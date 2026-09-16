@@ -16,7 +16,8 @@ Explore → sort/refine → trade/hub のモノレポです。
 - Build で直したら再公開し、必要なら Export をリポへ同期する
 
 運用方針: [`docs/agent_development_policy.md`](docs/agent_development_policy.md)  
-制約適応版オーケストレーション: [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md)
+制約適応版オーケストレーション: [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md)  
+Sort v2 ルール: [`docs/SORT_V2_RULES.md`](docs/SORT_V2_RULES.md)
 
 ## セットアップ
 
