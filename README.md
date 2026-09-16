@@ -22,8 +22,10 @@ Explore → sort/refine → trade/hub のモノレポです。
 
 ```bash
 npm install
-npm run typecheck -w @estg/shared
+npm run typecheck
+npm run dev:explore   # packages/explore 最小出撃
 ```
+
 
 ## ブランチ
 

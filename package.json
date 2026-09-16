@@ -7,7 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "typecheck": "npm run typecheck -w @estg/shared"
+    "typecheck": "npm run typecheck -w @estg/shared && npm run typecheck -w @estg/explore",
+    "dev:explore": "npm run dev -w @estg/explore",
+    "build:explore": "npm run build -w @estg/explore"
   },
   "engines": {
     "node": ">=20"
