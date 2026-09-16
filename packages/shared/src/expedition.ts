@@ -5,6 +5,7 @@ import {
   type OwnedMech,
   type SortieReturnKind,
 } from "./mech-fleet";
+import type { YieldBag } from "./sort-yield";
 
 /**
  * Shared player / expedition payload across explore → sort → trade.
@@ -127,6 +128,8 @@ export interface CraftingPuzzleResult {
   stabilizationScore?: number;
   totalTilesCleared?: number;
   finalQualityRank?: "Standard" | "Superior" | "Masterwork";
+  /** Yield v2: typed basic materials / parts bag (additive). */
+  yieldBag?: YieldBag;
 }
 
 export function applyPuzzleResult(

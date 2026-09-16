@@ -1,6 +1,12 @@
 import { MODULE_URLS, PIECES_PER_CONTAINER } from "./constants";
 import type { CraftingPuzzleResult } from "./expedition";
 import {
+  encodeYieldBagCompact,
+  parseYieldBagCompact,
+  yieldBagFromClearedWithMultiplier,
+  type YieldBag,
+} from "./sort-yield";
+import {
   filterToDeployableIds,
   selectDeployableInstanceIds,
   type OwnedMech,
@@ -14,10 +20,16 @@ export type ExploreToSortPayload = {
   isExtracted: boolean;
 };
 
-/** sort → trade */
+/** sort → trade
+ *
+ * v1: importMaterials + craftMultiplier
+ * v2 (additive): yieldBag of typed basic materials / parts for repair.
+ */
 export type SortToTradePayload = {
   importMaterials: number;
   craftMultiplier: number;
+  /** Yield v2: typed bag (omit for v1-compatible handoff). */
+  yieldBag?: YieldBag;
 };
 
 /**
@@ -207,23 +219,61 @@ export function buildSortToTradeUrl(
     "craftMultiplier",
     Number(payload.craftMultiplier).toFixed(3),
   );
+  if (payload.yieldBag != null) {
+    const encoded = encodeYieldBagCompact(payload.yieldBag);
+    if (encoded) u.searchParams.set("yieldBag", encoded);
+  }
   return u.toString();
+}
+
+/**
+ * Build sort→trade payload from puzzle result.
+ * Uses result.yieldBag when present; otherwise derives from yield* counts.
+ */
+export function buildSortToTradePayloadFromResult(
+  result: Pick<
+    CraftingPuzzleResult,
+    | "yieldFood"
+    | "yieldMaterial"
+    | "yieldEnergy"
+    | "craftMultiplier"
+    | "yieldBag"
+  >,
+): SortToTradePayload {
+  const craftMultiplier = Number(result.craftMultiplier) || 1;
+  const yieldBag =
+    result.yieldBag != null
+      ? result.yieldBag
+      : yieldBagFromClearedWithMultiplier(
+          {
+            food: result.yieldFood,
+            material: result.yieldMaterial,
+            energy: result.yieldEnergy,
+          },
+          craftMultiplier,
+        );
+  const payload: SortToTradePayload = {
+    importMaterials: importedMaterialsFromResult(result),
+    craftMultiplier,
+  };
+  if (Object.keys(yieldBag).length > 0) {
+    payload.yieldBag = yieldBag;
+  }
+  return payload;
 }
 
 export function buildSortToTradeUrlFromResult(
   result: Pick<
     CraftingPuzzleResult,
-    "yieldFood" | "yieldMaterial" | "yieldEnergy" | "craftMultiplier"
+    | "yieldFood"
+    | "yieldMaterial"
+    | "yieldEnergy"
+    | "craftMultiplier"
+    | "yieldBag"
   >,
   baseUrl: string = MODULE_URLS.trade,
 ): string {
-  return buildSortToTradeUrl(
-    {
-      importMaterials: importedMaterialsFromResult(result),
-      craftMultiplier: result.craftMultiplier,
-    },
-    baseUrl,
-  );
+  return buildSortToTradeUrl(buildSortToTradePayloadFromResult(result), baseUrl);
 }
 
 export function parseSortToTradeSearch(
@@ -231,11 +281,22 @@ export function parseSortToTradeSearch(
 ): SortToTradePayload | null {
   const raw = search.startsWith("?") ? search.slice(1) : search;
   const p = new URLSearchParams(raw);
-  if (!p.has("importMaterials") && !p.has("craftMultiplier")) return null;
-  return {
+  if (
+    !p.has("importMaterials") &&
+    !p.has("craftMultiplier") &&
+    !p.has("yieldBag")
+  ) {
+    return null;
+  }
+  const payload: SortToTradePayload = {
     importMaterials: parseNonNegInt(p.get("importMaterials"), 0),
     craftMultiplier: Number.parseFloat(p.get("craftMultiplier") ?? "1") || 1,
   };
+  const bag = parseYieldBagCompact(p.get("yieldBag"));
+  if (Object.keys(bag).length > 0) {
+    payload.yieldBag = bag;
+  }
+  return payload;
 }
 
 export function buildTradeToExploreUrl(

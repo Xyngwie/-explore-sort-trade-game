@@ -19,7 +19,8 @@ Explore → sort/refine → trade/hub のモノレポです。
 制約適応版オーケストレーション: [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md)  
 Sort v2 ルール: [`docs/SORT_V2_RULES.md`](docs/SORT_V2_RULES.md)  
 機体フリート循環: [`docs/MECH_FLEET.md`](docs/MECH_FLEET.md)  
-Explore I/O v2（機体インスタンス入出力）: [`docs/EXPLORE_IO_V2.md`](docs/EXPLORE_IO_V2.md)
+Explore I/O v2（機体インスタンス入出力）: [`docs/EXPLORE_IO_V2.md`](docs/EXPLORE_IO_V2.md)  
+Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md)
 
 ## セットアップ
 

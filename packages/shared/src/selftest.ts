@@ -12,6 +12,7 @@ import {
   buildExploreToHubWearUrl,
   parseExploreToHubWearSearch,
   toExploreToHubWearPayload,
+  buildSortToTradePayloadFromResult,
 } from "./handoff";
 import {
   createHubSave,
@@ -48,6 +49,25 @@ import {
   toGeoFix,
   type GeoFix,
 } from "./geolocation";
+
+import {
+  BASIC_MATERIAL_IDS,
+  PART_IDS,
+  yieldBagFromClearedCounts,
+  yieldBagFromClearedWithMultiplier,
+  mergeYieldBags,
+  scaleYieldBag,
+  encodeYieldBagCompact,
+  parseYieldBagCompact,
+  canAffordYieldCost,
+  spendYieldBag,
+  applyYieldBagToInventory,
+  yieldBagFromTypedRepairCost,
+  EXAMPLE_TYPED_REPAIR_COST,
+  isBasicMaterialId,
+  isPartId,
+} from "./sort-yield";
+
 
 const exploreUrl = buildExploreToSortUrl({
   salvagedContainers: 6,
@@ -308,3 +328,100 @@ assert.equal(
 );
 
 console.log("shared explore-io selftest: ok");
+
+// --- sort yield v2 ---
+assert.equal(BASIC_MATERIAL_IDS.length, 5);
+assert.equal(PART_IDS.length, 5);
+assert.equal(isBasicMaterialId("mat_scrap"), true);
+assert.equal(isPartId("part_actuator"), true);
+assert.equal(isPartId("mat_scrap"), false);
+
+const bag = yieldBagFromClearedCounts({
+  food: 10,
+  material: 20,
+  energy: 12,
+});
+assert.equal(bag.mat_ration, 10);
+assert.equal(bag.mat_scrap, 12); // floor(20*0.6)
+assert.equal(bag.mat_polymer, 8); // floor(20*0.4)
+assert.equal(bag.part_actuator, 2); // floor(20/10)
+assert.equal(bag.part_armor_plate, 1); // floor(20/15)
+assert.equal(bag.part_hydraulic_line, 1); // floor(20/20)
+assert.equal(bag.mat_circuit, 6); // floor(12*0.5)
+assert.equal(bag.mat_coolant, 6);
+assert.equal(bag.part_power_cell, 1); // floor(12/12)
+assert.equal(bag.part_sensor_array, undefined); // floor(12/18)=0
+
+const scaled = yieldBagFromClearedWithMultiplier(
+  { food: 10, material: 0, energy: 0 },
+  1.05,
+);
+assert.equal(scaled.mat_ration, 10); // floor(10*1.05)=10
+
+const merged = mergeYieldBags({ mat_scrap: 3 }, { mat_scrap: 2, part_actuator: 1 });
+assert.equal(merged.mat_scrap, 5);
+assert.equal(merged.part_actuator, 1);
+
+assert.equal(scaleYieldBag({ mat_scrap: 10 }, 0).mat_scrap, undefined);
+
+const compact = encodeYieldBagCompact(bag);
+const roundTrip = parseYieldBagCompact(compact);
+assert.equal(roundTrip.mat_ration, bag.mat_ration);
+assert.equal(roundTrip.part_actuator, bag.part_actuator);
+assert.deepEqual(parseYieldBagCompact("nope:1;mat_scrap:4;ghost:9").mat_scrap, 4);
+
+const inv = applyYieldBagToInventory(bag, {
+  mat_scrap: 20,
+  mat_polymer: 10,
+  part_actuator: 1,
+});
+const costBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
+assert.equal(canAffordYieldCost(inv, costBag), true);
+assert.equal(canAffordYieldCost(bag, costBag), false); // bag alone lacks scrap/polymer
+const spent = spendYieldBag(inv, costBag);
+assert.ok(spent);
+assert.equal(spent!.mat_scrap, (bag.mat_scrap ?? 0)); // +20 then -20
+assert.equal(spent!.mat_polymer, (bag.mat_polymer ?? 0)); // +10 then -10
+assert.equal(spent!.part_actuator, (bag.part_actuator ?? 0)); // +1 then -1
+assert.equal(
+  spendYieldBag({ mat_scrap: 1 }, { mat_scrap: 5 }),
+  null,
+);
+
+const payload = buildSortToTradePayloadFromResult({
+  yieldFood: 10,
+  yieldMaterial: 20,
+  yieldEnergy: 12,
+  craftMultiplier: 1,
+});
+assert.equal(payload.importMaterials, 42);
+assert.ok(payload.yieldBag);
+assert.equal(payload.yieldBag!.mat_ration, 10);
+
+const yieldUrl = buildSortToTradeUrlFromResult({
+  yieldFood: 10,
+  yieldMaterial: 20,
+  yieldEnergy: 12,
+  craftMultiplier: 1,
+});
+const yieldParsed = parseSortToTradeSearch(new URL(yieldUrl).search);
+assert.equal(yieldParsed?.importMaterials, 42);
+assert.equal(yieldParsed?.yieldBag?.mat_scrap, 12);
+assert.equal(yieldParsed?.yieldBag?.part_actuator, 2);
+
+// v1 URL without yieldBag still parses
+const v1Trade = parseSortToTradeSearch("importMaterials=9&craftMultiplier=1.000");
+assert.equal(v1Trade?.importMaterials, 9);
+assert.equal(v1Trade?.yieldBag, undefined);
+
+// explicit yieldBag on result wins over derivation
+const explicit = buildSortToTradePayloadFromResult({
+  yieldFood: 1,
+  yieldMaterial: 1,
+  yieldEnergy: 1,
+  craftMultiplier: 1,
+  yieldBag: { mat_scrap: 99 },
+});
+assert.equal(explicit.yieldBag?.mat_scrap, 99);
+
+console.log("shared sort-yield selftest: ok");
