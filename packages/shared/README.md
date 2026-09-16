@@ -10,6 +10,7 @@
 | `handoff.ts` | URLクエリの build/parse（explore⇄sort⇄trade） |
 | `hub-save.ts` | 拠点セーブ v2（v1 から移行）の正規化・読み書き |
 | `mech-fleet.ts` | 所有機体・耐久状態・修理/スクラップ純関数 |
+| `sort-yield.ts` | 精製成果の汎用資材／特定パーツ ID・`YieldBag` |
 
 変更する場合は親ボット（参謀）の承認後に PR。
 
