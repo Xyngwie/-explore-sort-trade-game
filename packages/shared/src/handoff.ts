@@ -1,5 +1,11 @@
 import { MODULE_URLS, PIECES_PER_CONTAINER } from "./constants";
 import type { CraftingPuzzleResult } from "./expedition";
+import {
+  filterToDeployableIds,
+  selectDeployableInstanceIds,
+  type OwnedMech,
+  type SortieReturnKind,
+} from "./mech-fleet";
 
 /** explore → sort */
 export type ExploreToSortPayload = {
@@ -14,11 +20,112 @@ export type SortToTradePayload = {
   craftMultiplier: number;
 };
 
-/** trade → explore */
+/**
+ * trade → explore
+ *
+ * v1: deployableMechs count + startingAmmo
+ * v2 (additive): deployedInstanceIds of 健在 mechs only.
+ * When ids are present, deployableMechs should match ids.length (builders enforce this).
+ */
 export type TradeToExplorePayload = {
   deployableMechs: number;
   startingAmmo: number;
+  /** Operational owned-mech instance ids committed to this sortie. */
+  deployedInstanceIds?: string[];
 };
+
+/** explore → hub wear return (salvage still goes explore → sort). */
+export type ExploreToHubWearPayload = {
+  returnKind: SortieReturnKind;
+  mechWear: Array<{ instanceId: string; durabilityAfter: number }>;
+};
+
+const SORTIE_RETURN_KINDS: readonly SortieReturnKind[] = [
+  "extract",
+  "fail",
+  "abort",
+];
+
+function isSortieReturnKind(value: string): value is SortieReturnKind {
+  return (SORTIE_RETURN_KINDS as readonly string[]).includes(value);
+}
+
+function encodeInstanceIds(ids: readonly string[]): string {
+  return ids
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+    .join(",");
+}
+
+function parseInstanceIds(raw: string | null): string[] {
+  if (raw == null || raw.trim() === "") return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const id = part.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function encodeMechWearCompact(
+  wear: ExploreToHubWearPayload["mechWear"],
+): string {
+  return wear
+    .map(
+      (w) =>
+        `${w.instanceId.trim()}:${Math.max(0, Math.floor(w.durabilityAfter))}`,
+    )
+    .filter((s) => !s.startsWith(":"))
+    .join(";");
+}
+
+function parseMechWearCompact(
+  raw: string | null,
+): ExploreToHubWearPayload["mechWear"] {
+  if (raw == null || raw.trim() === "") return [];
+  const out: ExploreToHubWearPayload["mechWear"] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(";")) {
+    const chunk = part.trim();
+    if (!chunk) continue;
+    const colon = chunk.lastIndexOf(":");
+    if (colon <= 0) continue;
+    const instanceId = chunk.slice(0, colon).trim();
+    const durabilityAfter = Number.parseInt(chunk.slice(colon + 1), 10);
+    if (!instanceId || !Number.isFinite(durabilityAfter) || seen.has(instanceId)) {
+      continue;
+    }
+    seen.add(instanceId);
+    out.push({
+      instanceId,
+      durabilityAfter: Math.max(0, durabilityAfter),
+    });
+  }
+  return out;
+}
+
+/**
+ * Build trade→explore payload from hangar fleet.
+ * Only 健在 mechs are included; needs_repair / destroyed are excluded.
+ */
+export function buildTradeToExplorePayloadFromFleet(
+  fleet: readonly OwnedMech[],
+  startingAmmo: number,
+  requestedInstanceIds?: readonly string[],
+): TradeToExplorePayload {
+  const deployedInstanceIds =
+    requestedInstanceIds != null
+      ? filterToDeployableIds(fleet, requestedInstanceIds)
+      : selectDeployableInstanceIds(fleet);
+  return {
+    deployableMechs: deployedInstanceIds.length,
+    startingAmmo: Math.max(0, Math.floor(startingAmmo)),
+    deployedInstanceIds,
+  };
+}
 
 export function importedMaterialsFromResult(
   result: Pick<
@@ -136,14 +243,24 @@ export function buildTradeToExploreUrl(
   baseUrl: string = MODULE_URLS.explore,
 ): string {
   const u = new URL(baseUrl);
-  u.searchParams.set(
-    "deployableMechs",
-    String(Math.max(0, Math.floor(payload.deployableMechs))),
-  );
+  const ids =
+    payload.deployedInstanceIds != null
+      ? payload.deployedInstanceIds
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0)
+      : [];
+  const deployableMechs =
+    ids.length > 0
+      ? ids.length
+      : Math.max(0, Math.floor(payload.deployableMechs));
+  u.searchParams.set("deployableMechs", String(deployableMechs));
   u.searchParams.set(
     "startingAmmo",
     String(Math.max(0, Math.floor(payload.startingAmmo))),
   );
+  if (ids.length > 0) {
+    u.searchParams.set("deployedInstanceIds", encodeInstanceIds(ids));
+  }
   return u.toString();
 }
 
@@ -152,10 +269,63 @@ export function parseTradeToExploreSearch(
 ): TradeToExplorePayload | null {
   const raw = search.startsWith("?") ? search.slice(1) : search;
   const p = new URLSearchParams(raw);
-  if (!p.has("deployableMechs") && !p.has("startingAmmo")) return null;
-  return {
-    deployableMechs: parseNonNegInt(p.get("deployableMechs"), 0),
+  if (
+    !p.has("deployableMechs") &&
+    !p.has("startingAmmo") &&
+    !p.has("deployedInstanceIds")
+  ) {
+    return null;
+  }
+  const deployedInstanceIds = parseInstanceIds(p.get("deployedInstanceIds"));
+  const deployableMechs =
+    deployedInstanceIds.length > 0
+      ? deployedInstanceIds.length
+      : parseNonNegInt(p.get("deployableMechs"), 0);
+  const payload: TradeToExplorePayload = {
+    deployableMechs,
     startingAmmo: parseNonNegInt(p.get("startingAmmo"), 0),
+  };
+  if (deployedInstanceIds.length > 0) {
+    payload.deployedInstanceIds = deployedInstanceIds;
+  }
+  return payload;
+}
+
+export function buildExploreToHubWearUrl(
+  payload: ExploreToHubWearPayload,
+  baseUrl: string = MODULE_URLS.trade,
+): string {
+  const u = new URL(baseUrl);
+  u.searchParams.set("returnKind", payload.returnKind);
+  u.searchParams.set("mechWear", encodeMechWearCompact(payload.mechWear));
+  return u.toString();
+}
+
+export function parseExploreToHubWearSearch(
+  search: string,
+): ExploreToHubWearPayload | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const p = new URLSearchParams(raw);
+  if (!p.has("returnKind") && !p.has("mechWear")) return null;
+  const kindRaw = (p.get("returnKind") ?? "").trim();
+  if (!isSortieReturnKind(kindRaw)) return null;
+  return {
+    returnKind: kindRaw,
+    mechWear: parseMechWearCompact(p.get("mechWear")),
+  };
+}
+
+/** Compact wear list from full MechWearReport-like rows. */
+export function toExploreToHubWearPayload(
+  returnKind: SortieReturnKind,
+  mechWear: readonly { instanceId: string; durabilityAfter: number }[],
+): ExploreToHubWearPayload {
+  return {
+    returnKind,
+    mechWear: mechWear.map((w) => ({
+      instanceId: w.instanceId,
+      durabilityAfter: Math.max(0, Math.floor(w.durabilityAfter)),
+    })),
   };
 }
 

@@ -66,6 +66,15 @@ export type ScrapYield = {
   materials: number;
 };
 
+/** Per-mech wear reported on explore return (hub applies durabilityAfter). */
+export type MechWearReport = {
+  instanceId: string;
+  durabilityBefore: number;
+  durabilityAfter: number;
+  statusAfter: MechStatus;
+  wearApplied: number;
+};
+
 export function isMechStatus(value: string): value is MechStatus {
   return (MECH_STATUSES as readonly string[]).includes(value);
 }
@@ -152,6 +161,76 @@ export function wearFleetAfterSortie(
 ): OwnedMech[] {
   const set = new Set(deployedInstanceIds);
   return fleet.map((m) => (set.has(m.instanceId) ? wearAfterSortie(m, kind) : m));
+}
+
+/** Instance ids that are currently 健在 / deployable. */
+export function selectDeployableInstanceIds(
+  fleet: readonly OwnedMech[],
+): string[] {
+  return fleet.filter(canDeploy).map((m) => m.instanceId);
+}
+
+/**
+ * Keep only requested ids that exist in fleet and pass canDeploy.
+ * needs_repair / destroyed / unknown ids are dropped (never deployable).
+ */
+export function filterToDeployableIds(
+  fleet: readonly OwnedMech[],
+  requestedIds: readonly string[],
+): string[] {
+  const byId = new Map(fleet.map((m) => [m.instanceId, m]));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of requestedIds) {
+    if (seen.has(id)) continue;
+    const m = byId.get(id);
+    if (!m || !canDeploy(m)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/** Build per-mech wear reports for the deployed set using flat return-kind rules. */
+export function buildWearReportsForSortie(
+  fleet: readonly OwnedMech[],
+  deployedInstanceIds: readonly string[],
+  kind: SortieReturnKind,
+): MechWearReport[] {
+  const set = new Set(deployedInstanceIds);
+  const reports: MechWearReport[] = [];
+  for (const m of fleet) {
+    if (!set.has(m.instanceId)) continue;
+    const after = wearAfterSortie(m, kind);
+    reports.push({
+      instanceId: m.instanceId,
+      durabilityBefore: m.durability,
+      durabilityAfter: after.durability,
+      statusAfter: after.status,
+      wearApplied: Math.max(0, m.durability - after.durability),
+    });
+  }
+  return reports;
+}
+
+/**
+ * Apply durabilityAfter from reports (status re-derived).
+ * Unknown instance ids in reports are ignored.
+ */
+export function applyWearReportsToFleet(
+  fleet: readonly OwnedMech[],
+  reports: readonly Pick<MechWearReport, "instanceId" | "durabilityAfter">[],
+): OwnedMech[] {
+  const map = new Map(
+    reports.map((r) => [r.instanceId, Math.max(0, Math.floor(r.durabilityAfter))]),
+  );
+  return fleet.map((m) => {
+    if (!map.has(m.instanceId)) return m;
+    return syncMechStatus({
+      ...m,
+      durability: map.get(m.instanceId)!,
+    });
+  });
 }
 
 export function repairCost(

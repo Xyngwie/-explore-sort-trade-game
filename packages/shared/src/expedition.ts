@@ -1,4 +1,10 @@
 import { PIECES_PER_CONTAINER } from "./constants";
+import {
+  buildWearReportsForSortie,
+  type MechWearReport,
+  type OwnedMech,
+  type SortieReturnKind,
+} from "./mech-fleet";
 
 /**
  * Shared player / expedition payload across explore → sort → trade.
@@ -78,6 +84,37 @@ export type ExploreResult = Pick<
   | "salvagedContainers"
   | "totalStockPieces"
 >;
+
+/**
+ * Explore sortie outcome for hub reconnection (v2): salvage fields plus per-mech wear.
+ * Sort still consumes ExploreResult / ExploreToSortPayload only.
+ */
+export type ExploreSortieOutcome = ExploreResult & {
+  returnKind: SortieReturnKind;
+  deployedInstanceIds: string[];
+  mechWear: MechWearReport[];
+};
+
+export function createExploreSortieOutcome(args: {
+  result: ExploreResult;
+  returnKind: SortieReturnKind;
+  fleet: readonly OwnedMech[];
+  deployedInstanceIds: readonly string[];
+}): ExploreSortieOutcome {
+  const deployedInstanceIds = [...args.deployedInstanceIds];
+  return {
+    ...args.result,
+    returnKind: args.returnKind,
+    deployedInstanceIds,
+    mechWear: buildWearReportsForSortie(
+      args.fleet,
+      deployedInstanceIds,
+      args.returnKind,
+    ),
+  };
+}
+
+export type { MechWearReport, SortieReturnKind };
 
 /** Sort module refine result written back toward trade. */
 export interface CraftingPuzzleResult {

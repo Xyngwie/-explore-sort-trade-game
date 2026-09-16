@@ -6,6 +6,12 @@ import {
   parseSortToTradeSearch,
   wingmanCountFromMechs,
   importedMaterialsFromResult,
+  buildTradeToExploreUrl,
+  parseTradeToExploreSearch,
+  buildTradeToExplorePayloadFromFleet,
+  buildExploreToHubWearUrl,
+  parseExploreToHubWearSearch,
+  toExploreToHubWearPayload,
 } from "./handoff";
 import {
   createHubSave,
@@ -18,6 +24,7 @@ import {
   createExpeditionState,
   applyPuzzleResult,
   puzzleInputFromExpedition,
+  createExploreSortieOutcome,
 } from "./expedition";
 import {
   createOwnedMech,
@@ -30,6 +37,10 @@ import {
   countDeployable,
   MECH_FLEET_RULES,
   statusFromDurability,
+  filterToDeployableIds,
+  selectDeployableInstanceIds,
+  buildWearReportsForSortie,
+  applyWearReportsToFleet,
 } from "./mech-fleet";
 import {
   coarsenFix,
@@ -218,3 +229,82 @@ assert.ok(legacy!.hub.fleet[0]!.instanceId.startsWith("migrated_"));
 assert.ok(legacy!.hub.fleet.length <= HUB_LIMITS.maxMechs);
 
 console.log("shared mech-fleet selftest: ok");
+
+// --- explore I/O v2 (deploy filter + wear return) ---
+const fleetIo = [
+  createOwnedMech("mech_gen1", { instanceId: "op1" }),
+  createOwnedMech("mech_gen1", { instanceId: "rep1", durability: 20 }),
+  createOwnedMech("mech_gen2", { instanceId: "dead1", durability: 0 }),
+];
+assert.equal(canDeploy(fleetIo[0]!), true);
+assert.equal(canDeploy(fleetIo[1]!), false);
+assert.equal(canDeploy(fleetIo[2]!), false);
+assert.deepEqual(selectDeployableInstanceIds(fleetIo), ["op1"]);
+assert.deepEqual(
+  filterToDeployableIds(fleetIo, ["op1", "rep1", "dead1", "ghost"]),
+  ["op1"],
+);
+
+const tte = buildTradeToExplorePayloadFromFleet(fleetIo, 42, [
+  "op1",
+  "rep1",
+  "dead1",
+]);
+assert.deepEqual(tte.deployedInstanceIds, ["op1"]);
+assert.equal(tte.deployableMechs, 1);
+assert.equal(tte.startingAmmo, 42);
+
+const tteUrl = buildTradeToExploreUrl(tte);
+const tteParsed = parseTradeToExploreSearch(new URL(tteUrl).search);
+assert.deepEqual(tteParsed?.deployedInstanceIds, ["op1"]);
+assert.equal(tteParsed?.deployableMechs, 1);
+
+// v1 count-only still parses
+const v1Parsed = parseTradeToExploreSearch("deployableMechs=3&startingAmmo=10");
+assert.equal(v1Parsed?.deployableMechs, 3);
+assert.equal(v1Parsed?.deployedInstanceIds, undefined);
+
+const wearReports = buildWearReportsForSortie(fleetIo, ["op1"], "extract");
+assert.equal(wearReports.length, 1);
+assert.equal(wearReports[0]!.instanceId, "op1");
+assert.equal(
+  wearReports[0]!.durabilityAfter,
+  100 - MECH_FLEET_RULES.wearOnExtract,
+);
+assert.equal(wearReports[0]!.wearApplied, MECH_FLEET_RULES.wearOnExtract);
+
+const wornFleet = applyWearReportsToFleet(fleetIo, wearReports);
+assert.equal(wornFleet[0]!.durability, 100 - MECH_FLEET_RULES.wearOnExtract);
+assert.equal(wornFleet[1]!.durability, 20); // untouched
+
+const outcome = createExploreSortieOutcome({
+  result: {
+    carrierCapacity: 4,
+    maxOperationTimeSec: 180,
+    ammoStock: 42,
+    isExtracted: true,
+    salvagedContainers: 2,
+    totalStockPieces: 50,
+  },
+  returnKind: "fail",
+  fleet: [
+    createOwnedMech("mech_gen1", { instanceId: "x1", durability: 50 }),
+  ],
+  deployedInstanceIds: ["x1"],
+});
+assert.equal(outcome.salvagedContainers, 2);
+assert.equal(outcome.returnKind, "fail");
+assert.equal(outcome.mechWear[0]!.statusAfter, "needs_repair");
+
+const hubWearUrl = buildExploreToHubWearUrl(
+  toExploreToHubWearPayload(outcome.returnKind, outcome.mechWear),
+);
+const hubWearParsed = parseExploreToHubWearSearch(new URL(hubWearUrl).search);
+assert.equal(hubWearParsed?.returnKind, "fail");
+assert.equal(hubWearParsed?.mechWear[0]!.instanceId, "x1");
+assert.equal(
+  hubWearParsed?.mechWear[0]!.durabilityAfter,
+  outcome.mechWear[0]!.durabilityAfter,
+);
+
+console.log("shared explore-io selftest: ok");
