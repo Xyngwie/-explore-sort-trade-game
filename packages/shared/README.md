@@ -8,7 +8,8 @@
 | `catalog.ts` | 機体・弾薬 ID |
 | `expedition.ts` | `PlayerExpeditionState` / 精製結果 / 変換ヘルパ |
 | `handoff.ts` | URLクエリの build/parse（explore⇄sort⇄trade） |
-| `hub-save.ts` | 拠点セーブ v1 の正規化・読み書き |
+| `hub-save.ts` | 拠点セーブ v2（v1 から移行）の正規化・読み書き |
+| `mech-fleet.ts` | 所有機体・耐久状態・修理/スクラップ純関数 |
 
 変更する場合は親ボット（参謀）の承認後に PR。
 

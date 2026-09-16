@@ -9,24 +9,52 @@ import {
   emptyAmmoLoad,
 } from "./catalog";
 import { HUB_SAVE_STORAGE_KEY } from "./constants";
+import {
+  createOwnedMech,
+  normalizeFleet,
+  type OwnedMech,
+} from "./mech-fleet";
 
 export { HUB_SAVE_STORAGE_KEY };
 
+/**
+ * Current hub snapshot. `fleet` holds owned instances (not bare MechId).
+ * Legacy saves with `MechId[]` are migrated in normalize / parse.
+ */
 export type HubSnapshot = {
   credits: number;
   materials: number;
-  fleet: MechId[];
+  fleet: OwnedMech[];
   ammoLoad: AmmoLoad;
   importedMaterials: number;
   selectedMechId: MechId;
   selectedAmmoId: AmmoId;
 };
 
+/** @deprecated Prefer HubSaveV2 — kept for migration typing. */
 export type HubSaveV1 = {
   v: 1;
   savedAt: string;
+  hub: {
+    credits: number;
+    materials: number;
+    /** Legacy: catalog ids only. */
+    fleet: MechId[] | OwnedMech[];
+    ammoLoad: AmmoLoad;
+    importedMaterials: number;
+    selectedMechId: MechId;
+    selectedAmmoId: AmmoId;
+  };
+};
+
+export type HubSaveV2 = {
+  v: 2;
+  savedAt: string;
   hub: HubSnapshot;
 };
+
+/** Current on-disk / in-memory save shape. */
+export type HubSave = HubSaveV2;
 
 export const INITIAL_HUB: HubSnapshot = {
   credits: 500,
@@ -51,17 +79,18 @@ function finiteNonNeg(n: unknown, fallback: number): number {
 }
 
 export function normalizeHubSnapshot(
-  raw: Partial<HubSnapshot> | null | undefined,
+  raw: Partial<HubSnapshot> | Record<string, unknown> | null | undefined,
   fallback: HubSnapshot = INITIAL_HUB,
 ): HubSnapshot {
-  const fleetIn = Array.isArray(raw?.fleet) ? raw!.fleet : fallback.fleet;
-  const fleet = fleetIn
-    .map(String)
-    .filter(isMechId)
-    .slice(0, HUB_LIMITS.maxMechs);
+  const fleetIn = Array.isArray((raw as HubSnapshot | undefined)?.fleet)
+    ? (raw as HubSnapshot).fleet
+    : fallback.fleet;
+  const fleet = normalizeFleet(fleetIn, HUB_LIMITS.maxMechs);
 
   const ammoLoad: AmmoLoad = emptyAmmoLoad();
-  const src = raw?.ammoLoad ?? fallback.ammoLoad;
+  const src =
+    ((raw as HubSnapshot | undefined)?.ammoLoad as AmmoLoad | undefined) ??
+    fallback.ammoLoad;
   for (const id of AMMO_IDS) {
     ammoLoad[id] = finiteNonNeg(src[id], fallback.ammoLoad[id] ?? 0);
   }
@@ -73,22 +102,30 @@ export function normalizeHubSnapshot(
     }
   }
 
+  const selectedMechIdRaw = (raw as HubSnapshot | undefined)?.selectedMechId;
   const selectedMechId =
-    raw?.selectedMechId && isMechId(String(raw.selectedMechId))
-      ? (String(raw.selectedMechId) as MechId)
+    selectedMechIdRaw && isMechId(String(selectedMechIdRaw))
+      ? (String(selectedMechIdRaw) as MechId)
       : fallback.selectedMechId;
+  const selectedAmmoIdRaw = (raw as HubSnapshot | undefined)?.selectedAmmoId;
   const selectedAmmoId =
-    raw?.selectedAmmoId && isAmmoId(String(raw.selectedAmmoId))
-      ? (String(raw.selectedAmmoId) as AmmoId)
+    selectedAmmoIdRaw && isAmmoId(String(selectedAmmoIdRaw))
+      ? (String(selectedAmmoIdRaw) as AmmoId)
       : fallback.selectedAmmoId;
 
   return {
-    credits: finiteNonNeg(raw?.credits, fallback.credits),
-    materials: finiteNonNeg(raw?.materials, fallback.materials),
+    credits: finiteNonNeg(
+      (raw as HubSnapshot | undefined)?.credits,
+      fallback.credits,
+    ),
+    materials: finiteNonNeg(
+      (raw as HubSnapshot | undefined)?.materials,
+      fallback.materials,
+    ),
     fleet,
     ammoLoad,
     importedMaterials: finiteNonNeg(
-      raw?.importedMaterials,
+      (raw as HubSnapshot | undefined)?.importedMaterials,
       fallback.importedMaterials,
     ),
     selectedMechId,
@@ -96,32 +133,43 @@ export function normalizeHubSnapshot(
   };
 }
 
-export function createHubSave(hub: HubSnapshot, at = new Date()): HubSaveV1 {
+export function createHubSave(hub: HubSnapshot, at = new Date()): HubSaveV2 {
   return {
-    v: 1,
+    v: 2,
     savedAt: at.toISOString(),
     hub: normalizeHubSnapshot(hub),
   };
 }
 
-export function parseHubSave(raw: unknown): HubSaveV1 | null {
-  if (!raw || typeof raw !== "object") return null;
-  const obj = raw as Record<string, unknown>;
-  if (obj.v !== 1) return null;
-  if (!obj.hub || typeof obj.hub !== "object") return null;
-  return {
-    v: 1,
-    savedAt:
-      typeof obj.savedAt === "string" ? obj.savedAt : new Date(0).toISOString(),
-    hub: normalizeHubSnapshot(obj.hub as Partial<HubSnapshot>),
-  };
+/** Convert a parsed v1 (or loose) hub blob into a v2 save. */
+export function migrateHubSaveV1ToV2(raw: HubSaveV1 | HubSaveV2 | {
+  v?: number;
+  savedAt?: string;
+  hub?: unknown;
+}): HubSaveV2 {
+  const savedAt =
+    typeof raw.savedAt === "string" ? raw.savedAt : new Date(0).toISOString();
+  const hub = normalizeHubSnapshot(
+    (raw.hub ?? {}) as Partial<HubSnapshot>,
+  );
+  return { v: 2, savedAt, hub };
 }
 
-export function serializeHubSave(save: HubSaveV1): string {
+export function parseHubSave(raw: unknown): HubSaveV2 | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  if (obj.v !== 1 && obj.v !== 2) return null;
+  if (!obj.hub || typeof obj.hub !== "object") return null;
+  return migrateHubSaveV1ToV2(
+    obj as { v: number; savedAt?: string; hub: unknown },
+  );
+}
+
+export function serializeHubSave(save: HubSaveV2): string {
   return JSON.stringify(save);
 }
 
-export function deserializeHubSave(json: string): HubSaveV1 | null {
+export function deserializeHubSave(json: string): HubSaveV2 | null {
   try {
     return parseHubSave(JSON.parse(json));
   } catch {
@@ -132,7 +180,7 @@ export function deserializeHubSave(json: string): HubSaveV1 | null {
 /** Browser helper — safe no-op outside window. */
 export function loadHubSaveFromLocalStorage(
   storage?: Pick<Storage, "getItem"> | null,
-): HubSaveV1 | null {
+): HubSaveV2 | null {
   const store =
     storage ??
     (typeof globalThis !== "undefined" && "localStorage" in globalThis
@@ -184,5 +232,18 @@ export function importMaterialsIntoHub(
     ...hub,
     importedMaterials: n,
     materials: hub.materials + n,
+  });
+}
+
+/** Purchase / add a fresh owned mech if under cap. */
+export function addMechToHub(
+  hub: HubSnapshot,
+  catalogId: MechId,
+): HubSnapshot | null {
+  if (!isMechId(catalogId)) return null;
+  if (hub.fleet.length >= HUB_LIMITS.maxMechs) return null;
+  return normalizeHubSnapshot({
+    ...hub,
+    fleet: [...hub.fleet, createOwnedMech(catalogId)],
   });
 }
