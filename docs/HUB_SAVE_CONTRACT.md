@@ -138,3 +138,11 @@ type HubSaveV1 = {
 
 同じ `HubSaveV1.hub` を共通ストアの初期値にする。  
 キー名と `v:1` を維持すれば移行が楽。
+
+
+---
+
+## 9. 機体フリート（v2 追記）
+
+`fleet` は **所有インスタンス**（`OwnedMech[]`）へ拡張。ペイロード版は **`v: 2`**（ストレージキー名は当面 `wreckline.hubSave.v1` のまま）。  
+詳細・仮バランス・マイグレーションは [`MECH_FLEET.md`](MECH_FLEET.md)。
