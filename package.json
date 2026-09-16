@@ -1,0 +1,15 @@
+{
+  "name": "explore-sort-trade-game",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo for the explore → sort/refine → trade/hub loop (WRECKLINE / Athanor / BASE HUB).",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck -w @estg/shared"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

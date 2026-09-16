@@ -70,3 +70,16 @@ my-project/
 - GitHubの `main` ブランチをソースコードの信頼できる唯一の情報源（Single Source of Truth）とする。
 - `main` ブランチへのマージをトリガーとし、GrokBuild経由で `.grok.me` 等のホスティング環境へ自動デプロイを行う。
 
+
+---
+
+## 付録 A. 本リポジトリのパッケージ対応（2026-09-16）
+
+| packages/ | 役割 |
+|---|---|
+| `shared` | 共通型・ハンドオフ・拠点セーブ契約 |
+| `explore` | Module 1 探索（WRECKLINE） |
+| `sort` | Module 2 精製（Athanor） |
+| `trade` | Module 3 拠点（BASE HUB） |
+
+段階適用・正本の二層化などは `docs/ORCHESTRATION.md` を参照。

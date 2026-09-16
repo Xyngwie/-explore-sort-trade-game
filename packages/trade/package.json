@@ -1,0 +1,9 @@
+{
+  "name": "@estg/trade",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@estg/shared": "*"
+  }
+}
