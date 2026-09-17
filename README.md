@@ -20,7 +20,8 @@ Explore → sort/refine → trade/hub のモノレポです。
 Sort v2 ルール: [`docs/SORT_V2_RULES.md`](docs/SORT_V2_RULES.md)  
 機体フリート循環: [`docs/MECH_FLEET.md`](docs/MECH_FLEET.md)  
 Explore I/O v2（機体インスタンス入出力）: [`docs/EXPLORE_IO_V2.md`](docs/EXPLORE_IO_V2.md)  
-Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md)
+Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md)  
+Trade Hangar v0（最小ハンガー）: [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_HANGAR_V0.md)
 
 ## セットアップ
 
@@ -28,6 +29,7 @@ Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](
 npm install
 npm run typecheck
 npm run dev:explore   # packages/explore 最小出撃
+npm run dev:trade     # packages/trade 最小ハンガー
 ```
 
 

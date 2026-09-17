@@ -18,6 +18,7 @@ import {
   createHubSave,
   parseHubSave,
   importMaterialsIntoHub,
+  importYieldBagIntoHub,
   INITIAL_HUB,
   HUB_LIMITS,
 } from "./hub-save";
@@ -425,3 +426,35 @@ const explicit = buildSortToTradePayloadFromResult({
 assert.equal(explicit.yieldBag?.mat_scrap, 99);
 
 console.log("shared sort-yield selftest: ok");
+
+// --- hub inventory (YieldBag) ---
+assert.deepEqual(INITIAL_HUB.inventory, {});
+const withBag = importYieldBagIntoHub(INITIAL_HUB, {
+  mat_scrap: 5,
+  part_actuator: 1,
+});
+assert.equal(withBag.inventory.mat_scrap, 5);
+assert.equal(withBag.inventory.part_actuator, 1);
+const mergedBag = importYieldBagIntoHub(withBag, { mat_scrap: 3 });
+assert.equal(mergedBag.inventory.mat_scrap, 8);
+const saveInv = createHubSave(mergedBag);
+assert.equal(saveInv.hub.inventory.mat_scrap, 8);
+const parsedInv = parseHubSave(saveInv);
+assert.equal(parsedInv?.hub.inventory.mat_scrap, 8);
+// missing inventory on legacy blob → empty
+const noInv = parseHubSave({
+  v: 2,
+  savedAt: "2026-09-01T00:00:00.000Z",
+  hub: {
+    credits: 1,
+    materials: 2,
+    fleet: [],
+    ammoLoad: { ammo_standard: 0, ammo_ap: 0, ammo_hp: 0 },
+    importedMaterials: 0,
+    selectedMechId: "mech_gen1",
+    selectedAmmoId: "ammo_standard",
+  },
+});
+assert.ok(noInv);
+assert.deepEqual(noInv!.hub.inventory, {});
+console.log("shared hub-inventory selftest: ok");
