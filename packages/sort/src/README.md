@@ -1,4 +1,12 @@
 # @estg/sort
 
-Stub package. Port from the corresponding Grok Build module in a later PR.
-Depends on `@estg/shared` for contracts only.
+Module 2（Athanor）最小精製スタブ。
+
+- ルール: [`docs/SORT_V2_RULES.md`](../../../docs/SORT_V2_RULES.md)
+- Yield: [`docs/SORT_YIELD_V2.md`](../../../docs/SORT_YIELD_V2.md)
+- 試し方: [`docs/SORT_V0.md`](../../../docs/SORT_V0.md)
+
+```bash
+npm run dev:sort
+# 例: http://localhost:5174/?salvagedContainers=2&totalStockPieces=50&isExtracted=1
+```
