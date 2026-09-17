@@ -1,6 +1,6 @@
 # Explore I/O v2（Module 1 入出力の再接続）
 
-**ステータス:** 採用方針（2026-09-17）・契約型は `packages/shared`、explore / trade UI 実装は後続  
+**ステータス:** 採用方針（2026-09-17）・契約型は `packages/shared`。explore 側は Behavior v0 垂直スライスで ids 受取＋フラット摩耗 URL scaffold（振る舞い正本は `EXPLORE_BEHAVIOR_V0.md`）。イベント積み上げ摩耗・hub UI 適用は後続  
 **目的:** ハンガーの**所有インスタンス**と出撃ループを繋ぐ。健在機だけ出せるようにし、帰還で**機体ごとの摩耗**を拠点に返す。
 
 関連: `docs/MECH_FLEET.md`、`packages/shared` の `mech-fleet.ts` / `expedition.ts` / `handoff.ts`、現行最小出撃 `packages/explore`。

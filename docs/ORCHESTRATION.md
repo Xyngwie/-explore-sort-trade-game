@@ -132,6 +132,13 @@ Build で直したら、人間または親のチェックリストで「再公�
 - GitHub `main` のみがソース正本
 - .grok.me はデプロイ成果物
 
+### Module 1（explore）正本メモ（2026-09-17）
+
+- **SoT:** `packages/explore` + `docs/EXPLORE_BEHAVIOR_V0.md` / `docs/EXPLORE_IO_V2.md`
+- 旧 Module1 `.grok.me` は **退役／練習用**。プレイ意図の参照のみ可。ビルド・URL 同期を正本経路にしない
+- sort / trade は移行期間中もプレビュー URL を併記してよい
+
+
 ---
 
 ## 6. モジュール境界と shared
