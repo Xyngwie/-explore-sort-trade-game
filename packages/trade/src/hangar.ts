@@ -16,6 +16,7 @@ import {
   applyWearReportsToFleet,
   buildTradeToExplorePayloadFromFleet,
   buildTradeToExploreUrl,
+  resolveModuleBaseUrl,
   canAffordRepair,
   canAffordYieldCost,
   canDeploy,
@@ -112,14 +113,23 @@ export function ingestLocationSearch(
 
   const wear = parseExploreToHubWearSearch(search);
   if (wear) {
+    const beforeById = new Map(hub.fleet.map((m) => [m.instanceId, m.durability]));
     hub = {
       ...hub,
       fleet: applyWearReportsToFleet(hub.fleet, wear.mechWear),
     };
     hub = normalizeHubSnapshot(hub);
+    const detail = wear.mechWear
+      .map((w) => {
+        const before = beforeById.get(w.instanceId);
+        const after = hub.fleet.find((m) => m.instanceId === w.instanceId);
+        if (before == null || !after) return `${w.instanceId}:${w.durabilityAfter}`;
+        return `${w.instanceId} ${before}→${after.durability}(${after.status})`;
+      })
+      .join("; ");
     log = pushLog(
       log,
-      `帰還ウェア ${wear.returnKind} ×${wear.mechWear.length}`,
+      `帰還ウェア ${wear.returnKind} ×${wear.mechWear.length}${detail ? ` · ${detail}` : ""}`,
     );
     consumed = true;
   }
@@ -238,7 +248,7 @@ export function buildDeployUrl(state: HangarState): string | null {
     ammo,
     ids,
   );
-  return buildTradeToExploreUrl(payload);
+  return buildTradeToExploreUrl(payload, resolveModuleBaseUrl("explore"));
 }
 
 /** Remember last deploy set when user opens the explore link. */

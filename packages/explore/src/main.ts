@@ -9,6 +9,7 @@ import { applyOrder, rallyWingman } from "./game/orders";
 import { isWingmanOffscreen, tickWorld, tryExtract, type PlayerInput } from "./game/sim";
 import { renderWorld, worldFromCanvas } from "./game/render";
 import {
+  buildSortieOutcome,
   hubWearHandoffUrl,
   sortHandoffUrl,
   toExploreResult,
@@ -156,6 +157,16 @@ function renderDom(): void {
   }
 
   if (world.phase === "result" && result) {
+    const outcome = buildSortieOutcome(world);
+    const wearRows =
+      outcome && outcome.mechWear.length > 0
+        ? outcome.mechWear
+            .map(
+              (w) =>
+                `<tr><td class="mono">${escapeHtml(w.instanceId)}</td><td>${w.durabilityBefore} → ${w.durabilityAfter}</td><td>-${w.wearApplied}</td><td>${w.statusAfter}</td></tr>`,
+            )
+            .join("")
+        : "";
     root.innerHTML = `
       <p class="pill">MODULE 1 · RESULT</p>
       <h1>作戦結果</h1>
@@ -170,6 +181,15 @@ function renderDom(): void {
           <tr><td>totalStockPieces</td><td>${result.totalStockPieces}</td></tr>
           <tr><td>ammoStock</td><td>${result.ammoStock}</td></tr>
         </table>
+        ${
+          wearRows
+            ? `<h2 style="font-size:0.95rem;margin:0.85rem 0 0.35rem">機体摩耗 (MechWearReport)</h2>
+               <table>
+                 <tr><th>instanceId</th><th>耐久</th><th>減</th><th>状態</th></tr>
+                 ${wearRows}
+               </table>`
+            : ""
+        }
         <div class="row">
           <a class="btn" href="${sortUrl}" target="_top" rel="noopener">精製炉へ渡す</a>
           ${
@@ -183,7 +203,7 @@ function renderDom(): void {
         ${
           wearUrl
             ? `<p class="mono muted">${escapeHtml(wearUrl)}</p>
-               <p class="muted">摩耗は returnKind フラット減の scaffold。イベント積み上げは EXPLORE_BEHAVIOR_V0 §9。</p>`
+               <p class="muted">localhost では trade (:5175) へ直リンク。摩耗は returnKind フラット減（イベント積み上げは後続）。</p>`
             : `<p class="muted">deployedInstanceIds 無しのため摩耗 URL は省略（v1 互換）。</p>`
         }
       </div>`;

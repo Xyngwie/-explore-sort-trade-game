@@ -55,7 +55,7 @@ sort から ?importMaterials=&yieldBag= → materials 加算 + inventory マー�
 
 - 弾薬の購入 UI（初期 `ammoLoad` のまま出撃に載せるだけ）
 - クレジット獲得以外の経済（解体・搬入のみ）
-- explore 側の実ウェア送信（trade 側はパーサとシミュで代替）
+- explore イベント積み上げ摩耗（現状は returnKind フラット減；URL 往復は実装済み）
 - 型付き修理と集計修理の統一コスト表（並存させて契約を両方見せる）
 
 ---
@@ -76,15 +76,19 @@ sort から ?importMaterials=&yieldBag= → materials 加算 + inventory マー�
 
 ```bash
 npm install
-npm run dev:trade
+npm run dev:trade    # :5175
+npm run dev:explore # :5173（任意・実 URL 往復）
 ```
 
 ブラウザで `http://localhost:5175/` を開き:
 
-1. 「機体を受領」→ 健在機を選択 → 「探索へ配備」の URL を確認  
-2. 「シミュ帰還 fail」で要修理化 → 「修理（集計）」  
-3. 「デモ資材バッグ」→ 再度要修理化 → 「修理（型付き）」  
-4. 例: `?importMaterials=10&yieldBag=mat_scrap:5;part_actuator:1` を付けてリロード  
+1. 「機体を受領」→ 健在機を選択 → 「探索へ配備」の URL を確認（`deployedInstanceIds` + `mechDurability`）  
+2. **実往復:** リンクで explore へ → 撤退 or EXTRACT →「拠点へ摩耗報告」→ trade で耐久減少を確認  
+3. **シミュ:** 「シミュ帰還 fail」で要修理化 → 「修理（集計）」  
+4. 「デモ資材バッグ」→ 再度要修理化 → 「修理（型付き）」  
+5. 例: `?importMaterials=10&yieldBag=mat_scrap:5;part_actuator:1` を付けてリロード  
+
+詳細: [`docs/EXPLORE_IO_V2.md`](./EXPLORE_IO_V2.md) §9  
 
 ---
 

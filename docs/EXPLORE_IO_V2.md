@@ -1,6 +1,6 @@
 # Explore I/O v2（Module 1 入出力の再接続）
 
-**ステータス:** 採用方針（2026-09-17）・契約型は `packages/shared`。explore 側は Behavior v0 垂直スライスで ids 受取＋フラット摩耗 URL scaffold（振る舞い正本は `EXPLORE_BEHAVIOR_V0.md`）。イベント積み上げ摩耗・hub UI 適用は後続  
+**ステータス:** 採用方針（2026-09-17）・契約型は `packages/shared`。**wear I/O wire**（trade↔explore URL 往復＋HubSave 適用）は `feature/wear-io-wire`。explore Behavior v0 で ids 受取＋フラット摩耗（振る舞い正本は `EXPLORE_BEHAVIOR_V0.md`）。イベント積み上げ摩耗は後続  
 **目的:** ハンガーの**所有インスタンス**と出撃ループを繋ぐ。健在機だけ出せるようにし、帰還で**機体ごとの摩耗**を拠点に返す。
 
 関連: `docs/MECH_FLEET.md`、`packages/shared` の `mech-fleet.ts` / `expedition.ts` / `handoff.ts`、現行最小出撃 `packages/explore`。
@@ -40,13 +40,15 @@ type TradeToExplorePayload = {
   startingAmmo: number;
   /** v2: 出撃に出す所有インスタンス ID（健在のみ） */
   deployedInstanceIds?: string[];
+  /** v2 additive: 配備時点の耐久（explore が durabilityAfter を正しく算出） */
+  deployedDurability?: Array<{ instanceId: string; durability: number }>;
 };
 ```
 
 URL（仮・既存クエリに加算）:
 
 ```text
-?deployableMechs=2&startingAmmo=28&deployedInstanceIds=owned_a,owned_b
+?deployableMechs=2&startingAmmo=28&deployedInstanceIds=owned_a,owned_b&mechDurability=owned_a:100;owned_b:100
 ```
 
 - `deployedInstanceIds` 省略時は v1 互換（件数のみ）。explore 最小実装は件数フォールバック可。
@@ -183,7 +185,25 @@ hub は `durabilityAfter` を正として `syncMechStatus` 相当で `OwnedMech`
 | `MechWearReport` / `buildWearReportsForSortie` / `applyWearReportsToFleet` | 帰還摩耗の純データ |
 | `filterToDeployableIds` / `selectDeployableInstanceIds` | 健在のみ配備 |
 | `ExploreSortieOutcome` / `createExploreSortieOutcome` | サルベージ + 摩耗の統合成果 |
-| `buildTradeToExploreUrl` / `parseTradeToExploreSearch` | `deployedInstanceIds` 加算（後方互換） |
+| `buildTradeToExploreUrl` / `parseTradeToExploreSearch` | `deployedInstanceIds` + `mechDurability`（後方互換） |
 | `buildExploreToHubWearUrl` / `parseExploreToHubWearSearch` | 摩耗の帰路 |
+| `resolveModuleBaseUrl` / `LOCAL_DEV_MODULE_URLS` | localhost では vite ポートへ（本番は MODULE_URLS） |
 
 定数の単一ソースは引き続き `MECH_FLEET_RULES`。本ドキュメントの表はそれと揃えること。
+
+---
+
+## 9. 試し方（wear I/O wire）
+
+```bash
+npm install
+npm run dev:trade    # http://localhost:5175/
+npm run dev:explore  # http://localhost:5173/
+```
+
+1. trade: 「機体を受領」→ 健在を選択 →「探索へ配備」（URL に `deployedInstanceIds` と `mechDurability`）
+2. explore: 出撃 → **撤退**（または EXTRACT 生還）→ 結果に MechWearReport 表 →「拠点へ摩耗報告」
+3. trade: ログに `帰還ウェア …`、耐久バー／状態が更新され HubSave に残る（リロードで確認）
+4. ライブ往復が難しい場合: trade の「シミュ帰還 extract/abort/fail」でも同じ適用経路を確認可
+
+localhost では `resolveModuleBaseUrl` が explore↔trade を `:5173` / `:5175` に向ける（`.grok.me` は非 localhost）。

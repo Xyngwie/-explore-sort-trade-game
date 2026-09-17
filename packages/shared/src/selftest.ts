@@ -15,6 +15,11 @@ import {
   buildSortToTradePayloadFromResult,
 } from "./handoff";
 import {
+  resolveModuleBaseUrl,
+  LOCAL_DEV_MODULE_URLS,
+  MODULE_URLS,
+} from "./constants";
+import {
   createHubSave,
   parseHubSave,
   importMaterialsIntoHub,
@@ -327,6 +332,27 @@ assert.equal(
   hubWearParsed?.mechWear[0]!.durabilityAfter,
   outcome.mechWear[0]!.durabilityAfter,
 );
+
+
+// durability snapshot on trade→explore (multi-sortie accuracy)
+const midFleet = [
+  createOwnedMech("mech_gen1", { instanceId: "m1", durability: 85 }),
+  createOwnedMech("mech_gen2", { instanceId: "m2", durability: 70 }),
+];
+const tteMid = buildTradeToExplorePayloadFromFleet(midFleet, 10, ["m1", "m2"]);
+assert.deepEqual(tteMid.deployedDurability, [
+  { instanceId: "m1", durability: 85 },
+  { instanceId: "m2", durability: 70 },
+]);
+const tteMidUrl = buildTradeToExploreUrl(tteMid);
+assert.ok(tteMidUrl.includes("mechDurability="));
+const tteMidParsed = parseTradeToExploreSearch(new URL(tteMidUrl).search);
+assert.deepEqual(tteMidParsed?.deployedDurability, [
+  { instanceId: "m1", durability: 85 },
+  { instanceId: "m2", durability: 70 },
+]);
+assert.equal(resolveModuleBaseUrl("explore", { hostname: "localhost" }), LOCAL_DEV_MODULE_URLS.explore);
+assert.equal(resolveModuleBaseUrl("trade", { hostname: "example.com" }), MODULE_URLS.trade);
 
 console.log("shared explore-io selftest: ok");
 

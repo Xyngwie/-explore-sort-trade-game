@@ -1,12 +1,12 @@
 import "./style.css";
 import {
   BASIC_MATERIAL_LABEL_JA,
-  MODULE_URLS,
   PART_LABEL_JA,
   buildSortToTradeUrlFromResult,
   importedMaterialsFromResult,
   isBasicMaterialId,
   isPartId,
+  resolveModuleBaseUrl,
   type YieldItemId,
 } from "@estg/shared";
 import {
@@ -25,14 +25,7 @@ const root = document.querySelector<HTMLDivElement>("#app")!;
 let state: RefineLive = createRefineFromLocationSearch(window.location.search);
 
 function tradeBaseUrl(): string {
-  if (
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1")
-  ) {
-    return "http://localhost:5175/";
-  }
-  return MODULE_URLS.trade;
+  return resolveModuleBaseUrl("trade");
 }
 
 function escapeHtml(s: string): string {
