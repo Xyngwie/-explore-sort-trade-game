@@ -15,6 +15,7 @@ Explore → sort/refine → trade/hub のモノレポです。
 - **Module 1:** `packages/explore` が SoT。旧 `.grok.me` Module1 は **退役／練習用**（URL を正本にしない）
 - sort / trade の移行期プレビュー URL は下表どおり残る場合あり
 
+プロダクトビジョン（願望・未実装）: [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md)  
 運用方針: [`docs/agent_development_policy.md`](docs/agent_development_policy.md)  
 制約適応版オーケストレーション: [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md)  
 Sort v2 ルール: [`docs/SORT_V2_RULES.md`](docs/SORT_V2_RULES.md)  
