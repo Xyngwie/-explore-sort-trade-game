@@ -1,5 +1,12 @@
-/** Canonical preview hosts during the split-.grok.me phase. */
+/** Canonical preview hosts on GitHub Pages (single project site, module subpaths). */
 export const MODULE_URLS = {
+  explore: "https://xyngwie.github.io/-explore-sort-trade-game/explore/",
+  sort: "https://xyngwie.github.io/-explore-sort-trade-game/sort/",
+  trade: "https://xyngwie.github.io/-explore-sort-trade-game/",
+} as const;
+
+/** Former split-.grok.me hosts (migration / reference only). */
+export const LEGACY_GROK_MODULE_URLS = {
   explore: "https://blend-honey-branch-scarlet.grok.me",
   sort: "https://brush-green-zinc-crystal.grok.me",
   trade: "https://mist-river-velvet-drum.grok.me",
@@ -16,12 +23,21 @@ export type ModuleKey = keyof typeof MODULE_URLS;
 
 /**
  * Prefer localhost vite URLs when the page is served from localhost / 127.0.0.1.
- * Falls back to MODULE_URLS (split .grok.me hosts) otherwise.
+ * Falls back to MODULE_URLS (GitHub Pages) otherwise.
+ *
+ * Optional overrides (forks / custom hosts): pass `overrides`, or pass an
+ * explicit `baseUrl` to handoff URL builders.
  */
 export function resolveModuleBaseUrl(
   key: ModuleKey,
-  opts?: { hostname?: string | null },
+  opts?: {
+    hostname?: string | null;
+    overrides?: Partial<Record<ModuleKey, string>>;
+  },
 ): string {
+  const fromOverride = opts?.overrides?.[key]?.trim();
+  if (fromOverride) return fromOverride;
+
   const host =
     opts?.hostname ??
     (typeof globalThis !== "undefined" &&
