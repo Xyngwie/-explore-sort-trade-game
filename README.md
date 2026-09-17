@@ -23,6 +23,7 @@ Explore I/O v2（機体インスタンス入出力）: [`docs/EXPLORE_IO_V2.md`]
 Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md)  
 Trade Hangar v0（最小ハンガー）: [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_HANGAR_V0.md)  
 Sort v0（最小精製）: [`docs/SORT_V0.md`](docs/SORT_V0.md)
+Preview Hosting v0（Trade プレビュー配信・準備）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
 
 ## セットアップ
 
