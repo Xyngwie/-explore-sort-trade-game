@@ -4,6 +4,7 @@
 **改訂理由:** 原案のオーケストレーション方針を維持しつつ、現行制約（GrokBuild 分割プレビュー、GitHub/Cloud Agents の制限、URLアダプタ運用、45MB統合トリガー）に合わせて段階適用できるようにした。
 
 関連:
+- プロダクト幻想・モジュール地図（ビジョン／未実装）: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md)
 - 拠点セーブ契約: `../HUB_SAVE_CONTRACT.md`
 - M2→M3 アダプタ: `../M2_TO_M3_ADAPTER_SPEC.md`
 - M3→M1 / M1→M2 指示: `../M3_M1_M2_ADAPTER_PROMPTS.md`
