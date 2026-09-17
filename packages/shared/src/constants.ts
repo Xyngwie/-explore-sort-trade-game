@@ -14,5 +14,10 @@ export const HUB_SAVE_STORAGE_KEY = "wreckline.hubSave.v1";
 export const HANDOFF_QUERY_KEYS = {
   exploreToSort: ["salvagedContainers", "totalStockPieces", "isExtracted"] as const,
   sortToTrade: ["importMaterials", "craftMultiplier", "yieldBag"] as const,
-  tradeToExplore: ["deployableMechs", "startingAmmo"] as const,
+  tradeToExplore: [
+    "deployableMechs",
+    "startingAmmo",
+    "deployedInstanceIds",
+  ] as const,
+  exploreToHubWear: ["returnKind", "mechWear"] as const,
 };

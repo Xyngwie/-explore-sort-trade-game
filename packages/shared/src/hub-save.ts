@@ -14,6 +14,12 @@ import {
   normalizeFleet,
   type OwnedMech,
 } from "./mech-fleet";
+import {
+  applyYieldBagToInventory,
+  compactYieldBag,
+  emptyYieldBag,
+  type YieldBag,
+} from "./sort-yield";
 
 export { HUB_SAVE_STORAGE_KEY };
 
@@ -26,6 +32,8 @@ export type HubSnapshot = {
   materials: number;
   fleet: OwnedMech[];
   ammoLoad: AmmoLoad;
+  /** Typed materials / parts from sort Yield v2 (additive; missing → {}). */
+  inventory: YieldBag;
   importedMaterials: number;
   selectedMechId: MechId;
   selectedAmmoId: AmmoId;
@@ -61,6 +69,7 @@ export const INITIAL_HUB: HubSnapshot = {
   materials: 250,
   fleet: [],
   ammoLoad: { ...INITIAL_AMMO_LOAD },
+  inventory: emptyYieldBag(),
   importedMaterials: 0,
   selectedMechId: "mech_gen1",
   selectedAmmoId: "ammo_standard",
@@ -76,6 +85,13 @@ function finiteNonNeg(n: unknown, fallback: number): number {
   const x = typeof n === "number" ? n : Number(n);
   if (!Number.isFinite(x)) return fallback;
   return Math.max(0, x);
+}
+
+function normalizeInventory(raw: unknown, fallback: YieldBag = emptyYieldBag()): YieldBag {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    return compactYieldBag(fallback);
+  }
+  return compactYieldBag(raw as YieldBag);
 }
 
 export function normalizeHubSnapshot(
@@ -113,6 +129,11 @@ export function normalizeHubSnapshot(
       ? (String(selectedAmmoIdRaw) as AmmoId)
       : fallback.selectedAmmoId;
 
+  const inventory = normalizeInventory(
+    (raw as HubSnapshot | undefined)?.inventory,
+    fallback.inventory ?? emptyYieldBag(),
+  );
+
   return {
     credits: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.credits,
@@ -124,6 +145,7 @@ export function normalizeHubSnapshot(
     ),
     fleet,
     ammoLoad,
+    inventory,
     importedMaterials: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.importedMaterials,
       fallback.importedMaterials,
@@ -232,6 +254,19 @@ export function importMaterialsIntoHub(
     ...hub,
     importedMaterials: n,
     materials: hub.materials + n,
+  });
+}
+
+/** Merge typed YieldBag into hub inventory (sort → trade v2). */
+export function importYieldBagIntoHub(
+  hub: HubSnapshot,
+  bag: YieldBag,
+): HubSnapshot {
+  const next = applyYieldBagToInventory(hub.inventory ?? emptyYieldBag(), bag);
+  if (Object.keys(compactYieldBag(bag)).length === 0) return hub;
+  return normalizeHubSnapshot({
+    ...hub,
+    inventory: next,
   });
 }
 
