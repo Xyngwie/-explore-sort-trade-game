@@ -2,13 +2,13 @@
   "name": "explore-sort-trade-game",
   "private": true,
   "version": "0.0.0",
-  "description": "Monorepo for the explore → sort/refine → trade/hub loop (WRECKLINE / Athanor / BASE HUB).",
+  "description": "Monorepo for the explore \u2192 sort/refine \u2192 trade/hub loop (WRECKLINE / Athanor / BASE HUB).",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "typecheck": "npm run typecheck -w @estg/shared && npm run typecheck -w @estg/explore && npm run typecheck -w @estg/sort && npm run typecheck -w @estg/trade",
-    "test": "npm run test -w @estg/shared && npm run test -w @estg/sort",
+    "test": "npm run test -w @estg/shared && npm run test -w @estg/explore && npm run test -w @estg/sort",
     "dev:explore": "npm run dev -w @estg/explore",
     "dev:trade": "npm run dev -w @estg/trade",
     "build:explore": "npm run build -w @estg/explore",
