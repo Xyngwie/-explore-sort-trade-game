@@ -16,6 +16,9 @@ import {
   applyWearReportsToFleet,
   buildTradeToExplorePayloadFromFleet,
   buildTradeToExploreUrl,
+  buildTradeToInvadeUrl,
+  buildTradeToRestoreUrl,
+  createEmptyCircuitBoard,
   resolveModuleBaseUrl,
   canAffordRepair,
   canAffordYieldCost,
@@ -28,6 +31,8 @@ import {
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   parseExploreToHubWearSearch,
+  parseInvadeToTradeSearch,
+  parseRestoreToTradeSearch,
   parseSortToTradeSearch,
   repairCost,
   saveHubSaveToLocalStorage,
@@ -36,13 +41,31 @@ import {
   stripHandoffParams,
   wearFleetAfterSortie,
   yieldBagFromTypedRepairCost,
+  type CircuitBoardState,
+  type CircuitOutcome,
   type HubSnapshot,
+  type InvadeToTradePayload,
   type MechId,
+  type RestoreToTradePayload,
   type SortieReturnKind,
   type YieldBag,
 } from "@estg/shared";
 
 export type HangarLog = string[];
+
+/** Side stash for M4/M5 handoff results (not HubSave — no schema bump). */
+export type HubM45Stash = {
+  lastInvadeSector: InvadeToTradePayload | null;
+  lastCircuit: RestoreToTradePayload | null;
+  /** ISO timestamp of last stash write (localStorage note). */
+  updatedAt: string | null;
+};
+
+export const HUB_M45_STASH_STORAGE_KEY = "wreckline.hubM45Stash.v0";
+
+/** Demo board used when opening restore with no prior circuit stash. */
+export const SEED_CIRCUIT_ID = "board_demo";
+export const SEED_CIRCUIT_PUZZLE_ID = "stub-8";
 
 export type HangarState = {
   hub: HubSnapshot;
@@ -51,6 +74,10 @@ export type HangarState = {
   selectedDeployIds: string[];
   log: HangarLog;
   notice: string;
+  /** Last invade→trade sector (UI + localStorage stash; not in HubSave). */
+  lastInvadeSector: InvadeToTradePayload | null;
+  /** Last restore→trade circuit outcome (UI + localStorage stash; not in HubSave). */
+  lastCircuit: RestoreToTradePayload | null;
 };
 
 const MAX_LOG = 12;
@@ -59,21 +86,103 @@ function pushLog(log: HangarLog, line: string): HangarLog {
   return [line, ...log].slice(0, MAX_LOG);
 }
 
+function emptyM45Stash(): HubM45Stash {
+  return { lastInvadeSector: null, lastCircuit: null, updatedAt: null };
+}
+
+export function loadM45StashFromLocalStorage(
+  storage?: Pick<Storage, "getItem"> | null,
+): HubM45Stash {
+  const store =
+    storage ??
+    (typeof globalThis !== "undefined" && "localStorage" in globalThis
+      ? globalThis.localStorage
+      : null);
+  if (!store) return emptyM45Stash();
+  const raw = store.getItem(HUB_M45_STASH_STORAGE_KEY);
+  if (!raw) return emptyM45Stash();
+  try {
+    const obj = JSON.parse(raw) as Partial<HubM45Stash> | null;
+    if (!obj || typeof obj !== "object") return emptyM45Stash();
+    return {
+      lastInvadeSector:
+        obj.lastInvadeSector && typeof obj.lastInvadeSector === "object"
+          ? (obj.lastInvadeSector as InvadeToTradePayload)
+          : null,
+      lastCircuit:
+        obj.lastCircuit && typeof obj.lastCircuit === "object"
+          ? (obj.lastCircuit as RestoreToTradePayload)
+          : null,
+      updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : null,
+    };
+  } catch {
+    return emptyM45Stash();
+  }
+}
+
+export function saveM45StashToLocalStorage(
+  stash: Pick<HangarState, "lastInvadeSector" | "lastCircuit">,
+  storage?: Pick<Storage, "setItem"> | null,
+): boolean {
+  const store =
+    storage ??
+    (typeof globalThis !== "undefined" && "localStorage" in globalThis
+      ? globalThis.localStorage
+      : null);
+  if (!store) return false;
+  const payload: HubM45Stash = {
+    lastInvadeSector: stash.lastInvadeSector,
+    lastCircuit: stash.lastCircuit,
+    updatedAt: new Date().toISOString(),
+  };
+  try {
+    store.setItem(HUB_M45_STASH_STORAGE_KEY, JSON.stringify(payload));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearM45StashFromLocalStorage(
+  storage?: Pick<Storage, "removeItem"> | null,
+): void {
+  const store =
+    storage ??
+    (typeof globalThis !== "undefined" && "localStorage" in globalThis
+      ? globalThis.localStorage
+      : null);
+  store?.removeItem(HUB_M45_STASH_STORAGE_KEY);
+}
+
+/** Fresh demo CircuitBoardState for trade→restore when no stash/seed board. */
+export function buildSeedCircuitBoard(): CircuitBoardState {
+  return createEmptyCircuitBoard(8, 8, SEED_CIRCUIT_PUZZLE_ID);
+}
+
 export function createInitialHangar(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
   const loaded = loadHubSaveFromLocalStorage(storage ?? undefined);
+  const stash = loadM45StashFromLocalStorage(storage ?? undefined);
   const hub = loaded?.hub
     ? normalizeHubSnapshot(loaded.hub)
     : normalizeHubSnapshot(INITIAL_HUB);
+  const log: HangarLog = loaded
+    ? [`セーブ読込 (${loaded.savedAt})`]
+    : ["初期ハブ（セーブなし）"];
+  if (stash.lastInvadeSector || stash.lastCircuit) {
+    log.unshift(
+      `M45スタッシュ読込${stash.updatedAt ? ` (${stash.updatedAt})` : ""}`,
+    );
+  }
   return {
     hub,
     lastDeployedIds: [],
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
-    log: loaded
-      ? [`セーブ読込 (${loaded.savedAt})`]
-      : ["初期ハブ（セーブなし）"],
+    log: log.slice(0, MAX_LOG),
     notice: "",
+    lastInvadeSector: stash.lastInvadeSector,
+    lastCircuit: stash.lastCircuit,
   };
 }
 
@@ -82,10 +191,11 @@ export function persistHangar(
   storage?: Pick<Storage, "setItem"> | null,
 ): HangarState {
   saveHubSaveToLocalStorage(state.hub, storage ?? undefined);
+  saveM45StashToLocalStorage(state, storage ?? undefined);
   return state;
 }
 
-/** Ingest sort / explore wear query params; clear them from the URL when possible. */
+/** Ingest sort / explore wear / invade / restore query params; clear them from the URL when possible. */
 export function ingestLocationSearch(
   state: HangarState,
   search: string,
@@ -93,6 +203,9 @@ export function ingestLocationSearch(
   let hub = state.hub;
   let log = state.log;
   let consumed = false;
+  let lastInvadeSector = state.lastInvadeSector;
+  let lastCircuit = state.lastCircuit;
+  const notices: string[] = [];
 
   const sort = parseSortToTradeSearch(search);
   if (sort) {
@@ -134,6 +247,32 @@ export function ingestLocationSearch(
     consumed = true;
   }
 
+  const invade = parseInvadeToTradeSearch(search);
+  if (invade) {
+    lastInvadeSector = invade;
+    const flags =
+      invade.intelFlags && invade.intelFlags.length > 0
+        ? ` · intel=${invade.intelFlags.join(",")}`
+        : "";
+    log = pushLog(
+      log,
+      `invade セクター (${invade.sectorX},${invade.sectorY}) dens=${invade.density.toFixed(3)}${flags}`,
+    );
+    notices.push(
+      `戦線セクター (${invade.sectorX},${invade.sectorY}) dens=${invade.density.toFixed(3)}`,
+    );
+    consumed = true;
+  }
+
+  const restore = parseRestoreToTradeSearch(search);
+  if (restore) {
+    lastCircuit = restore;
+    const id = restore.circuitId ?? restore.circuitBoard.puzzleId ?? "—";
+    log = pushLog(log, `restore 回路 ${id} → ${restore.outcome}`);
+    notices.push(`回路修復 ${restore.outcome} (${id})`);
+    consumed = true;
+  }
+
   if (!consumed) {
     return { state, consumed: false };
   }
@@ -142,11 +281,16 @@ export function ingestLocationSearch(
     ...state,
     hub,
     log,
+    lastInvadeSector,
+    lastCircuit,
     selectedDeployIds: filterToDeployableIds(
       hub.fleet,
       state.selectedDeployIds,
     ),
-    notice: "ハンドオフを取り込みました",
+    notice:
+      notices.length > 0
+        ? `ハンドオフ取込: ${notices.join(" / ")}`
+        : "ハンドオフを取り込みました",
   };
   return { state: persistHangar(next), consumed: true };
 }
@@ -156,9 +300,8 @@ export function clearHandoffFromUrl(): void {
   const keys = [
     ...HANDOFF_QUERY_KEYS.sortToTrade,
     ...HANDOFF_QUERY_KEYS.exploreToHubWear,
-    // Future (HANDOFF_M45 — do not ingest until UI wiring ticket):
-    // ...HANDOFF_QUERY_KEYS.invadeToTrade,
-    // ...HANDOFF_QUERY_KEYS.restoreToTrade,
+    ...HANDOFF_QUERY_KEYS.invadeToTrade,
+    ...HANDOFF_QUERY_KEYS.restoreToTrade,
   ];
   const next = stripHandoffParams(window.location.href, keys);
   window.history.replaceState({}, "", next);
@@ -266,19 +409,25 @@ export function buildPlaytestSeedHub(): HubSnapshot {
   });
 }
 
-/** Replace hub with playtest seed and persist via HubSave. */
+/** Replace hub with playtest seed and persist via HubSave (+ demo circuit stash). */
 export function loadPlaytestSeed(
   state: HangarState,
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
   const hub = buildPlaytestSeedHub();
+  const seedBoard = buildSeedCircuitBoard();
   const next: HangarState = {
     ...state,
     hub,
     lastDeployedIds: [],
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    lastCircuit: {
+      circuitId: SEED_CIRCUIT_ID,
+      circuitBoard: seedBoard,
+      outcome: "offline",
+    },
     log: pushLog(state.log, "シード読込"),
-    notice: "プレイテスト用シードを読込（健在2 + 要修理1）",
+    notice: "プレイテスト用シードを読込（健在2 + 要修理1 · 回路デモ）",
   };
   return persistHangar(next, storage ?? undefined);
 }
@@ -287,6 +436,7 @@ export function resetHangar(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
   clearHubSaveFromLocalStorage(storage ?? undefined);
+  clearM45StashFromLocalStorage(storage ?? undefined);
   const hub = normalizeHubSnapshot(INITIAL_HUB);
   const next: HangarState = {
     hub,
@@ -294,6 +444,8 @@ export function resetHangar(
     selectedDeployIds: [],
     log: ["デモ初期化"],
     notice: "セーブを消去し初期ハブへ",
+    lastInvadeSector: null,
+    lastCircuit: null,
   };
   return persistHangar(next, storage ?? undefined);
 }
@@ -333,6 +485,61 @@ export function buildDeployUrl(state: HangarState): string | null {
     ids,
   );
   return buildTradeToExploreUrl(payload, resolveModuleBaseUrl("explore"));
+}
+
+/** trade → invade preview URL (optional; fromHub + fleet/ammo summary). */
+export function buildInvadeUrl(state: HangarState): string {
+  const deployableMechs = selectDeployableInstanceIds(state.hub.fleet).length;
+  const startingAmmo = ammoTotal(state.hub.ammoLoad);
+  return buildTradeToInvadeUrl(
+    {
+      fromHub: true,
+      deployableMechs,
+      startingAmmo,
+    },
+    resolveModuleBaseUrl("invade"),
+  );
+}
+
+/**
+ * trade → restore preview URL.
+ * Prefers lastCircuit stash / seed circuit; otherwise opens with demo board.
+ * HubSave has no CircuitBoardState field yet — stash only.
+ */
+export function buildRestoreUrl(state: HangarState): string {
+  const stash = state.lastCircuit;
+  if (stash?.circuitBoard) {
+    const board: CircuitBoardState = {
+      v: 1,
+      cols: stash.circuitBoard.cols,
+      rows: stash.circuitBoard.rows,
+      edgeState: stash.circuitBoard.edgeState,
+    };
+    if (stash.circuitBoard.puzzleId) board.puzzleId = stash.circuitBoard.puzzleId;
+    // Do not forward prior outcome into a new restore session.
+    return buildTradeToRestoreUrl(
+      {
+        circuitId: stash.circuitId ?? SEED_CIRCUIT_ID,
+        circuitBoard: board,
+      },
+      resolveModuleBaseUrl("restore"),
+    );
+  }
+  // Seed / inventory note: mat_circuit is YieldBag material, not a board.
+  // Always attach a demo CircuitBoardState so restore has something to load.
+  return buildTradeToRestoreUrl(
+    {
+      circuitId: SEED_CIRCUIT_ID,
+      circuitBoard: buildSeedCircuitBoard(),
+    },
+    resolveModuleBaseUrl("restore"),
+  );
+}
+
+export function circuitOutcomeLabelJa(outcome: CircuitOutcome): string {
+  if (outcome === "fully_awakened") return "完全覚醒";
+  if (outcome === "bypass") return "バイパス";
+  return "オフライン";
 }
 
 /** Remember last deploy set when user opens the explore link. */

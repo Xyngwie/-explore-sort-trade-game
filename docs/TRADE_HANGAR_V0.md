@@ -1,9 +1,9 @@
 # Trade Hangar v0（Module 3 最小ハンガー）
 
-**ステータス:** stub 実装（`packages/trade`）· 2026-09-18  
+**ステータス:** stub 実装（`packages/trade`）· 2026-09-19  
 **目的:** BASE HUB で MECH_FLEET / EXPLORE_IO_V2 / SORT_YIELD_V2 の共有契約を**触って確認**できる薄いループを置く。
 
-関連: `docs/MECH_FLEET.md`、`docs/EXPLORE_IO_V2.md`、`docs/SORT_YIELD_V2.md`、`docs/HUB_SAVE_CONTRACT.md`、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)（invade/restore キー契約・**UI 未配線**）。
+関連: `docs/MECH_FLEET.md`、`docs/EXPLORE_IO_V2.md`、`docs/SORT_YIELD_V2.md`、`docs/HUB_SAVE_CONTRACT.md`、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)（invade/restore キー契約 · Hub リンク/取込配線済み）。
 
 ---
 
@@ -22,16 +22,16 @@
 ---
 
 
-## 1.5. Module 4 / 5 ハンドオフ（契約のみ）
+## 1.5. Module 4 / 5 ハンドオフ（Hub 配線）
 
-Hub は将来 invade / restore を開き結果を受け取る。**本スタブではナビしない。**
-
-| 方向 | キー（要約） | 状態 |
+| 方向 | キー（要約） | Hub 状態 |
 |---|---|---|
-| trade → invade | `fromHub` + 任意艦隊要約 | shared 契約のみ |
-| invade → trade | `sectorX/Y` + `density` + `intelFlags?` | 取込未配線 |
-| trade → restore | `circuitId?` + `circuitBoard?` | shared 契約のみ |
-| restore → trade | `circuitBoard` + `circuitOutcome` | 取込未配線 |
+| trade → invade | `fromHub` + 任意艦隊要約 | 「戦線へ（任意）」リンク（`buildTradeToInvadeUrl`） |
+| invade → trade | `sectorX/Y` + `density` + `intelFlags?` | 取込 → UI 表示 + `wreckline.hubM45Stash.v0`（HubSave 未拡張） |
+| trade → restore | `circuitId?` + `circuitBoard?` | 「回路修復へ」リンク（スタッシュ/シード盤があれば付与） |
+| restore → trade | `circuitBoard` + `circuitOutcome` | 取込 → UI 表示 + 同上スタッシュ |
+
+**非ゴールのまま:** HubSave への `CircuitBoardState` 本組み込み · invade 本 salvage / YieldBag。
 
 詳細: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
 
@@ -40,8 +40,8 @@ Hub は将来 invade / restore を開き結果を受け取る。**本スタブ�
 ```text
 起動
   → localStorage から HubSave v2 読込（無ければ INITIAL_HUB）
-  → URL に sort / wear があれば取込 → クエリ削除 → 自動セーブ
-  → ハンガー UI
+  → URL に sort / wear / invade / restore があれば取込 → クエリ削除 → 自動セーブ
+  → ハンガー UI（戦線・回路リンク含む）
 
 シード読込 → プレイテスト用 HubSave 一括適用（健在2 + 要修理1・クレジット/型付き資材/弾薬）
 機体を受領 → 艦隊に OwnedMech 追加（空/不足時の手動付与）
@@ -84,7 +84,7 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 
 ### 4.5.1 シード → 型付き修理 → 再出撃ループ
 
-受け入れの最短経路（Module 3 スタブのみ・invade/restore 未配線）:
+受け入れの最短経路（Module 3 スタブ · 型付き修理）:
 
 1. **シード読込** → `seed_repair_gen1` が要修理、在庫が `EXAMPLE_TYPED_REPAIR_COST` を満たす  
 2. **修理（型付き）** → クレジット + YieldBag を消費し、機体が健在・耐久最大へ  
@@ -114,7 +114,10 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 6. sort 相当の `?importMaterials=&yieldBag=` で集計資材と inventory が増える  
 7. 集計修理・型付き修理・解体がセーブに残る（リロード後も維持）  
 8. 「シード読込」で混合艦隊 + YieldBag + 弾薬が HubSave に残り、リロード後も維持  
-9. シード読込 → 型付き修理で要修理機が健在になり、出撃 URL にその instanceId が含まれる（不足時はメッセージのみ）
+9. シード読込 → 型付き修理で要修理機が健在になり、出撃 URL にその instanceId が含まれる（不足時はメッセージのみ）  
+10. 「戦線へ」URL に `fromHub=1`（+ 任意 `deployableMechs` / `startingAmmo`）が付く  
+11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（シードまたはスタッシュ優先）  
+12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示・スタッシュされる（HubSave 版上げなし）
 
 ---
 

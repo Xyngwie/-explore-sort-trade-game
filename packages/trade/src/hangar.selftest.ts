@@ -2,12 +2,20 @@ import assert from "node:assert/strict";
 import {
   MECH_FLEET_RULES,
   buildExploreToHubWearUrl,
+  buildInvadeToTradeUrl,
+  buildRestoreToTradeUrl,
+  createEmptyCircuitBoard,
   toExploreToHubWearPayload,
 } from "@estg/shared";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
+  HUB_M45_STASH_STORAGE_KEY,
+  SEED_CIRCUIT_ID,
   buildDeployUrl,
+  buildInvadeUrl,
   buildPlaytestSeedHub,
+  buildRestoreUrl,
+  buildSeedCircuitBoard,
   buildSeedYieldBagForTypedRepair,
   canAffordYieldCost,
   createInitialHangar,
@@ -224,6 +232,72 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     broke.hub.fleet.find((m) => m.instanceId === "seed_op_gen2")!.status,
     "needs_repair",
   );
+}
+
+
+// M4/M5 handoff: trade→invade / trade→restore builders + ingest stash
+{
+  const m45Storage = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = m45Storage;
+
+  let hs = resetHangar(m45Storage);
+  hs = loadPlaytestSeed(hs, m45Storage);
+  assert.ok(hs.lastCircuit, "seed should stash demo circuit");
+  assert.equal(hs.lastCircuit!.circuitId, SEED_CIRCUIT_ID);
+  assert.equal(hs.lastCircuit!.outcome, "offline");
+
+  const invadeUrl = buildInvadeUrl(hs);
+  assert.ok(invadeUrl.includes("fromHub=1"));
+  assert.ok(invadeUrl.includes("deployableMechs="));
+  assert.ok(invadeUrl.includes("startingAmmo="));
+
+  const restoreUrl = buildRestoreUrl(hs);
+  assert.ok(restoreUrl.includes("circuitId="));
+  assert.ok(restoreUrl.includes("circuitBoard="));
+  assert.equal(
+    restoreUrl.includes("circuitOutcome="),
+    false,
+    "trade→restore must not forward prior outcome",
+  );
+
+  const itt = buildInvadeToTradeUrl({
+    sectorX: 3,
+    sectorY: -2,
+    density: 0.3,
+    intelFlags: ["routeHint"],
+  });
+  const creditsBefore = hs.hub.credits;
+  const invaded = ingestLocationSearch(hs, new URL(itt).search);
+  assert.equal(invaded.consumed, true);
+  assert.equal(invaded.state.lastInvadeSector?.sectorX, 3);
+  assert.equal(invaded.state.lastInvadeSector?.sectorY, -2);
+  assert.equal(invaded.state.lastInvadeSector?.density, 0.3);
+  assert.deepEqual(invaded.state.lastInvadeSector?.intelFlags, ["routeHint"]);
+  assert.equal(invaded.state.hub.credits, creditsBefore, "invade must not pay salvage");
+  assert.ok(invaded.state.log.some((l) => l.includes("invade セクター")));
+  assert.ok(m45Storage.getItem(HUB_M45_STASH_STORAGE_KEY));
+
+  const board = createEmptyCircuitBoard(8, 8, "stub-8");
+  const rtt = buildRestoreToTradeUrl({
+    circuitId: "board_demo",
+    circuitBoard: board,
+    outcome: "bypass",
+  });
+  const restored = ingestLocationSearch(invaded.state, new URL(rtt).search);
+  assert.equal(restored.consumed, true);
+  assert.equal(restored.state.lastCircuit?.outcome, "bypass");
+  assert.equal(restored.state.lastCircuit?.circuitId, "board_demo");
+  assert.ok(restored.state.log.some((l) => l.includes("restore 回路")));
+
+  const reloaded = createInitialHangar(m45Storage);
+  assert.equal(reloaded.lastInvadeSector?.sectorX, 3);
+  assert.equal(reloaded.lastCircuit?.outcome, "bypass");
+
+  const empty = resetHangar(m45Storage);
+  assert.equal(empty.lastCircuit, null);
+  const emptyRestore = buildRestoreUrl(empty);
+  assert.ok(emptyRestore.includes("circuitBoard="));
+  assert.equal(buildSeedCircuitBoard().puzzleId, "stub-8");
 }
 
 console.log("trade hangar selftest: ok");

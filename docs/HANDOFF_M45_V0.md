@@ -162,7 +162,7 @@ type RestoreToTradePayload = {
 
 ## 7. 後続（配線チケット案）
 
-1. trade ハンガーに「戦線へ（任意）」「回路修復へ」リンク（上記 builder）  
-2. invade 完了 → trade または explore（merge）  
-3. restore 完了 → trade（`circuitOutcome` 取込 → Hub 在庫更新）  
+1. ~~trade ハンガーに「戦線へ（任意）」「回路修復へ」リンク（上記 builder）~~ → `packages/trade` で取込・リンク実装（結果は `hubM45Stash`、HubSave 未拡張）  
+2. invade 完了 → trade または explore（merge）※ invade 側ナビは別チケット  
+3. restore 完了 → trade（`circuitOutcome` 取込）※ restore 側ナビは別チケット · Hub 在庫更新はスタッシュ表示まで  
 4. HubSave への `CircuitBoardState` 永続（版上げ要否は別判断）
