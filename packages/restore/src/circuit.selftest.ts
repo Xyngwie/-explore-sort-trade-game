@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  buildTradeToRestoreUrl,
   createEmptyCircuitBoard,
   decodeEdgeState,
+  encodeCircuitBoardCompact,
   encodeEdgeState,
   edgeCount,
+  parseRestoreToTradeSearch,
   type EdgeMark,
 } from "@estg/shared";
 import {
@@ -15,6 +18,11 @@ import {
   isLoopClosed,
   vEdgeIndex,
 } from "./puzzle";
+import {
+  bootstrapFromSearch,
+  buildReturnToTradeUrl,
+  stripInboundSearchFromLocation,
+} from "./session";
 
 const n = edgeCount(4, 4);
 assert.equal(n, 40);
@@ -93,5 +101,85 @@ assert.equal(deriveStubOutcome(true, 0.5, 4), "bypass");
 assert.equal(deriveStubOutcome(false, 0.8, 4), "bypass");
 assert.equal(deriveStubOutcome(false, 0.2, 2), "offline");
 assert.equal(deriveStubOutcome(false, 1, 0), "offline");
+
+// --- M4/M5 handoff wire (restore session) ---
+{
+  const demo = bootstrapFromSearch("");
+  assert.equal(demo.source, "demo");
+  assert.equal(demo.puzzle.cols, 6);
+  assert.equal(demo.puzzle.puzzleId, "restore-stub-6");
+  assert.ok(!demo.circuitId);
+}
+
+{
+  const idOnly = bootstrapFromSearch("circuitId=board_from_hub");
+  assert.equal(idOnly.source, "handoff-id");
+  assert.equal(idOnly.circuitId, "board_from_hub");
+  assert.equal(idOnly.puzzle.puzzleId, "board_from_hub");
+  assert.equal(idOnly.puzzle.cols, 6);
+}
+
+{
+  const board0 = createEmptyCircuitBoard(8, 8, "stub-8");
+  const rawMarks = decodeEdgeState(board0.edgeState, edgeCount(8, 8));
+  rawMarks[0] = 1;
+  rawMarks[1] = 2;
+  board0.edgeState = encodeEdgeState(rawMarks);
+  board0.outcome = "bypass";
+
+  const ttr = buildTradeToRestoreUrl({
+    circuitId: "board_demo",
+    circuitBoard: board0,
+  });
+  const search = new URL(ttr).search;
+  const hydrated = bootstrapFromSearch(search);
+  assert.equal(hydrated.source, "handoff-board");
+  assert.equal(hydrated.circuitId, "board_demo");
+  assert.equal(hydrated.puzzle.cols, 8);
+  assert.equal(hydrated.puzzle.rows, 8);
+  assert.equal(hydrated.puzzle.puzzleId, "stub-8");
+  assert.equal(hydrated.inboundOutcome, "bypass");
+  assert.equal(hydrated.marks[0], 1);
+  assert.equal(hydrated.marks[1], 2);
+  assert.equal(hydrated.marks.length, edgeCount(8, 8));
+
+  const ret = buildReturnToTradeUrl({
+    circuitId: hydrated.circuitId,
+    cols: hydrated.puzzle.cols,
+    rows: hydrated.puzzle.rows,
+    marks: hydrated.marks,
+    puzzleId: hydrated.puzzle.puzzleId,
+    outcome: "fully_awakened",
+    baseUrl: "https://example.test/trade/",
+  });
+  const parsed = parseRestoreToTradeSearch(new URL(ret).search);
+  assert.ok(parsed);
+  assert.equal(parsed!.outcome, "fully_awakened");
+  assert.equal(parsed!.circuitId, "board_demo");
+  assert.equal(parsed!.circuitBoard.cols, 8);
+  assert.equal(parsed!.circuitBoard.outcome, "fully_awakened");
+  assert.equal(parsed!.circuitBoard.puzzleId, "stub-8");
+  const back = decodeEdgeState(
+    parsed!.circuitBoard.edgeState,
+    edgeCount(8, 8),
+  );
+  assert.equal(back[0], 1);
+  assert.equal(back[1], 2);
+
+  const stripped = stripInboundSearchFromLocation(
+    `https://example.test/restore/${search}`,
+  );
+  assert.ok(!stripped.includes("circuitId="));
+  assert.ok(!stripped.includes("circuitBoard="));
+}
+
+{
+  const bare = createEmptyCircuitBoard(4, 4, "bare");
+  const compact = encodeCircuitBoardCompact(bare);
+  const s = bootstrapFromSearch(`circuitBoard=${encodeURIComponent(compact)}`);
+  assert.equal(s.source, "handoff-board");
+  assert.equal(s.puzzle.cols, 4);
+  assert.ok(s.inboundOutcome == null);
+}
 
 console.log("restore circuit.selftest ok");
