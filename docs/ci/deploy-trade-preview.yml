@@ -1,72 +1,10 @@
-# Trade Hangar preview — build always; deploy only when GitHub Pages is opted in.
+# DEPRECATED — replaced by deploy-modules-preview.yml
 #
-# PREP / workflow-only: live URL is NOT required yet.
-# Private repos on free plan cannot enable Pages. See docs/PREVIEW_HOSTING_V0.md.
+# Trade-only Pages deploy is superseded by the unified modules preview
+# (explore + sort + trade in one artifact).
 #
-# To enable the Deploy job later:
-#   1. Make repo public (or use a plan that supports private Pages)
-#   2. Settings → Pages → Source: GitHub Actions
-#   3. Actions variable ENABLE_GITHUB_PAGES=true
-# Pattern follows GitHub’s static Vite → Pages template (upload-pages-artifact + deploy-pages).
-
-name: Deploy Trade Preview
-
-on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/trade/**"
-      - "packages/shared/**"
-      - ".github/workflows/deploy-trade-preview.yml"
-  workflow_dispatch:
-
-# Least privilege for build; deploy job needs pages + id-token when gated on.
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: trade-preview-pages
-  cancel-in-progress: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install
-        run: npm ci
-
-      - name: Build trade hangar
-        # Project Pages URL path matches the repo name (leading hyphen included).
-        # Override via repo variable TRADE_VITE_BASE if the host path changes.
-        env:
-          VITE_BASE: ${{ vars.TRADE_VITE_BASE || '/-explore-sort-trade-game/' }}
-        run: npm run build:trade
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: packages/trade/dist
-
-  # Skipped until ENABLE_GITHUB_PAGES=true so private/free-plan CI stays green.
-  deploy:
-    needs: build
-    if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+# Canonical workflow copy: docs/ci/deploy-modules-preview.yml
+# Install path:           .github/workflows/deploy-modules-preview.yml
+#
+# If this file still exists under .github/workflows/, delete it so only
+# Deploy Modules Preview publishes to the github-pages environment.

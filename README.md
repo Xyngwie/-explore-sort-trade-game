@@ -2,18 +2,18 @@
 
 Explore → sort/refine → trade/hub のモノレポです。
 
-| パッケージ | ゲーム上の役割 | 現行プレビュー（移行期間） |
+| パッケージ | ゲーム上の役割 | 現行プレビュー |
 |---|---|---|
 | `packages/shared` | 共通型・ハンドオフ・セーブスキーマ | — |
-| `packages/explore` | Module 1 探索（WRECKLINE）・振る舞い垂直スライス | モノレポ `dev:explore`（旧 grok.me は退役／練習用） |
-| `packages/sort` | Module 2 精製（Athanor） | `brush-green-zinc-crystal.grok.me` |
-| `packages/trade` | Module 3 拠点（BASE HUB） | `mist-river-velvet-drum.grok.me` |
+| `packages/explore` | Module 1 探索（WRECKLINE）・振る舞い垂直スライス | [Pages `/explore/`](https://xyngwie.github.io/-explore-sort-trade-game/explore/)（ローカル `dev:explore`） |
+| `packages/sort` | Module 2 精製（Athanor） | [Pages `/sort/`](https://xyngwie.github.io/-explore-sort-trade-game/sort/)（ローカル `dev:sort`） |
+| `packages/trade` | Module 3 拠点（BASE HUB） | [Pages ルート](https://xyngwie.github.io/-explore-sort-trade-game/)（ローカル `dev:trade`） |
 
 ## 正本
 
 - **ソース正本:** この GitHub リポジトリの `main`（explore / sort / trade ともモノレポ）
 - **Module 1:** `packages/explore` が SoT。旧 `.grok.me` Module1 は **退役／練習用**（URL を正本にしない）
-- sort / trade の移行期プレビュー URL は下表どおり残る場合あり
+- 旧 split `.grok.me` URL は退役方向。正本プレビューは GitHub Pages（詳細は PREVIEW_HOSTING_V0）
 
 プロダクトビジョン（願望・未実装）: [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md)  
 運用方針: [`docs/agent_development_policy.md`](docs/agent_development_policy.md)  
@@ -25,7 +25,8 @@ Explore Behavior v0（僚機方針・発見・戦報）: [`docs/EXPLORE_BEHAVIOR
 Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md)  
 Trade Hangar v0（最小ハンガー）: [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_HANGAR_V0.md)  
 Sort v0（最小精製）: [`docs/SORT_V0.md`](docs/SORT_V0.md)
-Preview Hosting v0（Trade プレビュー配信・準備）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
+Preview Hosting v0（explore / sort / trade の GitHub Pages）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
+Pages 用 workflow 正本（UI で `.github/workflows/` へコピー）: [`docs/ci/deploy-modules-preview.yml`](docs/ci/deploy-modules-preview.yml)
 
 ## セットアップ
 

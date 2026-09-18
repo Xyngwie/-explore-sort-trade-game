@@ -1,8 +1,8 @@
-# Preview Hosting v0（Trade Hangar プレビュー配信 — 準備のみ）
+# Preview Hosting v0（Modules プレビュー配信 — explore / sort / trade）
 
-**ステータス:** PLAN / PREP（workflow + ドキュメント）。**ライブ公開 URL はまだ不要。**  
-**日付:** 2026-09-17  
-**対象:** `packages/trade`（Hangar）のみ。explore / sort / フルループは対象外。
+**ステータス:** PLAN / PREP → Pages 有効時はライブ URL あり。  
+**日付:** 2026-09-18  
+**対象:** `packages/explore` · `packages/sort` · `packages/trade`（単一 GitHub Pages サイト、サブパス分割）
 
 関連: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)、ルート [`README.md`](../README.md)。
 
@@ -10,13 +10,14 @@
 
 ## 1. ゴール
 
-Android 端末（実機ブラウザ）から **ローカル `npm` / Grok Build なし** で Trade Hangar を開けるようにする。
+Android 端末（実機ブラウザ）から **ローカル `npm` / Grok Build なし** で三モジュールを開けるようにする。  
+同一オリジン（`*.github.io`）上でハンドオフ URL と localStorage（HubSave）を共有する。
 
-現状（この PR）:
+現状:
 
-- デプロイ用 GitHub Actions ワークフローと Vite `base` の環境変数対応を入れる
-- ホスト選定チェックリストと受け入れ条件を文書化する
-- **公開 URL の確定・有効化はユーザーが後で行う**
+- デプロイ用 GitHub Actions ワークフローと各パッケージの Vite `base`（`VITE_BASE`）対応
+- `MODULE_URLS` は GitHub Pages サブパスを正とする（旧 `.grok.me` は `LEGACY_GROK_MODULE_URLS`）
+- ホスト選定チェックリストと受け入れ条件を文書化
 
 ---
 
@@ -24,72 +25,62 @@ Android 端末（実機ブラウザ）から **ローカル `npm` / Grok Build �
 
 | 今やる | やらない |
 |---|---|
-| Trade Hangar の build → artifact / Pages 向け plumbing | explore / sort のデプロイ |
-| `docs` + workflow + `VITE_BASE` | フルループ結合デプロイ |
-| ホスト選択肢のチェックリスト | 実際の本番ドメイン契約・課金判断の自動化 |
+| explore / sort / trade の build → 単一 Pages artifact | wear I/O 実装（別トラック） |
+| サブパス `/explore/` · `/sort/` · ルート=trade | カスタムドメイン契約の自動化 |
+| `docs` + workflow + `VITE_BASE` + `MODULE_URLS` | Cloudflare / Vercel の本番切替自動化 |
 
 ---
 
-## 3. なぜ GitHub Pages が今ブロックされているか
+## 3. 公開 URL（GitHub Pages）
 
-リポジトリは **private**。GitHub Pages API / 設定で次の趣旨の拒否が返る:
+リポジトリ名 `-explore-sort-trade-game`（先頭ハイフン付き）の project Pages:
 
-> このリポジトリのプランでは Pages がサポートされない（private リポジトリ向け Pages は有料プラン等）
+| モジュール | URL |
+|---|---|
+| trade（Hangar） | `https://xyngwie.github.io/-explore-sort-trade-game/` |
+| explore | `https://xyngwie.github.io/-explore-sort-trade-game/explore/` |
+| sort | `https://xyngwie.github.io/-explore-sort-trade-game/sort/` |
 
-つまり **workflow を置いただけでは URL は出ない**。Pages を使うには次のいずれかが必要:
-
-- リポジトリを **public** にする（無料プランでも project Pages が使える）
-- または **GitHub Pro / Team / Enterprise** 等で private Pages を有効にする
-
-本リポ名は `-explore-sort-trade-game`（先頭ハイフン付き）のため、project Pages の典型 URL は:
-
-`https://<owner>.github.io/-explore-sort-trade-game/`
-
-Vite の `base` はワークフローで `VITE_BASE=/-explore-sort-trade-game/` を渡す想定（下記 §5）。
+`packages/shared` の `MODULE_URLS` が上記を指す。ローカル開発時は `resolveModuleBaseUrl()` が `localhost:5173/5174/5175` に切り替える。
 
 ---
 
-## 4. 次のホスト選択肢（ユーザーが後で選ぶ）
+## 4. ホスト選択肢
 
-### (A) public 化 + GitHub Pages
+### (A) GitHub Pages（推奨・現行）
 
 チェックリスト:
 
-1. Settings → General → Danger Zone で **Change visibility → Public**（または有料プランで private Pages）
+1. リポジトリが **public**（または有料プランで private Pages）
 2. Settings → Pages → **Source: GitHub Actions**
 3. Settings → Secrets and variables → Actions → Variables に  
-   `ENABLE_GITHUB_PAGES` = `true` を追加（deploy ジョブのゲート）
-4. `main` へ push、または Actions で `Deploy Trade Preview` を **Run workflow**
-5. 成功後、Pages URL を Android で開いて §6 を確認
+   `ENABLE_GITHUB_PAGES` = `true`
+4. `main` へ push、または Actions で **Deploy Modules Preview** を Run workflow
+5. 上表 URL を Android で開いて §7 を確認
 
-ワークフロー: [`.github/workflows/deploy-trade-preview.yml`](../.github/workflows/deploy-trade-preview.yml)
+任意の override 変数:
 
-### (B) Cloudflare Pages
+| Variable | デフォルト | 用途 |
+|---|---|---|
+| `TRADE_VITE_BASE` | `/-explore-sort-trade-game/` | trade の Vite `base` |
+| `EXPLORE_VITE_BASE` | `/-explore-sort-trade-game/explore/` | explore の Vite `base` |
+| `SORT_VITE_BASE` | `/-explore-sort-trade-game/sort/` | sort の Vite `base` |
 
-チェックリスト:
+ワークフロー正本（この PR）: [`docs/ci/deploy-modules-preview.yml`](./ci/deploy-modules-preview.yml)
 
-1. Cloudflare アカウント + Pages プロジェクト作成
-2. この GitHub リポを接続（private 可。Cloudflare 側に GitHub App 権限）
-3. Build 設定例:
-   - **Build command:** `npm ci && npm run build:trade`
-   - **Build output directory:** `packages/trade/dist`
-   - **Root directory:** リポジトリルート（モノレポ）
-   - **Environment variable:** `VITE_BASE=/`（独自ドメイン or `*.pages.dev` のルート配信）
-4. Production branch: `main`
-5. 発行された `*.pages.dev`（またはカスタムドメイン）を Android で確認
+**重要:** 使用中の PAT に `workflow` スコープが無いため、この PR は `.github/workflows/` を変更しない。
+マージ後（またはマージ前）に GitHub Web UI で §9 の手順どおり `.github/workflows/deploy-modules-preview.yml` を追加し、
+旧 `.github/workflows/deploy-trade-preview.yml` を削除すること。
 
-### (C) Vercel
+### (B) Cloudflare Pages / (C) Vercel
 
-チェックリスト:
+ルート配信なら各アプリを別プロジェクトにするか、ビルド後にサブディレクトリへ配置する。  
+単体ビルド例（trade）:
 
-1. Vercel アカウント + プロジェクト作成、GitHub リポを接続
-2. 設定例:
-   - **Framework Preset:** Other / Vite
-   - **Root Directory:** `.`（リポルート）
-   - **Build Command:** `npm ci && npm run build:trade`
-   - **Output Directory:** `packages/trade/dist`
-   - **Env:** `VITE_BASE=/`
-3. `main` デプロイ後、`*.vercel.app` を Android で確認
+- **Build command:** `npm ci && VITE_BASE=/ npm run build:trade`
+- **Output:** `packages/trade/dist`
+
+explore / sort も同様（`VITE_BASE=/` または独自サブパス）。
 
 ---
 
@@ -98,75 +89,85 @@ Vite の `base` はワークフローで `VITE_BASE=/-explore-sort-trade-game/` 
 ```bash
 npm ci
 npm run build:trade
+npm run build:explore
+npm run build:sort
 ```
 
-- **出力ディレクトリ:** `packages/trade/dist`
-- **プレビュー（任意）:** `npm run preview -w @estg/trade`
-
-### Vite `base`（サブパス配信）
-
-`packages/trade/vite.config.ts` は次を読む（どちらも可、優先は `VITE_BASE`）:
-
-| 変数 | デフォルト | 用途 |
-|---|---|---|
-| `VITE_BASE` | `/` | 推奨。GitHub Actions / Cloudflare / Vercel で設定 |
-| `BASE_PATH` | （`VITE_BASE` が無いとき） | 互換用エイリアス |
-
-**採用方針（本リポ）:**
-
-| ホスト | 推奨 `VITE_BASE` | 理由 |
-|---|---|---|
-| GitHub Pages（project site） | `/-explore-sort-trade-game/` | `https://<user>.github.io/<repo>/` に合わせる |
-| Cloudflare Pages / Vercel（ルート） | `/` | プロジェクトルートで配信するため |
-
-サブパス `/trade/` は使わない（Pages artifact はサイトルートに載る前提。別パスが必要ならホスト側の rewrite と合わせて再検討）。
-
-ローカルで Pages と同じ base を試す例:
+Pages と同じ base で試す:
 
 ```bash
 VITE_BASE=/-explore-sort-trade-game/ npm run build:trade
+VITE_BASE=/-explore-sort-trade-game/explore/ npm run build:explore
+VITE_BASE=/-explore-sort-trade-game/sort/ npm run build:sort
+
+mkdir -p _site/explore _site/sort
+cp -a packages/trade/dist/. _site/
+cp -a packages/explore/dist/. _site/explore/
+cp -a packages/sort/dist/. _site/sort/
 ```
 
----
+### Vite `base`
 
-## 6. 後での受け入れ条件（ライブ URL 取得後）
+各 `packages/{explore,sort,trade}/vite.config.ts` は次を読む（優先は `VITE_BASE`）:
 
-1. スマホのブラウザで **発行 URL** を開く
-2. Hangar UI が読み込まれる（白画面・404・アセット 404 がない）
-3. 同じオリジンで **localStorage**（HubSave 等）が動く  
-   - 機体受領 → リロードしても残る、など
-4. （任意）出撃リンクや sort 取込クエリが、そのオリジン前提で破綻しないこと
+| 変数 | デフォルト | 用途 |
+|---|---|---|
+| `VITE_BASE` | `/` | 推奨。CI / ホストで設定 |
+| `BASE_PATH` | （`VITE_BASE` が無いとき） | 互換用エイリアス |
 
----
-
-## 7. ワークフローの動き（今）
-
-ジョブ構成:
-
-1. **build** — `main` への該当 path push / `workflow_dispatch` で常に実行  
-   `npm ci` → `npm run build:trade`（`VITE_BASE` 付き）→ `actions/upload-pages-artifact`
-2. **deploy** — `vars.ENABLE_GITHUB_PAGES == 'true'` のときだけ  
-   `actions/deploy-pages` + `environment: github-pages`
-
-したがって:
-
-- Pages 未設定・private 無料プランでも **build は緑のまま**にできる
-- ライブ URL が欲しくなったら §4 (A) のチェックリスト（または B/C）を実施
-
-explore / sort 用 workflow はこのドキュメントの対象外（後続 PR）。
+| ホスト | 推奨 `VITE_BASE` |
+|---|---|
+| GitHub Pages trade | `/-explore-sort-trade-game/` |
+| GitHub Pages explore | `/-explore-sort-trade-game/explore/` |
+| GitHub Pages sort | `/-explore-sort-trade-game/sort/` |
+| Cloudflare / Vercel ルート | `/` |
 
 ---
 
-## 8. ワークフローファイルの設置
+## 6. ハンドオフ URL（MODULE_URLS）
 
-本リポへ Actions workflow を **git push するには PAT に `workflow` スコープが必要**です。  
-準備用の同一 YAML を [`docs/ci/deploy-trade-preview.yml`](./ci/deploy-trade-preview.yml) に置いてあります。
+| 定数 / 関数 | 役割 |
+|---|---|
+| `MODULE_URLS` | Pages 正本（本番プレビュー） |
+| `LOCAL_DEV_MODULE_URLS` | `localhost` 開発ポート |
+| `LEGACY_GROK_MODULE_URLS` | 旧 split `.grok.me`（参照のみ） |
+| `resolveModuleBaseUrl(key)` | localhost → local、それ以外 → `MODULE_URLS` |
 
-**推奨（GitHub Web UI）:**
+アプリ側（explore / sort / trade）はハンドオフ生成時に `resolveModuleBaseUrl` を渡す。  
+フォークや独自ホストでは、呼び出し側で `overrides` を渡すか、handoff builder の `baseUrl` 引数を明示する。
 
-1. この PR のブランチ上で **Add file → Create new file**
-2. パス: `.github/workflows/deploy-trade-preview.yml`
-3. [`docs/ci/deploy-trade-preview.yml`](./ci/deploy-trade-preview.yml) の内容を貼り付けて commit
-4. PR をマージ
+---
 
-**または:** `card.GH_TOKEN` を `repo` + `workflow` 付きで再発行し、同じ内容を `.github/workflows/` に置いて push。
+## 7. 受け入れ条件（ライブ URL）
+
+1. スマホで trade / explore / sort の各 URL が開く（白画面・アセット 404 なし）
+2. 同一オリジンで **localStorage**（HubSave）が共有される
+3. trade → explore → sort → trade のクエリハンドオフが Pages URL 同士でつながる
+4. （任意）ローカル `npm run dev:*` では引き続き `localhost:517x` にハンドオフする
+
+---
+
+## 8. ワークフローの動き
+
+1. **build** — `main` の該当 path push / `workflow_dispatch`  
+   `npm ci` → 三モジュールを各 `VITE_BASE` で build → `_site/{,explore/,sort/}` に集約 → `upload-pages-artifact`
+2. **deploy** — `vars.ENABLE_GITHUB_PAGES == 'true'` のときだけ `deploy-pages`
+
+Pages 未設定でも **build は緑**のままにできる。
+
+---
+
+## 9. ワークフローファイルの設置（必須・UI コピー）
+
+本 PR の PAT では `.github/workflows/*` を push できない（`workflow` スコープ不足）。  
+正本 YAML は [`docs/ci/deploy-modules-preview.yml`](./ci/deploy-modules-preview.yml) のみがリポジトリに入る。
+
+**GitHub Web UI（必須）:**
+
+1. ブランチ `chore/pages-explore-sort`（またはマージ後の `main`）で **Add file → Create new file**
+2. パス: `.github/workflows/deploy-modules-preview.yml`
+3. [`docs/ci/deploy-modules-preview.yml`](./ci/deploy-modules-preview.yml) の内容をすべて貼り付けて commit
+4. 旧 [`.github/workflows/deploy-trade-preview.yml`](../.github/workflows/deploy-trade-preview.yml) を **Delete file**（二重デプロイ防止）
+5. Actions で **Deploy Modules Preview** を Run（`ENABLE_GITHUB_PAGES=true` なら deploy まで進む）
+
+**または:** `GH_TOKEN` を `repo` + `workflow` 付きで再発行し、同じ内容を `.github/workflows/` に置いて push。
