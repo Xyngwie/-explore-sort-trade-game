@@ -22,6 +22,10 @@ import {
 } from "./puzzle";
 
 const DEFAULT_SEED = "restore-stub-6";
+
+/** Future handoff (not wired): buildRestoreToTradeUrl / parseTradeToRestoreSearch
+ * — docs/HANDOFF_M45_V0.md. No navigate-on-complete until that ticket.
+ */
 const COLS = 6;
 const ROWS = 6;
 

@@ -13,7 +13,10 @@ type SectorSel = { sx: number; sy: number };
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 
-/** UI-only route selection — no handoff URL. */
+/** UI-only route selection — no handoff URL navigation yet.
+ * Future: buildInvadeToTradeUrl / buildInvadeToExploreUrl / mergeInvadeSectorOntoExploreUrl
+ * (see docs/HANDOFF_M45_V0.md). Do not wire buttons until that ticket.
+ */
 let selected: SectorSel | null = null;
 /** Inert skip flag (quick-battle wording only). */
 let skipped = false;
@@ -115,7 +118,7 @@ function render(): void {
         <button type="button" class="btn ghost" id="btn-skip">スキップ（quick-battle・未配線）</button>
       </div>
       <p class="ok" style="margin-top:0.75rem">報酬はインテル／ルート表現のみ。本 salvage は払わない。</p>
-      <p class="warn">explore / sort / trade への URL ハンドオフなし。</p>
+      <p class="warn">explore / sort / trade への URL ナビ未配線（キー契約は HANDOFF_M45）。</p>
     </div>
   `;
 

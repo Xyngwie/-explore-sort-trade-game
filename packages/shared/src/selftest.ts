@@ -13,11 +13,23 @@ import {
   parseExploreToHubWearSearch,
   toExploreToHubWearPayload,
   buildSortToTradePayloadFromResult,
+  buildTradeToInvadeUrl,
+  parseTradeToInvadeSearch,
+  buildInvadeToTradeUrl,
+  parseInvadeToTradeSearch,
+  buildInvadeToExploreUrl,
+  parseInvadeToExploreSearch,
+  mergeInvadeSectorOntoExploreUrl,
+  buildTradeToRestoreUrl,
+  parseTradeToRestoreSearch,
+  buildRestoreToTradeUrl,
+  parseRestoreToTradeSearch,
 } from "./handoff";
 import {
   resolveModuleBaseUrl,
   LOCAL_DEV_MODULE_URLS,
   MODULE_URLS,
+  HANDOFF_QUERY_KEYS,
 } from "./constants";
 import {
   createHubSave,
@@ -498,6 +510,8 @@ import {
   createEmptyCircuitBoard,
   decodeEdgeState,
   encodeEdgeState,
+  encodeCircuitBoardCompact,
+  parseCircuitBoardCompact,
   edgeCount,
   type EdgeMark,
 } from "./circuit-board";
@@ -541,3 +555,100 @@ assert.equal(chebyshevDistance(-2, 5, 0, 0), 5);
 }
 
 console.log("shared selftest: sector-density + circuit-board ok");
+
+// --- M4/M5 handoff key contracts ---
+assert.ok(HANDOFF_QUERY_KEYS.tradeToInvade.includes("fromHub"));
+assert.ok(HANDOFF_QUERY_KEYS.invadeToTrade.includes("sectorX"));
+assert.ok(HANDOFF_QUERY_KEYS.invadeToExplore.includes("density"));
+assert.ok(HANDOFF_QUERY_KEYS.tradeToRestore.includes("circuitBoard"));
+assert.ok(HANDOFF_QUERY_KEYS.restoreToTrade.includes("circuitOutcome"));
+// non-goal: invade returns must not advertise yieldBag
+assert.equal(
+  (HANDOFF_QUERY_KEYS.invadeToTrade as readonly string[]).includes("yieldBag"),
+  false,
+);
+
+const tti = buildTradeToInvadeUrl({
+  fromHub: true,
+  deployableMechs: 2,
+  startingAmmo: 28,
+});
+const ttiParsed = parseTradeToInvadeSearch(new URL(tti).search);
+assert.equal(ttiParsed?.fromHub, true);
+assert.equal(ttiParsed?.deployableMechs, 2);
+assert.equal(ttiParsed?.startingAmmo, 28);
+assert.equal(parseTradeToInvadeSearch(""), null);
+// explore-style URL without fromHub is not trade→invade
+assert.equal(
+  parseTradeToInvadeSearch("deployableMechs=2&deployedInstanceIds=a,b"),
+  null,
+);
+
+const itt = buildInvadeToTradeUrl({
+  sectorX: 3,
+  sectorY: -2,
+  density: 0.3,
+  intelFlags: ["routeHint", "rareSignal", "bad flag!", "routeHint"],
+});
+const ittParsed = parseInvadeToTradeSearch(new URL(itt).search);
+assert.equal(ittParsed?.sectorX, 3);
+assert.equal(ittParsed?.sectorY, -2);
+assert.equal(ittParsed?.density, 0.3);
+assert.deepEqual(ittParsed?.intelFlags, ["routeHint", "rareSignal"]);
+assert.equal(itt.includes("yieldBag"), false);
+
+const ite = buildInvadeToExploreUrl({
+  sectorX: 10,
+  sectorY: 0,
+  density: 1,
+  intelFlags: ["frontline"],
+});
+const iteParsed = parseInvadeToExploreSearch(new URL(ite).search);
+assert.equal(iteParsed?.sectorX, 10);
+assert.equal(iteParsed?.density, 1);
+assert.deepEqual(iteParsed?.intelFlags, ["frontline"]);
+
+// merge sector onto trade→explore URL without dropping deploy keys
+const mergedExplore = mergeInvadeSectorOntoExploreUrl(
+  buildTradeToExploreUrl({
+    deployableMechs: 1,
+    startingAmmo: 5,
+    deployedInstanceIds: ["op1"],
+  }),
+  { sectorX: 4, sectorY: 1, density: 0.4 },
+);
+const mergedU = new URL(mergedExplore);
+assert.equal(mergedU.searchParams.get("deployedInstanceIds"), "op1");
+assert.equal(mergedU.searchParams.get("sectorX"), "4");
+assert.equal(mergedU.searchParams.get("density"), "0.400");
+
+const board0 = createEmptyCircuitBoard(8, 8, "stub-8");
+const boardCompact = encodeCircuitBoardCompact(board0);
+assert.ok(boardCompact.startsWith("1|8|8|"));
+assert.deepEqual(parseCircuitBoardCompact(boardCompact)?.puzzleId, "stub-8");
+
+const ttr = buildTradeToRestoreUrl({
+  circuitId: "board_demo",
+  circuitBoard: board0,
+});
+const ttrParsed = parseTradeToRestoreSearch(new URL(ttr).search);
+assert.equal(ttrParsed?.circuitId, "board_demo");
+assert.equal(ttrParsed?.circuitBoard?.cols, 8);
+assert.equal(ttrParsed?.circuitBoard?.puzzleId, "stub-8");
+
+const rtt = buildRestoreToTradeUrl({
+  circuitId: "board_demo",
+  circuitBoard: board0,
+  outcome: "bypass",
+});
+const rttParsed = parseRestoreToTradeSearch(new URL(rtt).search);
+assert.equal(rttParsed?.outcome, "bypass");
+assert.equal(rttParsed?.circuitBoard.outcome, "bypass");
+assert.equal(rttParsed?.circuitId, "board_demo");
+assert.equal(parseRestoreToTradeSearch("circuitId=only"), null);
+assert.equal(
+  parseRestoreToTradeSearch("circuitOutcome=fully_awakened"),
+  null,
+); // needs board
+
+console.log("shared handoff-m45 selftest: ok");
