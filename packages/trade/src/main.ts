@@ -11,9 +11,12 @@ import {
   MECH_FLEET_RULES,
   MECH_STATUS_LABEL_JA,
   buildDeployUrl,
+  buildInvadeUrl,
+  buildRestoreUrl,
   canAffordRepair,
   canAffordYieldCost,
   canDeploy,
+  circuitOutcomeLabelJa,
   clearHandoffFromUrl,
   createInitialHangar,
   describeTypedRepairShortfall,
@@ -39,7 +42,7 @@ import {
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 
-/** Stub: invade/restore nav not wired — use HANDOFF_M45 builders when connecting. */
+/** M4/M5: trade→invade / trade→restore links + invade/restore query ingest (HANDOFF_M45). */
 
 let state: HangarState = createInitialHangar();
 {
@@ -166,6 +169,8 @@ function fleetCards(s: HangarState): string {
 
 function render() {
   const deployUrl = buildDeployUrl(state);
+  const invadeUrl = buildInvadeUrl(state);
+  const restoreUrl = buildRestoreUrl(state);
   const typedCost = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
   const typedCostText = Object.entries(typedCost)
     .map(([k, v]) => `${k}:${v}`)
@@ -232,6 +237,31 @@ function render() {
         <button type="button" class="secondary" data-sim="abort">シミュ帰還 abort</button>
         <button type="button" class="secondary" data-sim="fail">シミュ帰還 fail</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem;margin:0 0 0.5rem">戦線 / 回路（M4·M5）</h2>
+      <p class="muted" style="margin:0 0 0.5rem">任意ルート。本 salvage は払わない。結果は HubSave 未対応のため UI + localStorage スタッシュ。</p>
+      <div class="row">
+        <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener">戦線へ（任意）</a>
+        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener">回路修復へ</a>
+      </div>
+      ${
+        state.lastInvadeSector
+          ? `<p class="ok" style="margin-top:0.75rem">直近セクター: (${state.lastInvadeSector.sectorX},${state.lastInvadeSector.sectorY}) dens=${state.lastInvadeSector.density.toFixed(3)}${
+              state.lastInvadeSector.intelFlags?.length
+                ? ` · ${escapeHtml(state.lastInvadeSector.intelFlags.join(", "))}`
+                : ""
+            }</p>`
+          : `<p class="muted" style="margin-top:0.75rem">セクター未取込（invade → ?sectorX=&sectorY=&density=）</p>`
+      }
+      ${
+        state.lastCircuit
+          ? `<p class="ok" style="margin-top:0.35rem">直近回路: ${escapeHtml(state.lastCircuit.circuitId ?? state.lastCircuit.circuitBoard.puzzleId ?? "—")} → ${escapeHtml(circuitOutcomeLabelJa(state.lastCircuit.outcome))} <span class="mono muted">(${escapeHtml(state.lastCircuit.outcome)})</span></p>`
+          : `<p class="muted" style="margin-top:0.35rem">回路未取込（restore → ?circuitBoard=&circuitOutcome=）。シード読込でデモ盤をスタッシュ。</p>`
+      }
+      <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(invadeUrl)}</p>
+      <p class="mono muted" style="margin-top:0.35rem">${escapeHtml(restoreUrl)}</p>
     </div>
 
     <div class="card">
