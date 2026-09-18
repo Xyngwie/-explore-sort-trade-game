@@ -2,19 +2,23 @@
   "name": "explore-sort-trade-game",
   "private": true,
   "version": "0.0.0",
-  "description": "Monorepo for the explore \u2192 sort/refine \u2192 trade/hub loop (WRECKLINE / Athanor / BASE HUB).",
+  "description": "Monorepo for the explore → sort/refine → trade/hub loop (WRECKLINE / Athanor / BASE HUB), plus invade/restore scaffolds.",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "typecheck": "npm run typecheck -w @estg/shared && npm run typecheck -w @estg/explore && npm run typecheck -w @estg/sort && npm run typecheck -w @estg/trade",
-    "test": "npm run test -w @estg/shared && npm run test -w @estg/explore && npm run test -w @estg/sort && npm run test -w @estg/trade",
+    "typecheck": "npm run typecheck -w @estg/shared && npm run typecheck -w @estg/explore && npm run typecheck -w @estg/sort && npm run typecheck -w @estg/trade && npm run typecheck -w @estg/invade && npm run typecheck -w @estg/restore",
+    "test": "npm run test -w @estg/shared && npm run test -w @estg/explore && npm run test -w @estg/sort && npm run test -w @estg/trade && npm run test -w @estg/invade && npm run test -w @estg/restore",
     "dev:explore": "npm run dev -w @estg/explore",
     "dev:trade": "npm run dev -w @estg/trade",
     "build:explore": "npm run build -w @estg/explore",
     "build:trade": "npm run build -w @estg/trade",
     "dev:sort": "npm run dev -w @estg/sort",
-    "build:sort": "npm run build -w @estg/sort"
+    "build:sort": "npm run build -w @estg/sort",
+    "dev:invade": "npm run dev -w @estg/invade",
+    "build:invade": "npm run build -w @estg/invade",
+    "dev:restore": "npm run dev -w @estg/restore",
+    "build:restore": "npm run build -w @estg/restore"
   },
   "engines": {
     "node": ">=20"

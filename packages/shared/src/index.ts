@@ -6,3 +6,5 @@ export * from "./hub-save";
 export * from "./geolocation";
 export * from "./mech-fleet";
 export * from "./sort-yield";
+export * from "./sector-density";
+export * from "./circuit-board";

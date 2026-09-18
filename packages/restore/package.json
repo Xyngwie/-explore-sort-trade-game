@@ -1,0 +1,22 @@
+{
+  "name": "@estg/restore",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "selftest": "tsx src/circuit.selftest.ts",
+    "test": "npm run typecheck && npm run selftest"
+  },
+  "dependencies": {
+    "@estg/shared": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  }
+}

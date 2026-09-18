@@ -11,7 +11,11 @@
 | `hub-save.ts` | 拠点セーブ v2（v1 から移行）の正規化・読み書き |
 | `mech-fleet.ts` | 所有機体・耐久状態・修理/スクラップ純関数 |
 | `sort-yield.ts` | 精製成果の汎用資材／特定パーツ ID・`YieldBag` |
+| `geolocation.ts` | 位置取得・許可・粗いグリッド（ルール未実装） |
+| `sector-density.ts` | Module 4 Chebyshev 密度プレースホルダ（純関数） |
+| `circuit-board.ts` | Module 5 `CircuitBoardState` + `edgeState` encode/decode スタブ |
 
 変更する場合は親ボット（参謀）の承認後に PR。
 
-| `geolocation.ts` | 位置取得・許可・粗いグリッド（ルール未実装） |
+Module 4 / 5 のドラフト仕様: [`docs/INVADE_V0.md`](../../docs/INVADE_V0.md)、[`docs/RESTORE_V0.md`](../../docs/RESTORE_V0.md)。  
+**URL ハンドオフは未配線**（invade / restore は constants の ModuleKey にも未追加）。
