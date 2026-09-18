@@ -15,6 +15,13 @@ import {
   type OwnedMech,
   type SortieReturnKind,
 } from "./mech-fleet";
+import {
+  encodeCircuitBoardCompact,
+  isCircuitOutcome,
+  parseCircuitBoardCompact,
+  type CircuitBoardState,
+  type CircuitOutcome,
+} from "./circuit-board";
 
 /** explore → sort */
 export type ExploreToSortPayload = {
@@ -429,6 +436,312 @@ export function toExploreToHubWearPayload(
 export function wingmanCountFromMechs(deployableMechs: number): number {
   const n = Math.floor(deployableMechs);
   return Math.max(0, Math.min(2, n - 1));
+}
+
+// ---------------------------------------------------------------------------
+// Module 4 / 5 handoff KEY CONTRACTS (URL build/parse only — UI not wired)
+// See docs/HANDOFF_M45_V0.md
+// ---------------------------------------------------------------------------
+
+/** trade → invade: minimal hub context. Invade remains optional. */
+export type TradeToInvadePayload = {
+  /** Always true when built from hub; encodes as fromHub=1. */
+  fromHub: true;
+  /** Optional operational mech count (display / planning — not a deploy commit). */
+  deployableMechs?: number;
+  /** Optional ammo snapshot for invade UI. */
+  startingAmmo?: number;
+};
+
+/**
+ * invade → trade: selected sector + density + optional intel flags.
+ * Explicit non-goal: never carry full YieldBag / salvagedContainers.
+ */
+export type InvadeToTradePayload = {
+  sectorX: number;
+  sectorY: number;
+  /** Provisional density 0..1 from sectorDensity helpers. */
+  density: number;
+  /** Optional short intel tokens (NOT salvage). */
+  intelFlags?: string[];
+};
+
+/**
+ * invade → explore: same sector deploy context explore can read later.
+ * May coexist on explore URLs with trade→explore keys (no key collision).
+ */
+export type InvadeToExplorePayload = {
+  sectorX: number;
+  sectorY: number;
+  density: number;
+  intelFlags?: string[];
+};
+
+/** trade → restore: circuit instance id and/or compact CircuitBoardState. */
+export type TradeToRestorePayload = {
+  /** Hub-side circuit instance id when inventory tracks named boards. */
+  circuitId?: string;
+  /** Compact board for the restore session (preferred when starting a puzzle). */
+  circuitBoard?: CircuitBoardState;
+};
+
+/** restore → trade: updated board + explicit outcome. */
+export type RestoreToTradePayload = {
+  circuitId?: string;
+  circuitBoard: CircuitBoardState;
+  /** Mirrors board.outcome; required for clear presence / strip keys. */
+  outcome: CircuitOutcome;
+};
+
+const INTEL_FLAG_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
+
+function encodeIntelFlags(flags: readonly string[]): string {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const f of flags) {
+    const t = f.trim();
+    if (!INTEL_FLAG_RE.test(t) || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out.join(",");
+}
+
+function parseIntelFlags(raw: string | null): string[] {
+  if (raw == null || raw.trim() === "") return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const t = part.trim();
+    if (!INTEL_FLAG_RE.test(t) || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
+
+function parseSignedInt(value: string | null, fallback: number): number {
+  if (value == null || value === "") return fallback;
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return n;
+}
+
+function parseUnitFloat(value: string | null, fallback: number): number {
+  if (value == null || value === "") return fallback;
+  const n = Number.parseFloat(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(1, Math.max(0, n));
+}
+
+function sectorPayloadFromParams(
+  p: URLSearchParams,
+): { sectorX: number; sectorY: number; density: number; intelFlags?: string[] } | null {
+  if (!p.has("sectorX") && !p.has("sectorY")) return null;
+  const sectorX = parseSignedInt(p.get("sectorX"), 0);
+  const sectorY = parseSignedInt(p.get("sectorY"), 0);
+  const density = parseUnitFloat(p.get("density"), 0);
+  const intelFlags = parseIntelFlags(p.get("intelFlags"));
+  const out: {
+    sectorX: number;
+    sectorY: number;
+    density: number;
+    intelFlags?: string[];
+  } = { sectorX, sectorY, density };
+  if (intelFlags.length > 0) out.intelFlags = intelFlags;
+  return out;
+}
+
+function applySectorParams(
+  u: URL,
+  payload: {
+    sectorX: number;
+    sectorY: number;
+    density: number;
+    intelFlags?: string[];
+  },
+): void {
+  u.searchParams.set("sectorX", String(Math.trunc(payload.sectorX)));
+  u.searchParams.set("sectorY", String(Math.trunc(payload.sectorY)));
+  u.searchParams.set(
+    "density",
+    Number(Math.min(1, Math.max(0, payload.density))).toFixed(3),
+  );
+  if (payload.intelFlags != null && payload.intelFlags.length > 0) {
+    const enc = encodeIntelFlags(payload.intelFlags);
+    if (enc) u.searchParams.set("intelFlags", enc);
+  }
+}
+
+export function buildTradeToInvadeUrl(
+  payload: TradeToInvadePayload,
+  baseUrl: string = resolveModuleBaseUrl("invade"),
+): string {
+  const u = new URL(baseUrl);
+  u.searchParams.set("fromHub", "1");
+  if (payload.deployableMechs != null) {
+    u.searchParams.set(
+      "deployableMechs",
+      String(Math.max(0, Math.floor(payload.deployableMechs))),
+    );
+  }
+  if (payload.startingAmmo != null) {
+    u.searchParams.set(
+      "startingAmmo",
+      String(Math.max(0, Math.floor(payload.startingAmmo))),
+    );
+  }
+  return u.toString();
+}
+
+export function parseTradeToInvadeSearch(
+  search: string,
+): TradeToInvadePayload | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const p = new URLSearchParams(raw);
+  if (
+    !p.has("fromHub") &&
+    !p.has("deployableMechs") &&
+    !p.has("startingAmmo")
+  ) {
+    return null;
+  }
+  // Reject explore-style deploy commits mistaken for invade context:
+  // if deployedInstanceIds present without fromHub, treat as not trade→invade.
+  if (!p.has("fromHub") && p.has("deployedInstanceIds")) return null;
+  const payload: TradeToInvadePayload = { fromHub: true };
+  if (p.has("deployableMechs")) {
+    payload.deployableMechs = parseNonNegInt(p.get("deployableMechs"), 0);
+  }
+  if (p.has("startingAmmo")) {
+    payload.startingAmmo = parseNonNegInt(p.get("startingAmmo"), 0);
+  }
+  return payload;
+}
+
+export function buildInvadeToTradeUrl(
+  payload: InvadeToTradePayload,
+  baseUrl: string = resolveModuleBaseUrl("trade"),
+): string {
+  const u = new URL(baseUrl);
+  applySectorParams(u, payload);
+  return u.toString();
+}
+
+export function parseInvadeToTradeSearch(
+  search: string,
+): InvadeToTradePayload | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const p = new URLSearchParams(raw);
+  return sectorPayloadFromParams(p);
+}
+
+export function buildInvadeToExploreUrl(
+  payload: InvadeToExplorePayload,
+  baseUrl: string = resolveModuleBaseUrl("explore"),
+): string {
+  const u = new URL(baseUrl);
+  applySectorParams(u, payload);
+  return u.toString();
+}
+
+export function parseInvadeToExploreSearch(
+  search: string,
+): InvadeToExplorePayload | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const p = new URLSearchParams(raw);
+  return sectorPayloadFromParams(p);
+}
+
+/**
+ * Merge invade sector context onto an existing explore URL (e.g. trade→explore).
+ * Does not remove deploy keys; only sets/overwrites sector* / density / intelFlags.
+ */
+export function mergeInvadeSectorOntoExploreUrl(
+  exploreUrl: string,
+  sector: InvadeToExplorePayload,
+): string {
+  const u = new URL(exploreUrl);
+  applySectorParams(u, sector);
+  return u.toString();
+}
+
+export function buildTradeToRestoreUrl(
+  payload: TradeToRestorePayload,
+  baseUrl: string = resolveModuleBaseUrl("restore"),
+): string {
+  const u = new URL(baseUrl);
+  if (payload.circuitId != null && payload.circuitId.trim() !== "") {
+    u.searchParams.set("circuitId", payload.circuitId.trim().slice(0, 64));
+  }
+  if (payload.circuitBoard != null) {
+    u.searchParams.set(
+      "circuitBoard",
+      encodeCircuitBoardCompact(payload.circuitBoard),
+    );
+  }
+  return u.toString();
+}
+
+export function parseTradeToRestoreSearch(
+  search: string,
+): TradeToRestorePayload | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const p = new URLSearchParams(raw);
+  if (!p.has("circuitId") && !p.has("circuitBoard")) return null;
+  const payload: TradeToRestorePayload = {};
+  const id = (p.get("circuitId") ?? "").trim();
+  if (id) payload.circuitId = id.slice(0, 64);
+  const board = parseCircuitBoardCompact(p.get("circuitBoard"));
+  if (board) payload.circuitBoard = board;
+  if (!payload.circuitId && !payload.circuitBoard) return null;
+  return payload;
+}
+
+export function buildRestoreToTradeUrl(
+  payload: RestoreToTradePayload,
+  baseUrl: string = resolveModuleBaseUrl("trade"),
+): string {
+  const u = new URL(baseUrl);
+  if (payload.circuitId != null && payload.circuitId.trim() !== "") {
+    u.searchParams.set("circuitId", payload.circuitId.trim().slice(0, 64));
+  }
+  const board: CircuitBoardState = {
+    ...payload.circuitBoard,
+    outcome: payload.outcome,
+  };
+  u.searchParams.set("circuitBoard", encodeCircuitBoardCompact(board));
+  u.searchParams.set("circuitOutcome", payload.outcome);
+  return u.toString();
+}
+
+export function parseRestoreToTradeSearch(
+  search: string,
+): RestoreToTradePayload | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const p = new URLSearchParams(raw);
+  if (
+    !p.has("circuitBoard") &&
+    !p.has("circuitOutcome") &&
+    !p.has("circuitId")
+  ) {
+    return null;
+  }
+  const board = parseCircuitBoardCompact(p.get("circuitBoard"));
+  const outcomeRaw = (p.get("circuitOutcome") ?? "").trim();
+  const outcome: CircuitOutcome | null = isCircuitOutcome(outcomeRaw)
+    ? outcomeRaw
+    : board?.outcome != null && isCircuitOutcome(board.outcome)
+      ? board.outcome
+      : null;
+  if (!board || outcome == null) return null;
+  const payload: RestoreToTradePayload = {
+    circuitBoard: { ...board, outcome },
+    outcome,
+  };
+  const id = (p.get("circuitId") ?? "").trim();
+  if (id) payload.circuitId = id.slice(0, 64);
+  return payload;
 }
 
 export function stripHandoffParams(

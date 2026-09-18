@@ -3,7 +3,7 @@
 **ステータス:** stub 実装（`packages/trade`）· 2026-09-18  
 **目的:** BASE HUB で MECH_FLEET / EXPLORE_IO_V2 / SORT_YIELD_V2 の共有契約を**触って確認**できる薄いループを置く。
 
-関連: `docs/MECH_FLEET.md`、`docs/EXPLORE_IO_V2.md`、`docs/SORT_YIELD_V2.md`、`docs/HUB_SAVE_CONTRACT.md`。
+関連: `docs/MECH_FLEET.md`、`docs/EXPLORE_IO_V2.md`、`docs/SORT_YIELD_V2.md`、`docs/HUB_SAVE_CONTRACT.md`、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)（invade/restore キー契約・**UI 未配線**）。
 
 ---
 
@@ -20,6 +20,20 @@
 | sort→trade 取込（`importMaterials` + `yieldBag`） | |
 
 ---
+
+
+## 1.5. Module 4 / 5 ハンドオフ（契約のみ）
+
+Hub は将来 invade / restore を開き結果を受け取る。**本スタブではナビしない。**
+
+| 方向 | キー（要約） | 状態 |
+|---|---|---|
+| trade → invade | `fromHub` + 任意艦隊要約 | shared 契約のみ |
+| invade → trade | `sectorX/Y` + `density` + `intelFlags?` | 取込未配線 |
+| trade → restore | `circuitId?` + `circuitBoard?` | shared 契約のみ |
+| restore → trade | `circuitBoard` + `circuitOutcome` | 取込未配線 |
+
+詳細: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
 
 ## 2. 画面 / フロー
 

@@ -12,7 +12,7 @@
 
 Android 端末（実機ブラウザ）から **ローカル `npm` / Grok Build なし** で各モジュールを開けるようにする。  
 同一オリジン（`*.github.io`）上でハンドオフ URL と localStorage（HubSave）を共有する（explore ↔ sort ↔ trade）。  
-invade / restore は **静的プレビューのみ**（モジュール間ハンドオフ未配線）。
+invade / restore は **静的プレビューのみ**（モジュール間 **UI ナビ未配線**；キー契約は [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)）。
 
 現状:
 

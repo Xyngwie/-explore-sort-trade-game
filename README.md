@@ -1,6 +1,6 @@
 # explore-sort-trade-game
 
-Explore → sort/refine → trade/hub のモノレポです。Module 4 / 5 は薄いプレイアブル・スタブ（ハンドオフ未配線）。Pages プレビューは全モジュール対応。
+Explore → sort/refine → trade/hub のモノレポです。Module 4 / 5 は薄いプレイアブル・スタブ。ハンドオフは **キー契約のみ**（[`HANDOFF_M45_V0.md`](docs/HANDOFF_M45_V0.md)）で UI ナビは未配線。Pages プレビューは全モジュール対応。
 
 | パッケージ | ゲーム上の役割 | 現行プレビュー |
 |---|---|---|
@@ -29,6 +29,7 @@ Trade Hangar v0（最小ハンガー）: [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_
 Sort v0（最小精製）: [`docs/SORT_V0.md`](docs/SORT_V0.md)
 Invade / Front v0（戦線ひな型・ドラフト）: [`docs/INVADE_V0.md`](docs/INVADE_V0.md)  
 Restore v0（精密回路修復・ドラフト）: [`docs/RESTORE_V0.md`](docs/RESTORE_V0.md)  
+Handoff M4/M5 v0（trade↔invade/restore キー契約）: [`docs/HANDOFF_M45_V0.md`](docs/HANDOFF_M45_V0.md)  
 Preview Hosting v0（GitHub Pages・全モジュール）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
 Pages 用 workflow 正本（UI で `.github/workflows/` へコピー）: [`docs/ci/deploy-modules-preview.yml`](docs/ci/deploy-modules-preview.yml)
 

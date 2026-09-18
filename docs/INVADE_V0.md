@@ -1,12 +1,12 @@
 # Invade / Front v0（Module 4 ドラフト仕様）
 
-**ステータス:** ドラフト仕様 / **ひな型のみ**（`packages/invade` スタブページ）· 2026-09-18  
-**性質:** プロダクト会話と [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) から落とした **V0 ドラフト**。ゲームプレイ実装・URL ハンドオフは未着手。  
+**ステータス:** ドラフト仕様 / 薄いスタブ（`packages/invade`）· ハンドオフ **キー契約のみ**（UI 未配線）· 2026-09-19  
+**性質:** プロダクト会話と [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) から落とした **V0 ドラフト**。ゲームプレイ本編は未着手。  
 **系譜:** Invading Minesweeper 系の任意レイヤ（名称 TBD: invade / front）
 
-関連: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.4・§4（報酬分割）。
+関連: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.4・§4（報酬分割）、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
 
-> **本ドキュメントは実装チケットではない。** explore / sort / trade への URL ハンドオフは **まだ結ばない**。
+> **URL ナビはまだ結ばない。** クエリ鍵・型・build/parse は [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md) / `@estg/shared` を正とする。
 
 ---
 
@@ -22,7 +22,7 @@ HQ を中心とした前線マップで、**どこで漁るか（ルート／セ
 |---|---|
 | HQ 中心のセクター格子イメージ | 本編マインスイーパ／侵食シミュレーション |
 | Chebyshev 距離に基づく密度カーブ案 | バランス確定・敵スポーン実装 |
-| 任意参加 vs quick-battle（短縮経路）の方針 | explore / trade への URL ハンドオフ |
+| 任意参加 vs quick-battle（短縮経路）の方針 | explore / trade への **UI ナビ配線**（キー契約は HANDOFF_M45） |
 | 報酬分割（インテル／ルート ≠ 本 salvage） | コンテナ／YieldBag の二重払い |
 | 後続スタブ受け入れ条件 | Pages デプロイ必須化・経済ゲート |
 
@@ -80,7 +80,7 @@ d >= 12 → blocked / wall
 
 ## 7. 非ゴール（明示）
 
-- explore / sort / trade との **URL ハンドオフ結線**
+- explore / sort / trade との **UI ナビ結線**（キー契約は別途 HANDOFF_M45）
 - Invading Minesweeper 本編ルールの移植
 - 敵 AI・弾薬消費・勝敗スコアの実装
 - 市場／戦闘ゲート付きドロップ（ビジョン §5 — バランス後）
@@ -101,6 +101,19 @@ d >= 12 → blocked / wall
 
 ---
 
+
+## 8.5. ハンドオフ契約（キーのみ）
+
+正本: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
+
+| 方向 | 主なキー | 備考 |
+|---|---|---|
+| trade → invade | `fromHub`, `deployableMechs?`, `startingAmmo?` | 任意参加。配備コミットはしない |
+| invade → trade | `sectorX`, `sectorY`, `density`, `intelFlags?` | **YieldBag 禁止** |
+| invade → explore | 同上セクター組 | trade→explore キーと共存可 |
+
+shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExploreUrl` / `mergeInvadeSectorOntoExploreUrl`。
+
 ## 9. パッケージ / 試し方（ひな型）
 
 ```bash
@@ -117,4 +130,4 @@ npm run dev:invade
 ## 10. 採否メモ
 
 - **位置づけ:** V0 ドラフト仕様 + 空の Vite ひな型。ビジョンの Module 4 欄の受け皿。
-- **次:** 選択 UI・密度表示の薄いスタブ（ハンドオフなし）。親（参謀）承認後にチケット化。
+- **次:** UI ナビ配線（HANDOFF_M45 builder をボタンに接続）。親（参謀）承認後にチケット化。

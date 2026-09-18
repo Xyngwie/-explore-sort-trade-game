@@ -1,12 +1,12 @@
 # Restore v0（Module 5 ドラフト仕様 — 精密回路修復）
 
-**ステータス:** ドラフト仕様 / **ひな型のみ**（`packages/restore` スタブページ）· 2026-09-18  
-**性質:** [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5 と事前の `CircuitBoardState` 草案を落とした **V0 ドラフト**。パズル本編・URL ハンドオフは未着手。  
+**ステータス:** ドラフト仕様 / 薄いスタブ（`packages/restore`）· ハンドオフ **キー契約のみ**（UI 未配線）· 2026-09-19  
+**性質:** [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5 と `CircuitBoardState` を落とした **V0 ドラフト**。パズル本編の本判定は薄いスタブ止まり。  
 **系譜:** Slitherlink 風の回路復元（高価値ワンオフ）
 
-関連: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5。
+関連: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
 
-> **本ドキュメントは実装チケットではない。** 他モジュールへの URL ハンドオフは **まだ結ばない**。  
+> **URL ナビはまだ結ばない。** クエリ鍵・型・build/parse は [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md) / `@estg/shared` を正とする。  
 > **タイマー圧なし**（制限時間で失敗させない）。
 
 ---
@@ -24,7 +24,7 @@ Slitherlink 系の **精密回路修復**。日常の薄利多売（sort）と�
 | 成果状態: Fully Awakened / Bypass / Offline | 本編 Slitherlink ソルバ・生成器 |
 | `CircuitBoardState` インタフェース草案 | HubSave への本統合・永続キー確定 |
 | `edgeState` のサイズ感と encode/decode スタブ | タイマー／タイムアタック |
-| ひな型ページ「精密回路修復 — ひな型」 | explore/sort/trade/invade への URL ハンドオフ |
+| 薄いスタブページ「精密回路修復」 | explore/sort/trade/invade への **UI ナビ配線** |
 | 後続スタブ受け入れ条件 | 報酬経済の本バランス |
 
 ---
@@ -99,12 +99,24 @@ export interface CircuitBoardState {
 ## 5. 非ゴール（明示）
 
 - 制限タイマー／タイムアタック失敗
-- 他モジュールへの URL ハンドオフ
+- 他モジュールへの **UI ナビ結線**（キー契約は HANDOFF_M45）
 - 自動ソルバ・ヒントエンジン
 - HubSave スキーマ版上げへの本組み込み
 - sort の日常ループへの強制挿入
 
 ---
+
+
+## 5.5. ハンドオフ契約（キーのみ）
+
+正本: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
+
+| 方向 | 主なキー | 備考 |
+|---|---|---|
+| trade → restore | `circuitId?`, `circuitBoard?` | compact = `encodeCircuitBoardCompact` |
+| restore → trade | `circuitId?`, `circuitBoard`, `circuitOutcome` | outcome: fully_awakened / bypass / offline |
+
+shared: `buildTradeToRestoreUrl` / `buildRestoreToTradeUrl`。
 
 ## 6. 後続スタブ受け入れ条件（まだ実装しない）
 
@@ -133,4 +145,4 @@ npm run dev:restore
 ## 8. 採否メモ
 
 - **位置づけ:** V0 ドラフト仕様 + 空の Vite ひな型。ビジョンの Module 5 欄の受け皿。
-- **次:** 辺トグルと encode 往復の薄いスタブ（ハンドオフなし）。親（参謀）承認後にチケット化。
+- **次:** UI ナビ配線（HANDOFF_M45 builder を完了ボタンに接続）。親（参謀）承認後にチケット化。

@@ -156,6 +156,9 @@ export function clearHandoffFromUrl(): void {
   const keys = [
     ...HANDOFF_QUERY_KEYS.sortToTrade,
     ...HANDOFF_QUERY_KEYS.exploreToHubWear,
+    // Future (HANDOFF_M45 — do not ingest until UI wiring ticket):
+    // ...HANDOFF_QUERY_KEYS.invadeToTrade,
+    // ...HANDOFF_QUERY_KEYS.restoreToTrade,
   ];
   const next = stripHandoffParams(window.location.href, keys);
   window.history.replaceState({}, "", next);

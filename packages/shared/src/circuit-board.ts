@@ -118,3 +118,49 @@ export function isCircuitOutcome(x: unknown): x is CircuitOutcome {
     x === "fully_awakened" || x === "bypass" || x === "offline"
   );
 }
+
+/**
+ * Compact URL / query encoding for CircuitBoardState.
+ * Shape: `v|cols|rows|edgeState|puzzleId|outcome` (trailing empties ok).
+ * edgeState is already base64url; other fields avoid `|`.
+ */
+export function encodeCircuitBoardCompact(board: CircuitBoardState): string {
+  const v = board.v === 1 ? "1" : String(Math.max(1, Math.floor(board.v)));
+  const cols = String(Math.max(1, Math.floor(board.cols)));
+  const rows = String(Math.max(1, Math.floor(board.rows)));
+  const edge = (board.edgeState ?? "").replace(/\|/g, "");
+  const puzzleId = (board.puzzleId ?? "").replace(/\|/g, "").slice(0, 64);
+  const outcome =
+    board.outcome != null && isCircuitOutcome(board.outcome) ? board.outcome : "";
+  return [v, cols, rows, edge, puzzleId, outcome].join("|");
+}
+
+/**
+ * Parse compact circuit board string. Returns null on malformed input.
+ */
+export function parseCircuitBoardCompact(
+  raw: string | null | undefined,
+): CircuitBoardState | null {
+  if (raw == null) return null;
+  const s = raw.trim();
+  if (!s) return null;
+  const parts = s.split("|");
+  if (parts.length < 4) return null;
+  const v = Number.parseInt(parts[0]!, 10);
+  const cols = Number.parseInt(parts[1]!, 10);
+  const rows = Number.parseInt(parts[2]!, 10);
+  if (v !== 1 || !Number.isFinite(cols) || !Number.isFinite(rows)) return null;
+  if (cols < 1 || rows < 1 || cols > 64 || rows > 64) return null;
+  const edgeState = parts[3] ?? "";
+  const puzzleId = (parts[4] ?? "").trim();
+  const outcomeRaw = (parts[5] ?? "").trim();
+  const board: CircuitBoardState = {
+    v: 1,
+    cols,
+    rows,
+    edgeState,
+  };
+  if (puzzleId) board.puzzleId = puzzleId.slice(0, 64);
+  if (isCircuitOutcome(outcomeRaw)) board.outcome = outcomeRaw;
+  return board;
+}

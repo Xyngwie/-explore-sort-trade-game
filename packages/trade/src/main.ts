@@ -39,6 +39,8 @@ import {
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 
+/** Stub: invade/restore nav not wired — use HANDOFF_M45 builders when connecting. */
+
 let state: HangarState = createInitialHangar();
 {
   const ingested = ingestLocationSearch(state, window.location.search);
