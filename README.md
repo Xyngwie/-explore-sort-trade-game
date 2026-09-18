@@ -1,6 +1,6 @@
 # explore-sort-trade-game
 
-Explore → sort/refine → trade/hub のモノレポです。
+Explore → sort/refine → trade/hub のモノレポです。Module 4 / 5 はひな型のみ（ハンドオフ未配線）。
 
 | パッケージ | ゲーム上の役割 | 現行プレビュー |
 |---|---|---|
@@ -8,6 +8,8 @@ Explore → sort/refine → trade/hub のモノレポです。
 | `packages/explore` | Module 1 探索（WRECKLINE）・振る舞い垂直スライス | [Pages `/explore/`](https://xyngwie.github.io/-explore-sort-trade-game/explore/)（ローカル `dev:explore`） |
 | `packages/sort` | Module 2 精製（Athanor） | [Pages `/sort/`](https://xyngwie.github.io/-explore-sort-trade-game/sort/)（ローカル `dev:sort`） |
 | `packages/trade` | Module 3 拠点（BASE HUB） | [Pages ルート](https://xyngwie.github.io/-explore-sort-trade-game/)（ローカル `dev:trade`） |
+| `packages/invade` | Module 4 戦線（invade / front）ひな型 | ローカル `dev:invade`（:5176）· Pages 未配線 |
+| `packages/restore` | Module 5 回路修復（restore）ひな型 | ローカル `dev:restore`（:5177）· Pages 未配線 |
 
 ## 正本
 
@@ -25,6 +27,8 @@ Explore Behavior v0（僚機方針・発見・戦報）: [`docs/EXPLORE_BEHAVIOR
 Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md)  
 Trade Hangar v0（最小ハンガー）: [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_HANGAR_V0.md)  
 Sort v0（最小精製）: [`docs/SORT_V0.md`](docs/SORT_V0.md)
+Invade / Front v0（戦線ひな型・ドラフト）: [`docs/INVADE_V0.md`](docs/INVADE_V0.md)  
+Restore v0（精密回路修復・ドラフト）: [`docs/RESTORE_V0.md`](docs/RESTORE_V0.md)  
 Preview Hosting v0（explore / sort / trade の GitHub Pages）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
 Pages 用 workflow 正本（UI で `.github/workflows/` へコピー）: [`docs/ci/deploy-modules-preview.yml`](docs/ci/deploy-modules-preview.yml)
 

@@ -484,3 +484,58 @@ const noInv = parseHubSave({
 assert.ok(noInv);
 assert.deepEqual(noInv!.hub.inventory, {});
 console.log("shared hub-inventory selftest: ok");
+
+import {
+  chebyshevDistance,
+  sectorDensityAt,
+  sectorDensityFromChebyshev,
+  SECTOR_WALL_DISTANCE,
+  SECTOR_FRONT_DISTANCE,
+} from "./sector-density";
+import {
+  createEmptyCircuitBoard,
+  decodeEdgeState,
+  encodeEdgeState,
+  edgeCount,
+  type EdgeMark,
+} from "./circuit-board";
+
+// --- sector density placeholders ---
+assert.equal(chebyshevDistance(0, 0, 3, 1), 3);
+assert.equal(chebyshevDistance(-2, 5, 0, 0), 5);
+{
+  const near = sectorDensityFromChebyshev(0);
+  assert.equal(near.blocked, false);
+  assert.equal(near.density, 0);
+  const front = sectorDensityFromChebyshev(SECTOR_FRONT_DISTANCE);
+  assert.equal(front.blocked, false);
+  assert.equal(front.density, 1);
+  const wall = sectorDensityFromChebyshev(SECTOR_WALL_DISTANCE);
+  assert.equal(wall.blocked, true);
+  assert.equal(wall.density, 0);
+  const at = sectorDensityAt(10, 0);
+  assert.equal(at.distance, 10);
+  assert.equal(at.density, 1);
+}
+
+// --- circuit board edgeState stub ---
+{
+  assert.equal(edgeCount(8, 8), 144);
+  const marks: EdgeMark[] = [0, 1, 2, 1, 0, 2, 1, 0];
+  const enc = encodeEdgeState(marks);
+  assert.ok(enc.length > 0);
+  const dec = decodeEdgeState(enc, marks.length);
+  assert.deepEqual(dec, marks);
+  const board = createEmptyCircuitBoard(8, 8, "stub-8");
+  assert.equal(board.v, 1);
+  assert.equal(board.cols, 8);
+  assert.equal(board.rows, 8);
+  assert.equal(board.puzzleId, "stub-8");
+  const empty = decodeEdgeState(board.edgeState, edgeCount(8, 8));
+  assert.equal(empty.length, 144);
+  assert.ok(empty.every((m) => m === 0));
+  // size budget: packed payload alone should be well under 0.4KB
+  assert.ok(board.edgeState.length < 100, `edgeState too long: ${board.edgeState.length}`);
+}
+
+console.log("shared selftest: sector-density + circuit-board ok");

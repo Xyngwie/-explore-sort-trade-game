@@ -9,6 +9,8 @@
 - Explore 振る舞い: [`EXPLORE_BEHAVIOR_V0.md`](./EXPLORE_BEHAVIOR_V0.md)
 - Sort Yield: [`SORT_YIELD_V2.md`](./SORT_YIELD_V2.md) / [`SORT_V2_RULES.md`](./SORT_V2_RULES.md)
 - Trade Hangar: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)
+- Invade / Front ドラフト: [`INVADE_V0.md`](./INVADE_V0.md)（Module 4 仕様の受け皿・ビジョンは願望のまま）
+- Restore ドラフト: [`RESTORE_V0.md`](./RESTORE_V0.md)（Module 5 仕様の受け皿・ビジョンは願望のまま）
 
 > **本ドキュメントは実装順を決めない。** 各モジュールの V0／契約ドキュメントを置き換えない。  
 > `.grok.me` プロトタイプは **練習用のみ**。ソース正本（SoT）にしない。
@@ -39,8 +41,8 @@
 | 1 | **explore** | `packages/explore` | リアルタイム有人出撃。サルベージと機体摩耗。僚機方針 帯同／哨戒／回収／遊撃（→ `EXPLORE_BEHAVIOR_V0`） |
 | 2 | **sort** | `packages/sort` | 日常の精製。薄利多売・高回転（→ `SORT_V2` / `YieldBag`） |
 | 3 | **trade** | `packages/trade` | 拠点ハブ。フリート・インベントリ・修理／解体 |
-| 4 | **invade / front**（名称 TBD） | 未定（Invading Minesweeper 系譜） | 任意のフィールド／ルート選択（HQ 周辺）。密度は Chebyshev 距離でスケール |
-| 5 | **restore** | `packages/restore`（想定） | Slitherlink 系の回路復元。高価値ワンオフ。タイマー圧なし |
+| 4 | **invade / front**（名称 TBD） | `packages/invade`（ひな型） | 任意のフィールド／ルート選択（HQ 周辺）。密度は Chebyshev 距離でスケール（→ `INVADE_V0`） |
+| 5 | **restore** | `packages/restore`（ひな型） | Slitherlink 系の回路復元。高価値ワンオフ。タイマー圧なし（→ `RESTORE_V0`） |
 
 ### 3.1 Module 1 — explore
 
@@ -61,6 +63,7 @@
 
 ### 3.4 Module 4 — invade / front（名称 TBD）
 
+- **ドラフト仕様（正）:** [`INVADE_V0.md`](./INVADE_V0.md) — 本節は願望の要約。詳細・受け入れは V0 を見る。
 - **Invading Minesweeper** 系譜の任意レイヤ。
 - HQ 周辺で **フィールド／ルートを選ぶ**（どこで漁るかの意思決定）。
 - 密度スケール案（願望）:
@@ -72,7 +75,8 @@
 
 ### 3.5 Module 5 — restore
 
-- `packages/restore`（想定）。Slitherlink 風の **回路復元**。
+- **ドラフト仕様（正）:** [`RESTORE_V0.md`](./RESTORE_V0.md) — 本節は願望の要約。`CircuitBoardState` 詳細は V0 を見る。
+- `packages/restore`（ひな型）。Slitherlink 風の **回路復元**。
 - 高価値なワンオフ成果。日常ループの薄利多売とは別軸。
 - 状態例（願望）: Fully Awakened / Bypass / Offline。
 - **タイマー圧なし。**
