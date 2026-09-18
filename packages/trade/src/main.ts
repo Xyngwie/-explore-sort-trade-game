@@ -16,7 +16,9 @@ import {
   canDeploy,
   clearHandoffFromUrl,
   createInitialHangar,
+  describeTypedRepairShortfall,
   durabilityBarClass,
+  formatTypedRepairSpend,
   grantDemoInventory,
   grantStarterFleet,
   ingestLocationSearch,
@@ -52,6 +54,12 @@ function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+/** Failure / blocked notices → warn; success → ok. */
+function noticeClass(notice: string): string {
+  if (/不足|失敗|なし|のみ|対象なし|機体なし|摩耗対象/.test(notice)) return "warn";
+  return "ok";
+}
+
 function labelYield(id: string): string {
   if (isBasicMaterialId(id)) return BASIC_MATERIAL_LABEL_JA[id];
   if (isPartId(id)) return PART_LABEL_JA[id];
@@ -77,23 +85,40 @@ function fleetCards(s: HangarState): string {
   if (s.hub.fleet.length === 0) {
     return `<p class="muted">艦隊が空です。「シード読込」または「機体を受領」でデモ機を追加してください。</p>`;
   }
+  const typedSpend = formatTypedRepairSpend();
   return s.hub.fleet
     .map((m) => {
       const pct = Math.round((m.durability / m.durabilityMax) * 100);
       const deployable = canDeploy(m);
       const checked = s.selectedDeployIds.includes(m.instanceId);
       const classicCost = repairCost(m);
-      const classicOk =
+      const needsRepair = m.status === "needs_repair";
+      // Clickable when repairable so shortfall shows as notice (not only disabled).
+      const classicClickable = classicCost != null;
+      const classicAfford =
         classicCost != null &&
         canAffordRepair(m, {
           credits: s.hub.credits,
           materials: s.hub.materials,
         });
+      const typedClickable = needsRepair;
       const typedBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
-      const typedOk =
-        m.status === "needs_repair" &&
+      const typedAfford =
+        needsRepair &&
         s.hub.credits >= EXAMPLE_TYPED_REPAIR_COST.credits &&
         canAffordYieldCost(s.hub.inventory, typedBag);
+      const typedHint = needsRepair
+        ? typedAfford
+          ? `<p class="muted" style="margin:0.35rem 0 0">型付き消費: ${escapeHtml(typedSpend)}</p>`
+          : `<p class="warn" style="margin:0.35rem 0 0">${escapeHtml(
+              describeTypedRepairShortfall(s.hub.credits, s.hub.inventory) ??
+                "型付き資材不足",
+            )}</p>`
+        : "";
+      const classicHint =
+        needsRepair && classicCost && !classicAfford
+          ? `<p class="warn" style="margin:0.2rem 0 0">集計不足（要 ${classicCost.credits}c / ${classicCost.materials}m · 持 ${s.hub.credits}c / ${s.hub.materials}m）</p>`
+          : "";
 
       return `
       <div class="fleet-row" data-id="${escapeHtml(m.instanceId)}">
@@ -116,13 +141,22 @@ function fleetCards(s: HangarState): string {
         </div>
         <div class="row">
           <button type="button" data-act="repair-classic" data-id="${escapeHtml(m.instanceId)}" ${
-            classicOk ? "" : "disabled"
-          }>修理（集計 ${MECH_FLEET_RULES.repairCredits}c/${MECH_FLEET_RULES.repairMaterials}m）</button>
+            classicClickable ? "" : "disabled"
+          } title="集計クレジット/資材を消費して健在へ">${
+            classicAfford
+              ? `修理（集計 −${MECH_FLEET_RULES.repairCredits}c/−${MECH_FLEET_RULES.repairMaterials}m）`
+              : `修理（集計 ${MECH_FLEET_RULES.repairCredits}c/${MECH_FLEET_RULES.repairMaterials}m）`
+          }</button>
           <button type="button" data-act="repair-typed" data-id="${escapeHtml(m.instanceId)}" ${
-            typedOk ? "" : "disabled"
-          }>修理（型付き）</button>
+            typedClickable ? "" : "disabled"
+          } title="型付き YieldBag + クレジットを消費して健在へ">${
+            typedAfford
+              ? `修理（型付き ${escapeHtml(typedSpend)}）`
+              : "修理（型付き）"
+          }</button>
           <button type="button" class="secondary" data-act="scrap" data-id="${escapeHtml(m.instanceId)}">解体</button>
         </div>
+        ${typedHint}${classicHint}
       </div>`;
     })
     .join("");
@@ -141,7 +175,7 @@ function render() {
     <p class="muted">フリート循環・ハンドオフ・型付き在庫の契約を見える化するスタブです。</p>
     ${
       state.notice
-        ? `<p class="ok">${escapeHtml(state.notice)}</p>`
+        ? `<p class="${noticeClass(state.notice)}">${escapeHtml(state.notice)}</p>`
         : ""
     }
 
@@ -163,7 +197,7 @@ function render() {
         <button type="button" class="secondary" id="btn-inv">デモ資材バッグ</button>
         <button type="button" class="secondary" id="btn-reset">デモ初期化</button>
       </div>
-      <p class="muted" style="margin-top:0.5rem">「シード読込」= 健在2機 + 要修理1機・クレジット/型付き資材/弾薬入りのプレイテスト用 HubSave。</p>
+      <p class="muted" style="margin-top:0.5rem">「シード読込」= 健在2機 + 要修理1機・クレジット/型付き資材（EXAMPLE_TYPED_REPAIR_COST×3）/弾薬入り。要修理機を型付き修理 → 出撃選択に載るループ用。</p>
     </div>
 
     <div class="card">
