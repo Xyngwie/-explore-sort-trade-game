@@ -175,4 +175,24 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.ok(wearUrl!.includes("mechWear="));
 }
 
+// --- wear uses deploy-time durability ---
+{
+  const world = createWorld(
+    bootstrapFromSearch(
+      "?deployedInstanceIds=owned_a&startingAmmo=10&mechDurability=owned_a:85",
+    ),
+  );
+  assert.equal(world.deployedDurability["owned_a"], 85);
+  startSortie(world);
+  world.phase = "result";
+  world.extracted = false;
+  world.failReason = "timeout";
+  const outcome = buildSortieOutcome(world)!;
+  assert.equal(outcome.returnKind, "fail");
+  assert.equal(outcome.mechWear[0]!.durabilityBefore, 85);
+  assert.equal(outcome.mechWear[0]!.durabilityAfter, 85 - 35); // wearOnFail
+  const wearUrl = hubWearHandoffUrl(world)!;
+  assert.ok(wearUrl.includes("owned_a:50") || wearUrl.includes("owned_a%3A50"));
+}
+
 console.log("explore selftest: ok");

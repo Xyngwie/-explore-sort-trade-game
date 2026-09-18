@@ -4,6 +4,7 @@ import {
   createExpeditionState,
   createExploreSortieOutcome,
   createOwnedMech,
+  resolveModuleBaseUrl,
   stockFromContainers,
   toExploreToHubWearPayload,
   type ExploreResult,
@@ -48,10 +49,11 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
   if (world.deployedInstanceIds.length === 0) return null;
   const result = toExploreResult(world);
   const kind = returnKindFromWorld(world);
-  // Stub fleet at full durability — real hub fleet not present in explore package.
-  const fleet = world.deployedInstanceIds.map((id) =>
-    createOwnedMech("mech_gen1", { instanceId: id, durability: 100 }),
-  );
+  // Rebuild a minimal fleet snapshot from deploy-time durability (hub is SoT).
+  const fleet = world.deployedInstanceIds.map((id) => {
+    const durability = world.deployedDurability[id] ?? 100;
+    return createOwnedMech("mech_gen1", { instanceId: id, durability });
+  });
   return createExploreSortieOutcome({
     result,
     returnKind: kind,
@@ -62,11 +64,14 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
 
 export function sortHandoffUrl(world: World): string {
   const result = toExploreResult(world);
-  return buildExploreToSortUrl({
-    salvagedContainers: result.salvagedContainers,
-    totalStockPieces: result.totalStockPieces,
-    isExtracted: result.isExtracted,
-  });
+  return buildExploreToSortUrl(
+    {
+      salvagedContainers: result.salvagedContainers,
+      totalStockPieces: result.totalStockPieces,
+      isExtracted: result.isExtracted,
+    },
+    resolveModuleBaseUrl("sort"),
+  );
 }
 
 export function hubWearHandoffUrl(world: World): string | null {
@@ -79,5 +84,5 @@ export function hubWearHandoffUrl(world: World): string | null {
       durabilityAfter: w.durabilityAfter,
     })),
   );
-  return buildExploreToHubWearUrl(payload);
+  return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));
 }

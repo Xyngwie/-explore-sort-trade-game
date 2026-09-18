@@ -84,6 +84,8 @@ export type World = {
   failReason: FailReason;
   note: string;
   deployedInstanceIds: string[];
+  /** Durability at deploy time (from trade mechDurability); empty → assume max. */
+  deployedDurability: Record<string, number>;
   camera: Camera;
   /** Accumulated damage events for wear scaffold (flat returnKind still primary). */
   combatHitsTaken: number;

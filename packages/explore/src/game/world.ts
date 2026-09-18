@@ -82,6 +82,7 @@ export type SortieBootstrap = {
   maxOperationTimeSec: number;
   note: string;
   deployedInstanceIds: string[];
+  deployedDurability: Record<string, number>;
 };
 
 export function bootstrapFromSearch(search: string): SortieBootstrap {
@@ -89,6 +90,12 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
   const deployedInstanceIds = inbound?.deployedInstanceIds
     ? [...inbound.deployedInstanceIds]
     : [];
+  const deployedDurability: Record<string, number> = {};
+  if (inbound?.deployedDurability) {
+    for (const row of inbound.deployedDurability) {
+      deployedDurability[row.instanceId] = row.durability;
+    }
+  }
   const craftFromIds = deployedInstanceIds.length;
   const wingmanCount =
     craftFromIds > 0
@@ -113,6 +120,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     maxOperationTimeSec: DEFAULT_EXPEDITION_LOADOUT.maxOperationTimeSec,
     note,
     deployedInstanceIds,
+    deployedDurability,
   };
 }
 
@@ -177,6 +185,7 @@ export function createWorld(boot: SortieBootstrap): World {
     failReason: null,
     note: boot.note,
     deployedInstanceIds: [...boot.deployedInstanceIds],
+    deployedDurability: { ...boot.deployedDurability },
     camera: { x: 0, y: 200, w: 720, h: 420 },
     combatHitsTaken: 0,
   };

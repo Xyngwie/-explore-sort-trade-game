@@ -5,7 +5,36 @@ export const MODULE_URLS = {
   trade: "https://mist-river-velvet-drum.grok.me",
 } as const;
 
+/** Local vite ports when developing the monorepo (see package vite configs). */
+export const LOCAL_DEV_MODULE_URLS = {
+  explore: "http://localhost:5173/",
+  sort: "http://localhost:5174/",
+  trade: "http://localhost:5175/",
+} as const;
+
 export type ModuleKey = keyof typeof MODULE_URLS;
+
+/**
+ * Prefer localhost vite URLs when the page is served from localhost / 127.0.0.1.
+ * Falls back to MODULE_URLS (split .grok.me hosts) otherwise.
+ */
+export function resolveModuleBaseUrl(
+  key: ModuleKey,
+  opts?: { hostname?: string | null },
+): string {
+  const host =
+    opts?.hostname ??
+    (typeof globalThis !== "undefined" &&
+    typeof (globalThis as { location?: { hostname?: string } }).location ===
+      "object" &&
+    (globalThis as { location?: { hostname?: string } }).location
+      ? (globalThis as { location: { hostname: string } }).location.hostname
+      : null);
+  if (host === "localhost" || host === "127.0.0.1") {
+    return LOCAL_DEV_MODULE_URLS[key];
+  }
+  return MODULE_URLS[key];
+}
 
 export const PIECES_PER_CONTAINER = 25;
 
@@ -18,6 +47,7 @@ export const HANDOFF_QUERY_KEYS = {
     "deployableMechs",
     "startingAmmo",
     "deployedInstanceIds",
+    "mechDurability",
   ] as const,
   exploreToHubWear: ["returnKind", "mechWear"] as const,
 };

@@ -187,7 +187,7 @@ function render() {
             <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(deployUrl)}</p>`
           : `<p class="warn">健在機がありません。受領するか修理してください。</p>`
       }
-      <p class="muted" style="margin-top:0.5rem">帰還は URL（returnKind / mechWear）か下のシミュで摩耗適用。</p>
+      <p class="muted" style="margin-top:0.5rem">帰還は explore の「拠点へ摩耗報告」（returnKind / mechWear）か下のシミュ。localhost では :5173 ↔ :5175。</p>
       <div class="row">
         <button type="button" class="secondary" data-sim="extract">シミュ帰還 extract</button>
         <button type="button" class="secondary" data-sim="abort">シミュ帰還 abort</button>

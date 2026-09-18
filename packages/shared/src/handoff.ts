@@ -1,4 +1,7 @@
-import { MODULE_URLS, PIECES_PER_CONTAINER } from "./constants";
+import {
+  PIECES_PER_CONTAINER,
+  resolveModuleBaseUrl,
+} from "./constants";
 import type { CraftingPuzzleResult } from "./expedition";
 import {
   encodeYieldBagCompact,
@@ -44,6 +47,11 @@ export type TradeToExplorePayload = {
   startingAmmo: number;
   /** Operational owned-mech instance ids committed to this sortie. */
   deployedInstanceIds?: string[];
+  /**
+   * Optional durability snapshot at deploy time (same compact shape as mechWear).
+   * Lets explore compute durabilityAfter from real hub values instead of assuming 100.
+   */
+  deployedDurability?: Array<{ instanceId: string; durability: number }>;
 };
 
 /** explore → hub wear return (salvage still goes explore → sort). */
@@ -132,10 +140,16 @@ export function buildTradeToExplorePayloadFromFleet(
     requestedInstanceIds != null
       ? filterToDeployableIds(fleet, requestedInstanceIds)
       : selectDeployableInstanceIds(fleet);
+  const byId = new Map(fleet.map((m) => [m.instanceId, m]));
+  const deployedDurability = deployedInstanceIds.map((id) => {
+    const m = byId.get(id)!;
+    return { instanceId: id, durability: m.durability };
+  });
   return {
     deployableMechs: deployedInstanceIds.length,
     startingAmmo: Math.max(0, Math.floor(startingAmmo)),
     deployedInstanceIds,
+    deployedDurability,
   };
 }
 
@@ -167,7 +181,7 @@ function parseLooseBool(value: string | null, fallback = false): boolean {
 
 export function buildExploreToSortUrl(
   payload: ExploreToSortPayload,
-  baseUrl: string = MODULE_URLS.sort,
+  baseUrl: string = resolveModuleBaseUrl("sort"),
 ): string {
   const u = new URL(baseUrl);
   const containers = Math.max(0, Math.floor(payload.salvagedContainers));
@@ -208,7 +222,7 @@ export function parseExploreToSortSearch(
 
 export function buildSortToTradeUrl(
   payload: SortToTradePayload,
-  baseUrl: string = MODULE_URLS.trade,
+  baseUrl: string = resolveModuleBaseUrl("trade"),
 ): string {
   const u = new URL(baseUrl);
   u.searchParams.set(
@@ -271,7 +285,7 @@ export function buildSortToTradeUrlFromResult(
     | "craftMultiplier"
     | "yieldBag"
   >,
-  baseUrl: string = MODULE_URLS.trade,
+  baseUrl: string = resolveModuleBaseUrl("trade"),
 ): string {
   return buildSortToTradeUrl(buildSortToTradePayloadFromResult(result), baseUrl);
 }
@@ -301,7 +315,7 @@ export function parseSortToTradeSearch(
 
 export function buildTradeToExploreUrl(
   payload: TradeToExplorePayload,
-  baseUrl: string = MODULE_URLS.explore,
+  baseUrl: string = resolveModuleBaseUrl("explore"),
 ): string {
   const u = new URL(baseUrl);
   const ids =
@@ -322,6 +336,19 @@ export function buildTradeToExploreUrl(
   if (ids.length > 0) {
     u.searchParams.set("deployedInstanceIds", encodeInstanceIds(ids));
   }
+  const durability =
+    payload.deployedDurability != null
+      ? payload.deployedDurability
+          .filter((d) => d.instanceId.trim().length > 0)
+          .map((d) => ({
+            instanceId: d.instanceId.trim(),
+            durabilityAfter: Math.max(0, Math.floor(d.durability)),
+          }))
+      : [];
+  if (durability.length > 0) {
+    // Reuse mechWear compact encoding (id:n;id:n).
+    u.searchParams.set("mechDurability", encodeMechWearCompact(durability));
+  }
   return u.toString();
 }
 
@@ -333,7 +360,8 @@ export function parseTradeToExploreSearch(
   if (
     !p.has("deployableMechs") &&
     !p.has("startingAmmo") &&
-    !p.has("deployedInstanceIds")
+    !p.has("deployedInstanceIds") &&
+    !p.has("mechDurability")
   ) {
     return null;
   }
@@ -349,12 +377,19 @@ export function parseTradeToExploreSearch(
   if (deployedInstanceIds.length > 0) {
     payload.deployedInstanceIds = deployedInstanceIds;
   }
+  const durabilityRows = parseMechWearCompact(p.get("mechDurability"));
+  if (durabilityRows.length > 0) {
+    payload.deployedDurability = durabilityRows.map((r) => ({
+      instanceId: r.instanceId,
+      durability: r.durabilityAfter,
+    }));
+  }
   return payload;
 }
 
 export function buildExploreToHubWearUrl(
   payload: ExploreToHubWearPayload,
-  baseUrl: string = MODULE_URLS.trade,
+  baseUrl: string = resolveModuleBaseUrl("trade"),
 ): string {
   const u = new URL(baseUrl);
   u.searchParams.set("returnKind", payload.returnKind);
