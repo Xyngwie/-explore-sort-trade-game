@@ -5,15 +5,21 @@ import {
   toExploreToHubWearPayload,
 } from "@estg/shared";
 import {
+  EXAMPLE_TYPED_REPAIR_COST,
   buildDeployUrl,
   buildPlaytestSeedHub,
+  buildSeedYieldBagForTypedRepair,
+  canAffordYieldCost,
   createInitialHangar,
+  describeTypedRepairShortfall,
   grantStarterFleet,
   ingestLocationSearch,
   loadPlaytestSeed,
   markDeployed,
+  repairTyped,
   resetHangar,
   simulateReturn,
+  yieldBagFromTypedRepairCost,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -129,6 +135,94 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(
     afterSeed.hub.inventory.mat_scrap ?? 0,
     seedHub.inventory.mat_scrap ?? 0,
+  );
+}
+
+
+// Seed → typed repair → operational → deployable again
+{
+  const seedStorage = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = seedStorage;
+
+  let seeded = resetHangar(seedStorage);
+  seeded = loadPlaytestSeed(seeded, seedStorage);
+
+  const costBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
+  assert.equal(
+    canAffordYieldCost(seeded.hub.inventory, costBag),
+    true,
+    "seed YieldBag must cover EXAMPLE_TYPED_REPAIR_COST",
+  );
+  assert.ok(
+    seeded.hub.credits >= EXAMPLE_TYPED_REPAIR_COST.credits,
+    "seed credits must cover typed repair",
+  );
+  assert.equal(describeTypedRepairShortfall(seeded.hub.credits, seeded.hub.inventory), null);
+
+  const derived = buildSeedYieldBagForTypedRepair(3);
+  assert.ok((derived.mat_scrap ?? 0) >= (costBag.mat_scrap ?? 0) * 3);
+  assert.ok((derived.part_actuator ?? 0) >= (costBag.part_actuator ?? 0) * 3);
+
+  const damaged = seeded.hub.fleet.find((m) => m.instanceId === "seed_repair_gen1")!;
+  assert.equal(damaged.status, "needs_repair");
+  assert.ok(!seeded.selectedDeployIds.includes("seed_repair_gen1"));
+
+  const creditsBefore = seeded.hub.credits;
+  const scrapBefore = seeded.hub.inventory.mat_scrap ?? 0;
+  const actuatorBefore = seeded.hub.inventory.part_actuator ?? 0;
+
+  seeded = repairTyped(seeded, "seed_repair_gen1");
+
+  const fixed = seeded.hub.fleet.find((m) => m.instanceId === "seed_repair_gen1")!;
+  assert.equal(fixed.status, "operational");
+  assert.equal(fixed.durability, fixed.durabilityMax);
+  assert.ok(
+    seeded.selectedDeployIds.includes("seed_repair_gen1"),
+    "repaired mech must enter deploy selection",
+  );
+  assert.equal(seeded.hub.credits, creditsBefore - EXAMPLE_TYPED_REPAIR_COST.credits);
+  assert.equal(
+    seeded.hub.inventory.mat_scrap ?? 0,
+    scrapBefore - (costBag.mat_scrap ?? 0),
+  );
+  assert.equal(
+    seeded.hub.inventory.part_actuator ?? 0,
+    actuatorBefore - (costBag.part_actuator ?? 0),
+  );
+  assert.ok(seeded.notice.includes("健在"));
+  assert.ok(seeded.log.some((l) => l.includes("修理(型付き)")));
+
+  const deployUrl = buildDeployUrl(seeded);
+  assert.ok(deployUrl);
+  assert.ok(
+    deployUrl!.includes("seed_repair_gen1"),
+    "deploy URL must include repaired instance",
+  );
+
+  // Shortfall path: empty inventory → failure notice, status unchanged
+  let broke = {
+    ...seeded,
+    hub: {
+      ...seeded.hub,
+      inventory: {},
+      credits: 0,
+      fleet: seeded.hub.fleet.map((m) =>
+        m.instanceId === "seed_op_gen2"
+          ? { ...m, durability: 20, status: "needs_repair" as const }
+          : m,
+      ),
+    },
+    selectedDeployIds: seeded.selectedDeployIds.filter((id) => id !== "seed_op_gen2"),
+  };
+  // Re-normalize status via durability by using create path: durability 20 → needs_repair
+  // (status field above is explicit for the test stub)
+  const beforeFailStatus = broke.hub.fleet.find((m) => m.instanceId === "seed_op_gen2")!.status;
+  assert.equal(beforeFailStatus, "needs_repair");
+  broke = repairTyped(broke, "seed_op_gen2");
+  assert.ok(/不足/.test(broke.notice), `expected shortfall notice, got: ${broke.notice}`);
+  assert.equal(
+    broke.hub.fleet.find((m) => m.instanceId === "seed_op_gen2")!.status,
+    "needs_repair",
   );
 }
 

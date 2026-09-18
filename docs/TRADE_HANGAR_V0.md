@@ -62,11 +62,22 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 | 項目 | 内容 |
 |---|---|
 | 艦隊 | `seed_op_gen1` 健在 / `seed_op_gen2` 健在 / `seed_repair_gen1` 要修理（耐久25） |
-| ウォレット | credits 800 · materials 200 |
-| YieldBag | scrap/polymer/circuit + actuator/armor（型付き修理に足りる量） |
+| ウォレット | credits ≥800（`EXAMPLE_TYPED_REPAIR_COST.credits` の余裕込み）· materials 200 |
+| YieldBag | `buildSeedYieldBagForTypedRepair()` = `EXAMPLE_TYPED_REPAIR_COST` ×3 + circuit/armor デモ枠 |
 | 弾薬 | standard 40 · ap 10 · hp 5 |
 | API | `buildPlaytestSeedHub()` / `loadPlaytestSeed()` → 既存 `saveHubSaveToLocalStorage` |
 | 対比 | 「デモ初期化」= セーブ消去 → `INITIAL_HUB`（空艦隊） |
+
+### 4.5.1 シード → 型付き修理 → 再出撃ループ
+
+受け入れの最短経路（Module 3 スタブのみ・invade/restore 未配線）:
+
+1. **シード読込** → `seed_repair_gen1` が要修理、在庫が `EXAMPLE_TYPED_REPAIR_COST` を満たす  
+2. **修理（型付き）** → クレジット + YieldBag を消費し、機体が健在・耐久最大へ  
+3. 出撃チェックに当該機が**自動で含まれる**（`selectDeployableInstanceIds`）  
+4. **探索へ配備** URL に `seed_repair_gen1` が入る  
+
+資材不足時はボタンを押すと赤字の不足メッセージ（要/持）を出し、状態は変えない。
 
 探索戦闘ルール・sort ルールは変更しない（trade スタブのみ）。
 
@@ -88,7 +99,8 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 5. シミュ帰還または `mechWear` URL で耐久が減り、状態が再計算される  
 6. sort 相当の `?importMaterials=&yieldBag=` で集計資材と inventory が増える  
 7. 集計修理・型付き修理・解体がセーブに残る（リロード後も維持）  
-8. 「シード読込」で混合艦隊 + YieldBag + 弾薬が HubSave に残り、リロード後も維持
+8. 「シード読込」で混合艦隊 + YieldBag + 弾薬が HubSave に残り、リロード後も維持  
+9. シード読込 → 型付き修理で要修理機が健在になり、出撃 URL にその instanceId が含まれる（不足時はメッセージのみ）
 
 ---
 
@@ -103,6 +115,7 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 ブラウザで `http://localhost:5175/` を開き:
 
 0. （推奨）「シード読込」→ 健在2 + 要修理1・資材/弾薬入りで即プレイテスト可  
+0b. **修理ループ:** 要修理機の「修理（型付き）」→ 在庫/クレジット減・健在化 → 出撃チェックに載る → 「探索へ配備」  
 1. または「機体を受領」→ 健在機を選択 → 「探索へ配備」の URL を確認（`deployedInstanceIds` + `mechDurability`）  
 2. **実往復:** リンクで explore へ → 撤退 or EXTRACT →「拠点へ摩耗報告」→ trade で耐久減少を確認  
 3. **シミュ:** 「シミュ帰還 fail」で要修理化 → 「修理（集計）」  

@@ -199,21 +199,43 @@ export function grantDemoInventory(state: HangarState): HangarState {
   return persistHangar(next);
 }
 
+/** Multiplier so seed inventory covers several EXAMPLE_TYPED_REPAIR_COST repairs. */
+const SEED_TYPED_REPAIR_COPIES = 3;
+
+/**
+ * YieldBag sized from EXAMPLE_TYPED_REPAIR_COST (plus a few demo extras).
+ * Keeps seed ↔ typed repair helpers from drifting apart.
+ */
+export function buildSeedYieldBagForTypedRepair(
+  copies: number = SEED_TYPED_REPAIR_COPIES,
+): YieldBag {
+  const costBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
+  const n = Math.max(1, Math.floor(copies));
+  const inventory: YieldBag = {};
+  for (const [id, qty] of Object.entries(costBag) as Array<[keyof YieldBag, number]>) {
+    const v = Math.floor(Number(qty) || 0) * n;
+    if (v > 0) inventory[id] = v;
+  }
+  // Demo extras (not required by EXAMPLE_TYPED_REPAIR_COST)
+  inventory.mat_circuit = Math.max(inventory.mat_circuit ?? 0, 8);
+  inventory.part_armor_plate = Math.max(inventory.part_armor_plate ?? 0, 2);
+  return inventory;
+}
+
 /**
  * Stable playtest HubSnapshot: mixed fleet + wallet + YieldBag + ammo.
  * One tap replaces the need to 「機体を受領」 / 「デモ資材バッグ」 manually.
  * Durability bands: operational ≥41, needs_repair 1..40 (MECH_FLEET_RULES).
+ * Inventory/credits sized so typed repair (EXAMPLE_TYPED_REPAIR_COST) succeeds immediately.
  */
 export function buildPlaytestSeedHub(): HubSnapshot {
-  const inventory: YieldBag = {
-    mat_scrap: 60,
-    mat_polymer: 30,
-    mat_circuit: 8,
-    part_actuator: 3,
-    part_armor_plate: 2,
-  };
+  const inventory = buildSeedYieldBagForTypedRepair();
+  const credits = Math.max(
+    800,
+    EXAMPLE_TYPED_REPAIR_COST.credits * SEED_TYPED_REPAIR_COPIES * 2,
+  );
   return normalizeHubSnapshot({
-    credits: 800,
+    credits,
     materials: 200,
     fleet: [
       createOwnedMech("mech_gen1", {
@@ -226,7 +248,7 @@ export function buildPlaytestSeedHub(): HubSnapshot {
       }),
       createOwnedMech("mech_gen1", {
         instanceId: "seed_repair_gen1",
-        durability: 25,
+        durability: 25, // needs_repair band (1..40)
       }),
     ],
     ammoLoad: {
@@ -366,9 +388,44 @@ export function repairClassic(
   return persistHangar(next);
 }
 
+/** Human-readable shortfall for EXAMPLE_TYPED_REPAIR_COST vs wallet/inventory. */
+export function describeTypedRepairShortfall(
+  credits: number,
+  inventory: YieldBag,
+): string | null {
+  const costBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
+  const creditsNeed = EXAMPLE_TYPED_REPAIR_COST.credits;
+  const parts: string[] = [];
+  if (credits < creditsNeed) {
+    parts.push(`クレジット不足（要 ${creditsNeed} / 持 ${credits}）`);
+  }
+  const missing: string[] = [];
+  for (const [id, needRaw] of Object.entries(costBag)) {
+    const need = Math.floor(Number(needRaw) || 0);
+    if (need <= 0) continue;
+    const have = Math.floor(Number(inventory[id as keyof YieldBag] ?? 0) || 0);
+    if (have < need) missing.push(`${id} 要${need}/持${have}`);
+  }
+  if (missing.length > 0) {
+    parts.push(`型付き資材不足: ${missing.join(", ")}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** Compact spend line for UI / log (credits + YieldBag keys). */
+export function formatTypedRepairSpend(): string {
+  const costBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
+  const bag = Object.entries(costBag)
+    .filter(([, v]) => (v ?? 0) > 0)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(", ");
+  return `−${EXAMPLE_TYPED_REPAIR_COST.credits}c` + (bag ? ` · −[${bag}]` : "");
+}
+
 /**
  * Typed repair: EXAMPLE_TYPED_REPAIR_COST credits + YieldBag spend.
  * Durability restored like applyRepair (要修理 only).
+ * On success, repaired mech is included in selectedDeployIds (all operational).
  */
 export function repairTyped(
   state: HangarState,
@@ -380,15 +437,16 @@ export function repairTyped(
     return { ...state, notice: "要修理のみ型付き修理可" };
   }
   const costBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
-  const creditsNeed = EXAMPLE_TYPED_REPAIR_COST.credits;
-  if (state.hub.credits < creditsNeed) {
-    return { ...state, notice: `クレジット不足（要 ${creditsNeed}）` };
-  }
-  if (!canAffordYieldCost(state.hub.inventory, costBag)) {
-    return { ...state, notice: "型付き資材/パーツ不足" };
+  const shortfall = describeTypedRepairShortfall(
+    state.hub.credits,
+    state.hub.inventory,
+  );
+  if (shortfall) {
+    return { ...state, notice: shortfall };
   }
   const nextInv = spendYieldBag(state.hub.inventory, costBag);
   if (!nextInv) return { ...state, notice: "型付き消費失敗" };
+  const creditsNeed = EXAMPLE_TYPED_REPAIR_COST.credits;
   const repaired = createOwnedMech(mech.catalogId, {
     instanceId: mech.instanceId,
     durability: mech.durabilityMax,
@@ -403,12 +461,14 @@ export function repairTyped(
     credits: state.hub.credits - creditsNeed,
     inventory: nextInv,
   });
+  const selectedDeployIds = selectDeployableInstanceIds(hub.fleet);
+  const spend = formatTypedRepairSpend();
   const next: HangarState = {
     ...state,
     hub,
-    selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
-    log: pushLog(state.log, `修理(型付き) ${instanceId}`),
-    notice: "型付きコストで修理完了 → 健在",
+    selectedDeployIds,
+    log: pushLog(state.log, `修理(型付き) ${instanceId} ${spend}`),
+    notice: `型付き修理完了 → 健在（${spend}）· 出撃選択に追加`,
   };
   return persistHangar(next);
 }
