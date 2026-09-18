@@ -247,9 +247,10 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   }
   moveToward(leader, leader.moveTarget, world.balance.moveSpeed, dt, world);
 
-  // Leader fire: nearest enemy in range when holding fire / auto if close
+  // Leader fire: movement stays player-led; auto-engage nearest threat in weapon
+  // range (escort-style reaction fire). Space/F also requests the same shot.
   let leadTarget: Unit | null = null;
-  let best: number = world.balance.weaponRange;
+  let best: number = world.balance.engageRange;
   for (const e of world.enemies) {
     if (!e.alive) continue;
     const d = dist(leader.pos, e.pos);
@@ -258,7 +259,12 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       leadTarget = e;
     }
   }
-  if (input.fire && leadTarget) tryFire(world, leader, leadTarget, false);
+  if (
+    leadTarget &&
+    (input.fire || best <= world.balance.weaponRange)
+  ) {
+    tryFire(world, leader, leadTarget, false);
+  }
 
   updateSalvage(world, leader, input.interact, dt);
 
