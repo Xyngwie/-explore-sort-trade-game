@@ -1,14 +1,18 @@
-# Modules preview (explore + sort + trade) — build always; deploy when Pages opted in.
+# Modules preview (explore + sort + trade + invade + restore) — build always; deploy when Pages opted in.
 #
 # Single GitHub Pages artifact with subpaths:
 #   /           → trade hangar
 #   /explore/   → explore
 #   /sort/      → sort
+#   /invade/    → invade (Module 4 scaffold)
+#   /restore/   → restore (Module 5 scaffold)
 #
 # Live URLs (owner Xyngwie, project Pages):
 #   https://xyngwie.github.io/-explore-sort-trade-game/
 #   https://xyngwie.github.io/-explore-sort-trade-game/explore/
 #   https://xyngwie.github.io/-explore-sort-trade-game/sort/
+#   https://xyngwie.github.io/-explore-sort-trade-game/invade/
+#   https://xyngwie.github.io/-explore-sort-trade-game/restore/
 #
 # To enable Deploy:
 #   1. Repo public (or plan with private Pages)
@@ -26,6 +30,8 @@ on:
       - "packages/explore/**"
       - "packages/sort/**"
       - "packages/trade/**"
+      - "packages/invade/**"
+      - "packages/restore/**"
       - "packages/shared/**"
       - ".github/workflows/deploy-modules-preview.yml"
   workflow_dispatch:
@@ -70,13 +76,25 @@ jobs:
           VITE_BASE: ${{ vars.SORT_VITE_BASE || '/-explore-sort-trade-game/sort/' }}
         run: npm run build:sort
 
+      - name: Build invade (Pages /invade/)
+        env:
+          VITE_BASE: ${{ vars.INVADE_VITE_BASE || '/-explore-sort-trade-game/invade/' }}
+        run: npm run build:invade
+
+      - name: Build restore (Pages /restore/)
+        env:
+          VITE_BASE: ${{ vars.RESTORE_VITE_BASE || '/-explore-sort-trade-game/restore/' }}
+        run: npm run build:restore
+
       - name: Assemble Pages site
         run: |
           set -euo pipefail
-          mkdir -p _site/explore _site/sort
+          mkdir -p _site/explore _site/sort _site/invade _site/restore
           cp -a packages/trade/dist/. _site/
           cp -a packages/explore/dist/. _site/explore/
           cp -a packages/sort/dist/. _site/sort/
+          cp -a packages/invade/dist/. _site/invade/
+          cp -a packages/restore/dist/. _site/restore/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

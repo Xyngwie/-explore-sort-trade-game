@@ -3,6 +3,8 @@ export const MODULE_URLS = {
   explore: "https://xyngwie.github.io/-explore-sort-trade-game/explore/",
   sort: "https://xyngwie.github.io/-explore-sort-trade-game/sort/",
   trade: "https://xyngwie.github.io/-explore-sort-trade-game/",
+  invade: "https://xyngwie.github.io/-explore-sort-trade-game/invade/",
+  restore: "https://xyngwie.github.io/-explore-sort-trade-game/restore/",
 } as const;
 
 /** Former split-.grok.me hosts (migration / reference only). */
@@ -17,6 +19,8 @@ export const LOCAL_DEV_MODULE_URLS = {
   explore: "http://localhost:5173/",
   sort: "http://localhost:5174/",
   trade: "http://localhost:5175/",
+  invade: "http://localhost:5176/",
+  restore: "http://localhost:5177/",
 } as const;
 
 export type ModuleKey = keyof typeof MODULE_URLS;

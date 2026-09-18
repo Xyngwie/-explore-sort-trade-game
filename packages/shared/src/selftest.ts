@@ -353,6 +353,8 @@ assert.deepEqual(tteMidParsed?.deployedDurability, [
 ]);
 assert.equal(resolveModuleBaseUrl("explore", { hostname: "localhost" }), LOCAL_DEV_MODULE_URLS.explore);
 assert.equal(resolveModuleBaseUrl("trade", { hostname: "example.com" }), MODULE_URLS.trade);
+assert.equal(resolveModuleBaseUrl("invade", { hostname: "localhost" }), LOCAL_DEV_MODULE_URLS.invade);
+assert.equal(resolveModuleBaseUrl("restore", { hostname: "example.com" }), MODULE_URLS.restore);
 
 console.log("shared explore-io selftest: ok");
 
