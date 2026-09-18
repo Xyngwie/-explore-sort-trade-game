@@ -154,6 +154,36 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   );
 }
 
+
+// --- captain auto-combat without holding fire ---
+{
+  const world = createWorld(bootstrapFromSearch("?startingAmmo=30"));
+  startSortie(world);
+  const enemy = world.enemies[0]!;
+  enemy.alive = true;
+  enemy.hp = 40;
+  // Place enemy inside weapon range of leader
+  world.leader.pos = { x: 400, y: 400 };
+  enemy.pos = {
+    x: world.leader.pos.x + world.balance.weaponRange * 0.5,
+    y: world.leader.pos.y,
+  };
+  const ammoBefore = world.ammo;
+  const bulletsBefore = world.bullets.length;
+  // fire: false — auto reaction should still shoot
+  tickWorld(world, 0.05, {
+    move: { x: 0, y: 0 },
+    clickMove: null,
+    fire: false,
+    interact: false,
+  });
+  assert.ok(
+    world.ammo < ammoBefore || world.bullets.length > bulletsBefore,
+    "leader should auto-fire at in-range enemy without Space/F",
+  );
+  assert.equal(world.leader.cooldown > 0, true);
+}
+
 // --- extract + wear scaffold ---
 {
   const world = createWorld(
