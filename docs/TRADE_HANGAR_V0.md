@@ -1,6 +1,6 @@
 # Trade Hangar v0（Module 3 最小ハンガー）
 
-**ステータス:** stub 実装（`packages/trade`）· 2026-09-17  
+**ステータス:** stub 実装（`packages/trade`）· 2026-09-18  
 **目的:** BASE HUB で MECH_FLEET / EXPLORE_IO_V2 / SORT_YIELD_V2 の共有契約を**触って確認**できる薄いループを置く。
 
 関連: `docs/MECH_FLEET.md`、`docs/EXPLORE_IO_V2.md`、`docs/SORT_YIELD_V2.md`、`docs/HUB_SAVE_CONTRACT.md`。
@@ -29,7 +29,8 @@
   → URL に sort / wear があれば取込 → クエリ削除 → 自動セーブ
   → ハンガー UI
 
-機体を受領 → 艦隊に OwnedMech 追加
+シード読込 → プレイテスト用 HubSave 一括適用（健在2 + 要修理1・クレジット/型付き資材/弾薬）
+機体を受領 → 艦隊に OwnedMech 追加（空/不足時の手動付与）
 出撃チェック → 「探索へ配備」リンク（deployableMechs + deployedInstanceIds + startingAmmo）
 （任意）シミュ帰還 extract/abort/fail → wearFleetAfterSortie
 または explore から ?returnKind=&mechWear= で戻る → applyWearReportsToFleet
@@ -51,6 +52,24 @@ sort から ?importMaterials=&yieldBag= → materials 加算 + inventory マー�
 
 ---
 
+
+---
+
+## 4.5. プレイテスト用シード
+
+Pages / Android で毎回「機体を受領」「デモ資材バッグ」しなくて済むよう、**「シード読込」**で HubSave を一括上書きする。
+
+| 項目 | 内容 |
+|---|---|
+| 艦隊 | `seed_op_gen1` 健在 / `seed_op_gen2` 健在 / `seed_repair_gen1` 要修理（耐久25） |
+| ウォレット | credits 800 · materials 200 |
+| YieldBag | scrap/polymer/circuit + actuator/armor（型付き修理に足りる量） |
+| 弾薬 | standard 40 · ap 10 · hp 5 |
+| API | `buildPlaytestSeedHub()` / `loadPlaytestSeed()` → 既存 `saveHubSaveToLocalStorage` |
+| 対比 | 「デモ初期化」= セーブ消去 → `INITIAL_HUB`（空艦隊） |
+
+探索戦闘ルール・sort ルールは変更しない（trade スタブのみ）。
+
 ## 4. スタブしているもの
 
 - 弾薬の購入 UI（初期 `ammoLoad` のまま出撃に載せるだけ）
@@ -68,7 +87,8 @@ sort から ?importMaterials=&yieldBag= → materials 加算 + inventory マー�
 4. 健在機のみ出撃 URL に `deployedInstanceIds` が付く  
 5. シミュ帰還または `mechWear` URL で耐久が減り、状態が再計算される  
 6. sort 相当の `?importMaterials=&yieldBag=` で集計資材と inventory が増える  
-7. 集計修理・型付き修理・解体がセーブに残る（リロード後も維持）
+7. 集計修理・型付き修理・解体がセーブに残る（リロード後も維持）  
+8. 「シード読込」で混合艦隊 + YieldBag + 弾薬が HubSave に残り、リロード後も維持
 
 ---
 
@@ -82,7 +102,8 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 
 ブラウザで `http://localhost:5175/` を開き:
 
-1. 「機体を受領」→ 健在機を選択 → 「探索へ配備」の URL を確認（`deployedInstanceIds` + `mechDurability`）  
+0. （推奨）「シード読込」→ 健在2 + 要修理1・資材/弾薬入りで即プレイテスト可  
+1. または「機体を受領」→ 健在機を選択 → 「探索へ配備」の URL を確認（`deployedInstanceIds` + `mechDurability`）  
 2. **実往復:** リンクで explore へ → 撤退 or EXTRACT →「拠点へ摩耗報告」→ trade で耐久減少を確認  
 3. **シミュ:** 「シミュ帰還 fail」で要修理化 → 「修理（集計）」  
 4. 「デモ資材バッグ」→ 再度要修理化 → 「修理（型付き）」  
@@ -96,6 +117,6 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 
 | パス | 役割 |
 |---|---|
-| `packages/trade/src/main.ts` | ハンガー UI |
-| `packages/trade/src/hangar.ts` | 状態遷移・永続化・ハンドオフ取込 |
+| `packages/trade/src/main.ts` | ハンガー UI（シード読込ボタン含む） |
+| `packages/trade/src/hangar.ts` | 状態遷移・永続化・ハンドオフ取込・`loadPlaytestSeed` |
 | `packages/shared/src/hub-save.ts` | `inventory` / `importYieldBagIntoHub` |

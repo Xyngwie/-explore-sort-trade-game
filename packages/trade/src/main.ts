@@ -20,6 +20,7 @@ import {
   grantDemoInventory,
   grantStarterFleet,
   ingestLocationSearch,
+  loadPlaytestSeed,
   markDeployed,
   repairClassic,
   repairCost,
@@ -74,7 +75,7 @@ function inventoryRows(hub: HangarState["hub"]): string {
 
 function fleetCards(s: HangarState): string {
   if (s.hub.fleet.length === 0) {
-    return `<p class="muted">艦隊が空です。「機体を受領」でデモ機を追加してください。</p>`;
+    return `<p class="muted">艦隊が空です。「シード読込」または「機体を受領」でデモ機を追加してください。</p>`;
   }
   return s.hub.fleet
     .map((m) => {
@@ -157,10 +158,12 @@ function render() {
         <tr><td>艦隊</td><td>${state.hub.fleet.length} / 3</td></tr>
       </table>
       <div class="row">
-        <button type="button" id="btn-grant">機体を受領</button>
+        <button type="button" id="btn-seed">シード読込</button>
+        <button type="button" class="secondary" id="btn-grant">機体を受領</button>
         <button type="button" class="secondary" id="btn-inv">デモ資材バッグ</button>
         <button type="button" class="secondary" id="btn-reset">デモ初期化</button>
       </div>
+      <p class="muted" style="margin-top:0.5rem">「シード読込」= 健在2機 + 要修理1機・クレジット/型付き資材/弾薬入りのプレイテスト用 HubSave。</p>
     </div>
 
     <div class="card">
@@ -203,6 +206,10 @@ function render() {
     </div>
   `;
 
+  document.getElementById("btn-seed")?.addEventListener("click", () => {
+    state = loadPlaytestSeed(state);
+    render();
+  });
   document.getElementById("btn-grant")?.addEventListener("click", () => {
     state = grantStarterFleet(state);
     render();
