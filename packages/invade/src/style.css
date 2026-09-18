@@ -94,3 +94,22 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   border-color: #2a313c;
   color: #9aa0a6;
 }
+.card-title {
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+  letter-spacing: 0.04em;
+  color: #c9d1d9;
+}
+a.btn {
+  display: inline-block;
+  text-decoration: none;
+  line-height: 1.2;
+}
+.btn.secondary {
+  background: #21262d;
+  border-color: #388bfd;
+  color: #58a6ff;
+}
+.btn.secondary:hover {
+  background: #30363d;
+}
