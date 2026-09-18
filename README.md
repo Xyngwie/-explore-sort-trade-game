@@ -1,6 +1,6 @@
 # explore-sort-trade-game
 
-Explore → sort/refine → trade/hub のモノレポです。Module 4 / 5 は薄いプレイアブル・スタブ（ハンドオフ未配線）。
+Explore → sort/refine → trade/hub のモノレポです。Module 4 / 5 は薄いプレイアブル・スタブ（ハンドオフ未配線）。Pages プレビューは全モジュール対応。
 
 | パッケージ | ゲーム上の役割 | 現行プレビュー |
 |---|---|---|
@@ -8,8 +8,8 @@ Explore → sort/refine → trade/hub のモノレポです。Module 4 / 5 は�
 | `packages/explore` | Module 1 探索（WRECKLINE）・振る舞い垂直スライス | [Pages `/explore/`](https://xyngwie.github.io/-explore-sort-trade-game/explore/)（ローカル `dev:explore`） |
 | `packages/sort` | Module 2 精製（Athanor） | [Pages `/sort/`](https://xyngwie.github.io/-explore-sort-trade-game/sort/)（ローカル `dev:sort`） |
 | `packages/trade` | Module 3 拠点（BASE HUB） | [Pages ルート](https://xyngwie.github.io/-explore-sort-trade-game/)（ローカル `dev:trade`） |
-| `packages/invade` | Module 4 戦線（invade / front）薄いスタブ | ローカル `dev:invade`（:5176）· Pages 未配線 |
-| `packages/restore` | Module 5 回路修復（restore）薄いスタブ | ローカル `dev:restore`（:5177）· Pages 未配線 |
+| `packages/invade` | Module 4 戦線（invade / front）薄いスタブ | [Pages `/invade/`](https://xyngwie.github.io/-explore-sort-trade-game/invade/)（ローカル `dev:invade` · :5176） |
+| `packages/restore` | Module 5 回路修復（restore）薄いスタブ | [Pages `/restore/`](https://xyngwie.github.io/-explore-sort-trade-game/restore/)（ローカル `dev:restore` · :5177） |
 
 ## 正本
 
@@ -29,7 +29,7 @@ Trade Hangar v0（最小ハンガー）: [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_
 Sort v0（最小精製）: [`docs/SORT_V0.md`](docs/SORT_V0.md)
 Invade / Front v0（戦線ひな型・ドラフト）: [`docs/INVADE_V0.md`](docs/INVADE_V0.md)  
 Restore v0（精密回路修復・ドラフト）: [`docs/RESTORE_V0.md`](docs/RESTORE_V0.md)  
-Preview Hosting v0（explore / sort / trade の GitHub Pages）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
+Preview Hosting v0（GitHub Pages・全モジュール）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
 Pages 用 workflow 正本（UI で `.github/workflows/` へコピー）: [`docs/ci/deploy-modules-preview.yml`](docs/ci/deploy-modules-preview.yml)
 
 ## セットアップ
