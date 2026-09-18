@@ -6,9 +6,11 @@ import {
 } from "@estg/shared";
 import {
   buildDeployUrl,
+  buildPlaytestSeedHub,
   createInitialHangar,
   grantStarterFleet,
   ingestLocationSearch,
+  loadPlaytestSeed,
   markDeployed,
   resetHangar,
   simulateReturn,
@@ -93,5 +95,41 @@ assert.ok(
     worn.status === "operational",
 );
 assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
+
+
+// Playtest seed: mixed fleet + wallet + YieldBag + ammo, persists via HubSave
+{
+  const seedHub = buildPlaytestSeedHub();
+  assert.equal(seedHub.fleet.length, 3);
+  const statuses = seedHub.fleet.map((m) => m.status).sort();
+  assert.deepEqual(statuses, ["needs_repair", "operational", "operational"]);
+  assert.ok(seedHub.credits >= 50);
+  assert.ok((seedHub.inventory.mat_scrap ?? 0) >= 20);
+  assert.ok((seedHub.inventory.part_actuator ?? 0) >= 1);
+  assert.ok(
+    seedHub.ammoLoad.ammo_standard +
+      seedHub.ammoLoad.ammo_ap +
+      seedHub.ammoLoad.ammo_hp >
+      0,
+  );
+
+  let seeded = resetHangar(storage);
+  seeded = loadPlaytestSeed(seeded, storage);
+  assert.equal(seeded.hub.fleet.length, 3);
+  assert.ok(seeded.selectedDeployIds.length === 2);
+  assert.ok(seeded.log.some((l) => l.includes("シード読込")));
+
+  const afterSeed = createInitialHangar(storage);
+  assert.equal(afterSeed.hub.fleet.length, 3);
+  assert.equal(
+    afterSeed.hub.fleet.find((m) => m.instanceId === "seed_repair_gen1")!.status,
+    "needs_repair",
+  );
+  assert.equal(afterSeed.hub.credits, seedHub.credits);
+  assert.equal(
+    afterSeed.hub.inventory.mat_scrap ?? 0,
+    seedHub.inventory.mat_scrap ?? 0,
+  );
+}
 
 console.log("trade hangar selftest: ok");

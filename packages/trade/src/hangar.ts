@@ -199,6 +199,65 @@ export function grantDemoInventory(state: HangarState): HangarState {
   return persistHangar(next);
 }
 
+/**
+ * Stable playtest HubSnapshot: mixed fleet + wallet + YieldBag + ammo.
+ * One tap replaces the need to 「機体を受領」 / 「デモ資材バッグ」 manually.
+ * Durability bands: operational ≥41, needs_repair 1..40 (MECH_FLEET_RULES).
+ */
+export function buildPlaytestSeedHub(): HubSnapshot {
+  const inventory: YieldBag = {
+    mat_scrap: 60,
+    mat_polymer: 30,
+    mat_circuit: 8,
+    part_actuator: 3,
+    part_armor_plate: 2,
+  };
+  return normalizeHubSnapshot({
+    credits: 800,
+    materials: 200,
+    fleet: [
+      createOwnedMech("mech_gen1", {
+        instanceId: "seed_op_gen1",
+        durability: 100,
+      }),
+      createOwnedMech("mech_gen2", {
+        instanceId: "seed_op_gen2",
+        durability: 85,
+      }),
+      createOwnedMech("mech_gen1", {
+        instanceId: "seed_repair_gen1",
+        durability: 25,
+      }),
+    ],
+    ammoLoad: {
+      ammo_standard: 40,
+      ammo_ap: 10,
+      ammo_hp: 5,
+    },
+    inventory,
+    importedMaterials: 0,
+    selectedMechId: "mech_gen1",
+    selectedAmmoId: "ammo_standard",
+  });
+}
+
+/** Replace hub with playtest seed and persist via HubSave. */
+export function loadPlaytestSeed(
+  state: HangarState,
+  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+): HangarState {
+  const hub = buildPlaytestSeedHub();
+  const next: HangarState = {
+    ...state,
+    hub,
+    lastDeployedIds: [],
+    selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    log: pushLog(state.log, "シード読込"),
+    notice: "プレイテスト用シードを読込（健在2 + 要修理1）",
+  };
+  return persistHangar(next, storage ?? undefined);
+}
+
 export function resetHangar(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
