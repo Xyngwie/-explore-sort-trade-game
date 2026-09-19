@@ -15,14 +15,20 @@ import {
   type TradeToInvadePayload,
 } from "@estg/shared";
 import {
-  type CellMark,
-  cellKey,
-  densityAfterSweep,
-  hazardChanceFromDensity,
-  mergeIntelFlags,
-  resolveFlag,
-  resolveSweep,
-} from "./sweep";
+  BOARD_SIZE,
+  MAX_MINES,
+  MIN_MINES,
+  cellGlyph,
+  countFlagged,
+  densityAfterBoard,
+  generateBoard,
+  mergeBoardIntel,
+  mineCountFromDensity,
+  minesRemaining,
+  openCell,
+  toggleFlag,
+  type MsBoard,
+} from "./board";
 
 /** Half-extent of the AOI around HQ (coords −AOI_HALF … +AOI_HALF). */
 const AOI_HALF = 10;
@@ -49,10 +55,12 @@ if (inbound != null) {
 let selected: SectorSel | null = null;
 /** Inert skip flag (quick-battle wording only — no URL nav). */
 let skipped = false;
-/** Per-cell thin-sweep marks (flag / clear / hazard). */
-const marks = new Map<string, CellMark>();
-/** Last scout/flag log line for UI. */
-let lastSweepLog: string | null = null;
+/** Inner minesweeper for the selected sector (null when none). */
+let board: MsBoard | null = null;
+/** Last board action log line for UI. */
+let lastBoardLog: string | null = null;
+/** Flag-mode: next cell click toggles flag instead of open. */
+let flagMode = false;
 
 function tradeBaseUrl(): string {
   return resolveModuleBaseUrl("trade");
@@ -70,10 +78,6 @@ function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function markAt(sx: number, sy: number): CellMark {
-  return marks.get(cellKey(sx, sy)) ?? "none";
-}
-
 /** Map density 0..1 → CSS color (cool → hot). Blocked = wall slate. */
 function densityStyle(info: SectorDensityInfo): string {
   if (info.blocked) return "background:#3d2a2a;border-color:#8b4545;color:#f85149";
@@ -88,10 +92,6 @@ function densityStyle(info: SectorDensityInfo): string {
 function cellLabel(sx: number, sy: number, info: SectorDensityInfo): string {
   if (sx === 0 && sy === 0) return "HQ";
   if (info.blocked) return "壁";
-  const m = markAt(sx, sy);
-  if (m === "flagged") return "⚑";
-  if (m === "cleared") return "✓";
-  if (m === "hazard") return "✕";
   return info.distance.toString();
 }
 
@@ -103,16 +103,29 @@ function baseIntelFlags(info: SectorDensityInfo): string[] {
   return flags;
 }
 
+function ensureBoard(sel: SectorSel, info: SectorDensityInfo): MsBoard {
+  if (
+    board != null &&
+    board.sectorX === sel.sx &&
+    board.sectorY === sel.sy
+  ) {
+    return board;
+  }
+  board = generateBoard(sel.sx, sel.sy, info.density);
+  lastBoardLog = `セクター (${sel.sx},${sel.sy}) 進入 — HQ 開放 · 敵 ${board.mineCount}（density ${info.density.toFixed(2)}）`;
+  return board;
+}
+
 function sectorPayload(
   sel: SectorSel,
   info: SectorDensityInfo,
 ): InvadeToTradePayload & InvadeToExplorePayload {
-  const mark = markAt(sel.sx, sel.sy);
+  const b = ensureBoard(sel, info);
   return {
     sectorX: sel.sx,
     sectorY: sel.sy,
-    density: densityAfterSweep(info.density, mark),
-    intelFlags: mergeIntelFlags(baseIntelFlags(info), mark),
+    density: densityAfterBoard(info.density, b),
+    intelFlags: mergeBoardIntel(baseIntelFlags(info), b),
   };
 }
 
@@ -151,48 +164,88 @@ function handoffActionsHtml(
       <a class="btn" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">格納庫へ渡す（invade→trade）</a>
       <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">探索へ渡す（invade→explore）</a>
     </div>
+    <p class="muted" style="margin-top:0.5rem">地雷マス＝敵位置の概念インテル。探索は当面 threat スケールに利用（本 salvage なし）。</p>
   `;
 }
 
-function sweepPanelHtml(
+function statusJa(b: MsBoard): string {
+  if (b.status === "won") return "セクター掃討完了";
+  if (b.status === "hazard") return "接触（hazard・前線は継続可）";
+  return "偵察中";
+}
+
+function minesweeperPanelHtml(
   sel: SectorSel | null,
   info: SectorDensityInfo | null,
 ): string {
   if (sel == null || info == null || info.blocked) {
     return `
       <div class="card">
-        <h2 class="card-title">薄掃討（thin sweep）</h2>
-        <p class="muted">セクターを選ぶと、旗立て / 偵察掃討ができます（本編マインスイーパではない）。</p>
+        <h2 class="card-title">セクター内マインスイーパ</h2>
+        <p class="muted">セクターを選ぶと ${BOARD_SIZE}×${BOARD_SIZE} の内盤が開きます。HQ 開放＝拠点 · 空白＝探索済 · 数字＝周囲の敵感知 · ✕＝敵（→ Module 1）。</p>
       </div>
     `;
   }
-  const mark = markAt(sel.sx, sel.sy);
-  const pHaz = hazardChanceFromDensity(info.density);
-  const markJa =
-    mark === "flagged"
-      ? "旗"
-      : mark === "cleared"
-        ? "掃討成功"
-        : mark === "hazard"
-          ? "接触（hazard）"
-          : "未掃討";
+  const b = ensureBoard(sel, info);
+  const expected = mineCountFromDensity(info.density);
+  const cells: string[] = [];
+  for (let y = 0; y < b.size; y++) {
+    for (let x = 0; x < b.size; x++) {
+      const c = b.cells[y]![x]!;
+      const cls = [
+        "ms-cell",
+        c.open ? "open" : "closed",
+        c.isHq ? "hq" : "",
+        c.flagged && !c.open ? "flagged" : "",
+        c.open && c.mine ? "mine" : "",
+        c.open && !c.mine && c.adjacent > 0 ? `n${c.adjacent}` : "",
+        c.open && !c.mine && c.adjacent === 0 ? "blank" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const title = c.open
+        ? c.mine
+          ? "敵接触"
+          : c.isHq
+            ? "HQ / base"
+            : c.adjacent === 0
+              ? "探索済セーフ"
+              : `周囲敵 ${c.adjacent}`
+        : c.flagged
+          ? "旗"
+          : "未開";
+      cells.push(
+        `<button type="button" class="${cls}" data-mx="${x}" data-my="${y}" title="${escapeHtml(title)}">${escapeHtml(cellGlyph(c))}</button>`,
+      );
+    }
+  }
+  const statusBanner =
+    b.status === "won"
+      ? `<div class="banner ok-banner" role="status">セクター掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
+      : b.status === "hazard"
+        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。前線マップはロックしません — 続行・旗立て・ハンドオフ可。</div>`
+        : "";
+
   return `
     <div class="card">
-      <h2 class="card-title">薄掃討（thin sweep）</h2>
-      <p class="muted">選択セルを旗立て、または密度連動の hazard 確率で偵察掃討。結果は既存 intelFlags / density に載せる。</p>
+      <h2 class="card-title">セクター内マインスイーパ（${BOARD_SIZE}×${BOARD_SIZE}）</h2>
+      <p class="muted">密度→敵数: ${MIN_MINES}…${MAX_MINES}（今 ${expected}）。左クリック＝開く / 旗モード＝旗。HQ は開始時から開放。</p>
       <table>
-        <tr><td>セル状態</td><td>${escapeHtml(markJa)}</td></tr>
-        <tr><td>hazard 確率</td><td>${(pHaz * 100).toFixed(0)}%（density ${info.density.toFixed(2)}）</td></tr>
+        <tr><td>状態</td><td>${escapeHtml(statusJa(b))}</td></tr>
+        <tr><td>敵（地雷）</td><td>${b.mineCount}</td></tr>
+        <tr><td>残敵（概算）</td><td>${minesRemaining(b)}</td></tr>
+        <tr><td>旗</td><td>${countFlagged(b)}</td></tr>
       </table>
+      ${statusBanner}
       ${
-        lastSweepLog
-          ? `<p class="mono" style="margin-top:0.5rem">${escapeHtml(lastSweepLog)}</p>`
+        lastBoardLog
+          ? `<p class="mono" style="margin-top:0.5rem">${escapeHtml(lastBoardLog)}</p>`
           : ""
       }
+      <div class="ms-grid" style="--ms:${b.size}">${cells.join("")}</div>
       <div class="actions">
-        <button type="button" class="btn" id="btn-flag">旗立て（Flag）</button>
-        <button type="button" class="btn secondary" id="btn-sweep">偵察掃討（Sweep）</button>
-        <button type="button" class="btn ghost" id="btn-unmark" ${mark === "none" ? "disabled" : ""}>マーク解除</button>
+        <button type="button" class="btn ${flagMode ? "secondary" : ""}" id="btn-flag-mode">${flagMode ? "旗モード ON" : "旗モード"}</button>
+        <button type="button" class="btn ghost" id="btn-regen">盤を再生成</button>
       </div>
       <p class="ok" style="margin-top:0.75rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
     </div>
@@ -208,14 +261,12 @@ function render(): void {
       const isHq = x === 0 && y === 0;
       const isSel =
         selected != null && selected.sx === x && selected.sy === y;
-      const mark = markAt(x, y);
       const cls = [
         "cell",
         isHq ? "hq" : "",
         info.blocked ? "blocked" : "pickable",
         isSel ? "selected" : "",
         !info.blocked && info.distance >= SECTOR_FRONT_DISTANCE ? "front" : "",
-        mark !== "none" ? `mark-${mark}` : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -223,7 +274,7 @@ function render(): void {
         ? "HQ (0,0)"
         : `(${x},${y}) d=${info.distance} dens=${info.density.toFixed(2)}${
             info.blocked ? " WALL" : ""
-          }${mark !== "none" ? ` [${mark}]` : ""}`;
+          }`;
       const disabled = info.blocked ? "disabled" : "";
       cells.push(
         `<button type="button" class="${cls}" data-sx="${x}" data-sy="${y}" title="${escapeHtml(title)}" style="${densityStyle(info)}" ${disabled}>${escapeHtml(cellLabel(x, y, info))}</button>`,
@@ -239,9 +290,9 @@ function render(): void {
     selInfo.distance >= SECTOR_FRONT_DISTANCE;
 
   root.innerHTML = `
-    <p class="pill">MODULE 4 · INVADE / FRONT · THIN SWEEP</p>
+    <p class="pill">MODULE 4 · INVADE / FRONT · SECTOR MINESWEEPER</p>
     <h1>戦線マップ</h1>
-    <p class="muted">HQ 中心の小 AOI。セクター選択 → 薄掃討（旗／偵察）→ Hub または探索へルート情報を渡す（本 salvage なし）。</p>
+    <p class="muted">HQ 中心の小 AOI。セクター選択 → 内盤マインスイーパ → Hub または探索へルート／インテルを渡す（本 salvage なし）。</p>
 
     <div class="card">
       <h2 class="card-title">到着（trade→invade）</h2>
@@ -250,12 +301,12 @@ function render(): void {
 
     ${
       showFrontWarn
-        ? `<div class="banner warn-banner" role="status">⚠ 前線帯 d≥${SECTOR_FRONT_DISTANCE} — 高密度ルート。インテル価値は高いがリスクも大きい（仮）。</div>`
+        ? `<div class="banner warn-banner" role="status">⚠ 前線帯 d≥${SECTOR_FRONT_DISTANCE} — 高密度ルート。内盤の敵も多い（仮）。</div>`
         : ""
     }
 
     <div class="card">
-      <p class="muted">AOI ${cols}×${cols}（半辺 ${AOI_HALF}）。色＝仮 density / 数字＝Chebyshev d。壁 d≥${SECTOR_WALL_DISTANCE} は選択不可。⚑旗 ✓掃討 ✕hazard。</p>
+      <p class="muted">AOI ${cols}×${cols}（半辺 ${AOI_HALF}）。色＝仮 density / 数字＝Chebyshev d。壁 d≥${SECTOR_WALL_DISTANCE} は選択不可。選択後に内盤が開く。</p>
       <div class="grid" style="--cols:${cols}">${cells.join("")}</div>
     </div>
 
@@ -279,7 +330,7 @@ function render(): void {
       </div>
     </div>
 
-    ${sweepPanelHtml(selected, selInfo)}
+    ${minesweeperPanelHtml(selected, selInfo)}
 
     <div class="card">
       <h2 class="card-title">出発ハンドオフ</h2>
@@ -296,51 +347,99 @@ function render(): void {
       if (info.blocked) return;
       selected = { sx, sy };
       skipped = false;
-      lastSweepLog = null;
+      board = null;
+      flagMode = false;
+      lastBoardLog = null;
+      ensureBoard(selected, info);
       render();
     });
   });
 
   root.querySelector("#btn-clear")?.addEventListener("click", () => {
     selected = null;
-    lastSweepLog = null;
+    board = null;
+    flagMode = false;
+    lastBoardLog = null;
     render();
   });
 
   root.querySelector("#btn-skip")?.addEventListener("click", () => {
     selected = null;
+    board = null;
     skipped = true;
-    lastSweepLog = null;
+    flagMode = false;
+    lastBoardLog = null;
     render();
   });
 
-  root.querySelector("#btn-flag")?.addEventListener("click", () => {
-    if (selected == null) return;
-    const out = resolveFlag();
-    marks.set(cellKey(selected.sx, selected.sy), out.mark);
-    lastSweepLog = `Flag → ${out.intelAdded.join(",")}`;
+  root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
+    flagMode = !flagMode;
+    lastBoardLog = flagMode ? "旗モード ON — セルクリックで旗トグル" : "旗モード OFF — クリックで開く";
     render();
   });
 
-  root.querySelector("#btn-sweep")?.addEventListener("click", () => {
+  root.querySelector("#btn-regen")?.addEventListener("click", () => {
     if (selected == null) return;
     const info = sectorDensityAt(selected.sx, selected.sy);
     if (info.blocked) return;
-    const out = resolveSweep(info.density);
-    marks.set(cellKey(selected.sx, selected.sy), out.mark);
-    const p = hazardChanceFromDensity(info.density);
-    lastSweepLog =
-      out.kind === "hazard"
-        ? `Sweep HAZARD (p=${(p * 100).toFixed(0)}%) → ${out.intelAdded.join(",")}`
-        : `Sweep CLEAR (p=${(p * 100).toFixed(0)}%) → ${out.intelAdded.join(",")}`;
+    // Nudge seed via density epsilon so layout changes while staying in-bucket-ish
+    board = generateBoard(
+      selected.sx,
+      selected.sy,
+      info.density,
+      BOARD_SIZE,
+      () => Math.random(),
+    );
+    lastBoardLog = `盤再生成 — 敵 ${board.mineCount}`;
     render();
   });
 
-  root.querySelector("#btn-unmark")?.addEventListener("click", () => {
-    if (selected == null) return;
-    marks.delete(cellKey(selected.sx, selected.sy));
-    lastSweepLog = "マーク解除";
-    render();
+  root.querySelectorAll<HTMLButtonElement>("button.ms-cell").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (board == null) return;
+      const x = Number(btn.dataset.mx);
+      const y = Number(btn.dataset.my);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+      if (flagMode) {
+        const r = toggleFlag(board, x, y);
+        if (r.ok) {
+          lastBoardLog = r.flagged ? `旗立て (${x},${y})` : `旗解除 (${x},${y})`;
+        }
+        render();
+        return;
+      }
+
+      const r = openCell(board, x, y);
+      if (!r.ok) {
+        if (r.reason === "flagged") {
+          lastBoardLog = "旗付きセルは開けません（旗モードで解除）";
+        }
+        render();
+        return;
+      }
+      if (board.hitMine && board.cells[y]![x]!.mine) {
+        lastBoardLog = `敵接触 (${x},${y}) → scoutHazard（前線は継続可）`;
+      } else if (board.status === "won") {
+        lastBoardLog = `掃討完了 — 開放 ${r.opened} → sectorCleared`;
+      } else {
+        lastBoardLog = `開放 (${x},${y}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
+      }
+      render();
+    });
+
+    btn.addEventListener("contextmenu", (ev) => {
+      ev.preventDefault();
+      if (board == null) return;
+      const x = Number(btn.dataset.mx);
+      const y = Number(btn.dataset.my);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      const r = toggleFlag(board, x, y);
+      if (r.ok) {
+        lastBoardLog = r.flagged ? `旗立て (${x},${y})` : `旗解除 (${x},${y})`;
+      }
+      render();
+    });
   });
 }
 
