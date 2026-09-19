@@ -41,6 +41,9 @@ import {
   hubCircuitBonuses,
   formatCircuitBonusesJa,
   applyRepairDiscountToCost,
+  isRareYieldItemId,
+  rareSellPriceCredits,
+  sellRareItem,
   type HangarState,
 } from "./hangar";
 
@@ -80,13 +83,25 @@ function inventoryRows(hub: HangarState["hub"]): string {
     ([, n]) => (n ?? 0) > 0,
   ) as Array<[YieldItemId, number]>;
   if (entries.length === 0) {
-    return `<tr><td colspan="2" class="muted">（空）</td></tr>`;
+    return `<tr><td colspan="3" class="muted">（空）</td></tr>`;
   }
   return entries
-    .map(
-      ([id, n]) =>
-        `<tr><td>${escapeHtml(labelYield(id))}<div class="mono muted">${escapeHtml(id)}</div></td><td>${n}</td></tr>`,
-    )
+    .map(([id, n]) => {
+      const rare = isRareYieldItemId(id);
+      const price = rareSellPriceCredits(id);
+      const sellCell =
+        rare && price != null
+          ? `<button type="button" class="secondary sell-rare" data-act="sell-rare" data-id="${escapeHtml(id)}" title="1個売却（仮価格）">売却 仮${price}c</button>`
+          : `<span class="muted">—</span>`;
+      const rareTag = rare
+        ? ` <span class="pill rare-tag">レア</span>`
+        : "";
+      return `<tr>
+        <td>${escapeHtml(labelYield(id))}${rareTag}<div class="mono muted">${escapeHtml(id)}</div></td>
+        <td>${n}</td>
+        <td>${sellCell}</td>
+      </tr>`;
+    })
     .join("");
 }
 
@@ -262,8 +277,11 @@ function render() {
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">型付き在庫 (YieldBag)</h2>
-      <table>${inventoryRows(state.hub)}</table>
-      <p class="muted" style="margin-top:0.5rem">型付き修理例: ${EXAMPLE_TYPED_REPAIR_COST.credits}c + ${escapeHtml(typedCostText || "—")}</p>
+      <table>
+        <thead><tr><th>アイテム</th><th>数量</th><th>売却（仮）</th></tr></thead>
+        <tbody>${inventoryRows(state.hub)}</tbody>
+      </table>
+      <p class="muted" style="margin-top:0.5rem">「レア」タグ付きのみ売却可。価格は仮（TBD）。型付き修理例: ${EXAMPLE_TYPED_REPAIR_COST.credits}c + ${escapeHtml(typedCostText || "—")}</p>
     </div>
 
     <div class="card">
@@ -360,6 +378,7 @@ function render() {
       if (act === "repair-classic") state = repairClassic(state, id);
       else if (act === "repair-typed") state = repairTyped(state, id);
       else if (act === "select-circuit") state = selectCircuit(state, id);
+      else if (act === "sell-rare") state = sellRareItem(state, id, 1);
       else if (act === "scrap") {
         if (!window.confirm(`解体しますか？\n${id}`)) return;
         state = scrapMech(state, id);

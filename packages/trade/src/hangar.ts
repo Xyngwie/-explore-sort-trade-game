@@ -57,6 +57,7 @@ import {
   type RestoreToTradePayload,
   type SortieReturnKind,
   type YieldBag,
+  type YieldItemId,
 } from "@estg/shared";
 
 export type HangarLog = string[];
@@ -871,6 +872,77 @@ export function simulateReturn(
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
     log: pushLog(state.log, `シミュ帰還 ${kind} ×${ids.length}${bufNote}`),
     notice: `シミュ帰還（${kind}）で摩耗適用${bufNote}`,
+  };
+  return persistHangar(next);
+}
+
+
+/**
+ * 「レア」売却対象の小さな仮サブセット（balance TBD）。
+ * parts sell higher than basic mats; only these ids show sell buttons for now.
+ */
+export const RARE_YIELD_ITEM_IDS = [
+  "mat_circuit",
+  "part_actuator",
+  "part_armor_plate",
+  "part_power_cell",
+  "part_sensor_array",
+] as const satisfies readonly YieldItemId[];
+
+export type RareYieldItemId = (typeof RARE_YIELD_ITEM_IDS)[number];
+
+/**
+ * Placeholder sell prices in credits (仮 / TBD).
+ * Parts > basic rare mats. Constants TBD — do not treat as final economy.
+ */
+export const RARE_SELL_PRICE_CREDITS: Record<RareYieldItemId, number> = {
+  // TBD: placeholder prices (仮)
+  mat_circuit: 8,
+  part_actuator: 35,
+  part_armor_plate: 40,
+  part_power_cell: 45,
+  part_sensor_array: 55,
+};
+
+export function isRareYieldItemId(id: string): id is RareYieldItemId {
+  return (RARE_YIELD_ITEM_IDS as readonly string[]).includes(id);
+}
+
+export function rareSellPriceCredits(id: YieldItemId): number | null {
+  if (!isRareYieldItemId(id)) return null;
+  return RARE_SELL_PRICE_CREDITS[id];
+}
+
+/**
+ * Sell one unit of a rare YieldBag item → +credits, −inventory, HubSave persist.
+ */
+export function sellRareItem(
+  state: HangarState,
+  itemId: string,
+  qty = 1,
+): HangarState {
+  if (!isRareYieldItemId(itemId)) {
+    return { ...state, notice: "レア対象外（売却不可）" };
+  }
+  const n = Math.max(1, Math.floor(qty));
+  const have = Math.floor(Number(state.hub.inventory[itemId] ?? 0) || 0);
+  if (have < n) {
+    return { ...state, notice: `${itemId} 不足（持 ${have}）` };
+  }
+  const unit = RARE_SELL_PRICE_CREDITS[itemId];
+  const gained = unit * n;
+  const nextInv = spendYieldBag(state.hub.inventory, { [itemId]: n });
+  if (!nextInv) return { ...state, notice: "売却失敗（在庫）" };
+  const hub = normalizeHubSnapshot({
+    ...state.hub,
+    credits: state.hub.credits + gained,
+    inventory: nextInv,
+  });
+  const next: HangarState = {
+    ...state,
+    hub,
+    log: pushLog(state.log, `レア売却 ${itemId}×${n} → +${gained}c（仮）`),
+    notice: `売却 +${gained}c（仮 ${unit}c/${itemId}）`,
   };
   return persistHangar(next);
 }

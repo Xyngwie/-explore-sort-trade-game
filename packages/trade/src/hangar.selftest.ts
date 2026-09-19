@@ -33,6 +33,10 @@ import {
   yieldBagFromTypedRepairCost,
   hubCircuitBonuses,
   repairClassic,
+  sellRareItem,
+  isRareYieldItemId,
+  RARE_SELL_PRICE_CREDITS,
+  grantDemoInventory,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -403,6 +407,30 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const spentM = materialsBefore - hs.hub.materials;
   assert.equal(spentC, Math.ceil(MECH_FLEET_RULES.repairCredits * 0.8));
   assert.equal(spentM, Math.ceil(MECH_FLEET_RULES.repairMaterials * 0.8));
+}
+
+
+// --- rare sell (YieldBag → credits, HubSave persist) ---
+{
+  // Earlier blocks swap globalThis.localStorage; restore so persistHangar hits this store.
+  (globalThis as unknown as { localStorage: Storage }).localStorage = storage;
+  let s = resetHangar(storage);
+  s = grantDemoInventory(s);
+  assert.ok(isRareYieldItemId("part_actuator"));
+  assert.ok(isRareYieldItemId("mat_circuit"));
+  assert.equal(isRareYieldItemId("mat_scrap"), false);
+  const beforeC = s.hub.credits;
+  const beforeAct = s.hub.inventory.part_actuator ?? 0;
+  assert.ok(beforeAct >= 1);
+  const unit = RARE_SELL_PRICE_CREDITS.part_actuator;
+  s = sellRareItem(s, "part_actuator", 1);
+  assert.equal(s.hub.credits, beforeC + unit);
+  assert.equal(s.hub.inventory.part_actuator ?? 0, beforeAct - 1);
+  const re = createInitialHangar(storage);
+  assert.equal(re.hub.credits, s.hub.credits);
+  assert.equal(re.hub.inventory.part_actuator ?? 0, s.hub.inventory.part_actuator ?? 0);
+  const blocked = sellRareItem(s, "mat_scrap", 1);
+  assert.match(blocked.notice, /レア対象外/);
 }
 
 console.log("trade hangar selftest: ok");

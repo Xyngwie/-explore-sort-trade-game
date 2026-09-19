@@ -73,3 +73,12 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .fleet-row { margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #2a313c; }
 .fleet-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 label.check { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+
+.rare-tag { background: #3d2a1a; color: #d29922; margin-left: 0.25rem; }
+button.sell-rare {
+  font-size: 0.7rem;
+  padding: 0.35rem 0.55rem;
+  font-weight: 600;
+}
+th { text-align: left; font-size: 0.75rem; color: #9aa0a6; font-weight: 600; padding: 0.25rem 0; border-bottom: 1px solid #2a313c; }
+th:nth-child(2), th:nth-child(3), td:nth-child(2), td:nth-child(3) { text-align: right; }
