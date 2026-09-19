@@ -1,5 +1,6 @@
 import type { Vec2 } from "./math";
 import type { Balance } from "./balance";
+import type { DensityThreat } from "./balance";
 
 export type Stance = "patrol" | "escort" | "recover" | "raid";
 
@@ -8,6 +9,15 @@ export const STANCE_LABEL: Record<Stance, string> = {
   escort: "帯同",
   recover: "回収",
   raid: "遊撃",
+};
+
+/** Invade→explore sector handoff (parsed once on boot). */
+export type InvadeSectorContext = {
+  sectorX: number;
+  sectorY: number;
+  /** 0..1 provisional density from invade. */
+  density: number;
+  intelFlags: string[];
 };
 
 export type Phase = "briefing" | "sortie" | "result";
@@ -102,6 +112,10 @@ export type World = {
   deployedInstanceIds: string[];
   /** Durability at deploy time (from trade mechDurability); empty → assume max. */
   deployedDurability: Record<string, number>;
+  /** Invade sector when opened via invade→explore; null for direct / trade-only. */
+  invadeSector: InvadeSectorContext | null;
+  /** Resolved threat from density (or baseline). */
+  densityThreat: DensityThreat;
   camera: Camera;
   /** Accumulated damage events for wear scaffold (flat returnKind still primary). */
   combatHitsTaken: number;

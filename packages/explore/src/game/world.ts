@@ -1,10 +1,16 @@
 import {
   DEFAULT_EXPEDITION_LOADOUT,
+  parseInvadeToExploreSearch,
   parseTradeToExploreSearch,
   wingmanCountFromMechs,
 } from "@estg/shared";
-import { BALANCE } from "./balance";
-import type { Container, Unit, World } from "./types";
+import {
+  BALANCE,
+  balanceForDensity,
+  threatFromDensity,
+  type DensityThreat,
+} from "./balance";
+import type { Container, InvadeSectorContext, Unit, World } from "./types";
 import { vec } from "./math";
 
 function makeUnit(
@@ -52,28 +58,47 @@ function placeContainers(): Container[] {
   }));
 }
 
-function placeEnemies(): Unit[] {
-  const spots = [
-    vec(650, 200),
-    vec(900, 480),
-    vec(500, 600),
-    vec(1050, 700),
-    vec(750, 800),
-  ];
-  return spots.map((pos, i) =>
-    makeUnit({
-      id: `enemy-${i}`,
-      kind: "enemy",
-      name: `敵${i + 1}`,
-      pos: { ...pos },
-      hp: BALANCE.enemyHp,
-      maxHp: BALANCE.enemyHp,
-      radius: BALANCE.enemyRadius,
-      alive: true,
-      stance: "raid",
-      capacity: 0,
-    }),
-  );
+function clampToWorld(x: number, y: number, margin: number): { x: number; y: number } {
+  return {
+    x: Math.min(BALANCE.worldW - margin, Math.max(margin, x)),
+    y: Math.min(BALANCE.worldH - margin, Math.max(margin, y)),
+  };
+}
+
+/**
+ * Place enemies on a ring around player spawn.
+ * Higher density → more enemies, closer ring (see threatFromDensity / BALANCE).
+ */
+function placeEnemies(
+  spawn: { x: number; y: number },
+  threat: DensityThreat,
+): Unit[] {
+  const count = Math.max(1, threat.enemyCount);
+  const enemies: Unit[] = [];
+  const margin = 40;
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + 0.35;
+    const raw = {
+      x: spawn.x + Math.cos(angle) * threat.spawnDist,
+      y: spawn.y + Math.sin(angle) * threat.spawnDist,
+    };
+    const pos = clampToWorld(raw.x, raw.y, margin);
+    enemies.push(
+      makeUnit({
+        id: `enemy-${i}`,
+        kind: "enemy",
+        name: `敵${i + 1}`,
+        pos,
+        hp: BALANCE.enemyHp,
+        maxHp: BALANCE.enemyHp,
+        radius: BALANCE.enemyRadius,
+        alive: true,
+        stance: "raid",
+        capacity: 0,
+      }),
+    );
+  }
+  return enemies;
 }
 
 export type SortieBootstrap = {
@@ -83,10 +108,23 @@ export type SortieBootstrap = {
   note: string;
   deployedInstanceIds: string[];
   deployedDurability: Record<string, number>;
+  /** Parsed invade→explore sector; null when keys absent. */
+  invadeSector: InvadeSectorContext | null;
 };
 
 export function bootstrapFromSearch(search: string): SortieBootstrap {
   const inbound = parseTradeToExploreSearch(search);
+  const sectorIn = parseInvadeToExploreSearch(search);
+  const invadeSector: InvadeSectorContext | null =
+    sectorIn != null
+      ? {
+          sectorX: sectorIn.sectorX,
+          sectorY: sectorIn.sectorY,
+          density: sectorIn.density,
+          intelFlags: sectorIn.intelFlags ? [...sectorIn.intelFlags] : [],
+        }
+      : null;
+
   const deployedInstanceIds = inbound?.deployedInstanceIds
     ? [...inbound.deployedInstanceIds]
     : [];
@@ -108,12 +146,24 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
       ? inbound.startingAmmo
       : DEFAULT_EXPEDITION_LOADOUT.ammoStock;
   const craft = 1 + wingmanCount;
-  const note =
-    inbound != null
-      ? deployedInstanceIds.length > 0
+
+  let note: string;
+  if (inbound != null) {
+    note =
+      deployedInstanceIds.length > 0
         ? `HUB v2 · 健在 ${craft} 機 · ids ${deployedInstanceIds.join(",")}`
-        : `HUB 受取 · 配備 ${craft} 機（僚機 ${wingmanCount}） · 実弾 ${ammoStock}`
-      : "デモ編成 · 僚機 2 · 既定実弾";
+        : `HUB 受取 · 配備 ${craft} 機（僚機 ${wingmanCount}） · 実弾 ${ammoStock}`;
+  } else {
+    note = "デモ編成 · 僚機 2 · 既定実弾";
+  }
+  if (invadeSector != null) {
+    const flags =
+      invadeSector.intelFlags.length > 0
+        ? ` · intel ${invadeSector.intelFlags.join(",")}`
+        : "";
+    note += ` · 戦線 (${invadeSector.sectorX},${invadeSector.sectorY}) dens=${invadeSector.density.toFixed(3)}${flags}`;
+  }
+
   return {
     wingmanCount,
     ammoStock,
@@ -121,11 +171,16 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     note,
     deployedInstanceIds,
     deployedDurability,
+    invadeSector,
   };
 }
 
 export function createWorld(boot: SortieBootstrap): World {
   const spawn = vec(180, 500);
+  const density = boot.invadeSector?.density ?? null;
+  const threat = threatFromDensity(density);
+  const balance = balanceForDensity(density);
+
   const leaderId = boot.deployedInstanceIds[0] ?? null;
   const leader = makeUnit({
     id: "leader",
@@ -166,14 +221,14 @@ export function createWorld(boot: SortieBootstrap): World {
   const carrierCapacity = BALANCE.carrierSlotsPerCraft * craft;
 
   return {
-    balance: BALANCE,
+    balance,
     phase: "briefing",
     timeLeft: boot.maxOperationTimeSec,
     elapsed: 0,
     maxOperationTimeSec: boot.maxOperationTimeSec,
     leader,
     wingmen,
-    enemies: placeEnemies(),
+    enemies: placeEnemies(spawn, threat),
     containers: placeContainers(),
     extract: { pos: vec(160, 480), radius: 48 },
     boarding: null,
@@ -187,6 +242,15 @@ export function createWorld(boot: SortieBootstrap): World {
     note: boot.note,
     deployedInstanceIds: [...boot.deployedInstanceIds],
     deployedDurability: { ...boot.deployedDurability },
+    invadeSector: boot.invadeSector
+      ? {
+          sectorX: boot.invadeSector.sectorX,
+          sectorY: boot.invadeSector.sectorY,
+          density: boot.invadeSector.density,
+          intelFlags: [...boot.invadeSector.intelFlags],
+        }
+      : null,
+    densityThreat: { ...threat },
     camera: { x: 0, y: 200, w: 720, h: 420 },
     combatHitsTaken: 0,
   };
