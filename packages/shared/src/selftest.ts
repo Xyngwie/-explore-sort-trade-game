@@ -40,6 +40,9 @@ import {
   importYieldBagIntoHub,
   upsertCircuitIntoHub,
   normalizeCircuits,
+  normalizeFrontProgress,
+  setFrontProgressInHub,
+  clearFrontProgressInHub,
   INITIAL_HUB,
   HUB_LIMITS,
 } from "./hub-save";
@@ -633,6 +636,81 @@ console.log("shared selftest: sector-density + circuit-board ok");
   assert.ok(HUB_LIMITS.maxCircuits >= 1);
 }
 console.log("shared hub-circuits selftest: ok");
+
+// --- hub frontProgress (HubSave v2 additive) ---
+{
+  assert.equal(INITIAL_HUB.frontProgress, null);
+
+  const progress = {
+    seed: 42,
+    aoiHalf: 12,
+    opened: [{ sx: 0, sy: 0 }, { sx: 1, sy: 0 }, [2, 0]],
+    flagged: [{ sx: 3, sy: 1 }],
+    focus: { sx: 1, sy: 0 },
+    hitMine: false,
+  };
+  let hub = setFrontProgressInHub(INITIAL_HUB, progress as never);
+  assert.ok(hub.frontProgress);
+  assert.equal(hub.frontProgress!.seed, 42);
+  assert.equal(hub.frontProgress!.aoiHalf, 12);
+  assert.equal(hub.frontProgress!.opened.length, 3);
+  assert.equal(hub.frontProgress!.flagged.length, 1);
+  assert.equal(hub.frontProgress!.focus?.sx, 1);
+  assert.ok(hub.frontProgress!.updatedAt);
+
+  const save = createHubSave(hub);
+  const parsed = parseHubSave(save);
+  assert.ok(parsed);
+  assert.equal(parsed!.hub.frontProgress!.seed, 42);
+  assert.equal(parsed!.hub.credits, INITIAL_HUB.credits);
+
+  const viaAliasHub = parseHubSave({
+    v: 2,
+    savedAt: "2026-09-19T00:00:00.000Z",
+    hub: {
+      credits: 10,
+      materials: 20,
+      fleet: [],
+      ammoLoad: { ammo_standard: 0, ammo_ap: 0, ammo_hp: 0 },
+      importedMaterials: 0,
+      selectedMechId: "mech_gen1",
+      selectedAmmoId: "ammo_standard",
+      invadeBoard: {
+        seed: 99,
+        opened: [{ sx: 0, sy: 0 }],
+        flagged: [],
+        focus: null,
+        hitMine: true,
+      },
+    },
+  });
+  assert.ok(viaAliasHub);
+  assert.equal(viaAliasHub!.hub.frontProgress!.seed, 99);
+  assert.equal(viaAliasHub!.hub.frontProgress!.hitMine, true);
+
+  const legacy = parseHubSave({
+    v: 2,
+    savedAt: "2026-09-01T00:00:00.000Z",
+    hub: {
+      credits: 1,
+      materials: 2,
+      fleet: [],
+      ammoLoad: { ammo_standard: 0, ammo_ap: 0, ammo_hp: 0 },
+      importedMaterials: 0,
+      selectedMechId: "mech_gen1",
+      selectedAmmoId: "ammo_standard",
+    },
+  });
+  assert.ok(legacy);
+  assert.equal(legacy!.hub.frontProgress, null);
+
+  hub = clearFrontProgressInHub(hub);
+  assert.equal(hub.frontProgress, null);
+
+  assert.equal(normalizeFrontProgress({ opened: [], flagged: [], focus: null }), null);
+  assert.ok(HUB_LIMITS.maxFrontCells >= 625);
+}
+console.log("shared hub-frontProgress selftest: ok");
 
 // --- M4/M5 handoff key contracts ---
 assert.ok(HANDOFF_QUERY_KEYS.tradeToInvade.includes("fromHub"));

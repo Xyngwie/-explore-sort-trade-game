@@ -13,6 +13,7 @@ Module 4（invade / front）薄いプレイアブル。**前線セクター格�
 - 任意レイド: 旗セルを通常クリック → `engage=raid`（当該のみ）→「任意出撃へ」
 - 出発: ルート焦点で invade→trade / invade→explore。戦闘は engage 付き explore リンク
 - **本 salvage / YieldBag は渡さない**
+- **永続:** 開いたマス・旗・地雷シード・ルート焦点を `HubSave.frontProgress` に保存（enter 時ロード、開く/旗後セーブ）。「盤を再生成（進捗リセット）」は確認ダイアログ付き
 - 回路ボーナス（track 1）・trade/restore は触らない
 - ネストした「セクター内 8×8」は廃止（PR #35 アプローチを訂正）
 

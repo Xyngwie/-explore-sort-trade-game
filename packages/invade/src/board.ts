@@ -8,6 +8,8 @@ import {
   SECTOR_FRONT_DISTANCE,
   SECTOR_WALL_DISTANCE,
   sectorDistanceFromHq,
+  type FrontCellCoord,
+  type InvadeFrontProgress,
 } from "@estg/shared";
 import { densityAfterSweep, type CellMark } from "./sweep";
 
@@ -56,6 +58,11 @@ export type MsBoard = {
   status: BoardStatus;
   /** Soft hazard — front not hard-locked. */
   hitMine: boolean;
+  /**
+   * Mine-layout seed (uint32). Present when generated via seed so HubSave can
+   * regenerate the same board. Absent when built from an opaque rng only.
+   */
+  seed?: number;
 };
 
 export type OpenResult =
@@ -289,15 +296,30 @@ export function recomputeStatus(board: MsBoard): BoardStatus {
   return "playing";
 }
 
+/** Default campaign seed when none supplied. */
+export const DEFAULT_BOARD_SEED = 0x4ead_f001;
+
 /**
  * Generate the front minesweeper board.
  * HQ (0,0) starts forced-open (flood). Wall ring d≥12 is blocked.
  * Mines placed with P rising by Chebyshev distance from HQ.
+ *
+ * Second arg may be:
+ * - `number` — uint32 seed (preferred for HubSave persistence)
+ * - `() => number` — opaque RNG (seed field left unset unless known)
  */
 export function generateBoard(
   aoiHalf: number = AOI_HALF,
-  rng: () => number = rngFromSeed(),
+  rngOrSeed: (() => number) | number = DEFAULT_BOARD_SEED,
 ): MsBoard {
+  let seed: number | undefined;
+  let rng: () => number;
+  if (typeof rngOrSeed === "number") {
+    seed = rngOrSeed >>> 0;
+    rng = rngFromSeed(seed);
+  } else {
+    rng = rngOrSeed;
+  }
   const cells = emptyFront(aoiHalf);
   const placed = placeMinesByDistance(cells, aoiHalf, rng);
   computeAdjacents(cells, aoiHalf);
@@ -310,9 +332,15 @@ export function generateBoard(
     status: "playing",
     hitMine: false,
   };
+  if (seed != null) board.seed = seed;
   openHqAndFlood(board);
   recomputeStatus(board);
   return board;
+}
+
+/** Fresh random uint32 seed for regenerate-board. */
+export function randomBoardSeed(rng: () => number = Math.random): number {
+  return (rng() * 0x1_0000_0000) >>> 0;
 }
 
 /** Open a sector cell. Stepping a mine → soft hazard (no hard-lock). */
@@ -493,4 +521,79 @@ export function cellGlyph(cell: MsCell): string {
   if (cell.isHq) return "HQ";
   if (cell.adjacent === 0) return "";
   return String(cell.adjacent);
+}
+
+// ---------------------------------------------------------------------------
+// HubSave frontProgress capture / restore
+// ---------------------------------------------------------------------------
+
+/** Snapshot board + focus into HubSave.frontProgress shape. */
+export function captureFrontProgress(
+  board: MsBoard,
+  focus: FrontCellCoord | null,
+): InvadeFrontProgress | null {
+  if (board.seed == null || !Number.isFinite(board.seed)) return null;
+  const opened: FrontCellCoord[] = [];
+  const flagged: FrontCellCoord[] = [];
+  for (const row of board.cells) {
+    for (const c of row) {
+      if (c.blocked) continue;
+      if (c.open) opened.push({ sx: c.sx, sy: c.sy });
+      if (c.flagged && !c.open) flagged.push({ sx: c.sx, sy: c.sy });
+    }
+  }
+  let focusOut: FrontCellCoord | null = null;
+  if (focus != null && inAoi(board.aoiHalf, focus.sx, focus.sy)) {
+    focusOut = { sx: focus.sx, sy: focus.sy };
+  }
+  return {
+    seed: board.seed >>> 0,
+    aoiHalf: board.aoiHalf,
+    opened,
+    flagged,
+    focus: focusOut,
+    hitMine: board.hitMine === true,
+  };
+}
+
+/**
+ * Rebuild board from HubSave.frontProgress (seed → mines, then opens/flags).
+ * Returns null when progress is unusable (bad aoiHalf / missing seed).
+ */
+export function restoreBoardFromProgress(
+  progress: InvadeFrontProgress,
+  expectedAoiHalf: number = AOI_HALF,
+): { board: MsBoard; focus: FrontCellCoord | null } | null {
+  const aoiHalf =
+    progress.aoiHalf != null ? progress.aoiHalf : expectedAoiHalf;
+  if (aoiHalf !== expectedAoiHalf) return null;
+  if (!Number.isFinite(progress.seed)) return null;
+
+  const board = generateBoard(aoiHalf, progress.seed >>> 0);
+  board.hitMine = progress.hitMine === true;
+
+  for (const o of progress.opened ?? []) {
+    const cell = getCell(board, o.sx, o.sy);
+    if (!cell || cell.blocked) continue;
+    cell.open = true;
+    cell.flagged = false;
+    if (cell.mine) board.hitMine = true;
+  }
+
+  for (const f of progress.flagged ?? []) {
+    const cell = getCell(board, f.sx, f.sy);
+    if (!cell || cell.blocked || cell.open) continue;
+    cell.flagged = true;
+  }
+
+  recomputeStatus(board);
+
+  let focus: FrontCellCoord | null = null;
+  if (
+    progress.focus != null &&
+    inAoi(aoiHalf, progress.focus.sx, progress.focus.sy)
+  ) {
+    focus = { sx: progress.focus.sx, sy: progress.focus.sy };
+  }
+  return { board, focus };
 }
