@@ -1,4 +1,4 @@
-import { dist } from "./math";
+import { clamp, dist } from "./math";
 import type { Stance, Unit, World } from "./types";
 import { STANCE_LABEL } from "./types";
 
@@ -89,6 +89,50 @@ export function applyOrder(
   }
 
   return "denied";
+}
+
+
+/**
+ * 散開捜索: captain + living wingmen all switch to raid and fan out
+ * ~120° apart relative to captain heading (easy clear when 1v1-strong).
+ */
+export function scatterSearch(world: World): "applied" | "denied" {
+  if (world.phase !== "sortie" || !world.leader.alive) return "denied";
+
+  const living: Unit[] = [
+    world.leader,
+    ...world.wingmen.filter((w) => w.alive),
+  ];
+  if (living.length === 0) return "denied";
+
+  const base = world.leader.heading;
+  const origin = world.leader.pos;
+  const distOut = world.balance.scatterSearchDist;
+  // Three bearings: forward / +120° / -120° (assign in order to living units).
+  const bearings = [0, (2 * Math.PI) / 3, -(2 * Math.PI) / 3];
+  const pad = 20;
+
+  for (let i = 0; i < living.length; i++) {
+    const unit = living[i]!;
+    const angle = base + bearings[i % bearings.length]!;
+    const target = {
+      x: clamp(origin.x + Math.cos(angle) * distOut, pad, world.balance.worldW - pad),
+      y: clamp(origin.y + Math.sin(angle) * distOut, pad, world.balance.worldH - pad),
+    };
+    abortSalvage(unit);
+    unit.stance = "raid";
+    unit.moveTarget = { ...target };
+    if (unit.kind === "leader") {
+      // Captain stays player-led; seed click-style moveTarget only.
+      unit.waypoint = null;
+    } else {
+      // Wingmen: raid brain uses waypoint as preferred fan-out search point.
+      unit.waypoint = { ...target };
+    }
+  }
+
+  pushLog(world, "散開捜索：隊長＋僚機を遊撃で三方向に展開。");
+  return "applied";
 }
 
 /** Rally / call wingman back — alias of escort for off-screen command. */

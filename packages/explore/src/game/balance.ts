@@ -67,6 +67,8 @@ export const BALANCE = {
   engageRaidSpawnDist: 320,
   engageRaidSpeedMul: 1.1,
   engageRaidHpMul: 1.0,
+  /** World units to fan out on 散開捜索 (raid search). */
+  scatterSearchDist: 280,
 } as const;
 
 export type Balance = typeof BALANCE;

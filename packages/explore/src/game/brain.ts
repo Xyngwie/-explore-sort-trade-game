@@ -127,7 +127,8 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       };
     }
     case "raid": {
-      // Autonomous aggression — no player waypoint required.
+      // Autonomous aggression — no player click target required.
+      // Optional waypoint = scatter-search fan-out (散開捜索); cleared on arrive.
       const hunt =
         nearestAliveEnemy(self.pos, world.enemies, b.visionRange * 1.5) ??
         nearestAliveEnemy(self.pos, world.enemies);
@@ -145,6 +146,16 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
           fireAt: d < b.engageRange * 1.35 ? hunt : null,
           trySalvage: false,
         };
+      }
+      if (self.waypoint) {
+        if (dist(self.pos, self.waypoint) > 24) {
+          return {
+            moveTarget: { ...self.waypoint },
+            fireAt: null,
+            trySalvage: false,
+          };
+        }
+        self.waypoint = null;
       }
       // No enemies: loiter near leader without consuming a click target.
       self.patrolAngle += b.patrolAngularSpeed * 0.6 * dt;
