@@ -14,6 +14,15 @@ import {
   type SectorDensityInfo,
   type TradeToInvadePayload,
 } from "@estg/shared";
+import {
+  type CellMark,
+  cellKey,
+  densityAfterSweep,
+  hazardChanceFromDensity,
+  mergeIntelFlags,
+  resolveFlag,
+  resolveSweep,
+} from "./sweep";
 
 /** Half-extent of the AOI around HQ (coords −AOI_HALF … +AOI_HALF). */
 const AOI_HALF = 10;
@@ -40,6 +49,10 @@ if (inbound != null) {
 let selected: SectorSel | null = null;
 /** Inert skip flag (quick-battle wording only — no URL nav). */
 let skipped = false;
+/** Per-cell thin-sweep marks (flag / clear / hazard). */
+const marks = new Map<string, CellMark>();
+/** Last scout/flag log line for UI. */
+let lastSweepLog: string | null = null;
 
 function tradeBaseUrl(): string {
   return resolveModuleBaseUrl("trade");
@@ -57,6 +70,10 @@ function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+function markAt(sx: number, sy: number): CellMark {
+  return marks.get(cellKey(sx, sy)) ?? "none";
+}
+
 /** Map density 0..1 → CSS color (cool → hot). Blocked = wall slate. */
 function densityStyle(info: SectorDensityInfo): string {
   if (info.blocked) return "background:#3d2a2a;border-color:#8b4545;color:#f85149";
@@ -71,11 +88,15 @@ function densityStyle(info: SectorDensityInfo): string {
 function cellLabel(sx: number, sy: number, info: SectorDensityInfo): string {
   if (sx === 0 && sy === 0) return "HQ";
   if (info.blocked) return "壁";
+  const m = markAt(sx, sy);
+  if (m === "flagged") return "⚑";
+  if (m === "cleared") return "✓";
+  if (m === "hazard") return "✕";
   return info.distance.toString();
 }
 
 /** Short intel tokens only — never YieldBag / salvage. */
-function intelFlagsFor(info: SectorDensityInfo): string[] {
+function baseIntelFlags(info: SectorDensityInfo): string[] {
   const flags: string[] = ["routeHint"];
   if (info.distance >= SECTOR_FRONT_DISTANCE) flags.push("frontLine");
   if (info.density >= 0.7) flags.push("rareSignal");
@@ -86,11 +107,12 @@ function sectorPayload(
   sel: SectorSel,
   info: SectorDensityInfo,
 ): InvadeToTradePayload & InvadeToExplorePayload {
+  const mark = markAt(sel.sx, sel.sy);
   return {
     sectorX: sel.sx,
     sectorY: sel.sy,
-    density: info.density,
-    intelFlags: intelFlagsFor(info),
+    density: densityAfterSweep(info.density, mark),
+    intelFlags: mergeIntelFlags(baseIntelFlags(info), mark),
   };
 }
 
@@ -124,10 +146,55 @@ function handoffActionsHtml(
   const toExplore = buildInvadeToExploreUrl(payload, exploreBaseUrl());
   const flags = (payload.intelFlags ?? []).join(", ") || "—";
   return `
-    <p class="muted mono">intelFlags: ${escapeHtml(flags)}</p>
+    <p class="muted mono">density: ${payload.density.toFixed(3)} · intelFlags: ${escapeHtml(flags)}</p>
     <div class="actions">
       <a class="btn" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">格納庫へ渡す（invade→trade）</a>
       <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">探索へ渡す（invade→explore）</a>
+    </div>
+  `;
+}
+
+function sweepPanelHtml(
+  sel: SectorSel | null,
+  info: SectorDensityInfo | null,
+): string {
+  if (sel == null || info == null || info.blocked) {
+    return `
+      <div class="card">
+        <h2 class="card-title">薄掃討（thin sweep）</h2>
+        <p class="muted">セクターを選ぶと、旗立て / 偵察掃討ができます（本編マインスイーパではない）。</p>
+      </div>
+    `;
+  }
+  const mark = markAt(sel.sx, sel.sy);
+  const pHaz = hazardChanceFromDensity(info.density);
+  const markJa =
+    mark === "flagged"
+      ? "旗"
+      : mark === "cleared"
+        ? "掃討成功"
+        : mark === "hazard"
+          ? "接触（hazard）"
+          : "未掃討";
+  return `
+    <div class="card">
+      <h2 class="card-title">薄掃討（thin sweep）</h2>
+      <p class="muted">選択セルを旗立て、または密度連動の hazard 確率で偵察掃討。結果は既存 intelFlags / density に載せる。</p>
+      <table>
+        <tr><td>セル状態</td><td>${escapeHtml(markJa)}</td></tr>
+        <tr><td>hazard 確率</td><td>${(pHaz * 100).toFixed(0)}%（density ${info.density.toFixed(2)}）</td></tr>
+      </table>
+      ${
+        lastSweepLog
+          ? `<p class="mono" style="margin-top:0.5rem">${escapeHtml(lastSweepLog)}</p>`
+          : ""
+      }
+      <div class="actions">
+        <button type="button" class="btn" id="btn-flag">旗立て（Flag）</button>
+        <button type="button" class="btn secondary" id="btn-sweep">偵察掃討（Sweep）</button>
+        <button type="button" class="btn ghost" id="btn-unmark" ${mark === "none" ? "disabled" : ""}>マーク解除</button>
+      </div>
+      <p class="ok" style="margin-top:0.75rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
     </div>
   `;
 }
@@ -141,12 +208,14 @@ function render(): void {
       const isHq = x === 0 && y === 0;
       const isSel =
         selected != null && selected.sx === x && selected.sy === y;
+      const mark = markAt(x, y);
       const cls = [
         "cell",
         isHq ? "hq" : "",
         info.blocked ? "blocked" : "pickable",
         isSel ? "selected" : "",
         !info.blocked && info.distance >= SECTOR_FRONT_DISTANCE ? "front" : "",
+        mark !== "none" ? `mark-${mark}` : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -154,7 +223,7 @@ function render(): void {
         ? "HQ (0,0)"
         : `(${x},${y}) d=${info.distance} dens=${info.density.toFixed(2)}${
             info.blocked ? " WALL" : ""
-          }`;
+          }${mark !== "none" ? ` [${mark}]` : ""}`;
       const disabled = info.blocked ? "disabled" : "";
       cells.push(
         `<button type="button" class="${cls}" data-sx="${x}" data-sy="${y}" title="${escapeHtml(title)}" style="${densityStyle(info)}" ${disabled}>${escapeHtml(cellLabel(x, y, info))}</button>`,
@@ -170,9 +239,9 @@ function render(): void {
     selInfo.distance >= SECTOR_FRONT_DISTANCE;
 
   root.innerHTML = `
-    <p class="pill">MODULE 4 · INVADE / FRONT · HANDOFF WIRE</p>
+    <p class="pill">MODULE 4 · INVADE / FRONT · THIN SWEEP</p>
     <h1>戦線マップ</h1>
-    <p class="muted">HQ 中心の小 AOI。セクターを選び、Hub または探索へルート情報を渡す（本 salvage なし）。</p>
+    <p class="muted">HQ 中心の小 AOI。セクター選択 → 薄掃討（旗／偵察）→ Hub または探索へルート情報を渡す（本 salvage なし）。</p>
 
     <div class="card">
       <h2 class="card-title">到着（trade→invade）</h2>
@@ -186,7 +255,7 @@ function render(): void {
     }
 
     <div class="card">
-      <p class="muted">AOI ${cols}×${cols}（半辺 ${AOI_HALF}）。色＝仮 density / 数字＝Chebyshev d。壁 d≥${SECTOR_WALL_DISTANCE} は選択不可。</p>
+      <p class="muted">AOI ${cols}×${cols}（半辺 ${AOI_HALF}）。色＝仮 density / 数字＝Chebyshev d。壁 d≥${SECTOR_WALL_DISTANCE} は選択不可。⚑旗 ✓掃討 ✕hazard。</p>
       <div class="grid" style="--cols:${cols}">${cells.join("")}</div>
     </div>
 
@@ -208,8 +277,9 @@ function render(): void {
         <button type="button" class="btn" id="btn-clear" ${selected == null ? "disabled" : ""}>選択クリア</button>
         <button type="button" class="btn ghost" id="btn-skip">スキップ（quick-battle・ナビなし）</button>
       </div>
-      <p class="ok" style="margin-top:0.75rem">報酬はインテル／ルート表現のみ。本 salvage は払わない。</p>
     </div>
+
+    ${sweepPanelHtml(selected, selInfo)}
 
     <div class="card">
       <h2 class="card-title">出発ハンドオフ</h2>
@@ -226,18 +296,50 @@ function render(): void {
       if (info.blocked) return;
       selected = { sx, sy };
       skipped = false;
+      lastSweepLog = null;
       render();
     });
   });
 
   root.querySelector("#btn-clear")?.addEventListener("click", () => {
     selected = null;
+    lastSweepLog = null;
     render();
   });
 
   root.querySelector("#btn-skip")?.addEventListener("click", () => {
     selected = null;
     skipped = true;
+    lastSweepLog = null;
+    render();
+  });
+
+  root.querySelector("#btn-flag")?.addEventListener("click", () => {
+    if (selected == null) return;
+    const out = resolveFlag();
+    marks.set(cellKey(selected.sx, selected.sy), out.mark);
+    lastSweepLog = `Flag → ${out.intelAdded.join(",")}`;
+    render();
+  });
+
+  root.querySelector("#btn-sweep")?.addEventListener("click", () => {
+    if (selected == null) return;
+    const info = sectorDensityAt(selected.sx, selected.sy);
+    if (info.blocked) return;
+    const out = resolveSweep(info.density);
+    marks.set(cellKey(selected.sx, selected.sy), out.mark);
+    const p = hazardChanceFromDensity(info.density);
+    lastSweepLog =
+      out.kind === "hazard"
+        ? `Sweep HAZARD (p=${(p * 100).toFixed(0)}%) → ${out.intelAdded.join(",")}`
+        : `Sweep CLEAR (p=${(p * 100).toFixed(0)}%) → ${out.intelAdded.join(",")}`;
+    render();
+  });
+
+  root.querySelector("#btn-unmark")?.addEventListener("click", () => {
+    if (selected == null) return;
+    marks.delete(cellKey(selected.sx, selected.sy));
+    lastSweepLog = "マーク解除";
     render();
   });
 }
