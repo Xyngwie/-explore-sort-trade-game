@@ -374,7 +374,17 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     tryFire(world, leader, leadTarget, false);
   }
 
-  updateSalvage(world, leader, input.interact, dt);
+  // Captain auto-starts/continues salvage on a discovered untaken crate in
+  // interactRadius. E (input.interact) remains an optional explicit hold.
+  const leaderWantSalvage =
+    input.interact ||
+    world.containers.some(
+      (c) =>
+        c.discovered &&
+        !c.taken &&
+        dist(leader.pos, c.pos) < world.balance.interactRadius,
+    );
+  updateSalvage(world, leader, leaderWantSalvage, dt);
 
   for (const w of world.wingmen) {
     if (!w.alive) continue;
