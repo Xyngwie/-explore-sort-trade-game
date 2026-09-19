@@ -11,6 +11,7 @@
 - Trade Hangar: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)
 - Invade / Front ドラフト: [`INVADE_V0.md`](./INVADE_V0.md)（Module 4 仕様の受け皿・ビジョンは願望のまま）
 - Restore ドラフト: [`RESTORE_V0.md`](./RESTORE_V0.md)（Module 5 仕様の受け皿・ビジョンは願望のまま）
+- 回路パラドックス／cosmos aspiration（未実装の拡張メモ）: [`RESTORE_CIRCUIT_PARADOX_V0.md`](./RESTORE_CIRCUIT_PARADOX_V0.md)
 
 > **本ドキュメントは実装順を決めない。** 各モジュールの V0／契約ドキュメントを置き換えない。  
 > `.grok.me` プロトタイプは **練習用のみ**。ソース正本（SoT）にしない。

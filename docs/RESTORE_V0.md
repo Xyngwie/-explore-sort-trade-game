@@ -5,6 +5,7 @@
 **系譜:** Slitherlink 風の回路復元（高価値ワンオフ）
 
 関連: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
+- 拡張の与太話（回路パラドックス／cosmos aspiration、未実装）: [`RESTORE_CIRCUIT_PARADOX_V0.md`](./RESTORE_CIRCUIT_PARADOX_V0.md)
 
 > **URL ナビはまだ結ばない。** クエリ鍵・型・build/parse は [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md) / `@estg/shared` を正とする。  
 > **タイマー圧なし**（制限時間で失敗させない）。
