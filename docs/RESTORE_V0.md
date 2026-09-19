@@ -43,6 +43,8 @@ Slitherlink 系の **精密回路修復**。日常の薄利多売（sort）と�
 
 完全に解ける盤は稀な最上位の「true」コアとし、大半は意図的に矛盾や誤りを含むハズレ（**flawed substrate**）を想定する。部分解決でもプレイヤーの手間を **Bypass** として性能向上に反映し、職人の腕前を感じられる余地を残す、という願望である。これは **Fully Awakened / Bypass / Offline** の成果語彙に沿うが、実装受入条件・生成規則・本判定を追加するものではない。
 
+**願望メモ（未実装）:** Fully Awakened / Bypass を、将来の機体・部隊の兵種（scout / armor / raid など）の解放／役割切替に結びつける案もあるが、未決定。
+
 ---
 
 ## 4. CircuitBoardState（草案）
