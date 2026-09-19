@@ -109,9 +109,11 @@ P(mine | d) ≈ 0.05 + density * 0.20   // 近傍薄 → 前線 ~25%
 2. HQ は開始時から開放され、地雷にならない  
 3. `d >= 12` は壁（選択・開放不可）と分かる  
 4. 盤進行が `intelFlags`（と軽微な density）に載る  
-5. 「スキップ（quick-battle）」相当の UI 文言があり、スキップ自体はナビしない  
-6. 報酬表示はインテル／ルート表現に留め、コンテナ数の本払いをしない  
-7. `npm run test -w @estg/invade` が通る  
+5. 地雷踏みで `engage=forced` + 隣接敵の「強制出撃へ」が出る  
+6. 旗セル選択で `engage=raid` + 当該のみの「任意出撃へ」が出る  
+7. 「スキップ（quick-battle）」相当の UI 文言があり、スキップ自体はナビしない  
+8. 報酬表示はインテル／ルート表現に留め、コンテナ数の本払いをしない  
+9. `npm run test -w @estg/invade` が通る  
 
 ---
 
@@ -124,7 +126,7 @@ P(mine | d) ≈ 0.05 + density * 0.20   // 近傍薄 → 前線 ~25%
 |---|---|---|
 | trade → invade | `fromHub`, `deployableMechs?`, `startingAmmo?` | 任意参加。配備コミットはしない |
 | invade → trade | `sectorX`, `sectorY`, `density`, `intelFlags?` | **YieldBag 禁止** |
-| invade → explore | 同上セクター組 | trade→explore キーと共存可 |
+| invade → explore | 同上 + `engage?` + `enemyCells?` | forced / raid 戦闘ハンドオフ。trade→explore と共存可 |
 
 shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExploreUrl` / `mergeInvadeSectorOntoExploreUrl`。
 
@@ -172,12 +174,16 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 
 ### ハンドオフ
 
-- **新しい URL キーは追加しない。** 既存の `sectorX` / `sectorY` / `density` / `intelFlags` に載せる
+- ベース: `sectorX` / `sectorY` / `density` / `intelFlags`
+- **engage 加算（invade→explore）:**
+  - **強制（`engage=forced`）:** 地雷踏み → 当該セル＋隣接地雷セルを `enemyCells` に載せ、「強制出撃へ」リンク
+  - **任意（`engage=raid`）:** 旗を立てたセルを通常クリックで選択 → 当該セルのみを `enemyCells` に載せ、「任意出撃へ」リンク
+- `enemyCells` 圧縮形: `sx,sy;sx,sy;...`（`encodeEnemyCells`）
 - `intelFlags` 例: `minesRemaining`, `sectorCleared`, `scoutHazard`, `sectorFlagged`, `scoutClear`（＋ `routeHint` 等）
-- density は盤結果で微調整（掃討完了でクールダウン、hazard でヒート）
-- invade→explore は「敵位置」の概念をトークンで渡す。explore 側は当面 threat スケールに利用してよい
+- density は盤結果で微調整（掃討完了でクールダウン、hazard でヒート）。**地雷密度カーブ自体は据え置き**（今は濃くしない）
+- explore 側の `engage` / `enemyCells` 消費は後続 PR
 
-実装: `packages/invade/src/board.ts`（invade 専用純関数）。
+実装: `packages/invade/src/board.ts`（`forcedEngageTargets` / `raidEngageTarget`）+ `@estg/shared` handoff。
 
 ---
 
@@ -195,7 +201,8 @@ npm run dev:invade
 
 1. 前線格子でセルを開く／旗を立てる（HQ は最初から開放・壁は不可）
 2. 開いたセルをクリックしてルート焦点
-3. **格納庫へ渡す** / **探索へ渡す**（`intelFlags` / `density` が付く）
+3. **格納庫へ渡す** / **探索へ渡す**（`intelFlags` / `density`）
+4. 地雷踏み → **強制出撃へ**（`engage=forced` + 隣接敵）／旗セル選択 → **任意出撃へ**（`engage=raid`）
 
 - パッケージ: `packages/invade`（`@estg/invade`）
 - 共有ヘルパ: `@estg/shared` の sector density プレースホルダ
@@ -207,4 +214,4 @@ npm run dev:invade
 
 - **位置づけ:** V0 ドラフト仕様 + 前線＝マインスイーパのプレイアブル。ビジョンの Module 4 欄の受け皿。
 - **訂正:** PR #35 の「セクター内 8×8」は製品意図と不一致のため、本仕様で前線格子＝盤に置き換え。
-- **次:** 侵食シミュレーション・explore 側の敵座標消費は後続。回路ボーナスは track 1（本トラックでは触らない）。
+- **次:** explore 側の `engage` / `enemyCells` 消費・侵食シミュレーションは後続。回路ボーナスは track 1（本トラックでは触らない）。

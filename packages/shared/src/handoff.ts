@@ -487,15 +487,30 @@ export type InvadeToTradePayload = {
   intelFlags?: string[];
 };
 
+/** Combat handoff mode from invade minesweeper → explore. */
+export type EngageMode = "forced" | "raid";
+
+/** One enemy/mine sector cell on the front map (world coords). */
+export type EnemyCellCoord = { sx: number; sy: number };
+
 /**
- * invade → explore: same sector deploy context explore can read later.
+ * invade → explore: sector deploy context + optional engage combat handoff.
  * May coexist on explore URLs with trade→explore keys (no key collision).
+ *
+ * engage:
+ * - `forced` — stepped a mine (punishment): focus cell + adjacent mine cells
+ * - `raid` — voluntary: flagged cell selected; only that cell
+ * enemyCells: compact query `sx,sy;sx,sy;...` (see encodeEnemyCells)
  */
 export type InvadeToExplorePayload = {
   sectorX: number;
   sectorY: number;
   density: number;
   intelFlags?: string[];
+  /** Combat mode when handing off to explore for a fight. */
+  engage?: EngageMode;
+  /** Enemy sector cells pulled into the fight (world coords). */
+  enemyCells?: EnemyCellCoord[];
 };
 
 /** trade → restore: circuit instance id and/or compact CircuitBoardState. */
@@ -553,6 +568,58 @@ function parseUnitFloat(value: string | null, fallback: number): number {
   const n = Number.parseFloat(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(1, Math.max(0, n));
+}
+
+const ENGAGE_MODES = new Set<EngageMode>(["forced", "raid"]);
+
+export function isEngageMode(v: string): v is EngageMode {
+  return ENGAGE_MODES.has(v as EngageMode);
+}
+
+/**
+ * Compact enemy cell list for URL: `sx,sy;sx,sy;...`
+ * Sorted, deduped; truncates to max 64 cells.
+ */
+export function encodeEnemyCells(cells: readonly EnemyCellCoord[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of cells) {
+    if (!Number.isFinite(c.sx) || !Number.isFinite(c.sy)) continue;
+    const sx = Math.trunc(c.sx);
+    const sy = Math.trunc(c.sy);
+    const key = `${sx},${sy}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+    if (out.length >= 64) break;
+  }
+  out.sort((a, b) => {
+    const [ax, ay] = a.split(",").map(Number);
+    const [bx, by] = b.split(",").map(Number);
+    return ax !== bx ? ax! - bx! : ay! - by!;
+  });
+  return out.join(";");
+}
+
+export function parseEnemyCells(raw: string | null): EnemyCellCoord[] {
+  if (raw == null || raw.trim() === "") return [];
+  const out: EnemyCellCoord[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(";")) {
+    const t = part.trim();
+    if (!t) continue;
+    const m = /^(-?\d+),(-?\d+)$/.exec(t);
+    if (!m) continue;
+    const sx = Number.parseInt(m[1]!, 10);
+    const sy = Number.parseInt(m[2]!, 10);
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) continue;
+    const key = `${sx},${sy}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ sx, sy });
+    if (out.length >= 64) break;
+  }
+  return out;
 }
 
 function sectorPayloadFromParams(
@@ -657,12 +724,23 @@ export function parseInvadeToTradeSearch(
   return sectorPayloadFromParams(p);
 }
 
+function applyEngageParams(u: URL, payload: InvadeToExplorePayload): void {
+  if (payload.engage != null && isEngageMode(payload.engage)) {
+    u.searchParams.set("engage", payload.engage);
+  }
+  if (payload.enemyCells != null && payload.enemyCells.length > 0) {
+    const enc = encodeEnemyCells(payload.enemyCells);
+    if (enc) u.searchParams.set("enemyCells", enc);
+  }
+}
+
 export function buildInvadeToExploreUrl(
   payload: InvadeToExplorePayload,
   baseUrl: string = resolveModuleBaseUrl("explore"),
 ): string {
   const u = new URL(baseUrl);
   applySectorParams(u, payload);
+  applyEngageParams(u, payload);
   return u.toString();
 }
 
@@ -671,12 +749,20 @@ export function parseInvadeToExploreSearch(
 ): InvadeToExplorePayload | null {
   const raw = search.startsWith("?") ? search.slice(1) : search;
   const p = new URLSearchParams(raw);
-  return sectorPayloadFromParams(p);
+  const base = sectorPayloadFromParams(p);
+  if (base == null) return null;
+  const payload: InvadeToExplorePayload = { ...base };
+  const engageRaw = (p.get("engage") ?? "").trim();
+  if (isEngageMode(engageRaw)) payload.engage = engageRaw;
+  const enemyCells = parseEnemyCells(p.get("enemyCells"));
+  if (enemyCells.length > 0) payload.enemyCells = enemyCells;
+  return payload;
 }
 
 /**
  * Merge invade sector context onto an existing explore URL (e.g. trade→explore).
- * Does not remove deploy keys; only sets/overwrites sector* / density / intelFlags.
+ * Does not remove deploy keys; sets/overwrites sector* / density / intelFlags /
+ * engage / enemyCells when present on the sector payload.
  */
 export function mergeInvadeSectorOntoExploreUrl(
   exploreUrl: string,
@@ -684,6 +770,7 @@ export function mergeInvadeSectorOntoExploreUrl(
 ): string {
   const u = new URL(exploreUrl);
   applySectorParams(u, sector);
+  applyEngageParams(u, sector);
   return u.toString();
 }
 

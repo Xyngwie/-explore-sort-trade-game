@@ -172,3 +172,25 @@ a.btn {
   border: 1px solid #3fb950;
   color: #7ee787;
 }
+
+.engage-box {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #2a313c;
+  background: #1a1f27;
+}
+.engage-box.forced {
+  border-color: #f85149;
+  background: #2a1515;
+}
+.engage-box.raid {
+  border-color: #3fb950;
+  background: #152a1a;
+}
+.btn.danger {
+  background: #da3633;
+  border-color: #f85149;
+  color: #fff;
+}
+.btn.danger:hover { filter: brightness(1.08); }

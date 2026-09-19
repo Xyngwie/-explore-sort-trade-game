@@ -1,7 +1,7 @@
 /**
  * Front-map minesweeper — the invade AOI sector grid IS the board.
  * Metaphor: HQ open = home · blank flood = explored · numbers = buffer sensing · mine = enemy → M1.
- * Invade-only; feeds existing handoff via intelFlags / density (no new URL keys).
+ * Invade-only; feeds handoff via intelFlags / density / engage+enemyCells.
  */
 
 import {
@@ -437,6 +437,50 @@ export function mergeBoardIntel(
     out.push(t);
   }
   return out;
+}
+
+export type EnemySector = { sx: number; sy: number };
+
+/**
+ * Forced engage targets after stepping a mine (punishment):
+ * the stepped cell PLUS all adjacent mine/enemy cells (8-neighbor).
+ * Returns [] if (sx,sy) is not a mine cell.
+ */
+export function forcedEngageTargets(
+  board: MsBoard,
+  sx: number,
+  sy: number,
+): EnemySector[] {
+  const cell = getCell(board, sx, sy);
+  if (!cell || cell.blocked || !cell.mine) return [];
+  const out: EnemySector[] = [{ sx, sy }];
+  const seen = new Set<string>([`${sx},${sy}`]);
+  for (const nb of neighbors(board.aoiHalf, sx, sy)) {
+    const ncell = getCell(board, nb.sx, nb.sy);
+    if (!ncell || ncell.blocked || !ncell.mine) continue;
+    const key = `${nb.sx},${nb.sy}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ sx: nb.sx, sy: nb.sy });
+  }
+  out.sort((a, b) => (a.sx !== b.sx ? a.sx - b.sx : a.sy - b.sy));
+  return out;
+}
+
+/**
+ * Voluntary raid target: a flagged cell selected by the player.
+ * Only that single cell (even if adjacent mines exist).
+ * Returns [] if the cell is not flagged (or blocked/oob).
+ */
+export function raidEngageTarget(
+  board: MsBoard,
+  sx: number,
+  sy: number,
+): EnemySector[] {
+  const cell = getCell(board, sx, sy);
+  if (!cell || cell.blocked || cell.open) return [];
+  if (!cell.flagged) return [];
+  return [{ sx, sy }];
 }
 
 /** Display glyph for a cell (UI). */

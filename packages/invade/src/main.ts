@@ -9,6 +9,8 @@ import {
   resolveModuleBaseUrl,
   sectorDensityAt,
   stripHandoffParams,
+  type EngageMode,
+  type EnemyCellCoord,
   type InvadeToExplorePayload,
   type InvadeToTradePayload,
   type TradeToInvadePayload,
@@ -19,11 +21,13 @@ import {
   cellGlyph,
   countFlagged,
   densityAfterBoard,
+  forcedEngageTargets,
   generateBoard,
   getCell,
   mergeBoardIntel,
   minesRemaining,
   openCell,
+  raidEngageTarget,
   toggleFlag,
   type MsBoard,
 } from "./board";
@@ -86,14 +90,24 @@ function baseIntelFlags(sx: number, sy: number): string[] {
 
 function sectorPayload(
   sel: SectorSel,
+  engage?: { mode: EngageMode; enemyCells: EnemyCellCoord[] },
 ): InvadeToTradePayload & InvadeToExplorePayload {
   const info = sectorDensityAt(sel.sx, sel.sy);
-  return {
+  const out: InvadeToTradePayload & InvadeToExplorePayload = {
     sectorX: sel.sx,
     sectorY: sel.sy,
     density: densityAfterBoard(info.density, board),
     intelFlags: mergeBoardIntel(baseIntelFlags(sel.sx, sel.sy), board),
   };
+  if (engage != null) {
+    out.engage = engage.mode;
+    if (engage.enemyCells.length > 0) out.enemyCells = engage.enemyCells;
+  }
+  return out;
+}
+
+function formatEnemyCells(cells: readonly EnemyCellCoord[]): string {
+  return cells.map((c) => `(${c.sx},${c.sy})`).join(" · ") || "—";
 }
 
 function inboundSummaryHtml(): string {
@@ -122,17 +136,72 @@ function handoffActionsHtml(sel: SectorSel | null): string {
   if (info.blocked) {
     return `<p class="muted">壁セルはルートにできません。内側のセクターを選んでください。</p>`;
   }
-  const payload = sectorPayload(sel);
-  const toTrade = buildInvadeToTradeUrl(payload, tradeBaseUrl());
-  const toExplore = buildInvadeToExploreUrl(payload, exploreBaseUrl());
-  const flags = (payload.intelFlags ?? []).join(", ") || "—";
+  const cell = getCell(board, sel.sx, sel.sy);
+  const base = sectorPayload(sel);
+  const toTrade = buildInvadeToTradeUrl(base, tradeBaseUrl());
+  const toExplore = buildInvadeToExploreUrl(base, exploreBaseUrl());
+  const flags = (base.intelFlags ?? []).join(", ") || "—";
+
+  // Forced: stepped open mine → that cell + adjacent mines
+  const forcedTargets =
+    cell && cell.open && cell.mine
+      ? forcedEngageTargets(board, sel.sx, sel.sy)
+      : [];
+  const forcedPayload =
+    forcedTargets.length > 0
+      ? sectorPayload(sel, { mode: "forced", enemyCells: forcedTargets })
+      : null;
+  const toForced =
+    forcedPayload != null
+      ? buildInvadeToExploreUrl(forcedPayload, exploreBaseUrl())
+      : null;
+
+  // Voluntary raid: flagged (closed) cell selected → only that cell
+  const raidTargets =
+    cell && cell.flagged && !cell.open
+      ? raidEngageTarget(board, sel.sx, sel.sy)
+      : [];
+  const raidPayload =
+    raidTargets.length > 0
+      ? sectorPayload(sel, { mode: "raid", enemyCells: raidTargets })
+      : null;
+  const toRaid =
+    raidPayload != null
+      ? buildInvadeToExploreUrl(raidPayload, exploreBaseUrl())
+      : null;
+
+  const engageBlock = (() => {
+    if (toForced != null && forcedPayload != null) {
+      return `
+        <div class="engage-box forced">
+          <p class="warn"><strong>強制出撃</strong>（地雷踏み · engage=forced）</p>
+          <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}（当該＋隣接敵）</p>
+          <div class="actions">
+            <a class="btn danger" href="${escapeHtml(toForced)}" target="_top" rel="noopener">強制出撃へ（invade→explore）</a>
+          </div>
+        </div>`;
+    }
+    if (toRaid != null && raidPayload != null) {
+      return `
+        <div class="engage-box raid">
+          <p class="ok"><strong>任意レイド</strong>（旗セル選択 · engage=raid）</p>
+          <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(raidTargets))}（当該のみ）</p>
+          <div class="actions">
+            <a class="btn" href="${escapeHtml(toRaid)}" target="_top" rel="noopener">任意出撃へ（invade→explore · raid）</a>
+          </div>
+        </div>`;
+    }
+    return `<p class="muted" style="margin-top:0.5rem">地雷踏み → 強制出撃（隣接敵も巻込み）。旗を立ててそのセルを選択 → 任意レイド（当該のみ）。</p>`;
+  })();
+
   return `
-    <p class="muted mono">route (${sel.sx},${sel.sy}) · density: ${payload.density.toFixed(3)} · intelFlags: ${escapeHtml(flags)}</p>
+    <p class="muted mono">route (${sel.sx},${sel.sy}) · density: ${base.density.toFixed(3)} · intelFlags: ${escapeHtml(flags)}</p>
     <div class="actions">
       <a class="btn" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">格納庫へ渡す（invade→trade）</a>
       <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">探索へ渡す（invade→explore）</a>
     </div>
-    <p class="muted" style="margin-top:0.5rem">地雷マス＝敵位置。探索へ渡すと Module 1 で掃討する概念インテル（本 salvage なし）。</p>
+    ${engageBlock}
+    <p class="muted" style="margin-top:0.5rem">地雷マス＝敵位置。engage / enemyCells は explore が戦闘に使う（本 salvage なし）。</p>
   `;
 }
 
@@ -198,7 +267,7 @@ function render(): void {
     board.status === "won"
       ? `<div class="banner ok-banner" role="status">前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
       : board.status === "hazard"
-        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。前線マップはロックしません — 続行・旗立て・ハンドオフ可。</div>`
+        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。強制出撃リンクで隣接敵ごと explore へ。前線はロックしません。</div>`
         : "";
 
   root.innerHTML = `
@@ -220,7 +289,7 @@ function render(): void {
 
     <div class="card">
       <h2 class="card-title">前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）</h2>
-      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。左クリック＝開く / 旗モードまたは右クリック＝旗。開いたセルをクリックでルート焦点。</p>
+      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。左クリック＝開く / 旗モードまたは右クリック＝旗。開いたセル＝ルート焦点。旗セル通常クリック＝任意レイド選択。地雷踏み＝強制出撃。</p>
       <table>
         <tr><td>状態</td><td>${escapeHtml(statusJa())}</td></tr>
         <tr><td>敵（地雷）</td><td>${board.mineCount}</td></tr>
@@ -298,11 +367,41 @@ function render(): void {
       const cell = getCell(board, sx, sy);
       if (!cell || cell.blocked) return;
 
-      // Already open → set route focus only
+      // Already open → set route focus only (mine → forced engage UI)
       if (cell.open && !cell.mine) {
         selected = { sx, sy };
         skipped = false;
         lastBoardLog = `ルート焦点 (${sx},${sy})`;
+        render();
+        return;
+      }
+
+      if (cell.open && cell.mine) {
+        selected = { sx, sy };
+        skipped = false;
+        const n = forcedEngageTargets(board, sx, sy).length;
+        lastBoardLog = `強制出撃対象 (${sx},${sy}) · 敵 ${n} マス（当該＋隣接）`;
+        render();
+        return;
+      }
+
+      // Flagged closed cell: flag-mode toggles; otherwise select for voluntary raid
+      if (cell.flagged && !cell.open) {
+        if (flagMode) {
+          const r = toggleFlag(board, sx, sy);
+          if (r.ok) {
+            selected = { sx, sy };
+            skipped = false;
+            lastBoardLog = r.flagged
+              ? `旗立て (${sx},${sy})`
+              : `旗解除 (${sx},${sy})`;
+          }
+          render();
+          return;
+        }
+        selected = { sx, sy };
+        skipped = false;
+        lastBoardLog = `任意レイド対象 (${sx},${sy}) · engage=raid`;
         render();
         return;
       }
@@ -312,15 +411,10 @@ function render(): void {
         if (r.ok) {
           selected = { sx, sy };
           skipped = false;
-          lastBoardLog = r.flagged ? `旗立て (${sx},${sy})` : `旗解除 (${sx},${sy})`;
+          lastBoardLog = r.flagged
+            ? `旗立て (${sx},${sy})`
+            : `旗解除 (${sx},${sy})`;
         }
-        render();
-        return;
-      }
-
-      if (cell.open && cell.mine) {
-        selected = { sx, sy };
-        skipped = false;
         render();
         return;
       }
@@ -328,7 +422,8 @@ function render(): void {
       const r = openCell(board, sx, sy);
       if (!r.ok) {
         if (r.reason === "flagged") {
-          lastBoardLog = "旗付きセルは開けません（旗モードで解除）";
+          lastBoardLog =
+            "旗付きセルは開けません（旗モードで解除／通常クリックで任意レイド選択）";
         }
         render();
         return;
@@ -336,7 +431,8 @@ function render(): void {
       selected = { sx, sy };
       skipped = false;
       if (board.hitMine && getCell(board, sx, sy)?.mine) {
-        lastBoardLog = `敵接触 (${sx},${sy}) → scoutHazard（前線は継続可）`;
+        const n = forcedEngageTargets(board, sx, sy).length;
+        lastBoardLog = `敵接触 (${sx},${sy}) → scoutHazard · 強制出撃 敵 ${n} マス`;
       } else if (board.status === "won") {
         lastBoardLog = `掃討完了 — 開放 ${r.opened} → sectorCleared`;
       } else {
