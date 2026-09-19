@@ -106,6 +106,25 @@ invade で選んだセクターは `sectorX` / `sectorY` / `density` / `intelFla
 
 定数は `packages/explore/src/game/balance.ts`。trade→explore の配備キーとは衝突しない。
 
+## 5.3 invade → explore 交戦ハンドオフ（forced / raid）
+
+invade マインスイーパから探索へ渡す戦闘モード。キー契約は invade PR / `HANDOFF_M45_V0` / `@estg/shared` と揃える。
+
+| キー | 値 | 意味 |
+|---|---|---|
+| `engage` | `forced` \| `raid` | 強制（地雷踏み） / 任意（旗セル） |
+| `enemyCells` | `sx,sy;sx,sy;...` | 戦闘に引き込む敵／地雷セル（`encodeEnemyCells`） |
+
+| engage | ブリーフィング表示 | 敵スポーン |
+|---|---|---|
+| `forced` | **強制交戦・周囲引き込み** | より多く／硬く（`enemyCells` 件数＝当該＋隣接。無いときは density＋neighborCount 相当） |
+| `raid` | **任意侵入** | 少なく集中（旗セル 1 件中心） |
+| （無し） | — | 従来どおり density のみで脅威スケール |
+
+取込後は `HANDOFF_QUERY_KEYS.invadeToExplore`（`engage` / `enemyCells` 含む）を strip。invade 盤 UI は触らない（並列）。
+
+実装: `threatFromInvadeSector` / `ENGAGE_BRIEFING_LABEL`（`packages/explore/src/game/balance.ts`）。
+
 ---
 
 ## 6. I/O v2 との関係
@@ -146,6 +165,7 @@ invade で選んだセクターは `sectorX` / `sectorY` / `density` / `intelFla
 9. 抽出はどこからでも要請でき、搭乗円・僚機自動哨戒・貨物 10s／離昇 15s の位相どおり動く。離昇時に隊長が円内なら成功、円外僚機は置き去りログ。隊長円外なら失敗
 10. 隊長は発見済みコンテナに接触していれば E を押さなくても回収チャネルが進み、時間経過で回収完了する
 11. invade→explore の `sectorX`/`sectorY`/`density` を取込み、ブリーフィングに表示し、density で敵数・スポーン距離・敵速度が変わる。取込後に当該クエリを strip する
+12. `engage=forced` でブリーフィングに「強制交戦・周囲引き込み」を出し、`enemyCells`（または density＋neighbor 相当）に応じてより多い／硬い敵をスポーンする。`engage=raid` では「任意侵入」と少数集中スポーン
 
 ---
 

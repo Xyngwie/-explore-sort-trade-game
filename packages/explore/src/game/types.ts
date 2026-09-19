@@ -18,6 +18,15 @@ export type InvadeSectorContext = {
   /** 0..1 provisional density from invade. */
   density: number;
   intelFlags: string[];
+  /**
+   * Combat handoff from invade minesweeper.
+   * forced = mine step (cell + neighbors); raid = voluntary flagged cell.
+   */
+  engage?: "forced" | "raid";
+  /** Enemy/mine cells pulled into the fight (world coords). */
+  enemyCells?: Array<{ sx: number; sy: number }>;
+  /** Optional neighbor count when enemyCells omitted (forced fallback). */
+  neighborCount?: number;
 };
 
 export type Phase = "briefing" | "sortie" | "result";

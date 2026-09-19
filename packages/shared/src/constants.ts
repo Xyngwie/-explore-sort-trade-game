@@ -75,8 +75,15 @@ export const HANDOFF_QUERY_KEYS = {
   tradeToInvade: ["fromHub", "deployableMechs", "startingAmmo"] as const,
   /** Module 4: invade → hub (sector/intel only — never YieldBag). */
   invadeToTrade: ["sectorX", "sectorY", "density", "intelFlags"] as const,
-  /** Module 4: invade → explore (sector deploy context for later). */
-  invadeToExplore: ["sectorX", "sectorY", "density", "intelFlags"] as const,
+  /** Module 4: invade → explore (sector + optional engage combat handoff). */
+  invadeToExplore: [
+    "sectorX",
+    "sectorY",
+    "density",
+    "intelFlags",
+    "engage",
+    "enemyCells",
+  ] as const,
   /** Module 5: hub → restore (circuit instance + compact board). */
   tradeToRestore: ["circuitId", "circuitBoard"] as const,
   /** Module 5: restore → hub (updated board + outcome). */
