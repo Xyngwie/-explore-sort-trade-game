@@ -202,4 +202,41 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.ok(s.inboundOutcome == null);
 }
 
+
+{
+  const board0 = createEmptyCircuitBoard(4, 4, "locked-board");
+  const ttr = buildTradeToRestoreUrl({
+    circuitId: "locked_id",
+    circuitBoard: board0,
+    editorName: "刻印テスト",
+    locked: true,
+    lastEditorName: "刻印テスト",
+  });
+  const lockedSession = bootstrapFromSearch(new URL(ttr).search);
+  assert.equal(lockedSession.locked, true);
+  assert.equal(lockedSession.editorName, "刻印テスト");
+  assert.ok(
+    lockedSession.engravedName === "刻印テスト" ||
+      lockedSession.editorName === "刻印テスト",
+  );
+
+  const ret = buildReturnToTradeUrl({
+    circuitId: "locked_id",
+    cols: 4,
+    rows: 4,
+    marks: lockedSession.marks,
+    puzzleId: "locked-board",
+    outcome: "fully_awakened",
+    lastEditorName: "刻印テスト",
+    perfect: true,
+    locked: true,
+    baseUrl: "https://example.test/trade/",
+  });
+  const parsed = parseRestoreToTradeSearch(new URL(ret).search);
+  assert.ok(parsed);
+  assert.equal(parsed!.lastEditorName, "刻印テスト");
+  assert.equal(parsed!.locked, true);
+  assert.equal(parsed!.perfect, true);
+}
+
 console.log("restore circuit.selftest ok");

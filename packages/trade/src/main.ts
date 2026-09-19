@@ -34,6 +34,7 @@ import {
   scrapMech,
   selectAllDeployable,
   selectCircuit,
+  setCraftSignature,
   setDeploySelection,
   simulateReturn,
   statusClass,
@@ -44,6 +45,8 @@ import {
   isRareYieldItemId,
   rareSellPriceCredits,
   sellRareItem,
+  isCircuitLocked,
+  isCraftSignatureLocked,
   type HangarState,
 } from "./hangar";
 
@@ -196,16 +199,22 @@ function circuitRows(s: HangarState): string {
     return `<p class="muted" style="margin:0.5rem 0 0">回路なし（restore 取込またはシード読込で HubSave に残ります）</p>`;
   }
   return `<table style="margin-top:0.5rem">
-    <thead><tr><th>circuitId</th><th>outcome</th><th></th></tr></thead>
+    <thead><tr><th>circuitId</th><th>outcome / 刻印</th><th></th></tr></thead>
     <tbody>
       ${list
         .map((c) => {
           const active =
             s.lastCircuit?.circuitId === c.circuitId ? " · 選択中" : "";
           const url = buildRestoreUrl(s, c.circuitId);
+          const locked = isCircuitLocked(c);
+          const editor =
+            c.lastEditorName ?? c.circuitBoard.lastEditorName ?? "—";
+          const lockTag = locked
+            ? ` <span class="pill lock-tag">完璧·編集不可</span>`
+            : "";
           return `<tr>
             <td>
-              <span class="mono">${escapeHtml(c.circuitId)}</span>
+              <span class="mono">${escapeHtml(c.circuitId)}</span>${lockTag}
               ${
                 c.circuitBoard.puzzleId
                   ? `<div class="mono muted">${escapeHtml(c.circuitBoard.puzzleId)}</div>`
@@ -213,11 +222,15 @@ function circuitRows(s: HangarState): string {
               }
               <div class="muted" style="font-size:0.75rem">${escapeHtml(active.trim())}</div>
             </td>
-            <td>${escapeHtml(circuitOutcomeLabelJa(c.outcome))} <span class="mono muted">(${escapeHtml(c.outcome)})</span></td>
+            <td>
+              ${escapeHtml(circuitOutcomeLabelJa(c.outcome))}
+              <span class="mono muted">(${escapeHtml(c.outcome)})</span>
+              <div class="engraved" style="font-size:0.8rem">刻印 ${escapeHtml(editor)}</div>
+            </td>
             <td>
               <div class="row" style="margin:0">
                 <button type="button" class="secondary" data-act="select-circuit" data-id="${escapeHtml(c.circuitId)}">選択</button>
-                <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">修復へ</a>
+                <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">${locked ? "閲覧へ" : "修復へ"}</a>
               </div>
             </td>
           </tr>`;
@@ -303,6 +316,25 @@ function render() {
       </div>
     </div>
 
+
+    <div class="card">
+      <h2 style="font-size:1rem;margin:0 0 0.5rem">署名（刻印）</h2>
+      <p class="muted" style="margin:0 0 0.5rem">回路を Hub に戻すときの職人名。一度確定すると変更不可。</p>
+      <div class="row" style="align-items:center">
+        <input type="text" id="input-signature" maxlength="32" placeholder="署名" value="${escapeHtml(state.craftSignature)}" ${
+          isCraftSignatureLocked() ? "disabled" : ""
+        } style="flex:1;min-width:8rem;padding:0.5rem 0.65rem;border-radius:8px;border:1px solid #3d444d;background:#0d1014;color:#e8eaed" />
+        <button type="button" id="btn-signature" ${
+          isCraftSignatureLocked() ? "disabled" : ""
+        }>確定</button>
+      </div>
+      <p class="muted" style="margin-top:0.5rem">${
+        isCraftSignatureLocked()
+          ? `確定済み: <span class="engraved">${escapeHtml(state.craftSignature)}</span>`
+          : "未確定（初期値はプレースホルダ。確定で localStorage に刻印）"
+      }</p>
+    </div>
+
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">戦線 / 回路（M4·M5）</h2>
       <p class="muted" style="margin:0 0 0.5rem">任意ルート。本 salvage は払わない。回路結果は HubSave.circuits に永続（旧 hubM45Stash から移行可）。セクターはスタッシュのみ。</p>
@@ -333,6 +365,11 @@ function render() {
     </div>
   `;
 
+  document.getElementById("btn-signature")?.addEventListener("click", () => {
+    const input = document.getElementById("input-signature") as HTMLInputElement | null;
+    state = setCraftSignature(state, input?.value ?? "");
+    render();
+  });
   document.getElementById("btn-seed")?.addEventListener("click", () => {
     state = loadPlaytestSeed(state);
     render();

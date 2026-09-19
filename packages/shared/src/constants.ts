@@ -60,6 +60,9 @@ export const PIECES_PER_CONTAINER = 25;
 
 export const HUB_SAVE_STORAGE_KEY = "wreckline.hubSave.v1";
 
+/** Hangar craft signature (署名) — engraved as circuit lastEditorName. */
+export const CRAFT_SIGNATURE_STORAGE_KEY = "wreckline.craftSignature.v0";
+
 export const HANDOFF_QUERY_KEYS = {
   exploreToSort: ["salvagedContainers", "totalStockPieces", "isExtracted", "craftMultiplier", "circuitBonuses"] as const,
   sortToTrade: ["importMaterials", "craftMultiplier", "yieldBag"] as const,
@@ -84,8 +87,21 @@ export const HANDOFF_QUERY_KEYS = {
     "engage",
     "enemyCells",
   ] as const,
-  /** Module 5: hub → restore (circuit instance + compact board). */
-  tradeToRestore: ["circuitId", "circuitBoard"] as const,
-  /** Module 5: restore → hub (updated board + outcome). */
-  restoreToTrade: ["circuitId", "circuitBoard", "circuitOutcome"] as const,
+  /** Module 5: hub → restore (circuit instance + compact board + editor name). */
+  tradeToRestore: [
+    "circuitId",
+    "circuitBoard",
+    "editorName",
+    "circuitLocked",
+    "lastEditorName",
+  ] as const,
+  /** Module 5: restore → hub (updated board + outcome + 刻印). */
+  restoreToTrade: [
+    "circuitId",
+    "circuitBoard",
+    "circuitOutcome",
+    "lastEditorName",
+    "circuitLocked",
+    "circuitPerfect",
+  ] as const,
 };

@@ -21,8 +21,12 @@ import {
   type YieldBag,
 } from "./sort-yield";
 import {
+  isCircuitLocked,
   isCircuitOutcome,
+  isPerfectCircuitClearance,
   normalizeCircuitBoard,
+  sanitizeEditorName,
+  stampCircuitEditor,
   type CircuitBoardState,
   type CircuitOutcome,
 } from "./circuit-board";
@@ -40,6 +44,13 @@ export type HubCircuitRecord = {
   outcome: CircuitOutcome;
   /** ISO timestamp of last upsert (optional). */
   updatedAt?: string;
+  /** 刻印 — final editor name when saved / returned from restore→hub. */
+  lastEditorName?: string;
+  /**
+   * Perfect Circuit lock (additive). Once true, refuse edge/outcome updates.
+   * Also mirrored onto circuitBoard.locked when set.
+   */
+  locked?: boolean;
 };
 
 /** Sector coord on the invade front AOI (additive HubSave field). */
@@ -211,14 +222,31 @@ export function normalizeCircuits(
       ...board,
       outcome: outcomeRaw,
     };
+    const editor =
+      sanitizeEditorName(obj.lastEditorName) ??
+      sanitizeEditorName(board.lastEditorName);
+    let boardFinal: CircuitBoardState = boardWithOutcome;
+    if (editor) boardFinal = { ...boardFinal, lastEditorName: editor };
+    const locked =
+      obj.locked === true ||
+      board.locked === true ||
+      isPerfectCircuitClearance({
+        outcome: outcomeRaw,
+        perfect: board.perfect === true || obj.perfect === true,
+      });
+    if (locked) {
+      boardFinal = { ...boardFinal, locked: true, perfect: true };
+    }
     const rec: HubCircuitRecord = {
       circuitId,
-      circuitBoard: boardWithOutcome,
+      circuitBoard: boardFinal,
       outcome: outcomeRaw,
     };
     if (typeof obj.updatedAt === "string" && obj.updatedAt.trim()) {
       rec.updatedAt = obj.updatedAt.trim().slice(0, 40);
     }
+    if (editor) rec.lastEditorName = editor;
+    if (locked) rec.locked = true;
     out.push(rec);
     if (out.length >= max) break;
   }
@@ -522,6 +550,12 @@ export function upsertCircuitIntoHub(
     circuitBoard: CircuitBoardState;
     outcome: CircuitOutcome;
     updatedAt?: string;
+    /** 刻印 — refreshes on non-locked upsert. */
+    lastEditorName?: string;
+    /** Optional clearance metrics from restore session. */
+    digitRate?: number;
+    loopClosed?: boolean;
+    perfect?: boolean;
   },
   at = new Date(),
 ): HubSnapshot {
@@ -532,21 +566,56 @@ export function upsertCircuitIntoHub(
     input.circuitId ?? board.puzzleId,
     "circuit",
   );
-  const boardWithOutcome: CircuitBoardState = { ...board, outcome: input.outcome };
+  const existing = (hub.circuits ?? []).find((c) => c.circuitId === circuitId);
+  // Perfect Circuit: refuse edge / outcome overrides thereafter.
+  if (existing && isCircuitLocked(existing)) {
+    return hub;
+  }
+
+  const editor =
+    sanitizeEditorName(input.lastEditorName) ??
+    sanitizeEditorName(board.lastEditorName);
+
+  const stamped = stampCircuitEditor(
+    { ...board, outcome: input.outcome },
+    editor,
+    {
+      outcome: input.outcome,
+      digitRate: input.digitRate,
+      loopClosed: input.loopClosed,
+      perfect: input.perfect ?? board.perfect,
+    },
+  );
+
+  const locked = isCircuitLocked({
+    ...stamped,
+    outcome: input.outcome,
+    digitRate: input.digitRate,
+    loopClosed: input.loopClosed,
+  });
+
+  const boardFinal: CircuitBoardState = locked
+    ? { ...stamped, outcome: input.outcome, locked: true, perfect: true }
+    : { ...stamped, outcome: input.outcome };
+
   const updatedAt =
     typeof input.updatedAt === "string" && input.updatedAt.trim()
       ? input.updatedAt.trim().slice(0, 40)
       : at.toISOString();
   const nextRec: HubCircuitRecord = {
     circuitId,
-    circuitBoard: boardWithOutcome,
+    circuitBoard: boardFinal,
     outcome: input.outcome,
     updatedAt,
   };
+  if (editor) nextRec.lastEditorName = editor;
+  if (locked) nextRec.locked = true;
+
   const rest = (hub.circuits ?? []).filter((c) => c.circuitId !== circuitId);
   const circuits = normalizeCircuits([nextRec, ...rest]);
   return normalizeHubSnapshot({ ...hub, circuits });
 }
+
 
 /** Set or replace invade front minesweeper progress (additive HubSave field). */
 export function setFrontProgressInHub(

@@ -19,6 +19,7 @@ import {
   encodeCircuitBoardCompact,
   isCircuitOutcome,
   parseCircuitBoardCompact,
+  sanitizeEditorName,
   type CircuitBoardState,
   type CircuitOutcome,
 } from "./circuit-board";
@@ -546,6 +547,12 @@ export type TradeToRestorePayload = {
   circuitId?: string;
   /** Compact board for the restore session (preferred when starting a puzzle). */
   circuitBoard?: CircuitBoardState;
+  /** Craft signature (署名) passed for 刻印 display / stamp on return. */
+  editorName?: string;
+  /** Forward Perfect Circuit lock when reopening from hub. */
+  locked?: boolean;
+  /** Engraved name when locked (optional; falls back to editorName). */
+  lastEditorName?: string;
 };
 
 /** restore → trade: updated board + explicit outcome. */
@@ -554,6 +561,12 @@ export type RestoreToTradePayload = {
   circuitBoard: CircuitBoardState;
   /** Mirrors board.outcome; required for clear presence / strip keys. */
   outcome: CircuitOutcome;
+  /** 刻印 — final editor name stamped into HubSave.circuits. */
+  lastEditorName?: string;
+  /** Perfect Circuit lock flag (URL; also mirrored onto board.locked). */
+  locked?: boolean;
+  /** Explicit perfect clearance flag. */
+  perfect?: boolean;
 };
 
 const INTEL_FLAG_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
@@ -815,6 +828,13 @@ export function buildTradeToRestoreUrl(
       encodeCircuitBoardCompact(payload.circuitBoard),
     );
   }
+  const editor = sanitizeEditorName(payload.editorName);
+  if (editor) u.searchParams.set("editorName", editor);
+  const engraved = sanitizeEditorName(payload.lastEditorName);
+  if (engraved) u.searchParams.set("lastEditorName", engraved);
+  const locked =
+    payload.locked === true || payload.circuitBoard?.locked === true;
+  if (locked) u.searchParams.set("circuitLocked", "1");
   return u.toString();
 }
 
@@ -829,6 +849,26 @@ export function parseTradeToRestoreSearch(
   if (id) payload.circuitId = id.slice(0, 64);
   const board = parseCircuitBoardCompact(p.get("circuitBoard"));
   if (board) payload.circuitBoard = board;
+  const editor = sanitizeEditorName(p.get("editorName"));
+  if (editor) payload.editorName = editor;
+  const engraved = sanitizeEditorName(p.get("lastEditorName"));
+  if (engraved) payload.lastEditorName = engraved;
+  const locked =
+    p.get("circuitLocked") === "1" || p.get("circuitLocked") === "true";
+  if (locked) {
+    payload.locked = true;
+    if (payload.circuitBoard) {
+      payload.circuitBoard = {
+        ...payload.circuitBoard,
+        locked: true,
+        perfect: true,
+        lastEditorName:
+          engraved ??
+          editor ??
+          payload.circuitBoard.lastEditorName,
+      };
+    }
+  }
   if (!payload.circuitId && !payload.circuitBoard) return null;
   return payload;
 }
@@ -847,6 +887,15 @@ export function buildRestoreToTradeUrl(
   };
   u.searchParams.set("circuitBoard", encodeCircuitBoardCompact(board));
   u.searchParams.set("circuitOutcome", payload.outcome);
+  const editor =
+    sanitizeEditorName(payload.lastEditorName) ??
+    sanitizeEditorName(payload.circuitBoard.lastEditorName);
+  if (editor) u.searchParams.set("lastEditorName", editor);
+  const locked = payload.locked === true || payload.circuitBoard.locked === true;
+  const perfect =
+    payload.perfect === true || payload.circuitBoard.perfect === true;
+  if (locked) u.searchParams.set("circuitLocked", "1");
+  if (perfect) u.searchParams.set("circuitPerfect", "1");
   return u.toString();
 }
 
@@ -876,6 +925,31 @@ export function parseRestoreToTradeSearch(
   };
   const id = (p.get("circuitId") ?? "").trim();
   if (id) payload.circuitId = id.slice(0, 64);
+  const editor =
+    sanitizeEditorName(p.get("lastEditorName")) ??
+    sanitizeEditorName(board.lastEditorName);
+  const locked =
+    p.get("circuitLocked") === "1" ||
+    p.get("circuitLocked") === "true" ||
+    board.locked === true;
+  const perfect =
+    p.get("circuitPerfect") === "1" ||
+    p.get("circuitPerfect") === "true" ||
+    board.perfect === true;
+  let nextBoard = payload.circuitBoard;
+  if (editor) {
+    payload.lastEditorName = editor;
+    nextBoard = { ...nextBoard, lastEditorName: editor };
+  }
+  if (perfect) {
+    payload.perfect = true;
+    nextBoard = { ...nextBoard, perfect: true };
+  }
+  if (locked) {
+    payload.locked = true;
+    nextBoard = { ...nextBoard, locked: true, perfect: true };
+  }
+  payload.circuitBoard = nextBoard;
   return payload;
 }
 

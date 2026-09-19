@@ -7,8 +7,11 @@ import {
   buildRestoreToTradeUrl,
   decodeEdgeState,
   edgeCount,
+  isCircuitLocked,
+  loadHubSaveFromLocalStorage,
   parseTradeToRestoreSearch,
   resolveModuleBaseUrl,
+  sanitizeEditorName,
   stripHandoffParams,
   type CircuitOutcome,
   type EdgeMark,
@@ -35,6 +38,12 @@ export type RestoreSession = {
   inboundOutcome?: CircuitOutcome;
   source: RestoreSessionSource;
   note: string;
+  /** Craft signature / 刻印 passed from hangar (or HubSave). */
+  editorName?: string;
+  /** Perfect Circuit — refuse edge / outcome edits. */
+  locked: boolean;
+  /** Engraved name when locked (prefer HubSave lastEditorName). */
+  engravedName?: string;
 };
 
 /**
@@ -43,6 +52,19 @@ export type RestoreSession = {
  */
 export function bootstrapFromSearch(search: string): RestoreSession {
   const inbound = parseTradeToRestoreSearch(search);
+  const hubEditor = lookupHubCircuitLock(
+    inbound?.circuitId,
+    inbound?.circuitBoard?.puzzleId,
+  );
+  const passedEditor =
+    sanitizeEditorName(inbound?.editorName) ??
+    sanitizeEditorName(inbound?.lastEditorName) ??
+    hubEditor?.lastEditorName;
+  const lockedFromHub = hubEditor?.locked === true;
+  const lockedFromBoard =
+    inbound?.circuitBoard != null && isCircuitLocked(inbound.circuitBoard);
+  const lockedFromQuery = inbound?.locked === true;
+  const locked = lockedFromHub || lockedFromBoard || lockedFromQuery;
 
   if (inbound?.circuitBoard != null) {
     const board = inbound.circuitBoard;
@@ -63,9 +85,17 @@ export function bootstrapFromSearch(search: string): RestoreSession {
       note: `HUB 受取 · 盤 hydrate ${cols}×${rows}${
         inbound.circuitId ? ` · id ${inbound.circuitId}` : ""
       }`,
+      locked,
     };
     if (inbound.circuitId) session.circuitId = inbound.circuitId;
     if (board.outcome != null) session.inboundOutcome = board.outcome;
+    if (passedEditor) session.editorName = passedEditor;
+    if (locked) {
+      session.engravedName =
+        hubEditor?.lastEditorName ??
+        sanitizeEditorName(board.lastEditorName) ??
+        passedEditor;
+    }
     return session;
   }
 
@@ -75,13 +105,19 @@ export function bootstrapFromSearch(search: string): RestoreSession {
     const marks =
       loadMarksFromStorage(puzzle.puzzleId, n) ??
       freshMarks(puzzle.cols, puzzle.rows);
-    return {
+    const session: RestoreSession = {
       circuitId: inbound.circuitId,
       puzzle,
       marks,
       source: "handoff-id",
       note: `HUB 受取 · circuitId=${inbound.circuitId}（盤なし → シード生成）`,
+      locked,
     };
+    if (passedEditor) session.editorName = passedEditor;
+    if (locked) {
+      session.engravedName = hubEditor?.lastEditorName ?? passedEditor;
+    }
+    return session;
   }
 
   const puzzle = generatePuzzle(DEFAULT_SEED, DEFAULT_COLS, DEFAULT_ROWS);
@@ -94,7 +130,32 @@ export function bootstrapFromSearch(search: string): RestoreSession {
     marks,
     source: "demo",
     note: "デモ盤 · クエリなし（trade→restore 未受信）",
+    locked: false,
+    editorName: passedEditor,
   };
+}
+
+function lookupHubCircuitLock(
+  circuitId?: string,
+  puzzleId?: string,
+): { locked: boolean; lastEditorName?: string } | null {
+  try {
+    const save = loadHubSaveFromLocalStorage();
+    const list = save?.hub.circuits ?? [];
+    const id = (circuitId ?? "").trim();
+    const pid = (puzzleId ?? "").trim();
+    const rec =
+      (id && list.find((c) => c.circuitId === id)) ||
+      (pid && list.find((c) => c.circuitBoard.puzzleId === pid)) ||
+      null;
+    if (!rec) return null;
+    return {
+      locked: isCircuitLocked(rec),
+      lastEditorName: rec.lastEditorName ?? rec.circuitBoard.lastEditorName,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Strip trade→restore keys from the current location (after ingest). */
@@ -118,19 +179,29 @@ export function buildReturnToTradeUrl(args: {
   marks: readonly EdgeMark[];
   puzzleId: string;
   outcome: CircuitOutcome;
+  lastEditorName?: string;
+  perfect?: boolean;
+  locked?: boolean;
   baseUrl?: string;
 }): string {
-  const circuitBoard = boardFromMarks(
+  let circuitBoard = boardFromMarks(
     args.cols,
     args.rows,
     args.marks,
     args.puzzleId,
     args.outcome,
   );
+  const editor = sanitizeEditorName(args.lastEditorName);
+  if (editor) circuitBoard = { ...circuitBoard, lastEditorName: editor };
+  if (args.perfect) circuitBoard = { ...circuitBoard, perfect: true };
+  if (args.locked) circuitBoard = { ...circuitBoard, locked: true };
   const payload: {
     circuitId?: string;
     circuitBoard: typeof circuitBoard;
     outcome: CircuitOutcome;
+    lastEditorName?: string;
+    locked?: boolean;
+    perfect?: boolean;
   } = {
     circuitBoard,
     outcome: args.outcome,
@@ -138,5 +209,8 @@ export function buildReturnToTradeUrl(args: {
   if (args.circuitId != null && args.circuitId.trim() !== "") {
     payload.circuitId = args.circuitId.trim();
   }
+  if (editor) payload.lastEditorName = editor;
+  if (args.perfect) payload.perfect = true;
+  if (args.locked) payload.locked = true;
   return buildRestoreToTradeUrl(payload, args.baseUrl ?? tradeBaseUrl());
 }
