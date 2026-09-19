@@ -20,6 +20,8 @@ import {
   buildInvadeToExploreUrl,
   parseInvadeToExploreSearch,
   mergeInvadeSectorOntoExploreUrl,
+  encodeEnemyCells,
+  parseEnemyCells,
   buildTradeToRestoreUrl,
   parseTradeToRestoreSearch,
   buildRestoreToTradeUrl,
@@ -683,6 +685,61 @@ const iteParsed = parseInvadeToExploreSearch(new URL(ite).search);
 assert.equal(iteParsed?.sectorX, 10);
 assert.equal(iteParsed?.density, 1);
 assert.deepEqual(iteParsed?.intelFlags, ["frontline"]);
+assert.equal(iteParsed?.engage, undefined);
+assert.equal(iteParsed?.enemyCells, undefined);
+
+assert.ok(HANDOFF_QUERY_KEYS.invadeToExplore.includes("engage"));
+assert.ok(HANDOFF_QUERY_KEYS.invadeToExplore.includes("enemyCells"));
+// trade path stays without engage keys
+assert.equal(
+  (HANDOFF_QUERY_KEYS.invadeToTrade as readonly string[]).includes("engage"),
+  false,
+);
+
+assert.equal(
+  encodeEnemyCells([
+    { sx: 3, sy: -1 },
+    { sx: 2, sy: 0 },
+    { sx: 3, sy: -1 },
+  ]),
+  "2,0;3,-1",
+);
+assert.deepEqual(parseEnemyCells("2,0;3,-1;bad;4,1"), [
+  { sx: 2, sy: 0 },
+  { sx: 3, sy: -1 },
+  { sx: 4, sy: 1 },
+]);
+
+const iteForced = buildInvadeToExploreUrl({
+  sectorX: 3,
+  sectorY: -2,
+  density: 0.5,
+  intelFlags: ["scoutHazard"],
+  engage: "forced",
+  enemyCells: [
+    { sx: 3, sy: -2 },
+    { sx: 4, sy: -2 },
+    { sx: 3, sy: -1 },
+  ],
+});
+const iteForcedParsed = parseInvadeToExploreSearch(new URL(iteForced).search);
+assert.equal(iteForcedParsed?.engage, "forced");
+assert.deepEqual(iteForcedParsed?.enemyCells, [
+  { sx: 3, sy: -2 },
+  { sx: 3, sy: -1 },
+  { sx: 4, sy: -2 },
+]);
+
+const iteRaid = buildInvadeToExploreUrl({
+  sectorX: 5,
+  sectorY: 1,
+  density: 0.2,
+  engage: "raid",
+  enemyCells: [{ sx: 5, sy: 1 }],
+});
+const iteRaidParsed = parseInvadeToExploreSearch(new URL(iteRaid).search);
+assert.equal(iteRaidParsed?.engage, "raid");
+assert.deepEqual(iteRaidParsed?.enemyCells, [{ sx: 5, sy: 1 }]);
 
 // merge sector onto trade→explore URL without dropping deploy keys
 const mergedExplore = mergeInvadeSectorOntoExploreUrl(
@@ -691,12 +748,20 @@ const mergedExplore = mergeInvadeSectorOntoExploreUrl(
     startingAmmo: 5,
     deployedInstanceIds: ["op1"],
   }),
-  { sectorX: 4, sectorY: 1, density: 0.4 },
+  {
+    sectorX: 4,
+    sectorY: 1,
+    density: 0.4,
+    engage: "raid",
+    enemyCells: [{ sx: 4, sy: 1 }],
+  },
 );
 const mergedU = new URL(mergedExplore);
 assert.equal(mergedU.searchParams.get("deployedInstanceIds"), "op1");
 assert.equal(mergedU.searchParams.get("sectorX"), "4");
 assert.equal(mergedU.searchParams.get("density"), "0.400");
+assert.equal(mergedU.searchParams.get("engage"), "raid");
+assert.equal(mergedU.searchParams.get("enemyCells"), "4,1");
 
 const board0 = createEmptyCircuitBoard(8, 8, "stub-8");
 const boardCompact = encodeCircuitBoardCompact(board0);

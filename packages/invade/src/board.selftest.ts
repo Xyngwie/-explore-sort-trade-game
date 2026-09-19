@@ -16,6 +16,7 @@ import {
   densityAfterBoard,
   expectedMineCount,
   floodOpen,
+  forcedEngageTargets,
   generateBoard,
   getCell,
   intelFromBoard,
@@ -23,6 +24,7 @@ import {
   mineProbabilityAtDistance,
   minesRemaining,
   openCell,
+  raidEngageTarget,
   rngFromSeed,
   toggleFlag,
 } from "./board";
@@ -267,6 +269,104 @@ assert.ok(countOpenSafe(board0) >= 1);
     "http://localhost:5175/",
   );
   assert.ok(tradeUrl.includes("intelFlags="));
+}
+
+// --- forced vs raid engage targets ---
+{
+  // Build a tiny controllable board: place two adjacent mines via seeded search
+  let found = false;
+  for (let seed = 1; seed < 500 && !found; seed++) {
+    const b = generateBoard(AOI_HALF, rngFromSeed(seed));
+    // Find an openable mine that has at least one adjacent mine
+    for (const row of b.cells) {
+      for (const c of row) {
+        if (c.blocked || c.open || !c.mine) continue;
+        const targets = forcedEngageTargets(b, c.sx, c.sy);
+        if (targets.length < 2) continue;
+        // Must include self
+        assert.ok(targets.some((t) => t.sx === c.sx && t.sy === c.sy));
+        // All targets are mines
+        for (const t of targets) {
+          const tc = getCell(b, t.sx, t.sy)!;
+          assert.equal(tc.mine, true);
+          assert.equal(tc.blocked, false);
+        }
+        // Adjacent-only: every other target is within Chebyshev 1 of focus
+        for (const t of targets) {
+          if (t.sx === c.sx && t.sy === c.sy) continue;
+          assert.ok(Math.max(Math.abs(t.sx - c.sx), Math.abs(t.sy - c.sy)) === 1);
+        }
+        openCell(b, c.sx, c.sy);
+        assert.equal(b.hitMine, true);
+        const after = forcedEngageTargets(b, c.sx, c.sy);
+        assert.deepEqual(after, targets);
+
+        const forcedUrl = buildInvadeToExploreUrl(
+          {
+            sectorX: c.sx,
+            sectorY: c.sy,
+            density: 0.5,
+            intelFlags: ["scoutHazard"],
+            engage: "forced",
+            enemyCells: targets,
+          },
+          "http://localhost:5173/",
+        );
+        const forcedParsed = parseInvadeToExploreSearch(new URL(forcedUrl).search);
+        assert.equal(forcedParsed?.engage, "forced");
+        assert.ok((forcedParsed?.enemyCells ?? []).length >= 2);
+        found = true;
+        break;
+      }
+      if (found) break;
+    }
+  }
+  assert.ok(found, "expected a mine with adjacent mine in seeded boards");
+}
+
+{
+  const b = generateBoard(AOI_HALF, rngFromSeed(42));
+  // Flag a closed mine for raid
+  let mine: { sx: number; sy: number } | null = null;
+  for (const row of b.cells) {
+    for (const c of row) {
+      if (!c.blocked && !c.open && c.mine) {
+        mine = { sx: c.sx, sy: c.sy };
+        break;
+      }
+    }
+    if (mine) break;
+  }
+  assert.ok(mine);
+  assert.deepEqual(raidEngageTarget(b, mine!.sx, mine!.sy), []);
+  toggleFlag(b, mine!.sx, mine!.sy);
+  assert.deepEqual(raidEngageTarget(b, mine!.sx, mine!.sy), [
+    { sx: mine!.sx, sy: mine!.sy },
+  ]);
+  // Forced on flagged-but-not-opened returns [] (not stepped)
+  // actually forcedEngageTargets only checks mine, not open — product is for stepped.
+  // Helper returns targets for any mine cell; UI gates on open. Keep helper mine-based.
+  const forcedOnFlagged = forcedEngageTargets(b, mine!.sx, mine!.sy);
+  assert.ok(forcedOnFlagged.length >= 1);
+
+  const raidUrl = buildInvadeToExploreUrl(
+    {
+      sectorX: mine!.sx,
+      sectorY: mine!.sy,
+      density: 0.3,
+      engage: "raid",
+      enemyCells: raidEngageTarget(b, mine!.sx, mine!.sy),
+    },
+    "http://localhost:5173/",
+  );
+  const raidParsed = parseInvadeToExploreSearch(new URL(raidUrl).search);
+  assert.equal(raidParsed?.engage, "raid");
+  assert.deepEqual(raidParsed?.enemyCells, [{ sx: mine!.sx, sy: mine!.sy }]);
+
+  // Non-mine: forced empty
+  const hq = getCell(b, 0, 0)!;
+  assert.deepEqual(forcedEngageTargets(b, 0, 0), []);
+  assert.equal(hq.mine, false);
 }
 
 console.log("invade board.selftest ok");

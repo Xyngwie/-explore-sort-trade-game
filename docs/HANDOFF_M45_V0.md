@@ -24,7 +24,7 @@
 |---|---|---|---|
 | trade → invade | `tradeToInvade` | `fromHub`, `deployableMechs?`, `startingAmmo?` | `TradeToInvadePayload` |
 | invade → trade | `invadeToTrade` | `sectorX`, `sectorY`, `density`, `intelFlags?` | `InvadeToTradePayload` |
-| invade → explore | `invadeToExplore` | `sectorX`, `sectorY`, `density`, `intelFlags?` | `InvadeToExplorePayload` |
+| invade → explore | `invadeToExplore` | `sectorX`, `sectorY`, `density`, `intelFlags?`, `engage?`, `enemyCells?` | `InvadeToExplorePayload` |
 | trade → restore | `tradeToRestore` | `circuitId?`, `circuitBoard?` | `TradeToRestorePayload` |
 | restore → trade | `restoreToTrade` | `circuitId?`, `circuitBoard`, `circuitOutcome` | `RestoreToTradePayload` |
 
@@ -79,12 +79,41 @@ type InvadeToTradePayload = {
 
 **禁止:** `yieldBag` / `importMaterials` / `salvagedContainers` を invade 成果として載せない（二重払い防止）。
 
-### 3.3 invade → explore（後続配備コンテキスト）
+### 3.3 invade → explore（後続配備コンテキスト + engage）
 
-キーは invade→trade と同じセクター組。explore が後で読めるよう `sectorX` / `sectorY` / `density` / `intelFlags?` を渡す。
+ベースは invade→trade と同じセクター組（`sectorX` / `sectorY` / `density` / `intelFlags?`）。
+
+戦闘ハンドオフ（マインスイーパ → explore）を加算:
+
+```ts
+type EngageMode = "forced" | "raid";
+
+type InvadeToExplorePayload = {
+  sectorX: number;
+  sectorY: number;
+  density: number;
+  intelFlags?: string[];
+  engage?: EngageMode;           // forced = 地雷踏み / raid = 任意（旗セル）
+  enemyCells?: { sx: number; sy: number }[];  // URL: sx,sy;sx,sy;...
+};
+```
+
+| engage | いつ | enemyCells |
+|---|---|---|
+| `forced` | 地雷を踏んだ（罰） | 当該セル **＋** 隣接する地雷／敵セル |
+| `raid` | 旗を立てたセルを選択（任意） | **当該セルのみ** |
+
+例:
+
+```text
+?sectorX=3&sectorY=-2&density=0.500&intelFlags=scoutHazard&engage=forced&enemyCells=3,-2;3,-1;4,-2
+?sectorX=5&sectorY=1&density=0.200&engage=raid&enemyCells=5,1
+```
 
 - trade→explore の配備キー（`deployableMechs` / `deployedInstanceIds` / …）と **衝突しない**。
-- 将来の結合用ヘルパ: `mergeInvadeSectorOntoExploreUrl(exploreUrl, sector)`。
+- 結合ヘルパ: `mergeInvadeSectorOntoExploreUrl(exploreUrl, sector)`（engage / enemyCells も上書き）。
+- encode/parse: `encodeEnemyCells` / `parseEnemyCells` / `isEngageMode`。
+- explore 側の消費は後続 PR（本契約＋invade UI が先行）。
 
 ### 3.4 trade → restore
 
@@ -141,8 +170,9 @@ type RestoreToTradePayload = {
 |---|---|
 | `buildTradeToInvadeUrl` / `parseTradeToInvadeSearch` | hub → invade |
 | `buildInvadeToTradeUrl` / `parseInvadeToTradeSearch` | invade → hub |
-| `buildInvadeToExploreUrl` / `parseInvadeToExploreSearch` | invade → explore |
-| `mergeInvadeSectorOntoExploreUrl` | セクターを既存 explore URL に加算 |
+| `buildInvadeToExploreUrl` / `parseInvadeToExploreSearch` | invade → explore（engage / enemyCells 含む） |
+| `mergeInvadeSectorOntoExploreUrl` | セクター＋engage を既存 explore URL に加算 |
+| `encodeEnemyCells` / `parseEnemyCells` / `isEngageMode` | 敵セル圧縮・engage 判定 |
 | `buildTradeToRestoreUrl` / `parseTradeToRestoreSearch` | hub → restore |
 | `buildRestoreToTradeUrl` / `parseRestoreToTradeSearch` | restore → hub |
 | `encodeCircuitBoardCompact` / `parseCircuitBoardCompact` | 盤のクエリ用圧縮 |
@@ -164,5 +194,6 @@ type RestoreToTradePayload = {
 
 1. ~~trade ハンガーに「戦線へ（任意）」「回路修復へ」リンク（上記 builder）~~ → `packages/trade` で取込・リンク実装（結果は `hubM45Stash`、HubSave 未拡張）  
 2. ~~invade → explore セクターを explore が読んで脅威に反映~~ → `packages/explore`（density→敵数/距離/速度 · strip）。invade 側ナビは既存リンク  
+2b. explore が `engage` / `enemyCells` を読んで戦闘編成（forced 隣接巻込み / raid 単体）— 消費 PR  
 3. restore 完了 → trade（`circuitOutcome` 取込）※ restore 側ナビは別チケット · Hub 在庫更新はスタッシュ表示まで  
 4. HubSave への `CircuitBoardState` 永続（版上げ要否は別判断）
