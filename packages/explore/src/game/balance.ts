@@ -28,6 +28,12 @@ export const BALANCE = {
   maxBattleReports: 24,
   maxTacticalLog: 40,
   fogCell: 40,
+  /** Boarding / extract circle radius (world units). */
+  boardingRadius: 110,
+  /** Seconds after extract request until cargo arrives. */
+  boardingCargoDelaySec: 10,
+  /** Seconds after extract request until lift-off / recovery. */
+  boardingLiftOffDelaySec: 15,
 } as const;
 
 export type Balance = typeof BALANCE;

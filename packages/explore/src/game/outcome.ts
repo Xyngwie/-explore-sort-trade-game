@@ -15,7 +15,11 @@ import type { World } from "./types";
 
 export function returnKindFromWorld(world: World): SortieReturnKind {
   if (world.extracted) return "extract";
-  if (world.failReason === "timeout" || world.failReason === "leader_down") {
+  if (
+    world.failReason === "timeout" ||
+    world.failReason === "leader_down" ||
+    world.failReason === "extract_missed"
+  ) {
     return "fail";
   }
   return "abort";

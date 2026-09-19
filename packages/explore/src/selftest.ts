@@ -5,7 +5,14 @@ import assert from "node:assert/strict";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
 import { applyOrder, onSalvageCompleted, rallyWingman } from "./game/orders";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
-import { extractReadiness, tickWorld, tryExtract } from "./game/sim";
+import {
+  boardingCargoEta,
+  boardingLiftOffEta,
+  isInsideBoarding,
+  requestExtract,
+  tickWorld,
+} from "./game/sim";
+import { BALANCE } from "./game/balance";
 import { buildSortieOutcome, hubWearHandoffUrl, toExploreResult } from "./game/outcome";
 import type { Unit } from "./game/types";
 
@@ -184,18 +191,55 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.equal(world.leader.cooldown > 0, true);
 }
 
-// --- extract + wear scaffold ---
+function idleInput() {
+  return {
+    move: { x: 0, y: 0 },
+    clickMove: null,
+    fire: false,
+    interact: false,
+  };
+}
+
+function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 0.05): void {
+  let left = seconds;
+  while (left > 1e-9 && world.phase === "sortie") {
+    const dt = Math.min(step, left);
+    tickWorld(world, dt, idleInput());
+    left -= dt;
+  }
+}
+
+// --- boarding extract + wear scaffold ---
 {
   const world = createWorld(
     bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20"),
   );
   startSortie(world);
-  world.leader.pos = { ...world.extract.pos };
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  // Request from anywhere (not the legacy fixed pad)
+  world.leader.pos = { x: 700, y: 400 };
   for (const w of world.wingmen) {
-    if (w.alive) w.pos = { ...world.extract.pos };
+    w.pos = { x: 700, y: 400 };
   }
   world.salvaged = 2;
-  assert.ok(tryExtract(world));
+  assert.ok(requestExtract(world));
+  assert.ok(world.boarding);
+  assert.equal(world.boarding!.center.x, 700);
+  {
+    let left = world.balance.boardingLiftOffDelaySec + 0.05;
+    while (left > 1e-9 && world.phase === "sortie") {
+      world.leader.pos = { x: 700, y: 400 };
+      for (const w of world.wingmen) w.pos = { x: 700, y: 400 };
+      const dt = Math.min(0.05, left);
+      tickWorld(world, dt, idleInput());
+      left -= dt;
+    }
+  }
+  assert.equal(world.phase, "result");
+  assert.equal(world.extracted, true);
   const result = toExploreResult(world);
   assert.equal(result.isExtracted, true);
   assert.equal(result.salvagedContainers, 2);
@@ -229,54 +273,122 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
 }
 
 
-// --- extract requires all living friendlies in radius ---
+// --- request extract anywhere; wingmen get patrol waypoint at circle center ---
 {
-  const world = createWorld(
-    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20"),
-  );
+  const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  const w = wing(world);
-  // Leader alone inside → fail while wingman alive outside
-  world.leader.pos = { ...world.extract.pos };
-  w.alive = true;
-  w.pos = {
-    x: world.extract.pos.x + world.extract.radius + 80,
-    y: world.extract.pos.y,
-  };
-  assert.equal(extractReadiness(world).ready, false);
-  assert.equal(extractReadiness(world).missing.map((u) => u.id).join(","), w.id);
-  const logsBefore = world.logs.length;
-  assert.equal(tryExtract(world), false);
-  assert.equal(world.phase, "sortie");
-  assert.ok(world.logs.length > logsBefore);
-  assert.ok(world.logs.some((l) => l.text.includes(w.name) && l.text.includes("圏外")));
-
-  // All alive friendlies inside → success
-  w.pos = { ...world.extract.pos };
-  assert.equal(extractReadiness(world).ready, true);
-  assert.ok(tryExtract(world));
-  assert.equal(world.phase, "result");
-  assert.equal(world.extracted, true);
+  world.leader.pos = { x: 640, y: 320 };
+  for (const w of world.wingmen) {
+    w.stance = "raid";
+    w.waypoint = null;
+    w.pos = { x: 200, y: 200 };
+  }
+  assert.equal(world.boarding, null);
+  assert.ok(requestExtract(world));
+  assert.ok(world.boarding);
+  assert.equal(world.boarding!.radius, BALANCE.boardingRadius);
+  assert.deepEqual(
+    { x: world.boarding!.center.x, y: world.boarding!.center.y },
+    { x: 640, y: 320 },
+  );
+  for (const w of world.wingmen) {
+    assert.equal(w.alive, true);
+    assert.equal(w.stance, "patrol");
+    assert.ok(w.waypoint);
+    assert.equal(w.waypoint!.x, 640);
+    assert.equal(w.waypoint!.y, 320);
+  }
+  // Second request while active denied
+  assert.equal(requestExtract(world), false);
+  assert.ok(world.logs.some((l) => l.text.includes("進行中")));
 }
 
-// --- dead wingman outside does not block extract ---
+function advancePinned(
+  world: ReturnType<typeof createWorld>,
+  seconds: number,
+  pin: () => void,
+  step = 0.05,
+): void {
+  let left = seconds;
+  while (left > 1e-9 && world.phase === "sortie") {
+    pin();
+    const dt = Math.min(step, left);
+    tickWorld(world, dt, idleInput());
+    pin();
+    left -= dt;
+  }
+}
+
+// --- cargo at +10s; lift-off at +15s only recovers units in circle ---
 {
-  const world = createWorld(
-    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20"),
-  );
+  const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  const w = wing(world);
-  world.leader.pos = { ...world.extract.pos };
-  w.alive = false;
-  w.hp = 0;
-  w.pos = {
-    x: world.extract.pos.x + world.extract.radius + 120,
-    y: world.extract.pos.y,
+  // Neutralize enemies so combat does not move units off pins
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  world.leader.pos = { x: 500, y: 500 };
+  const w0 = world.wingmen[0]!;
+  const w1 = world.wingmen[1]!;
+  const pin = () => {
+    world.leader.pos = { x: 500, y: 500 };
+    w0.pos = { x: 505, y: 505 };
+    w1.pos = { x: 900, y: 900 };
   };
-  assert.equal(extractReadiness(world).ready, true);
-  assert.equal(extractReadiness(world).missing.length, 0);
-  assert.ok(tryExtract(world));
+  pin();
+  assert.ok(requestExtract(world));
+  assert.equal(world.boarding!.cargoArrived, false);
+  assert.ok((boardingCargoEta(world) ?? 0) > 9.5);
+
+  advancePinned(world, world.balance.boardingCargoDelaySec + 0.02, pin);
+  assert.equal(world.phase, "sortie");
+  assert.ok(world.boarding);
+  assert.equal(world.boarding!.cargoArrived, true);
+  assert.equal(boardingCargoEta(world), null);
+  assert.ok(world.logs.some((l) => l.text.includes("貨物到着")));
+  assert.ok((boardingLiftOffEta(world) ?? 0) > 4);
+
+  advancePinned(world, world.balance.boardingLiftOffDelaySec, pin);
+  assert.equal(world.phase, "result");
   assert.equal(world.extracted, true);
+  assert.ok(world.logs.some((l) => l.text.includes(w1.name) && l.text.includes("置き去り")));
+  assert.ok(world.logs.some((l) => l.text.includes("脱出成功")));
+}
+
+// --- captain outside at lift-off → fail ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  world.leader.pos = { x: 400, y: 400 };
+  world.salvaged = 3;
+  assert.ok(requestExtract(world));
+  const center = { ...world.boarding!.center };
+  const w = world.wingmen[0]!;
+  const pin = () => {
+    w.pos = { ...center };
+    world.leader.pos = {
+      x: center.x + world.balance.boardingRadius + 40,
+      y: center.y,
+    };
+  };
+  pin();
+  assert.equal(isInsideBoarding(world, world.leader), false);
+  assert.equal(isInsideBoarding(world, w), true);
+
+  advancePinned(world, world.balance.boardingLiftOffDelaySec + 0.1, pin);
+  assert.equal(world.phase, "result");
+  assert.equal(world.extracted, false);
+  assert.equal(world.failReason, "extract_missed");
+  assert.equal(world.salvaged, 0);
+  assert.ok(world.logs.some((l) => l.text.includes("隊長") && l.text.includes("円外")));
+  const result = toExploreResult(world);
+  assert.equal(result.isExtracted, false);
+  assert.equal(result.salvagedContainers, 0);
 }
 
 console.log("explore selftest: ok");

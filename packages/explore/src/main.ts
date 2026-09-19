@@ -7,10 +7,11 @@ import {
 } from "./game/world";
 import { applyOrder, rallyWingman } from "./game/orders";
 import {
-  extractReadiness,
+  boardingCargoEta,
+  boardingLiftOffEta,
   isWingmanOffscreen,
+  requestExtract,
   tickWorld,
-  tryExtract,
   type PlayerInput,
 } from "./game/sim";
 import { renderWorld, worldFromCanvas } from "./game/render";
@@ -39,8 +40,14 @@ let last = performance.now();
 let needsDom = true;
 
 window.addEventListener("keydown", (e) => {
-  keys.add(e.key.toLowerCase());
-  if (["w", "a", "s", "d", " "].includes(e.key.toLowerCase())) e.preventDefault();
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  if (["w", "a", "s", "d", " "].includes(k)) e.preventDefault();
+  if (k === "x" && world.phase === "sortie") {
+    e.preventDefault();
+    requestExtract(world);
+    needsDom = true;
+  }
 });
 window.addEventListener("keyup", (e) => {
   keys.delete(e.key.toLowerCase());
@@ -151,7 +158,7 @@ function renderDom(): void {
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
         </table>
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
-        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · E 回収 · 右パネルで僚機命令（画面外も可）</p>
+        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · E 回収 · X 抽出要請 · 右パネルで僚機命令（画面外も可）</p>
       </div>`;
     document.getElementById("btn-start")?.addEventListener("click", () => {
       startSortie(world);
@@ -222,6 +229,14 @@ function renderDom(): void {
   }
 
   // sortie
+  const boardingActive = world.boarding != null;
+  const cargoEta = boardingCargoEta(world);
+  const liftEta = boardingLiftOffEta(world);
+  const extractHud = boardingActive
+    ? cargoEta != null
+      ? `貨物 ${cargoEta.toFixed(1)}s / 離昇 ${(liftEta ?? 0).toFixed(1)}s`
+      : `貨物到着 · 離昇 ${(liftEta ?? 0).toFixed(1)}s`
+    : "待機（どこでも要請可）";
   root.innerHTML = `
     <p class="pill">MODULE 1 · SORTIE</p>
     <h1>WRECKLINE</h1>
@@ -230,7 +245,7 @@ function renderDom(): void {
       <span>回収 <strong id="hud-salvage">${world.salvaged}/${world.carrierCapacity}</strong></span>
       <span>実弾 <strong id="hud-ammo">${world.ammo}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
-      <span id="hud-extract-wrap">脱出 <strong id="hud-extract">${extractReadiness(world).ready ? "準備完了" : "未集結"}</strong></span>
+      <span>抽出 <strong id="hud-boarding">${extractHud}</strong></span>
     </div>
     <div class="layout">
       <div>
@@ -238,10 +253,10 @@ function renderDom(): void {
           <canvas id="map" width="720" height="420"></canvas>
         </div>
         <div class="row">
-          <button type="button" id="btn-extract" class="${extractReadiness(world).ready ? "" : "secondary extract-not-ready"}" title="${extractReadiness(world).ready ? "生存友軍が EXTRACT 内 — 脱出可" : "生存友軍が全員 EXTRACT 内にいる必要があります（クリックで圏外名をログ）"}">脱出（全員EXTRACT内）</button>
+          <button type="button" id="btn-extract" ${boardingActive ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。">${boardingActive ? "抽出シーケンス中…" : "抽出要請（搭乗円）"}</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。遊撃は地点指定なし。脱出は生存友軍が全員 EXTRACT 圏内のときのみ。</p>
+        <p class="help">未発見コンテナは非表示。発見後に黄四角。遊撃は地点指定なし。抽出はどこからでも要請→搭乗円（隊長位置）・僚機自動哨戒・貨物10s／離昇15s。隊長が円内なら成功、円外僚機は置き去り。</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -257,7 +272,7 @@ function renderDom(): void {
 
   bindCanvas();
   document.getElementById("btn-extract")?.addEventListener("click", () => {
-    tryExtract(world);
+    requestExtract(world);
     needsDom = true;
   });
   document.getElementById("btn-abort")?.addEventListener("click", () => {
@@ -265,6 +280,7 @@ function renderDom(): void {
     world.extracted = false;
     world.failReason = null;
     world.salvaged = 0;
+    world.boarding = null;
     needsDom = true;
   });
   root.querySelectorAll<HTMLButtonElement>("[data-order]").forEach((btn) => {
@@ -292,21 +308,25 @@ function paintHudOnly(): void {
   if (a) a.textContent = String(world.ammo);
   const h = document.getElementById("hud-hp");
   if (h) h.textContent = String(Math.ceil(world.leader.hp));
-  const ready = extractReadiness(world);
-  const ex = document.getElementById("hud-extract");
-  if (ex) {
-    ex.textContent = ready.ready ? "準備完了" : "未集結";
-    ex.classList.toggle("ok", ready.ready);
-    ex.classList.toggle("warn", !ready.ready);
+
+  const boardingEl = document.getElementById("hud-boarding");
+  if (boardingEl) {
+    if (!world.boarding) {
+      boardingEl.textContent = "待機（どこでも要請可）";
+    } else {
+      const cargoEta = boardingCargoEta(world);
+      const liftEta = boardingLiftOffEta(world);
+      boardingEl.textContent =
+        cargoEta != null
+          ? `貨物 ${cargoEta.toFixed(1)}s / 離昇 ${(liftEta ?? 0).toFixed(1)}s`
+          : `貨物到着 · 離昇 ${(liftEta ?? 0).toFixed(1)}s`;
+    }
   }
-  const btn = document.getElementById("btn-extract") as HTMLButtonElement | null;
-  if (btn) {
-    btn.disabled = false;
-    btn.classList.toggle("secondary", !ready.ready);
-    btn.classList.toggle("extract-not-ready", !ready.ready);
-    btn.title = ready.ready
-      ? "生存友軍が EXTRACT 内 — 脱出可"
-      : "生存友軍が全員 EXTRACT 内にいる必要があります（クリックで圏外名をログ）";
+  const extractBtn = document.getElementById("btn-extract") as HTMLButtonElement | null;
+  if (extractBtn) {
+    const active = world.boarding != null;
+    extractBtn.disabled = active;
+    extractBtn.textContent = active ? "抽出シーケンス中…" : "抽出要請（搭乗円）";
   }
 
   const panel = document.getElementById("wing-panel");

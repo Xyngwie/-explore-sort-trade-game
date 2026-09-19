@@ -1,5 +1,5 @@
 import { decideWingman } from "./brain";
-import { onSalvageCompleted, pushLog } from "./orders";
+import { applyOrder, onSalvageCompleted, pushLog } from "./orders";
 import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
 import type { Bullet, Unit, World } from "./types";
 
@@ -209,6 +209,112 @@ export type PlayerInput = {
   interact: boolean;
 };
 
+export function isInsideBoarding(world: World, unit: Unit): boolean {
+  const b = world.boarding;
+  if (!b) return false;
+  return dist(unit.pos, b.center) <= b.radius;
+}
+
+export function boardingElapsed(world: World): number {
+  if (!world.boarding) return 0;
+  return Math.max(0, world.elapsed - world.boarding.requestedAt);
+}
+
+export function boardingCargoEta(world: World): number | null {
+  if (!world.boarding || world.boarding.cargoArrived) return null;
+  return Math.max(0, world.balance.boardingCargoDelaySec - boardingElapsed(world));
+}
+
+export function boardingLiftOffEta(world: World): number | null {
+  if (!world.boarding) return null;
+  return Math.max(0, world.balance.boardingLiftOffDelaySec - boardingElapsed(world));
+}
+
+/**
+ * Captain requests extract from anywhere. Spawns a fixed boarding circle at the
+ * request-time captain position, auto-patrols living wingmen on that center.
+ * No cancel / no second request while active (v0).
+ */
+export function requestExtract(world: World): boolean {
+  if (world.phase !== "sortie" || !world.leader.alive) return false;
+  if (world.boarding) {
+    pushLog(world, "抽出シーケンス進行中。キャンセル不可。");
+    return false;
+  }
+  const center = { ...world.leader.pos };
+  const radius = world.balance.boardingRadius;
+  world.boarding = {
+    center,
+    radius,
+    requestedAt: world.elapsed,
+    cargoArrived: false,
+  };
+  // Keep legacy extract marker aligned with active boarding for any readers.
+  world.extract = { pos: { ...center }, radius };
+
+  for (const w of world.wingmen) {
+    if (!w.alive) continue;
+    applyOrder(world, w, "patrol", { waypoint: center });
+  }
+  pushLog(
+    world,
+    `抽出要請。搭乗円展開（半径 ${radius}）。僚機は円中心を哨戒。貨物 ${world.balance.boardingCargoDelaySec}s／離昇 ${world.balance.boardingLiftOffDelaySec}s。`,
+  );
+  return true;
+}
+
+/** @deprecated Use requestExtract — kept as alias for call sites during transition. */
+export function tryExtract(world: World): boolean {
+  return requestExtract(world);
+}
+
+function resolveBoardingLiftOff(world: World): void {
+  const boarding = world.boarding;
+  if (!boarding) return;
+
+  const alive = friendlyUnits(world).filter((u) => u.alive);
+  const inside = alive.filter((u) => dist(u.pos, boarding.center) <= boarding.radius);
+  const outside = alive.filter((u) => dist(u.pos, boarding.center) > boarding.radius);
+  const captainIn = world.leader.alive && isInsideBoarding(world, world.leader);
+
+  if (outside.length > 0) {
+    const names = outside.map((u) => u.name).join("・");
+    pushLog(world, `置き去り：${names}（搭乗円外のため回収せず）。`);
+  }
+  const recovered = inside.map((u) => u.name).join("・");
+  if (inside.length > 0) {
+    pushLog(world, `回収完了：${recovered}。`);
+  }
+
+  world.boarding = null;
+  world.phase = "result";
+
+  if (captainIn) {
+    world.extracted = true;
+    world.failReason = null;
+    pushLog(world, "脱出成功（隊長搭乗）。サルベージは現状ルールどおり保持。");
+  } else {
+    world.extracted = false;
+    world.failReason = "extract_missed";
+    world.salvaged = 0;
+    pushLog(world, "脱出失敗：隊長が搭乗円外のため離昇せず。");
+  }
+}
+
+function updateBoarding(world: World): void {
+  const boarding = world.boarding;
+  if (!boarding || world.phase !== "sortie") return;
+
+  const elapsed = boardingElapsed(world);
+  if (!boarding.cargoArrived && elapsed >= world.balance.boardingCargoDelaySec) {
+    boarding.cargoArrived = true;
+    pushLog(world, "貨物到着。離昇まで搭乗円内へ。");
+  }
+  if (elapsed >= world.balance.boardingLiftOffDelaySec) {
+    resolveBoardingLiftOff(world);
+  }
+}
+
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   if (world.phase !== "sortie") return;
 
@@ -219,6 +325,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     world.extracted = false;
     world.failReason = "timeout";
     world.salvaged = 0;
+    world.boarding = null;
     pushLog(world, "時間切れ。未脱出のため失敗。");
     return;
   }
@@ -229,6 +336,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     world.extracted = false;
     world.failReason = "leader_down";
     world.salvaged = 0;
+    world.boarding = null;
     pushLog(world, "隊長撃破。作戦失敗。");
     return;
   }
@@ -282,58 +390,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   updateBullets(world, dt);
   revealVision(world);
   updateCamera(world);
-}
-
-/** True if unit is within the shared extract radius. */
-export function isInsideExtract(world: World, unit: Unit): boolean {
-  return dist(unit.pos, world.extract.pos) <= world.extract.radius;
-}
-
-export type ExtractReadiness = {
-  ready: boolean;
-  /** Alive friendlies currently outside the extract radius. */
-  missing: Unit[];
-  /** Alive friendlies (leader + wingmen). */
-  aliveCount: number;
-};
-
-/** All living friendlies must be in extract radius; dead wingmen do not block. */
-export function extractReadiness(world: World): ExtractReadiness {
-  const alive = friendlyUnits(world).filter((u) => u.alive);
-  const missing = alive.filter((u) => !isInsideExtract(world, u));
-  return {
-    ready: missing.length === 0 && alive.length > 0 && world.leader.alive,
-    missing,
-    aliveCount: alive.length,
-  };
-}
-
-export function tryExtract(world: World): boolean {
-  if (world.phase !== "sortie" || !world.leader.alive) return false;
-  const status = extractReadiness(world);
-  if (!status.ready) {
-    if (status.missing.length === 0) {
-      pushLog(world, "抽出ポイントに到達していません。");
-    } else if (status.missing.length === 1) {
-      const u = status.missing[0]!;
-      pushLog(
-        world,
-        `脱出未準備：${u.name} が抽出圏外です。生存友軍は全員 EXTRACT 内へ。`,
-      );
-    } else {
-      const names = status.missing.map((u) => u.name).join("・");
-      pushLog(
-        world,
-        `脱出未準備：${status.missing.length}名が抽出圏外（${names}）。生存友軍は全員 EXTRACT 内へ。`,
-      );
-    }
-    return false;
-  }
-  world.phase = "result";
-  world.extracted = true;
-  world.failReason = null;
-  pushLog(world, "脱出成功。");
-  return true;
+  updateBoarding(world);
 }
 
 export function isWingmanOffscreen(world: World, wing: Unit): boolean {

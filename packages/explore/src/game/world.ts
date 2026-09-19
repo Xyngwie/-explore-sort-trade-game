@@ -176,6 +176,7 @@ export function createWorld(boot: SortieBootstrap): World {
     enemies: placeEnemies(),
     containers: placeContainers(),
     extract: { pos: vec(160, 480), radius: 48 },
+    boarding: null,
     bullets: [],
     logs: [],
     salvaged: 0,
@@ -198,6 +199,7 @@ export function startSortie(world: World): void {
   world.salvaged = 0;
   world.extracted = false;
   world.failReason = null;
+  world.boarding = null;
   world.logs = [];
   world.combatHitsTaken = 0;
   for (const c of world.containers) {
