@@ -93,6 +93,10 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   flex: 0 0 auto;
 }
 .clue.blank { color: transparent; }
+/* Activated = digit satisfied by current edges; unsatisfied = not yet. */
+.clue.activated { color: #3fb950; font-weight: 700; }
+.clue.unsatisfied { color: #e8eaed; }
+
 
 .actions {
   display: flex;

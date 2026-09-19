@@ -13,6 +13,7 @@ import {
   cycleEdgeMark,
   deriveStubOutcome,
   digitSatisfaction,
+  isCellDigitActivated,
   generatePuzzle,
   hEdgeIndex,
   isLoopClosed,
@@ -95,6 +96,25 @@ assert.deepEqual(generatePuzzle("selftest-seed", 6, 6).clues, puzzle.clues);
   assert.equal(stats.satisfied, 2);
   assert.equal(stats.rate, 1);
 }
+
+{
+  const cols = 2;
+  const rows = 2;
+  const clues = [
+    [2, null],
+    [null, 1],
+  ];
+  const m: EdgeMark[] = Array.from(
+    { length: edgeCount(cols, rows) },
+    () => 0 as EdgeMark,
+  );
+  assert.equal(isCellDigitActivated(clues, m, cols, rows, 0, 0), false);
+  assert.equal(isCellDigitActivated(clues, m, cols, rows, 1, 0), null);
+  m[hEdgeIndex(cols, rows, 0, 0)] = 1;
+  m[vEdgeIndex(cols, rows, 0, 0)] = 1;
+  assert.equal(isCellDigitActivated(clues, m, cols, rows, 0, 0), true);
+}
+
 
 assert.equal(deriveStubOutcome(true, 1, 4), "fully_awakened");
 assert.equal(deriveStubOutcome(true, 0.5, 4), "bypass");

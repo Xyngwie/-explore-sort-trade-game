@@ -9,6 +9,7 @@ import {
   cycleEdgeMark,
   deriveStubOutcome,
   digitSatisfaction,
+  isCellDigitActivated,
   freshMarks,
   hEdgeIndex,
   isLoopClosed,
@@ -130,8 +131,16 @@ function boardHtml(): string {
       if (x < cols) {
         const clue = clues[y]![x];
         const label = clue == null ? "" : String(clue);
+        const activated =
+          clue == null
+            ? null
+            : isCellDigitActivated(clues, marks, cols, rows, x, y);
+        let clueClass = "clue";
+        if (clue == null) clueClass += " blank";
+        else if (activated) clueClass += " activated";
+        else clueClass += " unsatisfied";
         parts.push(
-          `<div class="clue${clue == null ? " blank" : ""}">${escapeHtml(label)}</div>`,
+          `<div class="${clueClass}">${escapeHtml(label)}</div>`,
         );
       }
     }
