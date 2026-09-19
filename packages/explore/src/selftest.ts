@@ -12,7 +12,10 @@ import {
   requestExtract,
   tickWorld,
 } from "./game/sim";
-import { BALANCE, threatFromDensity } from "./game/balance";
+import { BALANCE, threatFromDensity,
+  ENGAGE_BRIEFING_LABEL,
+  threatFromInvadeSector
+} from "./game/balance";
 import { buildSortieOutcome, hubWearHandoffUrl, toExploreResult } from "./game/outcome";
 import type { Unit } from "./game/types";
 
@@ -475,5 +478,63 @@ function advancePinned(
   assert.equal(outcome.mechWear[0]!.durabilityAfter, 85 - (35 - 10)); // fail wear buffered
   assert.equal(outcome.mechWear[0]!.wearApplied, 25);
 }
+
+
+// --- invade→explore engage handoff (forced vs raid) ---
+{
+  const forced = threatFromInvadeSector({
+    density: 0.5,
+    engage: "forced",
+    enemyCells: [
+      { sx: 3, sy: -2 },
+      { sx: 4, sy: -2 },
+      { sx: 3, sy: -1 },
+      { sx: 2, sy: -2 },
+      { sx: 3, sy: -3 },
+    ],
+  });
+  assert.equal(forced.enemyCount, 5);
+  assert.ok(forced.enemySpeedMul >= BALANCE.engageForcedSpeedMul - 1e-9);
+  assert.ok(forced.enemyHpMul >= BALANCE.engageForcedHpMul - 1e-9);
+  assert.ok(forced.spawnDist <= BALANCE.engageForcedSpawnDist + 1e-9);
+
+  const forcedFallback = threatFromInvadeSector({
+    density: 0.2,
+    engage: "forced",
+    neighborCount: 3,
+  });
+  assert.equal(forcedFallback.enemyCount, Math.max(BALANCE.engageForcedEnemyCountMin, 1 + 3));
+
+  const raid = threatFromInvadeSector({
+    density: 0.8,
+    engage: "raid",
+    enemyCells: [{ sx: 5, sy: 1 }],
+  });
+  assert.equal(raid.enemyCount, 1);
+  assert.equal(raid.spawnDist, BALANCE.engageRaidSpawnDist);
+  assert.ok(raid.enemyCount < forced.enemyCount);
+
+  const bootForced = bootstrapFromSearch(
+    "?sectorX=3&sectorY=-2&density=0.500&engage=forced&enemyCells=3,-2;4,-2;3,-1;2,-2;3,-3",
+  );
+  assert.equal(bootForced.invadeSector?.engage, "forced");
+  assert.equal(bootForced.invadeSector?.enemyCells?.length, 5);
+  assert.ok(bootForced.note.includes("強制交戦") || bootForced.note.includes(ENGAGE_BRIEFING_LABEL.forced));
+  const worldForced = createWorld(bootForced);
+  assert.equal(worldForced.enemies.length, 5);
+  assert.ok(worldForced.enemies[0]!.maxHp > BALANCE.enemyHp); // hp mul
+  assert.equal(worldForced.invadeSector?.engage, "forced");
+
+  const bootRaid = bootstrapFromSearch(
+    "?sectorX=5&sectorY=1&density=0.200&engage=raid&enemyCells=5,1",
+  );
+  assert.equal(bootRaid.invadeSector?.engage, "raid");
+  assert.deepEqual(bootRaid.invadeSector?.enemyCells, [{ sx: 5, sy: 1 }]);
+  assert.ok(bootRaid.note.includes("任意侵入") || bootRaid.note.includes(ENGAGE_BRIEFING_LABEL.raid));
+  const worldRaid = createWorld(bootRaid);
+  assert.equal(worldRaid.enemies.length, 1);
+  assert.ok(worldRaid.enemies.length < worldForced.enemies.length);
+}
+
 
 console.log("explore selftest: ok");

@@ -182,6 +182,24 @@ function renderDom(): void {
               : "—（基準脅威）"
           }</td></tr>
           <tr><td>脅威</td><td>敵 ${world.densityThreat.enemyCount} · 距離 ${Math.round(world.densityThreat.spawnDist)} · 速度×${world.densityThreat.enemySpeedMul.toFixed(2)}</td></tr>
+                    ${
+            world.invadeSector?.engage
+              ? `<tr><td>交戦</td><td>${
+                  world.invadeSector.engage === "forced"
+                    ? "強制交戦・周囲引き込み"
+                    : world.invadeSector.engage === "raid"
+                      ? "任意侵入"
+                      : escapeHtml(world.invadeSector.engage)
+                }（engage=${escapeHtml(world.invadeSector.engage)}）</td></tr>`
+              : ""
+          }
+          ${
+            world.invadeSector?.enemyCells && world.invadeSector.enemyCells.length > 0
+              ? `<tr><td>enemyCells</td><td>${escapeHtml(
+                  world.invadeSector.enemyCells.map((c) => `${c.sx},${c.sy}`).join("; "),
+                )}（${world.invadeSector.enemyCells.length}）</td></tr>`
+              : ""
+          }
           ${
             world.invadeSector && world.invadeSector.intelFlags.length > 0
               ? `<tr><td>intelFlags</td><td>${escapeHtml(world.invadeSector.intelFlags.join(", "))}</td></tr>`

@@ -6,8 +6,9 @@ import {
 } from "@estg/shared";
 import {
   BALANCE,
-  balanceForDensity,
-  threatFromDensity,
+  balanceForThreat,
+  ENGAGE_BRIEFING_LABEL,
+  threatFromInvadeSector,
   type DensityThreat,
 } from "./balance";
 import type { Container, InvadeSectorContext, Unit, World } from "./types";
@@ -83,14 +84,15 @@ function placeEnemies(
       y: spawn.y + Math.sin(angle) * threat.spawnDist,
     };
     const pos = clampToWorld(raw.x, raw.y, margin);
+    const hp = Math.max(1, Math.round(BALANCE.enemyHp * (threat.enemyHpMul ?? 1)));
     enemies.push(
       makeUnit({
         id: `enemy-${i}`,
         kind: "enemy",
         name: `敵${i + 1}`,
         pos,
-        hp: BALANCE.enemyHp,
-        maxHp: BALANCE.enemyHp,
+        hp,
+        maxHp: hp,
         radius: BALANCE.enemyRadius,
         alive: true,
         stance: "raid",
@@ -124,6 +126,15 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
           sectorY: sectorIn.sectorY,
           density: sectorIn.density,
           intelFlags: sectorIn.intelFlags ? [...sectorIn.intelFlags] : [],
+          ...(sectorIn.engage != null ? { engage: sectorIn.engage } : {}),
+          ...(sectorIn.enemyCells != null && sectorIn.enemyCells.length > 0
+            ? {
+                enemyCells: sectorIn.enemyCells.map((c) => ({
+                  sx: c.sx,
+                  sy: c.sy,
+                })),
+              }
+            : {}),
         }
       : null;
 
@@ -167,7 +178,15 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
       invadeSector.intelFlags.length > 0
         ? ` · intel ${invadeSector.intelFlags.join(",")}`
         : "";
-    note += ` · 戦線 (${invadeSector.sectorX},${invadeSector.sectorY}) dens=${invadeSector.density.toFixed(3)}${flags}`;
+    const engageLabel =
+      invadeSector.engage === "forced" || invadeSector.engage === "raid"
+        ? ` · ${ENGAGE_BRIEFING_LABEL[invadeSector.engage]}`
+        : "";
+    const cellN =
+      invadeSector.enemyCells != null && invadeSector.enemyCells.length > 0
+        ? ` · cells ${invadeSector.enemyCells.length}`
+        : "";
+    note += ` · 戦線 (${invadeSector.sectorX},${invadeSector.sectorY}) dens=${invadeSector.density.toFixed(3)}${engageLabel}${cellN}${flags}`;
   }
   if (circuitDurabilityBuffer > 0) {
     note += ` · 回路緩衝 ${circuitDurabilityBuffer}`;
@@ -191,8 +210,13 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
 export function createWorld(boot: SortieBootstrap): World {
   const spawn = vec(180, 500);
   const density = boot.invadeSector?.density ?? null;
-  const threat = threatFromDensity(density);
-  const balance = balanceForDensity(density);
+  const threat = threatFromInvadeSector({
+    density,
+    engage: boot.invadeSector?.engage ?? null,
+    enemyCells: boot.invadeSector?.enemyCells,
+    neighborCount: boot.invadeSector?.neighborCount,
+  });
+  const balance = balanceForThreat(threat);
 
   const leaderId = boot.deployedInstanceIds[0] ?? null;
   const leader = makeUnit({
@@ -262,6 +286,21 @@ export function createWorld(boot: SortieBootstrap): World {
           sectorY: boot.invadeSector.sectorY,
           density: boot.invadeSector.density,
           intelFlags: [...boot.invadeSector.intelFlags],
+          ...(boot.invadeSector.engage != null
+            ? { engage: boot.invadeSector.engage }
+            : {}),
+          ...(boot.invadeSector.enemyCells != null &&
+          boot.invadeSector.enemyCells.length > 0
+            ? {
+                enemyCells: boot.invadeSector.enemyCells.map((c) => ({
+                  sx: c.sx,
+                  sy: c.sy,
+                })),
+              }
+            : {}),
+          ...(boot.invadeSector.neighborCount != null
+            ? { neighborCount: boot.invadeSector.neighborCount }
+            : {}),
         }
       : null,
     densityThreat: { ...threat },
