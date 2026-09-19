@@ -22,6 +22,18 @@ export interface CircuitBoardState {
   edgeState: string;
   outcome?: CircuitOutcome;
   puzzleId?: string;
+  /** 刻印 — final editor name stamped on save / restore→hub. */
+  lastEditorName?: string;
+  /**
+   * Perfect Circuit lock. Once true, board edges/outcome are uneditable.
+   * Set when clearance is perfect (see isPerfectCircuitClearance).
+   */
+  locked?: boolean;
+  /**
+   * Explicit perfect flag (optional). With outcome===fully_awakened,
+   * or digit 100% + single loop closed, marks a Perfect Circuit.
+   */
+  perfect?: boolean;
 }
 
 /** Horizontal edges first (row-major), then vertical — Slitherlink-style. */
@@ -145,6 +157,10 @@ export function normalizeCircuitBoard(
     board.puzzleId = obj.puzzleId.trim().replace(/\|/g, "").slice(0, 64);
   }
   if (isCircuitOutcome(obj.outcome)) board.outcome = obj.outcome;
+  const editor = sanitizeEditorName(obj.lastEditorName);
+  if (editor) board.lastEditorName = editor;
+  if (obj.locked === true) board.locked = true;
+  if (obj.perfect === true) board.perfect = true;
   return board;
 }
 
@@ -192,4 +208,129 @@ export function parseCircuitBoardCompact(
   if (puzzleId) board.puzzleId = puzzleId.slice(0, 64);
   if (isCircuitOutcome(outcomeRaw)) board.outcome = outcomeRaw;
   return board;
+}
+
+
+/** Max length for engraved editor name (刻印). */
+export const CIRCUIT_EDITOR_NAME_MAX = 32;
+
+/** Sanitize player craft signature / editor name for persistence. */
+export function sanitizeEditorName(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim().replace(/[\u0000-\u001f|]/g, "").slice(0, CIRCUIT_EDITOR_NAME_MAX);
+  return t || undefined;
+}
+
+/**
+ * Perfect Circuit clearance (stub-friendly).
+ * Clearest available check without a full solver:
+ * - `perfect === true`, or
+ * - `outcome === fully_awakened` AND (`perfect === true` OR digitRate≥1 + single loop closed).
+ * When metrics are omitted, only an explicit `perfect`/`locked` flag counts
+ * (fully_awakened alone does not lock).
+ */
+export function isPerfectCircuitClearance(input: {
+  outcome?: CircuitOutcome | null;
+  perfect?: boolean | null;
+  locked?: boolean | null;
+  digitRate?: number | null;
+  loopClosed?: boolean | null;
+}): boolean {
+  if (input.locked === true) return true;
+  if (input.perfect === true) return true;
+  if (input.outcome !== "fully_awakened") return false;
+  const hasMetrics =
+    input.digitRate != null || input.loopClosed != null;
+  if (!hasMetrics) return false;
+  return (input.digitRate ?? 0) >= 1 && input.loopClosed === true;
+}
+
+/** True when a circuit board / hub record must refuse further edits. */
+export function isCircuitLocked(
+  input:
+    | {
+        locked?: boolean | null;
+        perfect?: boolean | null;
+        outcome?: CircuitOutcome | null;
+        circuitBoard?: CircuitBoardState | null;
+        digitRate?: number | null;
+        loopClosed?: boolean | null;
+      }
+    | CircuitBoardState
+    | null
+    | undefined,
+): boolean {
+  if (input == null) return false;
+  const board =
+    "circuitBoard" in input && input.circuitBoard
+      ? input.circuitBoard
+      : (input as CircuitBoardState);
+  const locked =
+    ("locked" in input && input.locked === true) ||
+    board.locked === true;
+  if (locked) return true;
+  const outcome =
+    "outcome" in input && input.outcome != null
+      ? input.outcome
+      : board.outcome;
+  const perfect =
+    ("perfect" in input && input.perfect === true) ||
+    board.perfect === true;
+  const digitRate =
+    "digitRate" in input ? (input as { digitRate?: number }).digitRate : undefined;
+  const loopClosed =
+    "loopClosed" in input
+      ? (input as { loopClosed?: boolean }).loopClosed
+      : undefined;
+  return isPerfectCircuitClearance({
+    outcome,
+    perfect: perfect || undefined,
+    digitRate,
+    loopClosed,
+  });
+}
+
+/**
+ * Stamp editor name onto a board; optionally mark perfect/locked from clearance.
+ * Does not mutate when already locked (returns input unchanged).
+ */
+export function stampCircuitEditor(
+  board: CircuitBoardState,
+  editorName: string | undefined | null,
+  clearance?: {
+    outcome?: CircuitOutcome | null;
+    digitRate?: number | null;
+    loopClosed?: boolean | null;
+    perfect?: boolean | null;
+  },
+): CircuitBoardState {
+  const next: CircuitBoardState = { ...board };
+  const name = sanitizeEditorName(editorName);
+  // Refresh 刻印 only while still editable; locked boards keep engraved name.
+  if (!isCircuitLocked(board) && name) {
+    next.lastEditorName = name;
+  } else if (isCircuitLocked(board) && !next.lastEditorName && name) {
+    // First persist of a board that arrived already flagged locked.
+    next.lastEditorName = name;
+  }
+  if (isCircuitLocked(board) && board.locked === true) {
+    // Preserve lock; do not mutate edges/outcome here (caller owns board bytes).
+    if (board.perfect === true) next.perfect = true;
+    next.locked = true;
+    return next;
+  }
+  const outcome = clearance?.outcome ?? board.outcome;
+  if (outcome && isCircuitOutcome(outcome)) next.outcome = outcome;
+  const perfect = isPerfectCircuitClearance({
+    outcome,
+    perfect: clearance?.perfect ?? board.perfect,
+    locked: board.locked,
+    digitRate: clearance?.digitRate,
+    loopClosed: clearance?.loopClosed,
+  });
+  if (perfect) {
+    next.perfect = true;
+    next.locked = true;
+  }
+  return next;
 }

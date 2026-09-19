@@ -1,6 +1,6 @@
 # RESTORE Circuit Paradox V0（回路パラドックス／宇宙構想メモ）
 
-**ステータス:** 願望・与太話由来の構想メモ / 未実装  
+**ステータス:** 願望・与太話由来の構想メモ · §6 刻印/ロックは薄い実装あり  
 **位置づけ:** **NOT V0 acceptance / NOT implementation ticket**  
 **Related:** [`PRODUCT_VISION.md`](./PRODUCT_VISION.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)（flawed boards / perfect rare）
 
@@ -116,8 +116,24 @@ Module 5 の artifact（回路／Perfect Circuit）は、何でも自動化し�
 ## 5. 非ゴール／扱い
 
 - `RESTORE_V0.md` の受入条件、`CircuitBoardState`、既存の outcome 語彙を変更しない。
-- 自動ソルバ、perfect 判定、0-cell の保存、盤面サイズ解放、宇宙戦争を実装しない。
+- 自動ソルバ、0-cell の保存、盤面サイズ解放、宇宙戦争を実装しない（薄い Perfect ロック／刻印は §6 · `RESTORE_V0` §5.4.2）。
 - 得点、報酬、出力、経済、社会階層、マルチプレイヤーを確定しない。
 - このメモをロードマップ、受入仕様、実装チケット、バランス表として引用しない。
 
 将来、具体化する場合は、まず親となるビジョンと現行 V0 の整合を確認し、別途小さな仕様として切り出す。
+
+
+---
+
+## 6. 刻印と Perfect Circuit ロック（願望→仕様メモ / 実装あり）
+
+親チケットで確定したプロダクト規則。パラドックス与太話の「稀な完全盤」を、Hub 上の編集権として薄く落とす。
+
+| 規則 | 内容 |
+|---|---|
+| 刻印 | 回路は保存／restore→hub 復帰時に **最終編集者名（刻印）** `lastEditorName` を記録する。 |
+| Perfect ロック | **Perfect Circuit**（完全クリアの単一ループ／`fully_awakened` + perfect 判定）は以降 **uneditable**（`locked`）。 |
+| 非 Perfect | 編集可。辺・outcome 更新で刻印を刷新する。 |
+
+判定（フルソルバ未実装時）: `outcome===fully_awakened` かつ（`perfect: true` **または** digit 100% + 単一ループ閉合）。実装詳細は [`RESTORE_V0.md`](./RESTORE_V0.md) §5.4.2。
+

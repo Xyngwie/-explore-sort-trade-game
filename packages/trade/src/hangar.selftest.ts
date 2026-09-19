@@ -37,6 +37,12 @@ import {
   isRareYieldItemId,
   RARE_SELL_PRICE_CREDITS,
   grantDemoInventory,
+  setCraftSignature,
+  loadCraftSignature,
+  isCraftSignatureLocked,
+  isCircuitLocked,
+  DEFAULT_CRAFT_SIGNATURE,
+  CRAFT_SIGNATURE_STORAGE_KEY,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -431,6 +437,85 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(re.hub.inventory.part_actuator ?? 0, s.hub.inventory.part_actuator ?? 0);
   const blocked = sellRareItem(s, "mat_scrap", 1);
   assert.match(blocked.notice, /レア対象外/);
+}
+
+
+
+// --- craft signature + Perfect Circuit lock ---
+{
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = resetHangar(store);
+  assert.equal(hs.craftSignature, DEFAULT_CRAFT_SIGNATURE);
+  assert.equal(isCraftSignatureLocked(store), false);
+  hs = setCraftSignature(hs, "  回路職人  ", store);
+  assert.equal(hs.craftSignature, "回路職人");
+  assert.equal(loadCraftSignature(store), "回路職人");
+  assert.equal(isCraftSignatureLocked(store), true);
+  const again = setCraftSignature(hs, "別の名前", store);
+  assert.equal(again.craftSignature, "回路職人");
+  assert.match(again.notice, /確定済み/);
+
+  const board = createEmptyCircuitBoard(8, 8, "stub-8");
+  const rtt = buildRestoreToTradeUrl({
+    circuitId: "board_perfect",
+    circuitBoard: { ...board, perfect: true },
+    outcome: "fully_awakened",
+    lastEditorName: "回路職人",
+    locked: true,
+    perfect: true,
+  });
+  const ingested = ingestLocationSearch(hs, new URL(rtt).search);
+  assert.equal(ingested.consumed, true);
+  const rec = ingested.state.hub.circuits.find((c) => c.circuitId === "board_perfect");
+  assert.ok(rec);
+  assert.equal(rec!.locked, true);
+  assert.equal(rec!.lastEditorName, "回路職人");
+  assert.equal(isCircuitLocked(rec!), true);
+
+  const restoreUrl = buildRestoreUrl(ingested.state, "board_perfect");
+  assert.ok(restoreUrl.includes("editorName="));
+  assert.ok(
+    restoreUrl.includes("circuitLocked=1") || restoreUrl.includes("circuitLocked=true"),
+  );
+
+  // Locked refuse: try overwrite via restore handoff
+  const tamper = buildRestoreToTradeUrl({
+    circuitId: "board_perfect",
+    circuitBoard: createEmptyCircuitBoard(4, 4, "hack"),
+    outcome: "offline",
+    lastEditorName: "侵入者",
+  });
+  const blocked = ingestLocationSearch(ingested.state, new URL(tamper).search);
+  const still = blocked.state.hub.circuits.find((c) => c.circuitId === "board_perfect");
+  assert.equal(still!.outcome, "fully_awakened");
+  assert.equal(still!.lastEditorName, "回路職人");
+
+  // Non-perfect refreshes 刻印
+  const soft = buildRestoreToTradeUrl({
+    circuitId: "board_soft",
+    circuitBoard: createEmptyCircuitBoard(4, 4, "soft"),
+    outcome: "bypass",
+    lastEditorName: "回路職人",
+  });
+  let softState = ingestLocationSearch(blocked.state, new URL(soft).search).state;
+  softState = setCraftSignature(
+    { ...softState, craftSignature: "回路職人" },
+    "ignored",
+    store,
+  );
+  const soft2 = buildRestoreToTradeUrl({
+    circuitId: "board_soft",
+    circuitBoard: createEmptyCircuitBoard(4, 4, "soft2"),
+    outcome: "bypass",
+    lastEditorName: "回路職人",
+  });
+  softState = ingestLocationSearch(softState, new URL(soft2).search).state;
+  assert.equal(
+    softState.hub.circuits.find((c) => c.circuitId === "board_soft")?.lastEditorName,
+    "回路職人",
+  );
+  assert.equal(store.getItem(CRAFT_SIGNATURE_STORAGE_KEY), "回路職人");
 }
 
 console.log("trade hangar selftest: ok");

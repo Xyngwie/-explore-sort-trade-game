@@ -116,7 +116,7 @@ export interface CircuitBoardState {
 
 ## 5.4. Hub 永続（Module 3）
 
-restore→trade 取込後、回路は **`HubSave.hub.circuits`**（`HubCircuitRecord`: `circuitId` + `circuitBoard` + `outcome`）に upsert される。  
+restore→trade 取込後、回路は **`HubSave.hub.circuits`**（`HubCircuitRecord`: `circuitId` + `circuitBoard` + `outcome` + `lastEditorName?` + `locked?`）に upsert される。  
 trade ハンガーの一覧から選択して trade→restore URL を開ける。詳細: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)。
 
 ### 5.4.1 成果ボーナス（track 1 · hub/sortie）
@@ -130,6 +130,16 @@ trade ハンガーの一覧から選択して trade→restore URL を開ける�
 | `offline` | 0 | 0 | 0 |
 
 加算後に soft cap（craft +0.25 / repair 50% / buffer 25）。trade は修理割引・配備 URL の `circuitBonuses`、explore は帰還摩耗に緩衝を適用。invade 非対象。
+
+
+
+### 5.4.2 刻印（署名）と Perfect Circuit ロック（願望→仕様メモ）
+
+1. **刻印:** restore→hub 保存時、最終編集者名 `lastEditorName`（刻印）を `HubCircuitRecord` / `CircuitBoardState` に記録する。trade ハンガーの「署名」（localStorage `wreckline.craftSignature.v0`、一度確定で変更不可）を渡し、upsert 時にスタンプする。
+2. **Perfect Circuit ロック:** 完全クリア（スタブ判定: `outcome===fully_awakened` かつ `perfect: true`、または digit satisfaction 100% + 単一ループ閉合）の回路は以降 **編集不可**（`locked: true`）。辺トグル・outcome 上書きを拒否し、restore UI に刻印と「完璧な回路・編集不可」を表示する。
+3. **非 Perfect:** 編集可。辺／outcome 更新のたびに `lastEditorName` を刷新する。既に `locked` のレコードへの upsert は拒否（盤面維持）。
+
+加算フィールド（HubSave v2 のまま）: `lastEditorName?`, `locked?`（board 側に `perfect?` も可）。ヘルパ: `isCircuitLocked` / `isPerfectCircuitClearance` / `stampCircuitEditor` / `sanitizeEditorName`。
 
 ## 5.5. ハンドオフ契約（キーのみ）
 

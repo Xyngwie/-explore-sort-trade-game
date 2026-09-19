@@ -82,3 +82,6 @@ button.sell-rare {
 }
 th { text-align: left; font-size: 0.75rem; color: #9aa0a6; font-weight: 600; padding: 0.25rem 0; border-bottom: 1px solid #2a313c; }
 th:nth-child(2), th:nth-child(3), td:nth-child(2), td:nth-child(3) { text-align: right; }
+
+.engraved { color: #f0c674; font-weight: 600; }
+.lock-tag { color: #d29922; border: 1px solid #d29922; background: #21262d; }

@@ -4,6 +4,7 @@
  */
 
 import {
+  CRAFT_SIGNATURE_STORAGE_KEY,
   HANDOFF_QUERY_KEYS,
   INITIAL_HUB,
   MECH_FLEET_RULES,
@@ -28,6 +29,7 @@ import {
   filterToDeployableIds,
   importMaterialsIntoHub,
   importYieldBagIntoHub,
+  isCircuitLocked,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   parseExploreToHubWearSearch,
@@ -35,6 +37,7 @@ import {
   parseRestoreToTradeSearch,
   parseSortToTradeSearch,
   repairCost,
+  sanitizeEditorName,
   saveHubSaveToLocalStorage,
   selectDeployableInstanceIds,
   syncMechStatus,
@@ -72,6 +75,69 @@ export type HubM45Stash = {
 
 export const HUB_M45_STASH_STORAGE_KEY = "wreckline.hubM45Stash.v0";
 
+/** Default craft signature when hangar 「署名」 is unset. */
+export const DEFAULT_CRAFT_SIGNATURE = "無名の職人";
+
+export function loadCraftSignature(
+  storage?: Pick<Storage, "getItem"> | null,
+): string {
+  const store =
+    storage ??
+    (typeof globalThis !== "undefined" && "localStorage" in globalThis
+      ? globalThis.localStorage
+      : null);
+  if (!store) return DEFAULT_CRAFT_SIGNATURE;
+  const raw = store.getItem(CRAFT_SIGNATURE_STORAGE_KEY);
+  return sanitizeEditorName(raw) ?? DEFAULT_CRAFT_SIGNATURE;
+}
+
+/**
+ * Persist hangar 「署名」 once. Returns false if already set (editable once).
+ */
+export function saveCraftSignatureOnce(
+  name: string,
+  storage?: Pick<Storage, "getItem" | "setItem"> | null,
+): { ok: boolean; signature: string; alreadySet: boolean } {
+  const store =
+    storage ??
+    (typeof globalThis !== "undefined" && "localStorage" in globalThis
+      ? (globalThis.localStorage as Storage)
+      : null);
+  const cleaned = sanitizeEditorName(name);
+  if (!cleaned) {
+    return {
+      ok: false,
+      signature: loadCraftSignature(store),
+      alreadySet: false,
+    };
+  }
+  if (!store) {
+    return { ok: true, signature: cleaned, alreadySet: false };
+  }
+  const existing = sanitizeEditorName(store.getItem(CRAFT_SIGNATURE_STORAGE_KEY));
+  if (existing) {
+    return { ok: false, signature: existing, alreadySet: true };
+  }
+  try {
+    store.setItem(CRAFT_SIGNATURE_STORAGE_KEY, cleaned);
+    return { ok: true, signature: cleaned, alreadySet: false };
+  } catch {
+    return { ok: false, signature: cleaned, alreadySet: false };
+  }
+}
+
+export function isCraftSignatureLocked(
+  storage?: Pick<Storage, "getItem"> | null,
+): boolean {
+  const store =
+    storage ??
+    (typeof globalThis !== "undefined" && "localStorage" in globalThis
+      ? globalThis.localStorage
+      : null);
+  if (!store) return false;
+  return sanitizeEditorName(store.getItem(CRAFT_SIGNATURE_STORAGE_KEY)) != null;
+}
+
 /** Demo board used when opening restore with no prior circuit stash. */
 export const SEED_CIRCUIT_ID = "board_demo";
 export const SEED_CIRCUIT_PUZZLE_ID = "stub-8";
@@ -87,6 +153,8 @@ export type HangarState = {
   lastInvadeSector: InvadeToTradePayload | null;
   /** Active / most recent circuit (mirrors hub.circuits[0]; HubSave is source of truth). */
   lastCircuit: RestoreToTradePayload | null;
+  /** Hangar craft signature (署名) for circuit 刻印. */
+  craftSignature: string;
 };
 
 const MAX_LOG = 12;
@@ -235,6 +303,7 @@ export function createInitialHangar(
   }
 
   const lastCircuit = resolveActiveCircuit(hub, stash.lastCircuit);
+  const craftSignature = loadCraftSignature(storage ?? undefined);
   const state: HangarState = {
     hub,
     lastDeployedIds: [],
@@ -243,6 +312,7 @@ export function createInitialHangar(
     notice: "",
     lastInvadeSector: stash.lastInvadeSector,
     lastCircuit,
+    craftSignature,
   };
   if (migratedCircuit) {
     return persistHangar(state, storage ?? undefined);
@@ -330,15 +400,41 @@ export function ingestLocationSearch(
 
   const restore = parseRestoreToTradeSearch(search);
   if (restore) {
+    const editor =
+      sanitizeEditorName(restore.lastEditorName) ??
+      sanitizeEditorName(restore.circuitBoard.lastEditorName) ??
+      sanitizeEditorName(state.craftSignature) ??
+      loadCraftSignature();
+    const wasLocked = (() => {
+      const id = restore.circuitId?.trim();
+      if (!id) return false;
+      const prev = hub.circuits.find((c) => c.circuitId === id);
+      return prev != null && isCircuitLocked(prev);
+    })();
     hub = upsertCircuitIntoHub(hub, {
       circuitId: restore.circuitId,
       circuitBoard: restore.circuitBoard,
       outcome: restore.outcome,
+      lastEditorName: editor,
+      perfect:
+        restore.perfect === true || restore.circuitBoard.perfect === true,
     });
-    lastCircuit = resolveActiveCircuit(hub, restore);
+    lastCircuit = resolveActiveCircuit(hub, {
+      ...restore,
+      lastEditorName: editor,
+    });
     const id = restore.circuitId ?? restore.circuitBoard.puzzleId ?? "—";
-    log = pushLog(log, `restore 回路 ${id} → ${restore.outcome}`);
-    notices.push(`回路修復 ${restore.outcome} (${id})`);
+    const lockNote = wasLocked
+      ? " · ロック維持（編集拒否）"
+      : hub.circuits.find((c) => c.circuitId === (restore.circuitId ?? ""))
+            ?.locked
+        ? " · 完璧ロック"
+        : "";
+    log = pushLog(
+      log,
+      `restore 回路 ${id} → ${restore.outcome} · 刻印 ${editor}${lockNote}`,
+    );
+    notices.push(`回路修復 ${restore.outcome} (${id}) · 刻印 ${editor}`);
     consumed = true;
   }
 
@@ -352,6 +448,7 @@ export function ingestLocationSearch(
     log,
     lastInvadeSector,
     lastCircuit,
+    craftSignature: state.craftSignature || loadCraftSignature(),
     selectedDeployIds: filterToDeployableIds(
       hub.fleet,
       state.selectedDeployIds,
@@ -499,6 +596,7 @@ export function loadPlaytestSeed(
       circuitBoard: seedBoard,
       outcome: "offline",
     }),
+    craftSignature: state.craftSignature || loadCraftSignature(storage ?? undefined),
     log: pushLog(state.log, "シード読込"),
     notice: "プレイテスト用シードを読込（健在2 + 要修理1 · 回路デモ）",
   };
@@ -519,6 +617,7 @@ export function resetHangar(
     notice: "セーブを消去し初期ハブへ",
     lastInvadeSector: null,
     lastCircuit: null,
+    craftSignature: loadCraftSignature(storage ?? undefined),
   };
   return persistHangar(next, storage ?? undefined);
 }
@@ -612,6 +711,7 @@ export function buildRestoreUrl(
             ? circuitRecordToPayload(state.hub.circuits[0])
             : null);
 
+  const editorName = sanitizeEditorName(state.craftSignature) ?? loadCraftSignature();
   if (stash?.circuitBoard) {
     const board: CircuitBoardState = {
       v: 1,
@@ -620,10 +720,23 @@ export function buildRestoreUrl(
       edgeState: stash.circuitBoard.edgeState,
     };
     if (stash.circuitBoard.puzzleId) board.puzzleId = stash.circuitBoard.puzzleId;
+    // Forward lock / 刻印 so restore can refuse edits without HubSave race.
+    const hubRec = findHubCircuit(state.hub, stash.circuitId);
+    if (hubRec && isCircuitLocked(hubRec)) {
+      board.locked = true;
+      board.perfect = true;
+      if (hubRec.lastEditorName) board.lastEditorName = hubRec.lastEditorName;
+    }
+    const locked = hubRec != null && isCircuitLocked(hubRec);
+    const engraved =
+      hubRec?.lastEditorName ?? hubRec?.circuitBoard.lastEditorName;
     return buildTradeToRestoreUrl(
       {
         circuitId: stash.circuitId ?? SEED_CIRCUIT_ID,
         circuitBoard: board,
+        editorName,
+        locked: locked || undefined,
+        lastEditorName: engraved,
       },
       resolveModuleBaseUrl("restore"),
     );
@@ -632,9 +745,35 @@ export function buildRestoreUrl(
     {
       circuitId: SEED_CIRCUIT_ID,
       circuitBoard: buildSeedCircuitBoard(),
+      editorName,
     },
     resolveModuleBaseUrl("restore"),
   );
+}
+
+/** Set hangar 「署名」 once (localStorage craft signature). */
+export function setCraftSignature(
+  state: HangarState,
+  name: string,
+  storage?: Pick<Storage, "getItem" | "setItem"> | null,
+): HangarState {
+  const result = saveCraftSignatureOnce(name, storage ?? undefined);
+  if (result.alreadySet) {
+    return {
+      ...state,
+      craftSignature: result.signature,
+      notice: `署名は確定済み（${result.signature}）· 変更不可`,
+    };
+  }
+  if (!result.ok) {
+    return { ...state, notice: "署名を入力してください" };
+  }
+  return {
+    ...state,
+    craftSignature: result.signature,
+    log: pushLog(state.log, `署名確定 ${result.signature}`),
+    notice: `署名を刻印用に確定: ${result.signature}`,
+  };
 }
 
 /** Select a circuit as the active lastCircuit (UI highlight / default restore). */
@@ -974,4 +1113,6 @@ export {
   canAffordYieldCost,
   formatCircuitBonusesJa,
   applyRepairDiscountToCost,
+  isCircuitLocked,
+  CRAFT_SIGNATURE_STORAGE_KEY,
 };

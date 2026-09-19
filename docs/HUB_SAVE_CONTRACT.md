@@ -152,7 +152,7 @@ type HubSaveV1 = {
 ## 10. 回路ボード（v2 追記）
 
 `HubSnapshot.circuits: HubCircuitRecord[]` を**加算**（欠落時は `[]`）。  
-各要素: `{ circuitId, circuitBoard: CircuitBoardState, outcome, updatedAt? }`。  
+各要素: `{ circuitId, circuitBoard: CircuitBoardState, outcome, updatedAt?, lastEditorName?, locked? }`（刻印・Perfect ロックは加算）。  
 版番号は **`v: 2` のまま**（inventory と同様）。ヘルパ: `upsertCircuitIntoHub` / `normalizeCircuits`。  
 詳細: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)。
 

@@ -549,6 +549,10 @@ import {
   parseCircuitBoardCompact,
   normalizeCircuitBoard,
   edgeCount,
+  isCircuitLocked,
+  isPerfectCircuitClearance,
+  sanitizeEditorName,
+  stampCircuitEditor,
   type EdgeMark,
 } from "./circuit-board";
 
@@ -655,7 +659,123 @@ console.log("shared selftest: sector-density + circuit-board ok");
   assert.equal(fromMap[0]!.circuitId, "alpha");
   assert.ok(HUB_LIMITS.maxCircuits >= 1);
 }
+
 console.log("shared hub-circuits selftest: ok");
+
+// --- circuit authorship + Perfect lock (additive) ---
+{
+  assert.equal(sanitizeEditorName("  職人A  "), "職人A");
+  assert.equal(sanitizeEditorName(""), undefined);
+  assert.equal(
+    isPerfectCircuitClearance({
+      outcome: "fully_awakened",
+      digitRate: 1,
+      loopClosed: true,
+    }),
+    true,
+  );
+  assert.equal(
+    isPerfectCircuitClearance({ outcome: "fully_awakened" }),
+    false,
+    "fully_awakened alone must not lock without perfect/metrics",
+  );
+  assert.equal(
+    isPerfectCircuitClearance({
+      outcome: "fully_awakened",
+      perfect: true,
+    }),
+    true,
+  );
+
+  const board = createEmptyCircuitBoard(4, 4, "lock-demo");
+  let hub = upsertCircuitIntoHub(INITIAL_HUB, {
+    circuitId: "lock_demo",
+    circuitBoard: board,
+    outcome: "bypass",
+    lastEditorName: "職人A",
+  });
+  assert.equal(hub.circuits[0]!.lastEditorName, "職人A");
+  assert.equal(hub.circuits[0]!.locked, undefined);
+  assert.equal(isCircuitLocked(hub.circuits[0]!), false);
+
+  hub = upsertCircuitIntoHub(hub, {
+    circuitId: "lock_demo",
+    circuitBoard: board,
+    outcome: "bypass",
+    lastEditorName: "職人B",
+  });
+  assert.equal(hub.circuits[0]!.lastEditorName, "職人B", "non-perfect refreshes 刻印");
+
+  hub = upsertCircuitIntoHub(hub, {
+    circuitId: "lock_demo",
+    circuitBoard: { ...board, perfect: true },
+    outcome: "fully_awakened",
+    lastEditorName: "職人C",
+    perfect: true,
+  });
+  assert.equal(hub.circuits[0]!.outcome, "fully_awakened");
+  assert.equal(hub.circuits[0]!.locked, true);
+  assert.equal(hub.circuits[0]!.lastEditorName, "職人C");
+  assert.equal(isCircuitLocked(hub.circuits[0]!), true);
+
+  const frozen = hub;
+  hub = upsertCircuitIntoHub(hub, {
+    circuitId: "lock_demo",
+    circuitBoard: createEmptyCircuitBoard(4, 4, "tamper"),
+    outcome: "offline",
+    lastEditorName: "侵入者",
+  });
+  assert.equal(hub.circuits[0]!.outcome, "fully_awakened", "locked refuses outcome override");
+  assert.equal(hub.circuits[0]!.lastEditorName, "職人C");
+  assert.equal(hub.circuits[0]!.circuitBoard.puzzleId, "lock-demo");
+  assert.equal(hub, frozen);
+
+  const stamped = stampCircuitEditor(board, "刻印X", {
+    outcome: "fully_awakened",
+    digitRate: 1,
+    loopClosed: true,
+  });
+  assert.equal(stamped.locked, true);
+  assert.equal(stamped.perfect, true);
+  assert.equal(stamped.lastEditorName, "刻印X");
+
+  const migrated = normalizeCircuits([
+    {
+      circuitId: "legacy_ok",
+      circuitBoard: createEmptyCircuitBoard(2, 2, "L"),
+      outcome: "offline",
+      lastEditorName: "旧職人",
+    },
+  ]);
+  assert.equal(migrated[0]!.lastEditorName, "旧職人");
+  assert.equal(migrated[0]!.locked, undefined);
+
+  const ttr = buildTradeToRestoreUrl({
+    circuitId: "lock_demo",
+    circuitBoard: hub.circuits[0]!.circuitBoard,
+    editorName: "職人C",
+    locked: true,
+    lastEditorName: "職人C",
+  });
+  const ttrP = parseTradeToRestoreSearch(new URL(ttr).search);
+  assert.equal(ttrP?.editorName, "職人C");
+  assert.equal(ttrP?.locked, true);
+
+  const rtt = buildRestoreToTradeUrl({
+    circuitId: "lock_demo",
+    circuitBoard: hub.circuits[0]!.circuitBoard,
+    outcome: "fully_awakened",
+    lastEditorName: "職人C",
+    locked: true,
+    perfect: true,
+  });
+  const rttP = parseRestoreToTradeSearch(new URL(rtt).search);
+  assert.equal(rttP?.lastEditorName, "職人C");
+  assert.equal(rttP?.locked, true);
+  assert.equal(rttP?.perfect, true);
+}
+console.log("shared circuit-lock selftest: ok");
+
 
 // --- hub frontProgress (HubSave v2 additive) ---
 {
