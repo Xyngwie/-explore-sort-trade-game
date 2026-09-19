@@ -102,6 +102,7 @@ function render() {
         <tr><td>validPieceBudget</td><td>${state.validPieceBudget}</td></tr>
         <tr><td>invalidPieceCount</td><td>${state.invalidPieceCount}</td></tr>
         <tr><td>isExtracted</td><td>${String(state.inbound.isExtracted)}</td></tr>
+        <tr><td>craftMultiplier</td><td>${(state.inbound.craftMultiplier ?? 1).toFixed(3)}</td></tr>
       </table>
       <p class="mono muted" style="margin-top:0.5rem">サンプル: ${escapeHtml(demoQueryExample())}</p>
     </div>

@@ -14,7 +14,7 @@
 | explore→sort URL 受取（`salvagedContainers` / `totalStockPieces` / `isExtracted`） | 本格 match-3 エンジン・特殊ピース |
 | 有効ピース予算＋無効（junk）比率 0.20 | 無効比率の探索品質連動 |
 | 盤上タップで同種連結 3+ 消去（ジャンクは不可） | v1 配合 UI |
-| 手数制限・結果画面 | 連鎖倍率の本調整（`craftMultiplier=1`） |
+| 手数制限・結果画面 | パズル連鎖由来の倍率本調整（Hub `craftMultiplier` 受取は §3） |
 | `yield*` 集計 ＋ `YieldBag` → `buildSortToTradeUrl` | HubSave / 修理 UI（trade 側） |
 
 ---
@@ -37,7 +37,8 @@
 
 - 盤は固定 6×8＋袋からの補充（巨大予算でも手数で打ち切り）
 - 消去は「連結グループ・タップ」のみ（スワイプやヒントなし）
-- `craftMultiplier` 固定 1.0
+- `craftMultiplier` 既定 1.0。explore→sort の `?craftMultiplier=`（テスト用）または `circuitBonuses` compact の craft、もしくはペイロードの任意 `craftMultiplier` があればそれを使う（Hub 回路ボーナス経由）
+- Columns 系落下／連鎖の手触りはビジョンのみ（[`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.2）。SORT_V2 経済ルールは変えない
 - 見た目は色付きセル＋1文字ラベル
 
 ---
@@ -64,6 +65,12 @@ npm run dev:sort
 
 ```text
 http://localhost:5174/?salvagedContainers=2&totalStockPieces=50&isExtracted=1
+```
+
+回路 craft 倍率のテスト例:
+
+```text
+http://localhost:5174/?salvagedContainers=2&totalStockPieces=50&isExtracted=1&craftMultiplier=1.100
 ```
 
 1. 「精製開始」→ 同色が3つ以上つながっているセルをタップ  

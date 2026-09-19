@@ -16,7 +16,7 @@ import { BALANCE, threatFromDensity,
   ENGAGE_BRIEFING_LABEL,
   threatFromInvadeSector
 } from "./game/balance";
-import { buildSortieOutcome, hubWearHandoffUrl, toExploreResult } from "./game/outcome";
+import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import type { Unit } from "./game/types";
 
 function wing(world: ReturnType<typeof createWorld>): Unit {
@@ -468,7 +468,15 @@ function advancePinned(
     ),
   );
   assert.equal(world.circuitDurabilityBuffer, 10);
+  assert.ok(Math.abs(world.circuitCraftMultiplier - 1.1) < 0.001);
   assert.ok(world.note.includes("回路緩衝 10"));
+  assert.ok(world.note.includes("craft×"));
+  world.extracted = true;
+  world.salvaged = 2;
+  const sortUrl = sortHandoffUrl(world);
+  assert.ok(sortUrl.includes("craftMultiplier=1.100"), "explore→sort forwards craft");
+  world.extracted = false;
+  world.salvaged = 0;
   startSortie(world);
   world.phase = "result";
   world.extracted = false;

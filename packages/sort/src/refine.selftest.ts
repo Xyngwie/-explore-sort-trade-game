@@ -11,6 +11,7 @@ import {
   tapCell,
   toCraftingResult,
   createRefineFromLocationSearch,
+  resolveCraftMultiplier,
   SORT_V0_RULES,
   type RefineLive,
 } from "./refine";
@@ -134,6 +135,43 @@ function assert(cond: unknown, msg: string): asserts cond {
   });
   assert(result.yieldBag!.mat_ration === expected.mat_ration, "mat_ration");
   assert(result.yieldBag!.mat_scrap === expected.mat_scrap, "mat_scrap");
+  assert(result.craftMultiplier === 1, "default craftMultiplier 1");
+}
+
+// craftMultiplier from ?craftMultiplier= scales yieldBag
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=12&isExtracted=1&craftMultiplier=1.100",
+  );
+  assert(
+    Math.abs(resolveCraftMultiplier(s.inbound) - 1.1) < 0.001,
+    "resolve inbound craft",
+  );
+  assert(s.note.includes("craft×"), "note mentions craft");
+  s = {
+    ...s,
+    phase: "result",
+    cleared: { food: 10, material: 0, energy: 0 },
+  };
+  const result = toCraftingResult(s);
+  assert(Math.abs(result.craftMultiplier - 1.1) < 0.001, "result craft");
+  const unscaled = yieldBagFromClearedCounts({ food: 10, material: 0, energy: 0 });
+  const ration = unscaled.mat_ration ?? 0;
+  assert(
+    result.yieldBag!.mat_ration === Math.floor(ration * 1.1),
+    "yieldBag scaled by craftMultiplier",
+  );
+}
+
+// circuitBonuses compact craft also accepted
+{
+  const s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=12&isExtracted=1&circuitBonuses=craft:1.050",
+  );
+  assert(
+    Math.abs(resolveCraftMultiplier(s.inbound) - 1.05) < 0.001,
+    "circuitBonuses craft",
+  );
 }
 
 // settleBoard fills from bag

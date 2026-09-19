@@ -61,7 +61,7 @@ export const PIECES_PER_CONTAINER = 25;
 export const HUB_SAVE_STORAGE_KEY = "wreckline.hubSave.v1";
 
 export const HANDOFF_QUERY_KEYS = {
-  exploreToSort: ["salvagedContainers", "totalStockPieces", "isExtracted"] as const,
+  exploreToSort: ["salvagedContainers", "totalStockPieces", "isExtracted", "craftMultiplier", "circuitBonuses"] as const,
   sortToTrade: ["importMaterials", "craftMultiplier", "yieldBag"] as const,
   tradeToExplore: [
     "deployableMechs",
