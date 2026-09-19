@@ -21,7 +21,7 @@
 |---|---|---|
 | trade→explore | `deployableMechs`（件数）+ `startingAmmo` | **`deployedInstanceIds`（健在のみ）** + `startingAmmo`（件数は派生） |
 | 配備可否 | 件数があれば出せる想定 | `operational`（健在）のみ。`needs_repair` / `destroyed` は選択不可 |
-| explore→sort | 回収缶・ピース・生還フラグ | **変更なし**（サルベージ経路） |
+| explore→sort | 回収缶・ピース・生還フラグ | **加算可:** 任意 `craftMultiplier`（Hub `circuitBonuses.craft` の転送）。サルベージ主経路は不変 |
 | explore→hub | 摩耗なし（件数ハンドオフのまま） | **`returnKind` + 機体ごとの wear 報告** |
 | 拠点の適用 | ウェアは後続／非ゴール扱いだった | hub が `OwnedMech` に耐久を書き戻す |
 

@@ -273,13 +273,22 @@ export function parseInboundOrDemo(search: string): {
       parsed.totalStockPieces > 0
         ? parsed.totalStockPieces
         : stockFromContainers(parsed.salvagedContainers);
+    const craft =
+      parsed.craftMultiplier != null && Number.isFinite(parsed.craftMultiplier)
+        ? parsed.craftMultiplier
+        : undefined;
+    const craftNote =
+      craft != null && craft !== 1
+        ? ` · craft×${craft.toFixed(2)}`
+        : "";
     return {
       inbound: {
         salvagedContainers: parsed.salvagedContainers,
         totalStockPieces: stock,
         isExtracted: parsed.isExtracted,
+        ...(craft != null ? { craftMultiplier: craft } : {}),
       },
-      note: `explore 受取 · 缶 ${parsed.salvagedContainers} · 予算 ${stock} · 生還 ${parsed.isExtracted ? "はい" : "いいえ"}`,
+      note: `explore 受取 · 缶 ${parsed.salvagedContainers} · 予算 ${stock} · 生還 ${parsed.isExtracted ? "はい" : "いいえ"}${craftNote}`,
       fromQuery: true,
     };
   }
@@ -420,8 +429,16 @@ export function scrapLossFromState(s: RefineLive): number {
   return onBoard + inBag;
 }
 
+export function resolveCraftMultiplier(inbound: ExploreToSortPayload): number {
+  const fromInbound = inbound.craftMultiplier;
+  if (fromInbound != null && Number.isFinite(fromInbound) && fromInbound > 0) {
+    return fromInbound;
+  }
+  return SORT_V0_RULES.craftMultiplier;
+}
+
 export function toCraftingResult(s: RefineLive): CraftingPuzzleResult {
-  const craftMultiplier = SORT_V0_RULES.craftMultiplier;
+  const craftMultiplier = resolveCraftMultiplier(s.inbound);
   const yieldBag: YieldBag = yieldBagFromClearedWithMultiplier(
     s.cleared,
     craftMultiplier,

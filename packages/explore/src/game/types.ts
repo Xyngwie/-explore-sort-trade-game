@@ -123,6 +123,8 @@ export type World = {
   deployedDurability: Record<string, number>;
   /** Hub circuit durability buffer (wear absorb); from trade circuitBonuses. */
   circuitDurabilityBuffer: number;
+  /** Hub circuit craft multiplier; forwarded explore→sort when > 1. */
+  circuitCraftMultiplier: number;
   /** Invade sector when opened via invade→explore; null for direct / trade-only. */
   invadeSector: InvadeSectorContext | null;
   /** Resolved threat from density (or baseline). */

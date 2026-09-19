@@ -112,6 +112,26 @@ assert.equal(exploreParsed?.salvagedContainers, 6);
 assert.equal(exploreParsed?.totalStockPieces, 150);
 assert.equal(exploreParsed?.isExtracted, true);
 
+const exploreCraftUrl = buildExploreToSortUrl({
+  salvagedContainers: 2,
+  totalStockPieces: 50,
+  isExtracted: true,
+  craftMultiplier: 1.1,
+});
+const exploreCraftParsed = parseExploreToSortSearch(new URL(exploreCraftUrl).search);
+assert.ok(Math.abs((exploreCraftParsed?.craftMultiplier ?? 0) - 1.1) < 0.001);
+assert.ok(new URL(exploreCraftUrl).searchParams.get("craftMultiplier")?.startsWith("1.100"));
+
+const fromCircuit = parseExploreToSortSearch(
+  "salvagedContainers=1&totalStockPieces=25&isExtracted=1&circuitBonuses=craft:1.050;dur:5",
+);
+assert.ok(Math.abs((fromCircuit?.craftMultiplier ?? 0) - 1.05) < 0.001);
+
+const overrideWins = parseExploreToSortSearch(
+  "salvagedContainers=1&totalStockPieces=25&isExtracted=1&craftMultiplier=1.200&circuitBonuses=craft:1.050",
+);
+assert.ok(Math.abs((overrideWins?.craftMultiplier ?? 0) - 1.2) < 0.001);
+
 const tradeUrl = buildSortToTradeUrlFromResult({
   yieldFood: 10,
   yieldMaterial: 20,

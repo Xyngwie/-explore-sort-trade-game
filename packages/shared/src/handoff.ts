@@ -33,6 +33,12 @@ export type ExploreToSortPayload = {
   salvagedContainers: number;
   totalStockPieces: number;
   isExtracted: boolean;
+  /**
+   * Optional hub circuit craft multiplier (typically 1.0–1.25).
+   * From deploy circuitBonuses or explicit ?craftMultiplier= (testing).
+   * Omitted / unset → sort uses 1.0.
+   */
+  craftMultiplier?: number;
 };
 
 /** sort → trade
@@ -199,6 +205,12 @@ function parseLooseBool(value: string | null, fallback = false): boolean {
   return fallback;
 }
 
+export function normalizeCraftMultiplier(raw: unknown, fallback = 1): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n;
+}
+
 export function buildExploreToSortUrl(
   payload: ExploreToSortPayload,
   baseUrl: string = resolveModuleBaseUrl("sort"),
@@ -212,6 +224,12 @@ export function buildExploreToSortUrl(
   u.searchParams.set("salvagedContainers", String(containers));
   u.searchParams.set("totalStockPieces", String(stock));
   u.searchParams.set("isExtracted", payload.isExtracted ? "1" : "0");
+  if (payload.craftMultiplier != null) {
+    const m = normalizeCraftMultiplier(payload.craftMultiplier, 1);
+    if (m !== 1) {
+      u.searchParams.set("craftMultiplier", m.toFixed(3));
+    }
+  }
   return u.toString();
 }
 
@@ -233,10 +251,19 @@ export function parseExploreToSortSearch(
     stockParam == null || stockParam === ""
       ? salvagedContainers * PIECES_PER_CONTAINER
       : parseNonNegInt(stockParam, 0);
+  // Precedence: explicit craftMultiplier > circuitBonuses compact craft > omit (sort defaults 1).
+  let craftMultiplier: number | undefined;
+  if (p.has("craftMultiplier")) {
+    craftMultiplier = normalizeCraftMultiplier(p.get("craftMultiplier"), 1);
+  } else if (p.has("circuitBonuses")) {
+    const bon = parseCircuitBonusesCompact(p.get("circuitBonuses"));
+    if (bon.craftMultiplier > 1) craftMultiplier = bon.craftMultiplier;
+  }
   return {
     salvagedContainers,
     totalStockPieces,
     isExtracted: parseLooseBool(p.get("isExtracted"), false),
+    ...(craftMultiplier != null ? { craftMultiplier } : {}),
   };
 }
 

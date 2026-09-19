@@ -87,11 +87,15 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
 
 export function sortHandoffUrl(world: World): string {
   const result = toExploreResult(world);
+  const craft = world.circuitCraftMultiplier;
   return buildExploreToSortUrl(
     {
       salvagedContainers: result.salvagedContainers,
       totalStockPieces: result.totalStockPieces,
       isExtracted: result.isExtracted,
+      ...(craft != null && Number.isFinite(craft) && craft > 1
+        ? { craftMultiplier: craft }
+        : {}),
     },
     resolveModuleBaseUrl("sort"),
   );

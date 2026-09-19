@@ -112,6 +112,8 @@ export type SortieBootstrap = {
   deployedDurability: Record<string, number>;
   /** Hub circuit wear buffer from circuitBonuses query. */
   circuitDurabilityBuffer: number;
+  /** Hub circuit craft multiplier from circuitBonuses (default 1). */
+  circuitCraftMultiplier: number;
   /** Parsed invade→explore sector; null when keys absent. */
   invadeSector: InvadeSectorContext | null;
 };
@@ -173,6 +175,11 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     0,
     Math.floor(inbound?.circuitBonuses?.durabilityBuffer ?? 0),
   );
+  const rawCraft = inbound?.circuitBonuses?.craftMultiplier;
+  const circuitCraftMultiplier =
+    rawCraft != null && Number.isFinite(rawCraft) && rawCraft > 0
+      ? rawCraft
+      : 1;
   if (invadeSector != null) {
     const flags =
       invadeSector.intelFlags.length > 0
@@ -191,8 +198,8 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
   if (circuitDurabilityBuffer > 0) {
     note += ` · 回路緩衝 ${circuitDurabilityBuffer}`;
   }
-  if (inbound?.circuitBonuses != null && inbound.circuitBonuses.craftMultiplier > 1) {
-    note += ` · craft×${inbound.circuitBonuses.craftMultiplier.toFixed(2)}`;
+  if (circuitCraftMultiplier > 1) {
+    note += ` · craft×${circuitCraftMultiplier.toFixed(2)}`;
   }
 
   return {
@@ -203,6 +210,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     deployedInstanceIds,
     deployedDurability,
     circuitDurabilityBuffer,
+    circuitCraftMultiplier,
     invadeSector,
   };
 }
@@ -280,6 +288,12 @@ export function createWorld(boot: SortieBootstrap): World {
     deployedInstanceIds: [...boot.deployedInstanceIds],
     deployedDurability: { ...boot.deployedDurability },
     circuitDurabilityBuffer: Math.max(0, Math.floor(boot.circuitDurabilityBuffer ?? 0)),
+    circuitCraftMultiplier:
+      boot.circuitCraftMultiplier != null &&
+      Number.isFinite(boot.circuitCraftMultiplier) &&
+      boot.circuitCraftMultiplier > 0
+        ? boot.circuitCraftMultiplier
+        : 1,
     invadeSector: boot.invadeSector
       ? {
           sectorX: boot.invadeSector.sectorX,
