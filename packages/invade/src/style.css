@@ -129,3 +129,64 @@ a.btn {
   border: 1px solid #3fb950;
   color: #7ee787;
 }
+
+/* Sector-internal minesweeper grid */
+.ms-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--ms, 8), 1fr);
+  gap: 2px;
+  margin-top: 0.75rem;
+  max-width: 22rem;
+}
+.ms-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  border: 1px solid #2a313c;
+  background: #21262d;
+  color: #c9d1d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ms-cell.closed:hover {
+  outline: 1px solid #58a6ff;
+  z-index: 1;
+}
+.ms-cell.open {
+  background: #0d1014;
+  cursor: default;
+}
+.ms-cell.open.blank {
+  background: #161b22;
+}
+.ms-cell.open.hq {
+  background: #1a3320;
+  border-color: #3fb950;
+  font-size: 0.55rem;
+  color: #7ee787;
+}
+.ms-cell.flagged {
+  background: #3d3420;
+  color: #f0c14b;
+  box-shadow: inset 0 0 0 1px rgba(240, 193, 75, 0.45);
+}
+.ms-cell.open.mine {
+  background: #3d1f1f;
+  color: #f85149;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.65);
+}
+.ms-cell.n1 { color: #58a6ff; }
+.ms-cell.n2 { color: #3fb950; }
+.ms-cell.n3 { color: #f85149; }
+.ms-cell.n4 { color: #a371f7; }
+.ms-cell.n5 { color: #d29922; }
+.ms-cell.n6 { color: #39c5cf; }
+.ms-cell.n7 { color: #e6edf3; }
+.ms-cell.n8 { color: #8b949e; }
