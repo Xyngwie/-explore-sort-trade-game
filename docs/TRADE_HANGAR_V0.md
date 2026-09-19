@@ -16,7 +16,7 @@
 | 帰還ウェア適用（URL またはシミュ） | sort パズル本編 |
 | 集計修理（`applyRepair`）と型付き修理（`EXAMPLE_TYPED_REPAIR_COST`） | 部位別修理・バランス本調整 |
 | 解体（`applyScrap`） | 見た目のアート |
-| HubSave v2 永続化 + `inventory: YieldBag` | HubSave v3 版上げ |
+| HubSave v2 永続化 + `inventory: YieldBag` + `circuits` | HubSave v3 版上げ |
 | sort→trade 取込（`importMaterials` + `yieldBag`） | |
 
 ---
@@ -27,11 +27,11 @@
 | 方向 | キー（要約） | Hub 状態 |
 |---|---|---|
 | trade → invade | `fromHub` + 任意艦隊要約 | 「戦線へ（任意）」リンク（`buildTradeToInvadeUrl`） |
-| invade → trade | `sectorX/Y` + `density` + `intelFlags?` | 取込 → UI 表示 + `wreckline.hubM45Stash.v0`（HubSave 未拡張） |
-| trade → restore | `circuitId?` + `circuitBoard?` | 「回路修復へ」リンク（スタッシュ/シード盤があれば付与） |
-| restore → trade | `circuitBoard` + `circuitOutcome` | 取込 → UI 表示 + 同上スタッシュ |
+| invade → trade | `sectorX/Y` + `density` + `intelFlags?` | 取込 → UI 表示 + `wreckline.hubM45Stash.v0`（セクターのみ・HubSave 未拡張） |
+| trade → restore | `circuitId?` + `circuitBoard?` | 「回路修復へ」＋保有回路一覧から選択 URL（`HubSave.circuits` / シード） |
+| restore → trade | `circuitBoard` + `circuitOutcome` | 取込 → `HubSave.hub.circuits` に upsert（旧 `hubM45Stash` から移行可） |
 
-**非ゴールのまま:** HubSave への `CircuitBoardState` 本組み込み · invade 本 salvage / YieldBag。
+**非ゴールのまま:** invade 本 salvage / YieldBag · セクターの HubSave 本組み込み。
 
 詳細: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
 
@@ -61,8 +61,9 @@ sort から ?importMaterials=&yieldBag= → materials 加算 + inventory マー�
 
 - キー: 既存どおり `wreckline.hubSave.v1`（中身 `v: 2`）
 - `HubSnapshot.inventory: YieldBag` を**加算**（欠落時は `{}`）
-- ヘルパ: `importYieldBagIntoHub`（`packages/shared`）
-- 版番号は 2 のまま（破壊的変更なし）
+- `HubSnapshot.circuits: HubCircuitRecord[]` を**加算**（欠落時は `[]`；`circuitId` + `CircuitBoardState` + `outcome`）
+- ヘルパ: `importYieldBagIntoHub` / `upsertCircuitIntoHub`（`packages/shared`）
+- 版番号は 2 のまま（破壊的変更なし）。旧 `wreckline.hubM45Stash.v0` の回路は起動時に HubSave へ移行
 
 ---
 
@@ -116,8 +117,8 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 8. 「シード読込」で混合艦隊 + YieldBag + 弾薬が HubSave に残り、リロード後も維持  
 9. シード読込 → 型付き修理で要修理機が健在になり、出撃 URL にその instanceId が含まれる（不足時はメッセージのみ）  
 10. 「戦線へ」URL に `fromHub=1`（+ 任意 `deployableMechs` / `startingAmmo`）が付く  
-11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（シードまたはスタッシュ優先）  
-12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示・スタッシュされる（HubSave 版上げなし）
+11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（HubSave.circuits 選択またはシード優先）  
+12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
 
 ---
 
@@ -149,4 +150,4 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 |---|---|
 | `packages/trade/src/main.ts` | ハンガー UI（シード読込ボタン含む） |
 | `packages/trade/src/hangar.ts` | 状態遷移・永続化・ハンドオフ取込・`loadPlaytestSeed` |
-| `packages/shared/src/hub-save.ts` | `inventory` / `importYieldBagIntoHub` |
+| `packages/shared/src/hub-save.ts` | `inventory` / `circuits` / `importYieldBagIntoHub` / `upsertCircuitIntoHub` |

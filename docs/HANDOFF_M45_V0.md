@@ -2,7 +2,7 @@
 
 **ステータス:** 共有 KEY CONTRACT のみ（`packages/shared`）· 2026-09-19  
 **目的:** Module 4（invade）・Module 5（restore）と Hub（Module 3 trade）の間で使う **URL クエリ鍵・型・build/parse** を先に固定する。  
-**非ゴール（本ドキュメント / 本 PR）:** モジュール間ナビの本配線・ボタン遷移・HubSave 版上げ・二重払い salvage。
+**非ゴール（契約ドキュメント）:** モジュール間ナビの本配線・二重払い salvage。**追記:** 回路永続は HubSave v2 加算（`hub.circuits`）で Module 3 実装済み。
 
 関連: [`INVADE_V0.md`](./INVADE_V0.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)、[`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)、[`EXPLORE_IO_V2.md`](./EXPLORE_IO_V2.md)、`packages/shared` の `handoff.ts` / `constants.ts` / `circuit-board.ts`。
 
@@ -130,7 +130,7 @@ type RestoreToTradePayload = {
 | invade / restore の **本ナビ配線**（ボタンで実遷移） | 契約先行。UI はスタブコメントまで |
 | invade からの **本 salvage / 満額 YieldBag** | 報酬分割（PRODUCT_VISION §4 / INVADE_V0） |
 | invade **必須化** | quick-battle / 直接 explore を残す |
-| HubSave スキーマ版上げへの回路本組み込み | restore 契約のみ。永続は後続 |
+| HubSave v3 版上げ | 回路は HubSave v2 加算（`hub.circuits`）。セクター永続は後続 |
 | 既存 explore/sort/trade/wear キーの破壊的変更 | 互換維持 |
 
 ---

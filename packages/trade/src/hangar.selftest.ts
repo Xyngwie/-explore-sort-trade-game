@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  HUB_SAVE_STORAGE_KEY,
   MECH_FLEET_RULES,
   buildExploreToHubWearUrl,
   buildInvadeToTradeUrl,
   buildRestoreToTradeUrl,
   createEmptyCircuitBoard,
+  parseHubSave,
   toExploreToHubWearPayload,
 } from "@estg/shared";
 import {
@@ -26,6 +28,7 @@ import {
   markDeployed,
   repairTyped,
   resetHangar,
+  selectCircuit,
   simulateReturn,
   yieldBagFromTypedRepairCost,
 } from "./hangar";
@@ -235,16 +238,23 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 }
 
 
-// M4/M5 handoff: trade→invade / trade→restore builders + ingest stash
+// M4/M5 handoff: trade→invade / trade→restore + HubSave.circuits persist
 {
   const m45Storage = memoryStorage();
   (globalThis as unknown as { localStorage: Storage }).localStorage = m45Storage;
 
   let hs = resetHangar(m45Storage);
   hs = loadPlaytestSeed(hs, m45Storage);
-  assert.ok(hs.lastCircuit, "seed should stash demo circuit");
+  assert.ok(hs.lastCircuit, "seed should set demo circuit");
   assert.equal(hs.lastCircuit!.circuitId, SEED_CIRCUIT_ID);
   assert.equal(hs.lastCircuit!.outcome, "offline");
+  assert.equal(hs.hub.circuits.length, 1, "seed must write HubSave.circuits");
+  assert.equal(hs.hub.circuits[0]!.circuitId, SEED_CIRCUIT_ID);
+
+  const rawSave = m45Storage.getItem(HUB_SAVE_STORAGE_KEY);
+  assert.ok(rawSave);
+  const parsedSave = parseHubSave(JSON.parse(rawSave!));
+  assert.equal(parsedSave?.hub.circuits.length, 1);
 
   const invadeUrl = buildInvadeUrl(hs);
   assert.ok(invadeUrl.includes("fromHub=1"));
@@ -288,13 +298,63 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(restored.state.lastCircuit?.outcome, "bypass");
   assert.equal(restored.state.lastCircuit?.circuitId, "board_demo");
   assert.ok(restored.state.log.some((l) => l.includes("restore 回路")));
+  assert.equal(restored.state.hub.circuits[0]!.outcome, "bypass");
+  assert.equal(restored.state.hub.circuits[0]!.circuitId, "board_demo");
+
+  const rtt2 = buildRestoreToTradeUrl({
+    circuitId: "board_extra",
+    circuitBoard: createEmptyCircuitBoard(4, 4, "extra"),
+    outcome: "fully_awakened",
+  });
+  const restored2 = ingestLocationSearch(restored.state, new URL(rtt2).search);
+  assert.equal(restored2.state.hub.circuits.length, 2);
+  assert.equal(restored2.state.hub.circuits[0]!.circuitId, "board_extra");
+
+  const selected = selectCircuit(restored2.state, "board_demo");
+  assert.equal(selected.lastCircuit?.circuitId, "board_demo");
+  const restoreSelected = buildRestoreUrl(selected, "board_demo");
+  assert.ok(restoreSelected.includes("circuitId=board_demo"));
+  assert.ok(restoreSelected.includes("circuitBoard="));
 
   const reloaded = createInitialHangar(m45Storage);
   assert.equal(reloaded.lastInvadeSector?.sectorX, 3);
-  assert.equal(reloaded.lastCircuit?.outcome, "bypass");
+  assert.equal(reloaded.hub.circuits.length, 2);
+  assert.equal(reloaded.lastCircuit?.outcome, "fully_awakened");
+  assert.equal(
+    reloaded.hub.circuits.find((c) => c.circuitId === "board_demo")?.outcome,
+    "bypass",
+  );
+
+  // Legacy stash → HubSave migration when hub has no circuits
+  {
+    const mig = memoryStorage();
+    (globalThis as unknown as { localStorage: Storage }).localStorage = mig;
+    mig.setItem(
+      HUB_M45_STASH_STORAGE_KEY,
+      JSON.stringify({
+        lastInvadeSector: null,
+        lastCircuit: {
+          circuitId: "legacy_board",
+          circuitBoard: createEmptyCircuitBoard(8, 8, "legacy"),
+          outcome: "offline",
+        },
+        updatedAt: "2026-09-01T00:00:00.000Z",
+      }),
+    );
+    const migrated = createInitialHangar(mig);
+    assert.equal(migrated.hub.circuits.length, 1);
+    assert.equal(migrated.hub.circuits[0]!.circuitId, "legacy_board");
+    const hubRaw = mig.getItem(HUB_SAVE_STORAGE_KEY);
+    assert.ok(hubRaw);
+    assert.equal(
+      parseHubSave(JSON.parse(hubRaw!))?.hub.circuits[0]?.circuitId,
+      "legacy_board",
+    );
+  }
 
   const empty = resetHangar(m45Storage);
   assert.equal(empty.lastCircuit, null);
+  assert.equal(empty.hub.circuits.length, 0);
   const emptyRestore = buildRestoreUrl(empty);
   assert.ok(emptyRestore.includes("circuitBoard="));
   assert.equal(buildSeedCircuitBoard().puzzleId, "stub-8");

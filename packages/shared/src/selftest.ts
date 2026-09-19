@@ -36,6 +36,8 @@ import {
   parseHubSave,
   importMaterialsIntoHub,
   importYieldBagIntoHub,
+  upsertCircuitIntoHub,
+  normalizeCircuits,
   INITIAL_HUB,
   HUB_LIMITS,
 } from "./hub-save";
@@ -512,6 +514,7 @@ import {
   encodeEdgeState,
   encodeCircuitBoardCompact,
   parseCircuitBoardCompact,
+  normalizeCircuitBoard,
   edgeCount,
   type EdgeMark,
 } from "./circuit-board";
@@ -552,9 +555,74 @@ assert.equal(chebyshevDistance(-2, 5, 0, 0), 5);
   assert.ok(empty.every((m) => m === 0));
   // size budget: packed payload alone should be well under 0.4KB
   assert.ok(board.edgeState.length < 100, `edgeState too long: ${board.edgeState.length}`);
+  assert.ok(normalizeCircuitBoard(board));
+  assert.equal(normalizeCircuitBoard({ v: 1, cols: 0, rows: 8, edgeState: "" }), null);
 }
 
+
 console.log("shared selftest: sector-density + circuit-board ok");
+
+// --- hub circuits (HubSave v2 additive) ---
+{
+  assert.deepEqual(INITIAL_HUB.circuits, []);
+  const board = createEmptyCircuitBoard(8, 8, "stub-8");
+  let hub = upsertCircuitIntoHub(INITIAL_HUB, {
+    circuitId: "board_demo",
+    circuitBoard: board,
+    outcome: "bypass",
+  });
+  assert.equal(hub.circuits.length, 1);
+  assert.equal(hub.circuits[0]!.circuitId, "board_demo");
+  assert.equal(hub.circuits[0]!.outcome, "bypass");
+  assert.equal(hub.circuits[0]!.circuitBoard.outcome, "bypass");
+
+  hub = upsertCircuitIntoHub(hub, {
+    circuitId: "board_demo",
+    circuitBoard: { ...board, puzzleId: "stub-8b" },
+    outcome: "fully_awakened",
+  });
+  assert.equal(hub.circuits.length, 1, "upsert same id must replace");
+  assert.equal(hub.circuits[0]!.outcome, "fully_awakened");
+
+  hub = upsertCircuitIntoHub(hub, {
+    circuitId: "board_other",
+    circuitBoard: createEmptyCircuitBoard(4, 4, "small"),
+    outcome: "offline",
+  });
+  assert.equal(hub.circuits.length, 2);
+  assert.equal(hub.circuits[0]!.circuitId, "board_other", "most recent first");
+
+  const save = createHubSave(hub);
+  assert.equal(save.v, 2);
+  const parsed = parseHubSave(save);
+  assert.ok(parsed);
+  assert.equal(parsed!.hub.circuits.length, 2);
+  assert.equal(parsed!.hub.circuits[0]!.circuitId, "board_other");
+
+  const legacyNoCircuits = parseHubSave({
+    v: 2,
+    savedAt: "2026-09-01T00:00:00.000Z",
+    hub: {
+      credits: 1,
+      materials: 2,
+      fleet: [],
+      ammoLoad: { ammo_standard: 0, ammo_ap: 0, ammo_hp: 0 },
+      importedMaterials: 0,
+      selectedMechId: "mech_gen1",
+      selectedAmmoId: "ammo_standard",
+    },
+  });
+  assert.ok(legacyNoCircuits);
+  assert.deepEqual(legacyNoCircuits!.hub.circuits, []);
+
+  const fromMap = normalizeCircuits({
+    alpha: { circuitBoard: board, outcome: "offline" },
+  });
+  assert.equal(fromMap.length, 1);
+  assert.equal(fromMap[0]!.circuitId, "alpha");
+  assert.ok(HUB_LIMITS.maxCircuits >= 1);
+}
+console.log("shared hub-circuits selftest: ok");
 
 // --- M4/M5 handoff key contracts ---
 assert.ok(HANDOFF_QUERY_KEYS.tradeToInvade.includes("fromHub"));

@@ -33,6 +33,7 @@ import {
   resetHangar,
   scrapMech,
   selectAllDeployable,
+  selectCircuit,
   setDeploySelection,
   simulateReturn,
   statusClass,
@@ -167,6 +168,44 @@ function fleetCards(s: HangarState): string {
     .join("");
 }
 
+
+function circuitRows(s: HangarState): string {
+  const list = s.hub.circuits ?? [];
+  if (list.length === 0) {
+    return `<p class="muted" style="margin:0.5rem 0 0">回路なし（restore 取込またはシード読込で HubSave に残ります）</p>`;
+  }
+  return `<table style="margin-top:0.5rem">
+    <thead><tr><th>circuitId</th><th>outcome</th><th></th></tr></thead>
+    <tbody>
+      ${list
+        .map((c) => {
+          const active =
+            s.lastCircuit?.circuitId === c.circuitId ? " · 選択中" : "";
+          const url = buildRestoreUrl(s, c.circuitId);
+          return `<tr>
+            <td>
+              <span class="mono">${escapeHtml(c.circuitId)}</span>
+              ${
+                c.circuitBoard.puzzleId
+                  ? `<div class="mono muted">${escapeHtml(c.circuitBoard.puzzleId)}</div>`
+                  : ""
+              }
+              <div class="muted" style="font-size:0.75rem">${escapeHtml(active.trim())}</div>
+            </td>
+            <td>${escapeHtml(circuitOutcomeLabelJa(c.outcome))} <span class="mono muted">(${escapeHtml(c.outcome)})</span></td>
+            <td>
+              <div class="row" style="margin:0">
+                <button type="button" class="secondary" data-act="select-circuit" data-id="${escapeHtml(c.circuitId)}">選択</button>
+                <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">修復へ</a>
+              </div>
+            </td>
+          </tr>`;
+        })
+        .join("")}
+    </tbody>
+  </table>`;
+}
+
 function render() {
   const deployUrl = buildDeployUrl(state);
   const invadeUrl = buildInvadeUrl(state);
@@ -241,10 +280,10 @@ function render() {
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">戦線 / 回路（M4·M5）</h2>
-      <p class="muted" style="margin:0 0 0.5rem">任意ルート。本 salvage は払わない。結果は HubSave 未対応のため UI + localStorage スタッシュ。</p>
+      <p class="muted" style="margin:0 0 0.5rem">任意ルート。本 salvage は払わない。回路結果は HubSave.circuits に永続（旧 hubM45Stash から移行可）。セクターはスタッシュのみ。</p>
       <div class="row">
         <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener">戦線へ（任意）</a>
-        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener">回路修復へ</a>
+        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener">回路修復へ（選択中）</a>
       </div>
       ${
         state.lastInvadeSector
@@ -255,11 +294,8 @@ function render() {
             }</p>`
           : `<p class="muted" style="margin-top:0.75rem">セクター未取込（invade → ?sectorX=&sectorY=&density=）</p>`
       }
-      ${
-        state.lastCircuit
-          ? `<p class="ok" style="margin-top:0.35rem">直近回路: ${escapeHtml(state.lastCircuit.circuitId ?? state.lastCircuit.circuitBoard.puzzleId ?? "—")} → ${escapeHtml(circuitOutcomeLabelJa(state.lastCircuit.outcome))} <span class="mono muted">(${escapeHtml(state.lastCircuit.outcome)})</span></p>`
-          : `<p class="muted" style="margin-top:0.35rem">回路未取込（restore → ?circuitBoard=&circuitOutcome=）。シード読込でデモ盤をスタッシュ。</p>`
-      }
+      <h3 style="font-size:0.9rem;margin:0.75rem 0 0">保有回路（HubSave）</h3>
+      ${circuitRows(state)}
       <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(invadeUrl)}</p>
       <p class="mono muted" style="margin-top:0.35rem">${escapeHtml(restoreUrl)}</p>
     </div>
@@ -316,6 +352,7 @@ function render() {
       const act = el.dataset.act!;
       if (act === "repair-classic") state = repairClassic(state, id);
       else if (act === "repair-typed") state = repairTyped(state, id);
+      else if (act === "select-circuit") state = selectCircuit(state, id);
       else if (act === "scrap") {
         if (!window.confirm(`解体しますか？\n${id}`)) return;
         state = scrapMech(state, id);

@@ -22,7 +22,7 @@ Slitherlink 系の **精密回路修復**。日常の薄利多売（sort）と�
 | 含む（仕様として書く） | 含まない（非ゴール） |
 |---|---|
 | 成果状態: Fully Awakened / Bypass / Offline | 本編 Slitherlink ソルバ・生成器 |
-| `CircuitBoardState` インタフェース草案 | HubSave への本統合・永続キー確定 |
+| `CircuitBoardState` インタフェース草案 | HubSave v3 版上げ（v2 加算は trade 側で実施） |
 | `edgeState` のサイズ感と encode/decode スタブ | タイマー／タイムアタック |
 | 薄いスタブページ「精密回路修復」 | explore/sort/trade/invade への **UI ナビ配線** |
 | 後続スタブ受け入れ条件 | 報酬経済の本バランス |
@@ -101,11 +101,16 @@ export interface CircuitBoardState {
 - 制限タイマー／タイムアタック失敗
 - 他モジュールへの **UI ナビ結線**（キー契約は HANDOFF_M45）
 - 自動ソルバ・ヒントエンジン
-- HubSave スキーマ版上げへの本組み込み
+- HubSave v3 版上げ（`circuits` は HubSave v2 加算で trade 永続済み）
 - sort の日常ループへの強制挿入
 
 ---
 
+
+## 5.4. Hub 永続（Module 3）
+
+restore→trade 取込後、回路は **`HubSave.hub.circuits`**（`HubCircuitRecord`: `circuitId` + `circuitBoard` + `outcome`）に upsert される。  
+trade ハンガーの一覧から選択して trade→restore URL を開ける。詳細: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)。
 
 ## 5.5. ハンドオフ契約（キーのみ）
 
