@@ -113,3 +113,19 @@ a.btn {
 .btn.secondary:hover {
   background: #30363d;
 }
+.cell.mark-flagged {
+  outline-color: #f0c14b;
+  box-shadow: inset 0 0 0 1px rgba(240, 193, 75, 0.45);
+}
+.cell.mark-cleared {
+  box-shadow: inset 0 0 0 1px rgba(63, 185, 80, 0.55);
+}
+.cell.mark-hazard {
+  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.65);
+  font-weight: 700;
+}
+.ok-banner {
+  background: #1a3320;
+  border: 1px solid #3fb950;
+  color: #7ee787;
+}
