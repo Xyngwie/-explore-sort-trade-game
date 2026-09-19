@@ -155,3 +155,15 @@ type HubSaveV1 = {
 各要素: `{ circuitId, circuitBoard: CircuitBoardState, outcome, updatedAt? }`。  
 版番号は **`v: 2` のまま**（inventory と同様）。ヘルパ: `upsertCircuitIntoHub` / `normalizeCircuits`。  
 詳細: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)。
+
+---
+
+## 11. 前線マインスイーパ進捗（v2 追記）
+
+`HubSnapshot.frontProgress: InvadeFrontProgress | null` を**加算**（欠落時は `null`）。  
+読込時エイリアス: `invadeBoard` → `frontProgress`。版番号は **`v: 2` のまま**。
+
+各要素: `{ seed, aoiHalf?, opened[], flagged[], focus, hitMine?, updatedAt? }`。  
+地雷レイアウトは `seed`（uint32）から invade 側 `rngFromSeed` で再生成し、開いたマス・旗・ルート焦点を載せる。  
+ヘルパ: `normalizeFrontProgress` / `setFrontProgressInHub` / `clearFrontProgressInHub`。  
+UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。

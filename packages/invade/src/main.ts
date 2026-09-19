@@ -22,7 +22,6 @@ import {
   countFlagged,
   densityAfterBoard,
   forcedEngageTargets,
-  generateBoard,
   getCell,
   mergeBoardIntel,
   minesRemaining,
@@ -31,6 +30,12 @@ import {
   toggleFlag,
   type MsBoard,
 } from "./board";
+import {
+  clearPersistedFrontProgress,
+  loadOrCreateFrontSession,
+  persistFrontSession,
+  regenerateFrontSession,
+} from "./hub-persist";
 
 type SectorSel = { sx: number; sy: number };
 
@@ -52,16 +57,22 @@ if (inbound != null) {
 }
 
 /** The front AOI IS the minesweeper board (one unified grid). */
-let board: MsBoard = generateBoard(AOI_HALF);
+const initialSession = loadOrCreateFrontSession();
+let board: MsBoard = initialSession.board;
 /** Route focus for handoff (last interacted playable cell, or HQ). */
-let selected: SectorSel | null = { sx: 0, sy: 0 };
+let selected: SectorSel | null = initialSession.focus;
 /** Inert skip flag (quick-battle wording only — no URL nav). */
-let skipped = false;
+let skipped = selected == null;
 /** Last board action log line for UI. */
-let lastBoardLog: string | null =
-  `前線盤生成 — ${BOARD_SPAN}×${BOARD_SPAN} · 敵 ${board.mineCount} · HQ 開放`;
+let lastBoardLog: string | null = initialSession.restored
+  ? `前線進捗を HubSave から復元 — 敵 ${board.mineCount} · seed ${board.seed ?? "—"}`
+  : `前線盤生成 — ${BOARD_SPAN}×${BOARD_SPAN} · 敵 ${board.mineCount} · HQ 開放 · seed ${board.seed ?? "—"}`;
 /** Flag-mode: next cell click toggles flag instead of open. */
 let flagMode = false;
+
+function saveFrontProgress(): void {
+  persistFrontSession(board, selected);
+}
 
 function tradeBaseUrl(): string {
   return resolveModuleBaseUrl("trade");
@@ -314,11 +325,12 @@ function render(): void {
       <div class="grid front-ms" style="--cols:${cols}">${cellsHtml.join("")}</div>
       <div class="actions">
         <button type="button" class="btn ${flagMode ? "secondary" : ""}" id="btn-flag-mode">${flagMode ? "旗モード ON" : "旗モード"}</button>
-        <button type="button" class="btn ghost" id="btn-regen">盤を再生成</button>
+        <button type="button" class="btn ghost" id="btn-regen" title="保存済みの開いたマス・旗・シードを破棄して新しい盤にします">盤を再生成（進捗リセット）</button>
         <button type="button" class="btn ghost" id="btn-clear" ${selected == null ? "disabled" : ""}>焦点クリア</button>
         <button type="button" class="btn ghost" id="btn-skip">スキップ（quick-battle・ナビなし）</button>
       </div>
-      <p class="ok" style="margin-top:0.75rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
+      <p class="muted" style="margin-top:0.5rem">開いたマス・旗・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。「盤を再生成」は確認のうえ進捗を消します。</p>
+      <p class="ok" style="margin-top:0.5rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
     </div>
 
     <div class="card">
@@ -336,17 +348,25 @@ function render(): void {
   });
 
   root.querySelector("#btn-regen")?.addEventListener("click", () => {
-    board = generateBoard(AOI_HALF, () => Math.random());
-    selected = { sx: 0, sy: 0 };
+    const ok = window.confirm(
+      "盤を再生成すると、保存済みの前線進捗（開いたマス・旗・地雷シード・ルート焦点）が消えます。よろしいですか？",
+    );
+    if (!ok) return;
+    clearPersistedFrontProgress();
+    const session = regenerateFrontSession();
+    board = session.board;
+    selected = session.focus;
     skipped = false;
     flagMode = false;
-    lastBoardLog = `盤再生成 — 敵 ${board.mineCount} · HQ 開放`;
+    lastBoardLog = `盤再生成（進捗リセット）— 敵 ${board.mineCount} · HQ 開放 · seed ${board.seed ?? "—"}`;
     render();
   });
 
   root.querySelector("#btn-clear")?.addEventListener("click", () => {
     selected = { sx: 0, sy: 0 };
+    skipped = false;
     lastBoardLog = "ルート焦点を HQ に戻した";
+    saveFrontProgress();
     render();
   });
 
@@ -355,6 +375,7 @@ function render(): void {
     skipped = true;
     flagMode = false;
     lastBoardLog = "quick-battle スキップ（ナビなし）";
+    saveFrontProgress();
     render();
   });
 
@@ -372,6 +393,7 @@ function render(): void {
         selected = { sx, sy };
         skipped = false;
         lastBoardLog = `ルート焦点 (${sx},${sy})`;
+        saveFrontProgress();
         render();
         return;
       }
@@ -381,6 +403,7 @@ function render(): void {
         skipped = false;
         const n = forcedEngageTargets(board, sx, sy).length;
         lastBoardLog = `強制出撃対象 (${sx},${sy}) · 敵 ${n} マス（当該＋隣接）`;
+        saveFrontProgress();
         render();
         return;
       }
@@ -395,6 +418,7 @@ function render(): void {
             lastBoardLog = r.flagged
               ? `旗立て (${sx},${sy})`
               : `旗解除 (${sx},${sy})`;
+            saveFrontProgress();
           }
           render();
           return;
@@ -402,6 +426,7 @@ function render(): void {
         selected = { sx, sy };
         skipped = false;
         lastBoardLog = `任意レイド対象 (${sx},${sy}) · engage=raid`;
+        saveFrontProgress();
         render();
         return;
       }
@@ -414,6 +439,7 @@ function render(): void {
           lastBoardLog = r.flagged
             ? `旗立て (${sx},${sy})`
             : `旗解除 (${sx},${sy})`;
+          saveFrontProgress();
         }
         render();
         return;
@@ -438,6 +464,7 @@ function render(): void {
       } else {
         lastBoardLog = `開放 (${sx},${sy}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
       }
+      saveFrontProgress();
       render();
     };
 
@@ -452,6 +479,7 @@ function render(): void {
         selected = { sx, sy };
         skipped = false;
         lastBoardLog = r.flagged ? `旗立て (${sx},${sy})` : `旗解除 (${sx},${sy})`;
+        saveFrontProgress();
       }
       render();
     });

@@ -42,6 +42,34 @@ export type HubCircuitRecord = {
   updatedAt?: string;
 };
 
+/** Sector coord on the invade front AOI (additive HubSave field). */
+export type FrontCellCoord = {
+  sx: number;
+  sy: number;
+};
+
+/**
+ * Invade front minesweeper progress (Module 4).
+ * Additive on HubSave v2 — missing / invalid → null.
+ * Mine layout is reproduced from `seed` via invade `rngFromSeed`.
+ */
+export type InvadeFrontProgress = {
+  /** uint32 mine-layout seed. */
+  seed: number;
+  /** AOI half-extent used when saved (default 12). Mismatch → treat as absent. */
+  aoiHalf?: number;
+  /** Opened cells (HQ flood + player opens + stepped mines). */
+  opened: FrontCellCoord[];
+  /** Flagged cells. */
+  flagged: FrontCellCoord[];
+  /** Route focus; null = none / quick-battle skip. */
+  focus: FrontCellCoord | null;
+  /** Soft hazard — player stepped a mine. */
+  hitMine?: boolean;
+  /** ISO timestamp of last write (optional). */
+  updatedAt?: string;
+};
+
 /**
  * Current hub snapshot. `fleet` holds owned instances (not bare MechId).
  * Legacy saves with `MechId[]` are migrated in normalize / parse.
@@ -59,6 +87,11 @@ export type HubSnapshot = {
    * missing / invalid → []. Upserted by circuitId (most recent first).
    */
   circuits: HubCircuitRecord[];
+  /**
+   * Module 4 invade front minesweeper progress. Additive on HubSave v2;
+   * missing / invalid → null. Alias key `invadeBoard` accepted on read.
+   */
+  frontProgress: InvadeFrontProgress | null;
   importedMaterials: number;
   selectedMechId: MechId;
   selectedAmmoId: AmmoId;
@@ -96,6 +129,7 @@ export const INITIAL_HUB: HubSnapshot = {
   ammoLoad: { ...INITIAL_AMMO_LOAD },
   inventory: emptyYieldBag(),
   circuits: [],
+  frontProgress: null,
   importedMaterials: 0,
   selectedMechId: "mech_gen1",
   selectedAmmoId: "ammo_standard",
@@ -107,6 +141,8 @@ export const HUB_LIMITS = {
   materialUnitPrice: 10,
   /** Cap of persisted restore circuits (most recent kept). */
   maxCircuits: 8,
+  /** Max opened/flagged cells stored in frontProgress (25×25 AOI). */
+  maxFrontCells: 625,
 } as const;
 
 function finiteNonNeg(n: unknown, fallback: number): number {
@@ -189,6 +225,105 @@ export function normalizeCircuits(
   return out;
 }
 
+const FRONT_COORD_MAX = 32;
+
+function finiteInt(n: unknown, fallback: number): number {
+  const x = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(x)) return fallback;
+  return Math.trunc(x);
+}
+
+function normalizeFrontCoord(raw: unknown): FrontCellCoord | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    if (Array.isArray(raw) && raw.length >= 2) {
+      const sx = finiteInt(raw[0], NaN);
+      const sy = finiteInt(raw[1], NaN);
+      if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+      if (Math.abs(sx) > FRONT_COORD_MAX || Math.abs(sy) > FRONT_COORD_MAX) return null;
+      return { sx, sy };
+    }
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
+  const sx = finiteInt(obj.sx, NaN);
+  const sy = finiteInt(obj.sy, NaN);
+  if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+  if (Math.abs(sx) > FRONT_COORD_MAX || Math.abs(sy) > FRONT_COORD_MAX) return null;
+  return { sx, sy };
+}
+
+function normalizeFrontCoordList(
+  raw: unknown,
+  max = HUB_LIMITS.maxFrontCells,
+): FrontCellCoord[] {
+  if (!Array.isArray(raw)) return [];
+  const out: FrontCellCoord[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const c = normalizeFrontCoord(item);
+    if (!c) continue;
+    const key = `${c.sx},${c.sy}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/**
+ * Normalize HubSnapshot.frontProgress (also accepts alias `invadeBoard`).
+ * Missing / invalid → null. Does not bump save version (v2 additive).
+ */
+export function normalizeFrontProgress(
+  raw: unknown,
+  fallback: InvadeFrontProgress | null = null,
+): InvadeFrontProgress | null {
+  if (raw == null) return fallback;
+  if (typeof raw !== "object" || Array.isArray(raw)) return fallback;
+  const obj = raw as Record<string, unknown>;
+  const seedRaw = obj.seed;
+  const seedNum =
+    typeof seedRaw === "number"
+      ? seedRaw
+      : typeof seedRaw === "string"
+        ? Number(seedRaw)
+        : NaN;
+  if (!Number.isFinite(seedNum)) return fallback;
+  const seed = seedNum >>> 0;
+
+  let aoiHalf: number | undefined;
+  if (obj.aoiHalf != null) {
+    const ah = finiteInt(obj.aoiHalf, NaN);
+    if (!Number.isFinite(ah) || ah < 1 || ah > FRONT_COORD_MAX) return fallback;
+    aoiHalf = ah;
+  }
+
+  const opened = normalizeFrontCoordList(obj.opened);
+  const flagged = normalizeFrontCoordList(obj.flagged);
+
+  let focus: FrontCellCoord | null = null;
+  if (obj.focus != null) {
+    focus = normalizeFrontCoord(obj.focus);
+    // invalid focus → null focus (keep rest), not whole-null
+  }
+
+  const hitMine = obj.hitMine === true;
+
+  const out: InvadeFrontProgress = {
+    seed,
+    opened,
+    flagged,
+    focus,
+    hitMine,
+  };
+  if (aoiHalf != null) out.aoiHalf = aoiHalf;
+  if (typeof obj.updatedAt === "string" && obj.updatedAt.trim()) {
+    out.updatedAt = obj.updatedAt.trim().slice(0, 40);
+  }
+  return out;
+}
+
 export function normalizeHubSnapshot(
   raw: Partial<HubSnapshot> | Record<string, unknown> | null | undefined,
   fallback: HubSnapshot = INITIAL_HUB,
@@ -234,6 +369,12 @@ export function normalizeHubSnapshot(
     fallback.circuits ?? [],
   );
 
+  const rawRec = raw as Record<string, unknown> | null | undefined;
+  const frontProgress = normalizeFrontProgress(
+    rawRec?.frontProgress ?? rawRec?.invadeBoard,
+    fallback.frontProgress ?? null,
+  );
+
   return {
     credits: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.credits,
@@ -247,6 +388,7 @@ export function normalizeHubSnapshot(
     ammoLoad,
     inventory,
     circuits,
+    frontProgress,
     importedMaterials: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.importedMaterials,
       fallback.importedMaterials,
@@ -404,6 +546,34 @@ export function upsertCircuitIntoHub(
   const rest = (hub.circuits ?? []).filter((c) => c.circuitId !== circuitId);
   const circuits = normalizeCircuits([nextRec, ...rest]);
   return normalizeHubSnapshot({ ...hub, circuits });
+}
+
+/** Set or replace invade front minesweeper progress (additive HubSave field). */
+export function setFrontProgressInHub(
+  hub: HubSnapshot,
+  progress: InvadeFrontProgress | null,
+  at = new Date(),
+): HubSnapshot {
+  if (progress == null) {
+    return normalizeHubSnapshot({ ...hub, frontProgress: null });
+  }
+  const normalized = normalizeFrontProgress(progress);
+  if (!normalized) {
+    return normalizeHubSnapshot({ ...hub, frontProgress: null });
+  }
+  const withTs: InvadeFrontProgress = {
+    ...normalized,
+    updatedAt:
+      typeof progress.updatedAt === "string" && progress.updatedAt.trim()
+        ? progress.updatedAt.trim().slice(0, 40)
+        : at.toISOString(),
+  };
+  return normalizeHubSnapshot({ ...hub, frontProgress: withTs });
+}
+
+/** Clear invade front progress (e.g. after regenerate board). */
+export function clearFrontProgressInHub(hub: HubSnapshot): HubSnapshot {
+  return normalizeHubSnapshot({ ...hub, frontProgress: null });
 }
 
 /** Purchase / add a fresh owned mech if under cap. */
