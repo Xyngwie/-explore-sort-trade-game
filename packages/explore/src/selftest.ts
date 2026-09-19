@@ -12,7 +12,7 @@ import {
   requestExtract,
   tickWorld,
 } from "./game/sim";
-import { BALANCE } from "./game/balance";
+import { BALANCE, threatFromDensity } from "./game/balance";
 import { buildSortieOutcome, hubWearHandoffUrl, toExploreResult } from "./game/outcome";
 import type { Unit } from "./game/types";
 
@@ -410,6 +410,50 @@ function advancePinned(
   const result = toExploreResult(world);
   assert.equal(result.isExtracted, false);
   assert.equal(result.salvagedContainers, 0);
+}
+
+
+// --- invade→explore density → threat ---
+{
+  const low = threatFromDensity(0);
+  const high = threatFromDensity(1);
+  const mid = threatFromDensity(0.5);
+  const base = threatFromDensity(null);
+  assert.equal(low.enemyCount, BALANCE.densityEnemyCountMin);
+  assert.equal(high.enemyCount, BALANCE.densityEnemyCountMax);
+  assert.equal(base.enemyCount, BALANCE.baselineEnemyCount);
+  assert.ok(low.spawnDist > high.spawnDist, "higher density → closer spawn");
+  assert.ok(high.enemySpeedMul > low.enemySpeedMul);
+  assert.equal(mid.enemyCount, Math.round((BALANCE.densityEnemyCountMin + BALANCE.densityEnemyCountMax) / 2));
+
+  const bootLow = bootstrapFromSearch("?sectorX=1&sectorY=0&density=0");
+  assert.ok(bootLow.invadeSector);
+  assert.equal(bootLow.invadeSector!.sectorX, 1);
+  assert.equal(bootLow.invadeSector!.density, 0);
+  const worldLow = createWorld(bootLow);
+  assert.equal(worldLow.enemies.length, BALANCE.densityEnemyCountMin);
+  assert.equal(worldLow.invadeSector?.sectorY, 0);
+  assert.equal(worldLow.balance.enemySpeed, BALANCE.enemySpeed * low.enemySpeedMul);
+
+  const bootHigh = bootstrapFromSearch(
+    "?sectorX=3&sectorY=-2&density=1&intelFlags=routeHint,rareSignal&deployableMechs=2&startingAmmo=25",
+  );
+  assert.ok(bootHigh.invadeSector);
+  assert.deepEqual(bootHigh.invadeSector!.intelFlags, ["routeHint", "rareSignal"]);
+  assert.equal(bootHigh.ammoStock, 25);
+  assert.equal(bootHigh.wingmanCount, 1);
+  assert.ok(bootHigh.note.includes("戦線"));
+  const worldHigh = createWorld(bootHigh);
+  assert.equal(worldHigh.enemies.length, BALANCE.densityEnemyCountMax);
+  assert.ok(
+    Math.abs(worldHigh.balance.enemySpeed - BALANCE.enemySpeed * high.enemySpeedMul) < 1e-9,
+  );
+
+  const bootNone = bootstrapFromSearch("?deployableMechs=3&startingAmmo=10");
+  assert.equal(bootNone.invadeSector, null);
+  const worldNone = createWorld(bootNone);
+  assert.equal(worldNone.enemies.length, BALANCE.baselineEnemyCount);
+  assert.equal(worldNone.balance.enemySpeed, BALANCE.enemySpeed);
 }
 
 console.log("explore selftest: ok");

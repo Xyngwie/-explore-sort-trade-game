@@ -93,6 +93,21 @@ HUD は貨物 ETA／離昇 ETA とマップ上の搭乗円を表示する。
 
 ---
 
+## 5.2 invade → explore セクター密度（脅威）
+
+invade で選んだセクターは `sectorX` / `sectorY` / `density` / `intelFlags?` として explore に渡る（`parseInvadeToExploreSearch` · `HANDOFF_M45_V0`）。
+
+| 項目 | 挙動 |
+|---|---|
+| 取込 | 起動時にパースしブリーフィング表にセクター・density・脅威要約を表示 |
+| 脅威 | `density` 0..1 で敵数・スポーン距離・敵速度を線形補間（`BALANCE` の `densityEnemy*` / `threatFromDensity`） |
+| strip | 取込後に `stripHandoffParams(..., HANDOFF_QUERY_KEYS.invadeToExplore)` でクエリ削除 |
+| 無し | セクター無し時は基準敵数（`baselineEnemyCount`）・基準距離・速度×1 |
+
+定数は `packages/explore/src/game/balance.ts`。trade→explore の配備キーとは衝突しない。
+
+---
+
 ## 6. I/O v2 との関係
 
 本ドキュメントは **振る舞い** の正本。機体インスタンス入出力は `docs/EXPLORE_IO_V2.md`。
@@ -130,6 +145,7 @@ HUD は貨物 ETA／離昇 ETA とマップ上の搭乗円を表示する。
 8. 隊長は Space/F を押さなくても、武器射程内の敵に自動反応射撃する（移動はプレイヤー操作のまま）
 9. 抽出はどこからでも要請でき、搭乗円・僚機自動哨戒・貨物 10s／離昇 15s の位相どおり動く。離昇時に隊長が円内なら成功、円外僚機は置き去りログ。隊長円外なら失敗
 10. 隊長は発見済みコンテナに接触していれば E を押さなくても回収チャネルが進み、時間経過で回収完了する
+11. invade→explore の `sectorX`/`sectorY`/`density` を取込み、ブリーフィングに表示し、density で敵数・スポーン距離・敵速度が変わる。取込後に当該クエリを strip する
 
 ---
 

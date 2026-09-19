@@ -1,4 +1,8 @@
 import "./style.css";
+import {
+  HANDOFF_QUERY_KEYS,
+  stripHandoffParams,
+} from "@estg/shared";
 import { STANCE_LABEL, type Stance, type World } from "./game/types";
 import {
   bootstrapFromSearch,
@@ -25,6 +29,17 @@ import {
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const boot = bootstrapFromSearch(window.location.search);
+if (boot.invadeSector != null) {
+  const cleaned = stripHandoffParams(
+    window.location.href,
+    HANDOFF_QUERY_KEYS.invadeToExplore,
+  );
+  const current =
+    window.location.pathname + window.location.search + window.location.hash;
+  if (cleaned !== current) {
+    history.replaceState(null, "", cleaned);
+  }
+}
 let world: World = createWorld(boot);
 
 const keys = new Set<string>();
@@ -156,6 +171,22 @@ function renderDom(): void {
           <tr><td>実弾</td><td>${world.ammo}</td></tr>
           <tr><td>活動限界</td><td>${world.maxOperationTimeSec}s</td></tr>
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
+          <tr><td>戦線セクター</td><td>${
+            world.invadeSector
+              ? `(${world.invadeSector.sectorX},${world.invadeSector.sectorY})`
+              : "（なし・直接出撃）"
+          }</td></tr>
+          <tr><td>density</td><td>${
+            world.invadeSector
+              ? world.invadeSector.density.toFixed(3)
+              : "—（基準脅威）"
+          }</td></tr>
+          <tr><td>脅威</td><td>敵 ${world.densityThreat.enemyCount} · 距離 ${Math.round(world.densityThreat.spawnDist)} · 速度×${world.densityThreat.enemySpeedMul.toFixed(2)}</td></tr>
+          ${
+            world.invadeSector && world.invadeSector.intelFlags.length > 0
+              ? `<tr><td>intelFlags</td><td>${escapeHtml(world.invadeSector.intelFlags.join(", "))}</td></tr>`
+              : ""
+          }
         </table>
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
         <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · 右パネルで僚機命令（画面外も可）</p>
@@ -221,7 +252,8 @@ function renderDom(): void {
         }
       </div>`;
     document.getElementById("btn-again")?.addEventListener("click", () => {
-      world = createWorld(bootstrapFromSearch(window.location.search));
+      // Reuse boot so stripped invade/trade query still applies to re-sortie.
+      world = createWorld(boot);
       needsDom = true;
       renderDom();
     });
