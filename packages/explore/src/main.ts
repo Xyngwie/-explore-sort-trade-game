@@ -6,7 +6,13 @@ import {
   startSortie,
 } from "./game/world";
 import { applyOrder, rallyWingman } from "./game/orders";
-import { isWingmanOffscreen, tickWorld, tryExtract, type PlayerInput } from "./game/sim";
+import {
+  extractReadiness,
+  isWingmanOffscreen,
+  tickWorld,
+  tryExtract,
+  type PlayerInput,
+} from "./game/sim";
 import { renderWorld, worldFromCanvas } from "./game/render";
 import {
   buildSortieOutcome,
@@ -224,6 +230,7 @@ function renderDom(): void {
       <span>回収 <strong id="hud-salvage">${world.salvaged}/${world.carrierCapacity}</strong></span>
       <span>実弾 <strong id="hud-ammo">${world.ammo}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
+      <span id="hud-extract-wrap">脱出 <strong id="hud-extract">${extractReadiness(world).ready ? "準備完了" : "未集結"}</strong></span>
     </div>
     <div class="layout">
       <div>
@@ -231,10 +238,10 @@ function renderDom(): void {
           <canvas id="map" width="720" height="420"></canvas>
         </div>
         <div class="row">
-          <button type="button" id="btn-extract">脱出（EXTRACT上）</button>
+          <button type="button" id="btn-extract" class="${extractReadiness(world).ready ? "" : "secondary extract-not-ready"}" title="${extractReadiness(world).ready ? "生存友軍が EXTRACT 内 — 脱出可" : "生存友軍が全員 EXTRACT 内にいる必要があります（クリックで圏外名をログ）"}">脱出（全員EXTRACT内）</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。遊撃は地点指定なし。</p>
+        <p class="help">未発見コンテナは非表示。発見後に黄四角。遊撃は地点指定なし。脱出は生存友軍が全員 EXTRACT 圏内のときのみ。</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -285,6 +292,22 @@ function paintHudOnly(): void {
   if (a) a.textContent = String(world.ammo);
   const h = document.getElementById("hud-hp");
   if (h) h.textContent = String(Math.ceil(world.leader.hp));
+  const ready = extractReadiness(world);
+  const ex = document.getElementById("hud-extract");
+  if (ex) {
+    ex.textContent = ready.ready ? "準備完了" : "未集結";
+    ex.classList.toggle("ok", ready.ready);
+    ex.classList.toggle("warn", !ready.ready);
+  }
+  const btn = document.getElementById("btn-extract") as HTMLButtonElement | null;
+  if (btn) {
+    btn.disabled = false;
+    btn.classList.toggle("secondary", !ready.ready);
+    btn.classList.toggle("extract-not-ready", !ready.ready);
+    btn.title = ready.ready
+      ? "生存友軍が EXTRACT 内 — 脱出可"
+      : "生存友軍が全員 EXTRACT 内にいる必要があります（クリックで圏外名をログ）";
+  }
 
   const panel = document.getElementById("wing-panel");
   if (panel) panel.innerHTML = wingPanelHtml();

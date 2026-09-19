@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
 import { applyOrder, onSalvageCompleted, rallyWingman } from "./game/orders";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
-import { tickWorld, tryExtract } from "./game/sim";
+import { extractReadiness, tickWorld, tryExtract } from "./game/sim";
 import { buildSortieOutcome, hubWearHandoffUrl, toExploreResult } from "./game/outcome";
 import type { Unit } from "./game/types";
 
@@ -191,6 +191,9 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   );
   startSortie(world);
   world.leader.pos = { ...world.extract.pos };
+  for (const w of world.wingmen) {
+    if (w.alive) w.pos = { ...world.extract.pos };
+  }
   world.salvaged = 2;
   assert.ok(tryExtract(world));
   const result = toExploreResult(world);
@@ -223,6 +226,57 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.equal(outcome.mechWear[0]!.durabilityAfter, 85 - 35); // wearOnFail
   const wearUrl = hubWearHandoffUrl(world)!;
   assert.ok(wearUrl.includes("owned_a:50") || wearUrl.includes("owned_a%3A50"));
+}
+
+
+// --- extract requires all living friendlies in radius ---
+{
+  const world = createWorld(
+    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20"),
+  );
+  startSortie(world);
+  const w = wing(world);
+  // Leader alone inside → fail while wingman alive outside
+  world.leader.pos = { ...world.extract.pos };
+  w.alive = true;
+  w.pos = {
+    x: world.extract.pos.x + world.extract.radius + 80,
+    y: world.extract.pos.y,
+  };
+  assert.equal(extractReadiness(world).ready, false);
+  assert.equal(extractReadiness(world).missing.map((u) => u.id).join(","), w.id);
+  const logsBefore = world.logs.length;
+  assert.equal(tryExtract(world), false);
+  assert.equal(world.phase, "sortie");
+  assert.ok(world.logs.length > logsBefore);
+  assert.ok(world.logs.some((l) => l.text.includes(w.name) && l.text.includes("圏外")));
+
+  // All alive friendlies inside → success
+  w.pos = { ...world.extract.pos };
+  assert.equal(extractReadiness(world).ready, true);
+  assert.ok(tryExtract(world));
+  assert.equal(world.phase, "result");
+  assert.equal(world.extracted, true);
+}
+
+// --- dead wingman outside does not block extract ---
+{
+  const world = createWorld(
+    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20"),
+  );
+  startSortie(world);
+  const w = wing(world);
+  world.leader.pos = { ...world.extract.pos };
+  w.alive = false;
+  w.hp = 0;
+  w.pos = {
+    x: world.extract.pos.x + world.extract.radius + 120,
+    y: world.extract.pos.y,
+  };
+  assert.equal(extractReadiness(world).ready, true);
+  assert.equal(extractReadiness(world).missing.length, 0);
+  assert.ok(tryExtract(world));
+  assert.equal(world.extracted, true);
 }
 
 console.log("explore selftest: ok");
