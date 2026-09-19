@@ -158,7 +158,7 @@ function renderDom(): void {
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
         </table>
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
-        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · E 回収 · X 抽出要請 · 右パネルで僚機命令（画面外も可）</p>
+        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · 右パネルで僚機命令（画面外も可）</p>
       </div>`;
     document.getElementById("btn-start")?.addEventListener("click", () => {
       startSortie(world);

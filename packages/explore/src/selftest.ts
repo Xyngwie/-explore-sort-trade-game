@@ -209,6 +209,27 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
   }
 }
 
+// --- captain auto-salvage without holding E ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  const crate = world.containers[0]!;
+  crate.discovered = true;
+  crate.taken = false;
+  world.leader.pos = { ...crate.pos };
+  world.leader.salvagedCount = 0;
+  const salvagedBefore = world.salvaged;
+  // interact stays false for the whole channel
+  advance(world, world.balance.salvageSeconds + 0.5);
+  assert.equal(crate.taken, true, "crate should be taken without E");
+  assert.equal(world.salvaged, salvagedBefore + 1);
+  assert.equal(world.leader.salvagedCount, 1);
+}
+
 // --- boarding extract + wear scaffold ---
 {
   const world = createWorld(
