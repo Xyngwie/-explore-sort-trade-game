@@ -9,7 +9,7 @@ import {
   createWorld,
   startSortie,
 } from "./game/world";
-import { applyOrder, rallyWingman } from "./game/orders";
+import { applyOrder, rallyWingman, scatterSearch } from "./game/orders";
 import {
   boardingCargoEta,
   boardingLiftOffEta,
@@ -99,6 +99,11 @@ function rally(wingId: string): void {
   const wing = world.wingmen.find((w) => w.id === wingId);
   if (!wing) return;
   rallyWingman(world, wing);
+  needsDom = true;
+}
+
+function doScatterSearch(): void {
+  scatterSearch(world);
   needsDom = true;
 }
 
@@ -304,9 +309,10 @@ function renderDom(): void {
         </div>
         <div class="row">
           <button type="button" id="btn-extract" ${boardingActive ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。">${boardingActive ? "抽出シーケンス中…" : "抽出要請（搭乗円）"}</button>
+          <button type="button" class="stance-raid" id="btn-scatter" title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。遊撃は地点指定なし。抽出はどこからでも要請→搭乗円（隊長位置）・僚機自動哨戒・貨物10s／離昇15s。隊長が円内なら成功、円外僚機は置き去り。</p>
+        <p class="help">未発見コンテナは非表示。発見後に黄四角。遊撃は地点指定なし。散開捜索で隊長＋僚機を三方向遊撃展開。抽出はどこからでも要請→搭乗円（隊長位置）・僚機自動哨戒・貨物10s／離昇15s。隊長が円内なら成功、円外僚機は置き去り。</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -324,6 +330,9 @@ function renderDom(): void {
   document.getElementById("btn-extract")?.addEventListener("click", () => {
     requestExtract(world);
     needsDom = true;
+  });
+  document.getElementById("btn-scatter")?.addEventListener("click", () => {
+    doScatterSearch();
   });
   document.getElementById("btn-abort")?.addEventListener("click", () => {
     world.phase = "result";

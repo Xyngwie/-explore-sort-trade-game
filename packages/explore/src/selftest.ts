@@ -3,7 +3,7 @@
  */
 import assert from "node:assert/strict";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
-import { applyOrder, onSalvageCompleted, rallyWingman } from "./game/orders";
+import { applyOrder, onSalvageCompleted, rallyWingman, scatterSearch } from "./game/orders";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import {
   boardingCargoEta,
@@ -71,6 +71,52 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   const intent = decideWingman(world, w, 0.016);
   // Should produce some move target (hunt or loiter) without player click
   assert.ok(intent.moveTarget != null);
+}
+
+
+// --- scatter search: captain + living wingmen → raid, fan ~120° ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  world.leader.heading = 0; // +x
+  world.leader.pos = { x: 700, y: 500 };
+  for (const w of world.wingmen) {
+    w.alive = true;
+    w.pos = { ...world.leader.pos };
+    w.stance = "escort";
+  }
+  const before = world.logs.length;
+  const r = scatterSearch(world);
+  assert.equal(r, "applied");
+  assert.equal(world.leader.stance, "raid");
+  assert.ok(world.leader.moveTarget != null);
+  const livingWings = world.wingmen.filter((w) => w.alive);
+  assert.ok(livingWings.length >= 1);
+  for (const w of livingWings) {
+    assert.equal(w.stance, "raid");
+    assert.ok(w.waypoint != null, "wingman should get scatter waypoint");
+  }
+  // Directions should diverge (not all the same point)
+  const pts = [
+    world.leader.moveTarget!,
+    ...livingWings.map((w) => w.waypoint!),
+  ];
+  const uniq = new Set(pts.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`));
+  assert.ok(uniq.size >= Math.min(3, pts.length), "fan-out targets should differ");
+  assert.ok(world.logs.length > before);
+  assert.ok(world.logs.some((l) => l.text.includes("散開捜索")));
+  // Wingman intent should chase scatter waypoint when no nearby hunt
+  world.enemies.forEach((e) => {
+    e.alive = false;
+  });
+  const w0 = livingWings[0]!;
+  const intent = decideWingman(world, w0, 0.016);
+  assert.ok(intent.moveTarget != null);
+  const dWp = Math.hypot(
+    intent.moveTarget!.x - w0.waypoint!.x,
+    intent.moveTarget!.y - w0.waypoint!.y,
+  );
+  assert.ok(dWp < 1, "raid with scatter waypoint should move toward it");
 }
 
 // --- salvage complete → auto escort ---
