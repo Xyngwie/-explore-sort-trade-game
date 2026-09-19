@@ -112,6 +112,8 @@ export type World = {
   deployedInstanceIds: string[];
   /** Durability at deploy time (from trade mechDurability); empty → assume max. */
   deployedDurability: Record<string, number>;
+  /** Hub circuit durability buffer (wear absorb); from trade circuitBonuses. */
+  circuitDurabilityBuffer: number;
   /** Invade sector when opened via invade→explore; null for direct / trade-only. */
   invadeSector: InvadeSectorContext | null;
   /** Resolved threat from density (or baseline). */

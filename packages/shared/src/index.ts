@@ -8,3 +8,4 @@ export * from "./mech-fleet";
 export * from "./sort-yield";
 export * from "./sector-density";
 export * from "./circuit-board";
+export * from "./circuit-bonuses";

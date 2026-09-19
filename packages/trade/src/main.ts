@@ -38,6 +38,9 @@ import {
   simulateReturn,
   statusClass,
   yieldBagFromTypedRepairCost,
+  hubCircuitBonuses,
+  formatCircuitBonusesJa,
+  applyRepairDiscountToCost,
   type HangarState,
 } from "./hangar";
 
@@ -92,21 +95,24 @@ function fleetCards(s: HangarState): string {
     return `<p class="muted">艦隊が空です。「シード読込」または「機体を受領」でデモ機を追加してください。</p>`;
   }
   const typedSpend = formatTypedRepairSpend();
+  const circuitBonuses = hubCircuitBonuses(s.hub);
   return s.hub.fleet
     .map((m) => {
       const pct = Math.round((m.durability / m.durabilityMax) * 100);
       const deployable = canDeploy(m);
       const checked = s.selectedDeployIds.includes(m.instanceId);
-      const classicCost = repairCost(m);
+      const classicBase = repairCost(m);
+      const classicCost =
+        classicBase != null
+          ? applyRepairDiscountToCost(classicBase, circuitBonuses)
+          : null;
       const needsRepair = m.status === "needs_repair";
       // Clickable when repairable so shortfall shows as notice (not only disabled).
       const classicClickable = classicCost != null;
       const classicAfford =
         classicCost != null &&
-        canAffordRepair(m, {
-          credits: s.hub.credits,
-          materials: s.hub.materials,
-        });
+        s.hub.credits >= classicCost.credits &&
+        s.hub.materials >= classicCost.materials;
       const typedClickable = needsRepair;
       const typedBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
       const typedAfford =
@@ -262,6 +268,7 @@ function render() {
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">出撃 → Explore</h2>
+      <p class="ok" style="margin:0 0 0.5rem">回路ボーナス: ${escapeHtml(formatCircuitBonusesJa(hubCircuitBonuses(state.hub)))}</p>
       ${
         deployUrl
           ? `<div class="row">
@@ -270,7 +277,7 @@ function render() {
             <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(deployUrl)}</p>`
           : `<p class="warn">健在機がありません。受領するか修理してください。</p>`
       }
-      <p class="muted" style="margin-top:0.5rem">帰還は explore の「拠点へ摩耗報告」（returnKind / mechWear）か下のシミュ。localhost では :5173 ↔ :5175。</p>
+      <p class="muted" style="margin-top:0.5rem">帰還は explore の「拠点へ摩耗報告」（returnKind / mechWear）か下のシミュ。localhost では :5173 ↔ :5175。配備 URL に circuitBonuses（摩耗緩衝）が付きます。</p>
       <div class="row">
         <button type="button" class="secondary" data-sim="extract">シミュ帰還 extract</button>
         <button type="button" class="secondary" data-sim="abort">シミュ帰還 abort</button>

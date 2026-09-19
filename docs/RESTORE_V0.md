@@ -116,6 +116,18 @@ export interface CircuitBoardState {
 restore→trade 取込後、回路は **`HubSave.hub.circuits`**（`HubCircuitRecord`: `circuitId` + `circuitBoard` + `outcome`）に upsert される。  
 trade ハンガーの一覧から選択して trade→restore URL を開ける。詳細: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)。
 
+### 5.4.1 成果ボーナス（track 1 · hub/sortie）
+
+`aggregateCircuitBonuses(hub.circuits)`（`packages/shared/src/circuit-bonuses.ts`）が outcome を集計する。仮バランス:
+
+| outcome | craftMultiplierBonus | repairDiscount | durabilityBuffer |
+|---|---|---|---|
+| `fully_awakened` | +0.10 | 20% | 10 |
+| `bypass` | +0.05 | 10% | 5 |
+| `offline` | 0 | 0 | 0 |
+
+加算後に soft cap（craft +0.25 / repair 50% / buffer 25）。trade は修理割引・配備 URL の `circuitBonuses`、explore は帰還摩耗に緩衝を適用。invade 非対象。
+
 ## 5.5. ハンドオフ契約（キーのみ）
 
 正本: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。

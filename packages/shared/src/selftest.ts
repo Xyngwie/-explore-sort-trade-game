@@ -42,6 +42,14 @@ import {
   HUB_LIMITS,
 } from "./hub-save";
 import {
+  aggregateCircuitBonuses,
+  applyDurabilityBufferToWear,
+  applyRepairDiscountToCost,
+  encodeCircuitBonusesCompact,
+  parseCircuitBonusesCompact,
+  CIRCUIT_OUTCOME_BONUS,
+} from "./circuit-bonuses";
+import {
   createExpeditionState,
   applyPuzzleResult,
   puzzleInputFromExpedition,
@@ -718,5 +726,67 @@ assert.equal(
   parseRestoreToTradeSearch("circuitOutcome=fully_awakened"),
   null,
 ); // needs board
+
+
+// --- circuit outcome bonuses (track 1) ---
+{
+  const empty = aggregateCircuitBonuses([]);
+  assert.equal(empty.craftMultiplier, 1);
+  assert.equal(empty.durabilityBuffer, 0);
+  assert.equal(empty.repairDiscount, 0);
+
+  const one = aggregateCircuitBonuses([
+    { circuitId: "a", outcome: "fully_awakened" },
+  ]);
+  assert.equal(one.craftMultiplierBonus, CIRCUIT_OUTCOME_BONUS.fully_awakened.craftMultiplierBonus);
+  assert.equal(one.repairDiscount, CIRCUIT_OUTCOME_BONUS.fully_awakened.repairDiscount);
+  assert.equal(one.durabilityBuffer, CIRCUIT_OUTCOME_BONUS.fully_awakened.durabilityBuffer);
+  assert.equal(one.counts.fully_awakened, 1);
+
+  const mixed = aggregateCircuitBonuses([
+    { circuitId: "a", outcome: "fully_awakened" },
+    { circuitId: "b", outcome: "bypass" },
+    { circuitId: "c", outcome: "offline" },
+  ]);
+  assert.equal(
+    mixed.craftMultiplierBonus,
+    CIRCUIT_OUTCOME_BONUS.fully_awakened.craftMultiplierBonus +
+      CIRCUIT_OUTCOME_BONUS.bypass.craftMultiplierBonus,
+  );
+  assert.equal(mixed.counts.offline, 1);
+  assert.ok(mixed.contributingCircuitIds.includes("a"));
+  assert.ok(!mixed.contributingCircuitIds.includes("c"));
+
+  const discounted = applyRepairDiscountToCost(
+    { credits: 50, materials: 30 },
+    one,
+  );
+  assert.equal(discounted.credits, Math.ceil(50 * one.repairCostMul));
+  assert.equal(discounted.materials, Math.ceil(30 * one.repairCostMul));
+
+  assert.equal(applyDurabilityBufferToWear(35, 10), 25);
+  assert.equal(applyDurabilityBufferToWear(5, 10), 0);
+
+  const enc = encodeCircuitBonusesCompact(one);
+  assert.ok(enc.includes("craft:"));
+  assert.ok(enc.includes("dur:10"));
+  const round = parseCircuitBonusesCompact(enc);
+  assert.equal(round.durabilityBuffer, 10);
+  assert.ok(Math.abs(round.craftMultiplier - one.craftMultiplier) < 0.001);
+
+  const url = buildTradeToExploreUrl({
+    deployableMechs: 1,
+    startingAmmo: 10,
+    deployedInstanceIds: ["op1"],
+    circuitBonuses: {
+      craftMultiplier: one.craftMultiplier,
+      repairDiscount: one.repairDiscount,
+      durabilityBuffer: one.durabilityBuffer,
+    },
+  });
+  const parsed = parseTradeToExploreSearch(new URL(url).search);
+  assert.equal(parsed?.circuitBonuses?.durabilityBuffer, 10);
+  assert.ok((parsed?.circuitBonuses?.craftMultiplier ?? 0) > 1);
+}
 
 console.log("shared handoff-m45 selftest: ok");

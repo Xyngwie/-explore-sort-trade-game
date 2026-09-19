@@ -456,4 +456,24 @@ function advancePinned(
   assert.equal(worldNone.balance.enemySpeed, BALANCE.enemySpeed);
 }
 
+
+// --- circuit durability buffer reduces wear ---
+{
+  const world = createWorld(
+    bootstrapFromSearch(
+      "?deployedInstanceIds=owned_a&startingAmmo=10&mechDurability=owned_a:85&circuitBonuses=craft:1.100;repair:0.200;dur:10",
+    ),
+  );
+  assert.equal(world.circuitDurabilityBuffer, 10);
+  assert.ok(world.note.includes("回路緩衝 10"));
+  startSortie(world);
+  world.phase = "result";
+  world.extracted = false;
+  world.failReason = "timeout";
+  const outcome = buildSortieOutcome(world)!;
+  assert.equal(outcome.mechWear[0]!.durabilityBefore, 85);
+  assert.equal(outcome.mechWear[0]!.durabilityAfter, 85 - (35 - 10)); // fail wear buffered
+  assert.equal(outcome.mechWear[0]!.wearApplied, 25);
+}
+
 console.log("explore selftest: ok");

@@ -108,6 +108,8 @@ export type SortieBootstrap = {
   note: string;
   deployedInstanceIds: string[];
   deployedDurability: Record<string, number>;
+  /** Hub circuit wear buffer from circuitBonuses query. */
+  circuitDurabilityBuffer: number;
   /** Parsed invade→explore sector; null when keys absent. */
   invadeSector: InvadeSectorContext | null;
 };
@@ -156,12 +158,22 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
   } else {
     note = "デモ編成 · 僚機 2 · 既定実弾";
   }
+  const circuitDurabilityBuffer = Math.max(
+    0,
+    Math.floor(inbound?.circuitBonuses?.durabilityBuffer ?? 0),
+  );
   if (invadeSector != null) {
     const flags =
       invadeSector.intelFlags.length > 0
         ? ` · intel ${invadeSector.intelFlags.join(",")}`
         : "";
     note += ` · 戦線 (${invadeSector.sectorX},${invadeSector.sectorY}) dens=${invadeSector.density.toFixed(3)}${flags}`;
+  }
+  if (circuitDurabilityBuffer > 0) {
+    note += ` · 回路緩衝 ${circuitDurabilityBuffer}`;
+  }
+  if (inbound?.circuitBonuses != null && inbound.circuitBonuses.craftMultiplier > 1) {
+    note += ` · craft×${inbound.circuitBonuses.craftMultiplier.toFixed(2)}`;
   }
 
   return {
@@ -171,6 +183,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     note,
     deployedInstanceIds,
     deployedDurability,
+    circuitDurabilityBuffer,
     invadeSector,
   };
 }
@@ -242,6 +255,7 @@ export function createWorld(boot: SortieBootstrap): World {
     note: boot.note,
     deployedInstanceIds: [...boot.deployedInstanceIds],
     deployedDurability: { ...boot.deployedDurability },
+    circuitDurabilityBuffer: Math.max(0, Math.floor(boot.circuitDurabilityBuffer ?? 0)),
     invadeSector: boot.invadeSector
       ? {
           sectorX: boot.invadeSector.sectorX,
