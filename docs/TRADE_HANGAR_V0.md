@@ -64,6 +64,7 @@ sort から ?importMaterials=&yieldBag= → materials 加算 + inventory マー�
 - `HubSnapshot.circuits: HubCircuitRecord[]` を**加算**（欠落時は `[]`；`circuitId` + `CircuitBoardState` + `outcome`）
 - ヘルパ: `importYieldBagIntoHub` / `upsertCircuitIntoHub`（`packages/shared`）
 - 版番号は 2 のまま（破壊的変更なし）。旧 `wreckline.hubM45Stash.v0` の回路は起動時に HubSave へ移行
+- **回路ボーナス（track 1）:** `hubCircuitBonuses` / `aggregateCircuitBonuses` — 集計修理割引・出撃 URL の `circuitBonuses`・ハンガー表示。表は [`RESTORE_V0.md`](./RESTORE_V0.md) §5.4.1
 
 ---
 

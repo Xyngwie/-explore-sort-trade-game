@@ -31,6 +31,8 @@ import {
   selectCircuit,
   simulateReturn,
   yieldBagFromTypedRepairCost,
+  hubCircuitBonuses,
+  repairClassic,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -358,6 +360,49 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const emptyRestore = buildRestoreUrl(empty);
   assert.ok(emptyRestore.includes("circuitBoard="));
   assert.equal(buildSeedCircuitBoard().puzzleId, "stub-8");
+}
+
+
+// Circuit outcome bonuses on deploy URL + repair discount
+{
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = loadPlaytestSeed(resetHangar(store));
+  const board = createEmptyCircuitBoard(8, 8, "bonus-test");
+  hs = ingestLocationSearch(
+    hs,
+    new URL(
+      buildRestoreToTradeUrl({
+        circuitId: "bonus_awake",
+        circuitBoard: { ...board, outcome: "fully_awakened" },
+        outcome: "fully_awakened",
+      }),
+    ).search,
+  ).state;
+  const bonuses = hubCircuitBonuses(hs.hub);
+  assert.equal(bonuses.durabilityBuffer, 10);
+  assert.ok(Math.abs(bonuses.repairDiscount - 0.2) < 1e-9);
+
+  const deploy = buildDeployUrl(hs);
+  assert.ok(deploy);
+  assert.ok(
+    deploy!.includes("circuitBonuses=") &&
+      (deploy!.includes("dur%3A10") || deploy!.includes("dur:10")),
+  );
+
+  const repairTarget = hs.hub.fleet.find((m) => m.status === "needs_repair");
+  assert.ok(repairTarget);
+  const creditsBefore = hs.hub.credits;
+  const materialsBefore = hs.hub.materials;
+  hs = repairClassic(hs, repairTarget!.instanceId);
+  assert.equal(
+    hs.hub.fleet.find((m) => m.instanceId === repairTarget!.instanceId)?.status,
+    "operational",
+  );
+  const spentC = creditsBefore - hs.hub.credits;
+  const spentM = materialsBefore - hs.hub.materials;
+  assert.equal(spentC, Math.ceil(MECH_FLEET_RULES.repairCredits * 0.8));
+  assert.equal(spentM, Math.ceil(MECH_FLEET_RULES.repairMaterials * 0.8));
 }
 
 console.log("trade hangar selftest: ok");

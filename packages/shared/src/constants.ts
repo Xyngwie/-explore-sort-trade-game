@@ -68,6 +68,7 @@ export const HANDOFF_QUERY_KEYS = {
     "startingAmmo",
     "deployedInstanceIds",
     "mechDurability",
+    "circuitBonuses",
   ] as const,
   exploreToHubWear: ["returnKind", "mechWear"] as const,
   /** Module 4: hub → invade (minimal context; invade optional). */

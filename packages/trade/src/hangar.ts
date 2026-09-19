@@ -37,11 +37,17 @@ import {
   repairCost,
   saveHubSaveToLocalStorage,
   selectDeployableInstanceIds,
+  syncMechStatus,
   spendYieldBag,
   stripHandoffParams,
   upsertCircuitIntoHub,
-  wearFleetAfterSortie,
   yieldBagFromTypedRepairCost,
+  aggregateCircuitBonuses,
+  applyRepairDiscountToCost,
+  applyDurabilityBufferToWear,
+  buildWearReportsForSortie,
+  formatCircuitBonusesJa,
+  type AggregatedCircuitBonuses,
   type CircuitBoardState,
   type CircuitOutcome,
   type HubCircuitRecord,
@@ -536,6 +542,12 @@ export function selectAllDeployable(state: HangarState): HangarState {
   };
 }
 
+
+/** Aggregate HubSave.circuits outcomes into sortie/hub bonuses. */
+export function hubCircuitBonuses(hub: HubSnapshot): AggregatedCircuitBonuses {
+  return aggregateCircuitBonuses(hub.circuits ?? []);
+}
+
 export function buildDeployUrl(state: HangarState): string | null {
   const ids = filterToDeployableIds(
     state.hub.fleet,
@@ -550,6 +562,18 @@ export function buildDeployUrl(state: HangarState): string | null {
     ammo,
     ids,
   );
+  const bonuses = hubCircuitBonuses(state.hub);
+  if (
+    bonuses.durabilityBuffer > 0 ||
+    bonuses.craftMultiplier > 1 ||
+    bonuses.repairDiscount > 0
+  ) {
+    payload.circuitBonuses = {
+      craftMultiplier: bonuses.craftMultiplier,
+      repairDiscount: bonuses.repairDiscount,
+      durabilityBuffer: bonuses.durabilityBuffer,
+    };
+  }
   return buildTradeToExploreUrl(payload, resolveModuleBaseUrl("explore"));
 }
 
@@ -649,41 +673,49 @@ export function repairClassic(
 ): HangarState {
   const mech = state.hub.fleet.find((m) => m.instanceId === instanceId);
   if (!mech) return { ...state, notice: "機体なし" };
-  const cost = repairCost(mech);
-  if (!cost) {
+  const baseCost = repairCost(mech);
+  if (!baseCost) {
     return { ...state, notice: "要修理のみ修理可（大破は解体）" };
   }
+  const bonuses = hubCircuitBonuses(state.hub);
+  const cost = applyRepairDiscountToCost(baseCost, bonuses);
   if (
-    !canAffordRepair(mech, {
-      credits: state.hub.credits,
-      materials: state.hub.materials,
-    })
+    state.hub.credits < cost.credits ||
+    state.hub.materials < cost.materials
   ) {
+    const disc =
+      bonuses.repairDiscount > 0
+        ? ` · 回路割引 −${Math.round(bonuses.repairDiscount * 100)}%`
+        : "";
     return {
       ...state,
-      notice: `クレジット/資材不足（要 ${cost.credits}c / ${cost.materials}m）`,
+      notice: `クレジット/資材不足（要 ${cost.credits}c / ${cost.materials}m${disc}）`,
     };
   }
-  const result = applyRepair(mech, {
-    credits: state.hub.credits,
-    materials: state.hub.materials,
+  // Apply discounted spend; restore mech to full like applyRepair.
+  const repaired = syncMechStatus({
+    ...mech,
+    durability: mech.durabilityMax,
   });
-  if (!result) return { ...state, notice: "修理失敗" };
   const fleet = state.hub.fleet.map((m) =>
-    m.instanceId === instanceId ? result.mech : m,
+    m.instanceId === instanceId ? repaired : m,
   );
   const hub = normalizeHubSnapshot({
     ...state.hub,
     fleet,
-    credits: result.wallet.credits,
-    materials: result.wallet.materials,
+    credits: state.hub.credits - cost.credits,
+    materials: state.hub.materials - cost.materials,
   });
+  const discNote =
+    bonuses.repairDiscount > 0
+      ? `（回路 −${Math.round(bonuses.repairDiscount * 100)}%）`
+      : "";
   const next: HangarState = {
     ...state,
     hub,
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
-    log: pushLog(state.log, `修理(集計) ${instanceId}`),
-    notice: "集計コストで修理完了 → 健在",
+    log: pushLog(state.log, `修理(集計) ${instanceId}${discNote}`),
+    notice: `集計コストで修理完了 → 健在${discNote}`,
   };
   return persistHangar(next);
 }
@@ -819,15 +851,26 @@ export function simulateReturn(
   if (ids.length === 0) {
     return { ...state, notice: "摩耗対象の機体がありません" };
   }
-  const fleet = wearFleetAfterSortie(state.hub.fleet, ids, kind);
+  const buffer = hubCircuitBonuses(state.hub).durabilityBuffer;
+  const reports = buildWearReportsForSortie(state.hub.fleet, ids, kind).map(
+    (w) => {
+      const reduced = applyDurabilityBufferToWear(w.wearApplied, buffer);
+      return {
+        instanceId: w.instanceId,
+        durabilityAfter: Math.max(0, w.durabilityBefore - reduced),
+      };
+    },
+  );
+  const fleet = applyWearReportsToFleet(state.hub.fleet, reports);
   const hub = normalizeHubSnapshot({ ...state.hub, fleet });
+  const bufNote = buffer > 0 ? ` · 回路緩衝 ${buffer}` : "";
   const next: HangarState = {
     ...state,
     hub,
     lastDeployedIds: [],
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
-    log: pushLog(state.log, `シミュ帰還 ${kind} ×${ids.length}`),
-    notice: `シミュ帰還（${kind}）で摩耗適用`,
+    log: pushLog(state.log, `シミュ帰還 ${kind} ×${ids.length}${bufNote}`),
+    notice: `シミュ帰還（${kind}）で摩耗適用${bufNote}`,
   };
   return persistHangar(next);
 }
@@ -848,4 +891,15 @@ export function durabilityBarClass(
   return "bar dead";
 }
 
-export { MECH_STATUS_LABEL_JA, MECH_FLEET_RULES, EXAMPLE_TYPED_REPAIR_COST, canDeploy, repairCost, yieldBagFromTypedRepairCost, canAffordRepair, canAffordYieldCost };
+export {
+  MECH_STATUS_LABEL_JA,
+  MECH_FLEET_RULES,
+  EXAMPLE_TYPED_REPAIR_COST,
+  canDeploy,
+  repairCost,
+  yieldBagFromTypedRepairCost,
+  canAffordRepair,
+  canAffordYieldCost,
+  formatCircuitBonusesJa,
+  applyRepairDiscountToCost,
+};

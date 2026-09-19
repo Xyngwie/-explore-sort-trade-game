@@ -1,10 +1,12 @@
 import {
+  applyDurabilityBufferToWear,
   buildExploreToHubWearUrl,
   buildExploreToSortUrl,
   createExpeditionState,
   createExploreSortieOutcome,
   createOwnedMech,
   resolveModuleBaseUrl,
+  statusFromDurability,
   stockFromContainers,
   toExploreToHubWearPayload,
   type ExploreResult,
@@ -58,12 +60,29 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
     const durability = world.deployedDurability[id] ?? 100;
     return createOwnedMech("mech_gen1", { instanceId: id, durability });
   });
-  return createExploreSortieOutcome({
+  const outcome = createExploreSortieOutcome({
     result,
     returnKind: kind,
     fleet,
     deployedInstanceIds: world.deployedInstanceIds,
   });
+  const buffer = Math.max(0, Math.floor(world.circuitDurabilityBuffer ?? 0));
+  if (buffer <= 0) return outcome;
+  // Absorb circuit durability buffer from flat returnKind wear (per mech).
+  return {
+    ...outcome,
+    mechWear: outcome.mechWear.map((w) => {
+      const reduced = applyDurabilityBufferToWear(w.wearApplied, buffer);
+      const durabilityAfter = w.durabilityBefore - reduced;
+      const after = Math.max(0, durabilityAfter);
+      return {
+        ...w,
+        durabilityAfter: after,
+        wearApplied: reduced,
+        statusAfter: statusFromDurability(after),
+      };
+    }),
+  };
 }
 
 export function sortHandoffUrl(world: World): string {

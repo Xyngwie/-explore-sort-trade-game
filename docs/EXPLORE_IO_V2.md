@@ -42,14 +42,18 @@ type TradeToExplorePayload = {
   deployedInstanceIds?: string[];
   /** v2 additive: 配備時点の耐久（explore が durabilityAfter を正しく算出） */
   deployedDurability?: Array<{ instanceId: string; durability: number }>;
+  /** additive: hub circuit bonuses (durabilityBuffer applied on wear) */
+  circuitBonuses?: { craftMultiplier: number; repairDiscount: number; durabilityBuffer: number };
 };
 ```
 
 URL（仮・既存クエリに加算）:
 
 ```text
-?deployableMechs=2&startingAmmo=28&deployedInstanceIds=owned_a,owned_b&mechDurability=owned_a:100;owned_b:100
+?deployableMechs=2&startingAmmo=28&deployedInstanceIds=owned_a,owned_b&mechDurability=owned_a:100;owned_b:100&circuitBonuses=craft:1.100;repair:0.200;dur:10
 ```
+
+`circuitBonuses` は HubSave.circuits の outcome 集計（[`RESTORE_V0.md`](./RESTORE_V0.md) §5.4.1）。explore は `dur` を帰還摩耗から差し引く。
 
 - `deployedInstanceIds` 省略時は v1 互換（件数のみ）。explore 最小実装は件数フォールバック可。
 - 送信側（hub）は **必ず `canDeploy` で濾した ID だけ**を載せる。

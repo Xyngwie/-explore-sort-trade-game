@@ -22,6 +22,11 @@ import {
   type CircuitBoardState,
   type CircuitOutcome,
 } from "./circuit-board";
+import {
+  encodeCircuitBonusesCompact,
+  parseCircuitBonusesCompact,
+  type AggregatedCircuitBonuses,
+} from "./circuit-bonuses";
 
 /** explore → sort */
 export type ExploreToSortPayload = {
@@ -59,6 +64,14 @@ export type TradeToExplorePayload = {
    * Lets explore compute durabilityAfter from real hub values instead of assuming 100.
    */
   deployedDurability?: Array<{ instanceId: string; durability: number }>;
+  /**
+   * Optional hub circuit outcome bonuses (aggregateCircuitBonuses).
+   * Explore consumes durabilityBuffer on wear; craft/repair are informational on sortie.
+   */
+  circuitBonuses?: Pick<
+    AggregatedCircuitBonuses,
+    "craftMultiplier" | "repairDiscount" | "durabilityBuffer"
+  >;
 };
 
 /** explore → hub wear return (salvage still goes explore → sort). */
@@ -356,6 +369,10 @@ export function buildTradeToExploreUrl(
     // Reuse mechWear compact encoding (id:n;id:n).
     u.searchParams.set("mechDurability", encodeMechWearCompact(durability));
   }
+  if (payload.circuitBonuses != null) {
+    const enc = encodeCircuitBonusesCompact(payload.circuitBonuses);
+    if (enc) u.searchParams.set("circuitBonuses", enc);
+  }
   return u.toString();
 }
 
@@ -368,7 +385,8 @@ export function parseTradeToExploreSearch(
     !p.has("deployableMechs") &&
     !p.has("startingAmmo") &&
     !p.has("deployedInstanceIds") &&
-    !p.has("mechDurability")
+    !p.has("mechDurability") &&
+    !p.has("circuitBonuses")
   ) {
     return null;
   }
@@ -390,6 +408,9 @@ export function parseTradeToExploreSearch(
       instanceId: r.instanceId,
       durability: r.durabilityAfter,
     }));
+  }
+  if (p.has("circuitBonuses")) {
+    payload.circuitBonuses = parseCircuitBonusesCompact(p.get("circuitBonuses"));
   }
   return payload;
 }
