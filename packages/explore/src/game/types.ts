@@ -11,7 +11,8 @@ export const STANCE_LABEL: Record<Stance, string> = {
 };
 
 export type Phase = "briefing" | "sortie" | "result";
-export type FailReason = "timeout" | "leader_down" | null;
+/** extract_missed = captain outside boarding circle at lift-off. */
+export type FailReason = "timeout" | "leader_down" | "extract_missed" | null;
 
 export type UnitKind = "leader" | "wingman" | "enemy";
 
@@ -60,6 +61,18 @@ export type Bullet = {
 
 export type LogLine = { t: number; text: string; kind: "tactical" | "battle" };
 
+/** Active boarding circle while an extract request is in progress. */
+export type BoardingState = {
+  /** World position of circle center (= captain pos at request). */
+  center: Vec2;
+  radius: number;
+  /** `world.elapsed` when the captain requested extract. */
+  requestedAt: number;
+  /** True after cargo delay elapsed (visual / log flag). */
+  cargoArrived: boolean;
+};
+
+/** @deprecated Prefer boarding circle; kept for map label fallback when idle. */
 export type ExtractPoint = { pos: Vec2; radius: number };
 
 export type Camera = { x: number; y: number; w: number; h: number };
@@ -74,7 +87,10 @@ export type World = {
   wingmen: Unit[];
   enemies: Unit[];
   containers: Container[];
+  /** Legacy fixed pad — not used for extract success; boarding supersedes. */
   extract: ExtractPoint;
+  /** Active extract / boarding phase; null when idle. */
+  boarding: BoardingState | null;
   bullets: Bullet[];
   logs: LogLine[];
   salvaged: number;

@@ -35,30 +35,27 @@ export function renderWorld(
     ctx.stroke();
   }
 
-  // Extract zone (fill + solid ring + dashed outer cue)
-  {
-    const ex = tx(world.extract.pos.x);
-    const ey = ty(world.extract.pos.y);
-    const er = world.extract.radius * sx;
-    ctx.fillStyle = "#3dd68c22";
+  // Boarding / extract circle (only while request active)
+  if (world.boarding) {
+    const b = world.boarding;
+    const cx = tx(b.center.x);
+    const cy = ty(b.center.y);
+    const rr = b.radius * sx;
+    ctx.fillStyle = b.cargoArrived ? "#3dd68c33" : "#3d8bfd22";
     ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#3dd68c";
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = b.cargoArrived ? "#3dd68c" : "#3d8bfd";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 6]);
     ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([6, 5]);
-    ctx.strokeStyle = "#3dd68c88";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(ex, ey, er + 6, 0, Math.PI * 2);
+    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "#7dffb8";
-    ctx.font = "bold 12px sans-serif";
-    ctx.fillText("EXTRACT", ex - 28, ey - er - 10);
+    ctx.fillStyle = b.cargoArrived ? "#3dd68ccc" : "#7eb6ffcc";
+    ctx.font = "12px sans-serif";
+    const label = b.cargoArrived ? "BOARDING · CARGO" : "BOARDING";
+    ctx.fillText(label, cx - 48, cy - rr - 6);
   }
 
   // Containers: only discovered

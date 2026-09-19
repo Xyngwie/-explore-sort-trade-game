@@ -25,12 +25,13 @@ npm run test -w @estg/explore
 | マップクリック | 隊長移動目標 |
 | Space / F | 射撃（任意・明示）。隊長は射程内なら自動反応射撃 |
 | E | 回収チャネル（接触時） |
+| X / 抽出ボタン | 抽出要請（どこからでも）。搭乗円展開 → 貨物 10s → 離昇 15s |
 | 右パネル | 僚機 帯同／哨戒／回収／遊撃／召還（画面外でも可） |
 
 ## データの流れ
 
 1. （任意）`?deployableMechs=&startingAmmo=&deployedInstanceIds=&mechDurability=` を trade から受取  
-2. 出撃 → 探索発見 → 回収（完了で自動帯同）→ 脱出／撤退  
+2. 出撃 → 探索発見 → 回収（完了で自動帯同）→ 抽出要請（搭乗円）／撤退  
 3. sort へサルベージ URL、ids があるとき hub へ摩耗 URL（フラット returnKind + MechWearReport）  
 4. localhost では「拠点へ摩耗報告」が `http://localhost:5175/` を向く  
 
