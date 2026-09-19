@@ -113,6 +113,24 @@ export type DigitStats = {
   rate: number;
 };
 
+
+/**
+ * Whether a digit cell is 「activated」(satisfied by current line edges).
+ * Returns null when the cell has no clue.
+ */
+export function isCellDigitActivated(
+  clues: ClueGrid,
+  marks: readonly EdgeMark[],
+  cols: number,
+  rows: number,
+  cx: number,
+  cy: number,
+): boolean | null {
+  const c = clues[cy]?.[cx];
+  if (c == null) return null;
+  return countLineEdgesAroundCell(marks, cols, rows, cx, cy) === c;
+}
+
 export function digitSatisfaction(
   clues: ClueGrid,
   marks: readonly EdgeMark[],
