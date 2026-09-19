@@ -284,10 +284,49 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   updateCamera(world);
 }
 
+/** True if unit is within the shared extract radius. */
+export function isInsideExtract(world: World, unit: Unit): boolean {
+  return dist(unit.pos, world.extract.pos) <= world.extract.radius;
+}
+
+export type ExtractReadiness = {
+  ready: boolean;
+  /** Alive friendlies currently outside the extract radius. */
+  missing: Unit[];
+  /** Alive friendlies (leader + wingmen). */
+  aliveCount: number;
+};
+
+/** All living friendlies must be in extract radius; dead wingmen do not block. */
+export function extractReadiness(world: World): ExtractReadiness {
+  const alive = friendlyUnits(world).filter((u) => u.alive);
+  const missing = alive.filter((u) => !isInsideExtract(world, u));
+  return {
+    ready: missing.length === 0 && alive.length > 0 && world.leader.alive,
+    missing,
+    aliveCount: alive.length,
+  };
+}
+
 export function tryExtract(world: World): boolean {
   if (world.phase !== "sortie" || !world.leader.alive) return false;
-  if (dist(world.leader.pos, world.extract.pos) > world.extract.radius) {
-    pushLog(world, "抽出ポイントに到達していません。");
+  const status = extractReadiness(world);
+  if (!status.ready) {
+    if (status.missing.length === 0) {
+      pushLog(world, "抽出ポイントに到達していません。");
+    } else if (status.missing.length === 1) {
+      const u = status.missing[0]!;
+      pushLog(
+        world,
+        `脱出未準備：${u.name} が抽出圏外です。生存友軍は全員 EXTRACT 内へ。`,
+      );
+    } else {
+      const names = status.missing.map((u) => u.name).join("・");
+      pushLog(
+        world,
+        `脱出未準備：${status.missing.length}名が抽出圏外（${names}）。生存友軍は全員 EXTRACT 内へ。`,
+      );
+    }
     return false;
   }
   world.phase = "result";

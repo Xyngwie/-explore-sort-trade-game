@@ -35,15 +35,31 @@ export function renderWorld(
     ctx.stroke();
   }
 
-  // Extract
-  ctx.strokeStyle = "#3dd68c";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(tx(world.extract.pos.x), ty(world.extract.pos.y), world.extract.radius * sx, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = "#3dd68c88";
-  ctx.font = "12px sans-serif";
-  ctx.fillText("EXTRACT", tx(world.extract.pos.x) - 24, ty(world.extract.pos.y) - world.extract.radius * sy - 6);
+  // Extract zone (fill + solid ring + dashed outer cue)
+  {
+    const ex = tx(world.extract.pos.x);
+    const ey = ty(world.extract.pos.y);
+    const er = world.extract.radius * sx;
+    ctx.fillStyle = "#3dd68c22";
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#3dd68c";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = "#3dd68c88";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(ex, ey, er + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#7dffb8";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText("EXTRACT", ex - 28, ey - er - 10);
+  }
 
   // Containers: only discovered
   for (const c of world.containers) {
