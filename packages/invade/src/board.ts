@@ -1,100 +1,124 @@
 /**
- * Sector-internal minesweeper — mini-board played inside a selected front sector.
- * Metaphor: HQ open = home · blank = explored safe · numbers = buffer sensing · mine = enemy → M1.
+ * Front-map minesweeper — the invade AOI sector grid IS the board.
+ * Metaphor: HQ open = home · blank flood = explored · numbers = buffer sensing · mine = enemy → M1.
  * Invade-only; feeds existing handoff via intelFlags / density (no new URL keys).
  */
 
+import {
+  SECTOR_FRONT_DISTANCE,
+  SECTOR_WALL_DISTANCE,
+  sectorDistanceFromHq,
+} from "@estg/shared";
 import { densityAfterSweep, type CellMark } from "./sweep";
 
-/** Classic beginner-ish grid (8×8). */
-export const BOARD_SIZE = 8;
+/**
+ * Half-extent of the front AOI (coords −AOI_HALF … +AOI_HALF).
+ * Includes the wall ring at d≥SECTOR_WALL_DISTANCE (12).
+ */
+export const AOI_HALF = 12;
 
-/** Mine count at density 0 (HQ-near sectors stay light). */
-export const MIN_MINES = 3;
+/** Full board side length (odd): 2*AOI_HALF+1 = 25. */
+export const BOARD_SPAN = AOI_HALF * 2 + 1;
 
-/** Mine count at density 1 (~25% of 64 cells). */
-export const MAX_MINES = 16;
+/** @deprecated Use BOARD_SPAN — kept as alias for call-site clarity. */
+export const BOARD_SIZE = BOARD_SPAN;
+
+/** Near-HQ mine rate floor (d→0+, excluding HQ). Matches old mini-board ~5%. */
+export const MIN_MINE_P = 0.05;
+
+/** Front-cap mine rate (d≥FRONT). Matches old mini-board ~25%. */
+export const MAX_MINE_P = 0.25;
 
 export type BoardStatus = "playing" | "won" | "hazard";
 
 export type MsCell = {
+  /** World sector X (−AOI_HALF … +AOI_HALF). */
+  sx: number;
+  /** World sector Y. */
+  sy: number;
   mine: boolean;
-  /** Adjacent mine count (0–8). Meaningful when !mine. */
+  /** d ≥ wall — impassable; not openable / not flaggable. */
+  blocked: boolean;
+  /** Adjacent mine count among 8-neighbors (blocked neighbors ignored). */
   adjacent: number;
   open: boolean;
   flagged: boolean;
-  /** Forced-safe home cell(s); never mined; start open. */
+  /** HQ at (0,0); never mined; starts open. */
   isHq: boolean;
 };
 
 export type MsBoard = {
-  size: number;
+  aoiHalf: number;
+  span: number;
+  /** Row-major [iy][ix]; world = (ix - aoiHalf, iy - aoiHalf). */
   cells: MsCell[][];
   mineCount: number;
-  density: number;
-  /** Sector seed inputs (for regen / debug). */
-  sectorX: number;
-  sectorY: number;
   status: BoardStatus;
-  /** True after the player opens a mine (soft hazard — front not hard-locked). */
+  /** Soft hazard — front not hard-locked. */
   hitMine: boolean;
 };
 
 export type OpenResult =
   | { ok: true; opened: number; status: BoardStatus }
-  | { ok: false; reason: "oob" | "flagged" | "alreadyOpen" };
+  | { ok: false; reason: "oob" | "flagged" | "alreadyOpen" | "blocked" };
 
 export type FlagResult =
   | { ok: true; flagged: boolean }
-  | { ok: false; reason: "oob" | "open" };
+  | { ok: false; reason: "oob" | "open" | "blocked" };
 
-/** Map provisional sector density → mine count on the mini-board. */
-export function mineCountFromDensity(
-  density: number,
-  size: number = BOARD_SIZE,
-): number {
-  const d = Number.isFinite(density) ? Math.min(1, Math.max(0, density)) : 0;
-  const raw = Math.round(MIN_MINES + d * (MAX_MINES - MIN_MINES));
-  const maxFit = Math.max(0, size * size - hqCellCount(size) - 1);
-  return Math.min(maxFit, Math.max(MIN_MINES, raw));
+/** Index helpers: world sector → array index. */
+export function worldToIndex(aoiHalf: number, s: number): number {
+  return s + aoiHalf;
 }
 
-/** 2×2 HQ block centered on an even-sized board (else single center cell). */
-export function hqCoords(size: number = BOARD_SIZE): ReadonlyArray<{ x: number; y: number }> {
-  if (size < 2) return [{ x: 0, y: 0 }];
-  if (size % 2 === 0) {
-    const a = size / 2 - 1;
-    const b = size / 2;
-    return [
-      { x: a, y: a },
-      { x: b, y: a },
-      { x: a, y: b },
-      { x: b, y: b },
-    ];
-  }
-  const c = Math.floor(size / 2);
-  return [{ x: c, y: c }];
+export function indexToWorld(aoiHalf: number, i: number): number {
+  return i - aoiHalf;
 }
 
-export function hqCellCount(size: number = BOARD_SIZE): number {
-  return hqCoords(size).length;
-}
-
-/** Deterministic mulberry32 from sector + density bucket. */
-export function rngFromSector(
-  sectorX: number,
-  sectorY: number,
-  density: number,
-): () => number {
-  const densBucket = Math.round(
-    (Number.isFinite(density) ? Math.min(1, Math.max(0, density)) : 0) * 1000,
+export function inAoi(aoiHalf: number, sx: number, sy: number): boolean {
+  return (
+    sx >= -aoiHalf &&
+    sx <= aoiHalf &&
+    sy >= -aoiHalf &&
+    sy <= aoiHalf
   );
-  let t =
-    (Math.imul(sectorX | 0, 374761393) ^
-      Math.imul(sectorY | 0, 668265263) ^
-      Math.imul(densBucket, 2147483647)) >>>
-    0;
-  t = (t + 0x6d2b79f5) >>> 0;
+}
+
+export function getCell(board: MsBoard, sx: number, sy: number): MsCell | null {
+  if (!inAoi(board.aoiHalf, sx, sy)) return null;
+  const ix = worldToIndex(board.aoiHalf, sx);
+  const iy = worldToIndex(board.aoiHalf, sy);
+  return board.cells[iy]![ix] ?? null;
+}
+
+/**
+ * P(mine) for a playable cell at Chebyshev distance d from HQ.
+ * Denser farther out; HQ (d=0) and wall (blocked) are never mined here.
+ */
+export function mineProbabilityAtDistance(d: number): number {
+  if (!Number.isFinite(d) || d <= 0) return 0;
+  if (d >= SECTOR_WALL_DISTANCE) return 0;
+  const density = Math.min(1, d / SECTOR_FRONT_DISTANCE);
+  return MIN_MINE_P + density * (MAX_MINE_P - MIN_MINE_P);
+}
+
+/** Expected mine count across the playable AOI (analytic sum of P). */
+export function expectedMineCount(aoiHalf: number = AOI_HALF): number {
+  let sum = 0;
+  for (let sy = -aoiHalf; sy <= aoiHalf; sy++) {
+    for (let sx = -aoiHalf; sx <= aoiHalf; sx++) {
+      const d = sectorDistanceFromHq(sx, sy);
+      if (d >= SECTOR_WALL_DISTANCE) continue;
+      if (sx === 0 && sy === 0) continue;
+      sum += mineProbabilityAtDistance(d);
+    }
+  }
+  return sum;
+}
+
+/** Deterministic mulberry32 from optional seed (default fixed campaign seed). */
+export function rngFromSeed(seed: number = 0x4ead_f001): () => number {
+  let t = (seed >>> 0) + 0x6d2b79f5;
   return () => {
     t = (t + 0x6d2b79f5) >>> 0;
     let r = Math.imul(t ^ (t >>> 15), 1 | t);
@@ -103,34 +127,43 @@ export function rngFromSector(
   };
 }
 
-function inBounds(size: number, x: number, y: number): boolean {
-  return x >= 0 && y >= 0 && x < size && y < size;
-}
-
-function neighbors(size: number, x: number, y: number): Array<{ x: number; y: number }> {
-  const out: Array<{ x: number; y: number }> = [];
+function neighbors(
+  aoiHalf: number,
+  sx: number,
+  sy: number,
+): Array<{ sx: number; sy: number }> {
+  const out: Array<{ sx: number; sy: number }> = [];
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (dx === 0 && dy === 0) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (inBounds(size, nx, ny)) out.push({ x: nx, y: ny });
+      const nx = sx + dx;
+      const ny = sy + dy;
+      if (inAoi(aoiHalf, nx, ny)) out.push({ sx: nx, sy: ny });
     }
   }
   return out;
 }
 
-function emptyCells(size: number): MsCell[][] {
+function emptyFront(aoiHalf: number): MsCell[][] {
+  const span = aoiHalf * 2 + 1;
   const cells: MsCell[][] = [];
-  for (let y = 0; y < size; y++) {
+  for (let iy = 0; iy < span; iy++) {
     const row: MsCell[] = [];
-    for (let x = 0; x < size; x++) {
+    const sy = indexToWorld(aoiHalf, iy);
+    for (let ix = 0; ix < span; ix++) {
+      const sx = indexToWorld(aoiHalf, ix);
+      const d = sectorDistanceFromHq(sx, sy);
+      const isHq = sx === 0 && sy === 0;
+      const blocked = d >= SECTOR_WALL_DISTANCE;
       row.push({
+        sx,
+        sy,
         mine: false,
+        blocked,
         adjacent: 0,
         open: false,
         flagged: false,
-        isHq: false,
+        isHq,
       });
     }
     cells.push(row);
@@ -138,51 +171,42 @@ function emptyCells(size: number): MsCell[][] {
   return cells;
 }
 
-function markHq(cells: MsCell[][], size: number): void {
-  for (const { x, y } of hqCoords(size)) {
-    cells[y]![x]!.isHq = true;
-  }
-}
-
-function placeMines(
+function placeMinesByDistance(
   cells: MsCell[][],
-  size: number,
-  mineCount: number,
+  aoiHalf: number,
   rng: () => number,
 ): number {
-  const forbidden = new Set(
-    hqCoords(size).map((c) => `${c.x},${c.y}`),
-  );
-  const candidates: Array<{ x: number; y: number }> = [];
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      if (!forbidden.has(`${x},${y}`)) candidates.push({ x, y });
+  let placed = 0;
+  const span = aoiHalf * 2 + 1;
+  for (let iy = 0; iy < span; iy++) {
+    for (let ix = 0; ix < span; ix++) {
+      const cell = cells[iy]![ix]!;
+      if (cell.isHq || cell.blocked) continue;
+      const d = sectorDistanceFromHq(cell.sx, cell.sy);
+      const p = mineProbabilityAtDistance(d);
+      if (rng() < p) {
+        cell.mine = true;
+        placed++;
+      }
     }
   }
-  // Fisher–Yates partial shuffle
-  const n = Math.min(mineCount, candidates.length);
-  for (let i = 0; i < n; i++) {
-    const j = i + Math.floor(rng() * (candidates.length - i));
-    const tmp = candidates[i]!;
-    candidates[i] = candidates[j]!;
-    candidates[j] = tmp;
-    const { x, y } = candidates[i]!;
-    cells[y]![x]!.mine = true;
-  }
-  return n;
+  return placed;
 }
 
-function computeAdjacents(cells: MsCell[][], size: number): void {
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const cell = cells[y]![x]!;
-      if (cell.mine) {
+function computeAdjacents(cells: MsCell[][], aoiHalf: number): void {
+  const span = aoiHalf * 2 + 1;
+  for (let iy = 0; iy < span; iy++) {
+    for (let ix = 0; ix < span; ix++) {
+      const cell = cells[iy]![ix]!;
+      if (cell.mine || cell.blocked) {
         cell.adjacent = 0;
         continue;
       }
       let n = 0;
-      for (const nb of neighbors(size, x, y)) {
-        if (cells[nb.y]![nb.x]!.mine) n++;
+      for (const nb of neighbors(aoiHalf, cell.sx, cell.sy)) {
+        const ncell =
+          cells[worldToIndex(aoiHalf, nb.sy)]![worldToIndex(aoiHalf, nb.sx)]!;
+        if (ncell.mine) n++;
       }
       cell.adjacent = n;
     }
@@ -190,27 +214,33 @@ function computeAdjacents(cells: MsCell[][], size: number): void {
 }
 
 /**
- * Flood-open from (x,y) like classic MS: zeros recurse to neighbors.
- * Does not open mines (caller handles mine step).
+ * Flood-open from (sx,sy) like classic MS: zeros recurse to neighbors.
+ * Skips mines, flags, and blocked wall cells.
  */
-export function floodOpen(board: MsBoard, x: number, y: number): number {
-  const { size, cells } = board;
-  if (!inBounds(size, x, y)) return 0;
-  const start = cells[y]![x]!;
-  if (start.open || start.flagged || start.mine) return 0;
+export function floodOpen(board: MsBoard, sx: number, sy: number): number {
+  const cell0 = getCell(board, sx, sy);
+  if (!cell0 || cell0.blocked || cell0.open || cell0.flagged || cell0.mine) {
+    return 0;
+  }
 
   let opened = 0;
-  const stack: Array<{ x: number; y: number }> = [{ x, y }];
+  const stack: Array<{ sx: number; sy: number }> = [{ sx, sy }];
   while (stack.length > 0) {
     const cur = stack.pop()!;
-    const cell = cells[cur.y]![cur.x]!;
-    if (cell.open || cell.flagged || cell.mine) continue;
+    const cell = getCell(board, cur.sx, cur.sy);
+    if (!cell || cell.blocked || cell.open || cell.flagged || cell.mine) continue;
     cell.open = true;
     opened++;
     if (cell.adjacent === 0) {
-      for (const nb of neighbors(size, cur.x, cur.y)) {
-        const ncell = cells[nb.y]![nb.x]!;
-        if (!ncell.open && !ncell.flagged && !ncell.mine) {
+      for (const nb of neighbors(board.aoiHalf, cur.sx, cur.sy)) {
+        const ncell = getCell(board, nb.sx, nb.sy);
+        if (
+          ncell &&
+          !ncell.blocked &&
+          !ncell.open &&
+          !ncell.flagged &&
+          !ncell.mine
+        ) {
           stack.push(nb);
         }
       }
@@ -220,15 +250,13 @@ export function floodOpen(board: MsBoard, x: number, y: number): number {
 }
 
 function openHqAndFlood(board: MsBoard): void {
-  for (const { x, y } of hqCoords(board.size)) {
-    floodOpen(board, x, y);
-  }
+  floodOpen(board, 0, 0);
 }
 
 function allSafeOpen(board: MsBoard): boolean {
-  for (let y = 0; y < board.size; y++) {
-    for (let x = 0; x < board.size; x++) {
-      const c = board.cells[y]![x]!;
+  for (const row of board.cells) {
+    for (const c of row) {
+      if (c.blocked) continue;
       if (!c.mine && !c.open) return false;
     }
   }
@@ -238,9 +266,9 @@ function allSafeOpen(board: MsBoard): boolean {
 function allMinesFlagged(board: MsBoard): boolean {
   let flaggedMines = 0;
   let falseFlags = 0;
-  for (let y = 0; y < board.size; y++) {
-    for (let x = 0; x < board.size; x++) {
-      const c = board.cells[y]![x]!;
+  for (const row of board.cells) {
+    for (const c of row) {
+      if (c.blocked) continue;
       if (c.flagged && c.mine) flaggedMines++;
       if (c.flagged && !c.mine) falseFlags++;
     }
@@ -262,28 +290,23 @@ export function recomputeStatus(board: MsBoard): BoardStatus {
 }
 
 /**
- * Generate a seeded mini-board for a sector. HQ cells start forced-open (flood).
+ * Generate the front minesweeper board.
+ * HQ (0,0) starts forced-open (flood). Wall ring d≥12 is blocked.
+ * Mines placed with P rising by Chebyshev distance from HQ.
  */
 export function generateBoard(
-  sectorX: number,
-  sectorY: number,
-  density: number,
-  size: number = BOARD_SIZE,
-  rng: () => number = rngFromSector(sectorX, sectorY, density),
+  aoiHalf: number = AOI_HALF,
+  rng: () => number = rngFromSeed(),
 ): MsBoard {
-  const mineCount = mineCountFromDensity(density, size);
-  const cells = emptyCells(size);
-  markHq(cells, size);
-  const placed = placeMines(cells, size, mineCount, rng);
-  computeAdjacents(cells, size);
+  const cells = emptyFront(aoiHalf);
+  const placed = placeMinesByDistance(cells, aoiHalf, rng);
+  computeAdjacents(cells, aoiHalf);
 
   const board: MsBoard = {
-    size,
+    aoiHalf,
+    span: aoiHalf * 2 + 1,
     cells,
     mineCount: placed,
-    density: Number.isFinite(density) ? Math.min(1, Math.max(0, density)) : 0,
-    sectorX,
-    sectorY,
     status: "playing",
     hitMine: false,
   };
@@ -292,10 +315,11 @@ export function generateBoard(
   return board;
 }
 
-/** Left-click / open a cell. Stepping a mine → soft hazard (no hard-lock). */
-export function openCell(board: MsBoard, x: number, y: number): OpenResult {
-  if (!inBounds(board.size, x, y)) return { ok: false, reason: "oob" };
-  const cell = board.cells[y]![x]!;
+/** Open a sector cell. Stepping a mine → soft hazard (no hard-lock). */
+export function openCell(board: MsBoard, sx: number, sy: number): OpenResult {
+  const cell = getCell(board, sx, sy);
+  if (!cell) return { ok: false, reason: "oob" };
+  if (cell.blocked) return { ok: false, reason: "blocked" };
   if (cell.flagged) return { ok: false, reason: "flagged" };
   if (cell.open) return { ok: false, reason: "alreadyOpen" };
 
@@ -306,15 +330,16 @@ export function openCell(board: MsBoard, x: number, y: number): OpenResult {
     return { ok: true, opened: 1, status };
   }
 
-  const opened = floodOpen(board, x, y);
+  const opened = floodOpen(board, sx, sy);
   const status = recomputeStatus(board);
   return { ok: true, opened, status };
 }
 
-/** Toggle flag on a closed cell. */
-export function toggleFlag(board: MsBoard, x: number, y: number): FlagResult {
-  if (!inBounds(board.size, x, y)) return { ok: false, reason: "oob" };
-  const cell = board.cells[y]![x]!;
+/** Toggle flag on a closed playable cell. */
+export function toggleFlag(board: MsBoard, sx: number, sy: number): FlagResult {
+  const cell = getCell(board, sx, sy);
+  if (!cell) return { ok: false, reason: "oob" };
+  if (cell.blocked) return { ok: false, reason: "blocked" };
   if (cell.open) return { ok: false, reason: "open" };
   cell.flagged = !cell.flagged;
   recomputeStatus(board);
@@ -332,12 +357,20 @@ export function countFlagged(board: MsBoard): number {
 export function countOpenSafe(board: MsBoard): number {
   let n = 0;
   for (const row of board.cells) {
-    for (const c of row) if (c.open && !c.mine) n++;
+    for (const c of row) if (c.open && !c.mine && !c.blocked) n++;
   }
   return n;
 }
 
-/** Unopened (and unflagged-as-done) mines still conceptually on the board. */
+export function countPlayableSafe(board: MsBoard): number {
+  let n = 0;
+  for (const row of board.cells) {
+    for (const c of row) if (!c.blocked && !c.mine) n++;
+  }
+  return n;
+}
+
+/** Unopened / unflagged mines still on the front. */
 export function minesRemaining(board: MsBoard): number {
   if (board.status === "won") return 0;
   let flaggedCorrect = 0;
@@ -354,8 +387,8 @@ export function minesRemaining(board: MsBoard): number {
 /**
  * Intel tokens from board progress (HANDOFF_M45 intelFlags — identifier tokens only).
  * - sectorCleared — all safe open or mines correctly flagged
- * - minesRemaining — still uncleared enemies (conceptual for explore)
- * - scoutHazard — stepped a mine (soft; front not locked)
+ * - minesRemaining — still uncleared enemies
+ * - scoutHazard — stepped a mine (soft)
  * - sectorFlagged — at least one flag placed
  * - scoutClear — meaningful safe ground opened without full clear
  */
@@ -368,7 +401,7 @@ export function intelFromBoard(board: MsBoard): string[] {
   }
   if (board.hitMine) flags.push("scoutHazard");
   if (countFlagged(board) > 0) flags.push("sectorFlagged");
-  const safeTotal = board.size * board.size - board.mineCount;
+  const safeTotal = countPlayableSafe(board);
   const opened = countOpenSafe(board);
   if (board.status !== "won" && safeTotal > 0 && opened / safeTotal >= 0.35) {
     flags.push("scoutClear");
@@ -377,18 +410,16 @@ export function intelFromBoard(board: MsBoard): string[] {
 }
 
 /**
- * Density nudge from board outcome (reuses thin-sweep scaler semantics).
+ * Density nudge from board outcome for a handoff sector's base density.
  * won → cool-down · hazard → heat · partial open → slight cool · else unchanged.
  */
 export function densityAfterBoard(baseDensity: number, board: MsBoard): number {
   let mark: CellMark = "none";
   if (board.status === "won") mark = "cleared";
   else if (board.hitMine) mark = "hazard";
-  else if (countOpenSafe(board) > hqCellCount(board.size)) mark = "cleared";
-  // Partial clear uses a gentler cool-down than full scoutClear:
+  else if (countOpenSafe(board) > 1) mark = "cleared";
   const d = densityAfterSweep(baseDensity, mark);
   if (board.status === "won" || board.hitMine || mark === "none") return d;
-  // Soft partial: halfway between base and cleared nudge
   const cleared = densityAfterSweep(baseDensity, "cleared");
   return Number(((baseDensity + cleared) / 2).toFixed(3));
 }
@@ -398,7 +429,6 @@ export function mergeBoardIntel(
   base: readonly string[],
   board: MsBoard,
 ): string[] {
-  // mergeIntelFlags expects a CellMark; fold board tokens manually with same dedupe.
   const seen = new Set<string>();
   const out: string[] = [];
   for (const t of [...base, ...intelFromBoard(board)]) {
@@ -411,11 +441,12 @@ export function mergeBoardIntel(
 
 /** Display glyph for a cell (UI). */
 export function cellGlyph(cell: MsCell): string {
+  if (cell.blocked) return "壁";
   if (cell.flagged && !cell.open) return "⚑";
   if (!cell.open) return "";
   if (cell.mine) return "✕";
   if (cell.isHq && cell.adjacent === 0) return "HQ";
+  if (cell.isHq) return "HQ";
   if (cell.adjacent === 0) return "";
   return String(cell.adjacent);
 }
-
