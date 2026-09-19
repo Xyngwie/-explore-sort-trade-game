@@ -11,27 +11,22 @@ import {
   stripHandoffParams,
   type InvadeToExplorePayload,
   type InvadeToTradePayload,
-  type SectorDensityInfo,
   type TradeToInvadePayload,
 } from "@estg/shared";
 import {
-  BOARD_SIZE,
-  MAX_MINES,
-  MIN_MINES,
+  AOI_HALF,
+  BOARD_SPAN,
   cellGlyph,
   countFlagged,
   densityAfterBoard,
   generateBoard,
+  getCell,
   mergeBoardIntel,
-  mineCountFromDensity,
   minesRemaining,
   openCell,
   toggleFlag,
   type MsBoard,
 } from "./board";
-
-/** Half-extent of the AOI around HQ (coords −AOI_HALF … +AOI_HALF). */
-const AOI_HALF = 10;
 
 type SectorSel = { sx: number; sy: number };
 
@@ -52,13 +47,15 @@ if (inbound != null) {
   }
 }
 
-let selected: SectorSel | null = null;
+/** The front AOI IS the minesweeper board (one unified grid). */
+let board: MsBoard = generateBoard(AOI_HALF);
+/** Route focus for handoff (last interacted playable cell, or HQ). */
+let selected: SectorSel | null = { sx: 0, sy: 0 };
 /** Inert skip flag (quick-battle wording only — no URL nav). */
 let skipped = false;
-/** Inner minesweeper for the selected sector (null when none). */
-let board: MsBoard | null = null;
 /** Last board action log line for UI. */
-let lastBoardLog: string | null = null;
+let lastBoardLog: string | null =
+  `前線盤生成 — ${BOARD_SPAN}×${BOARD_SPAN} · 敵 ${board.mineCount} · HQ 開放`;
 /** Flag-mode: next cell click toggles flag instead of open. */
 let flagMode = false;
 
@@ -78,54 +75,24 @@ function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/** Map density 0..1 → CSS color (cool → hot). Blocked = wall slate. */
-function densityStyle(info: SectorDensityInfo): string {
-  if (info.blocked) return "background:#3d2a2a;border-color:#8b4545;color:#f85149";
-  const t = info.density;
-  const r = Math.round(20 + t * 180);
-  const g = Math.round(40 + (1 - t) * 60);
-  const b = Math.round(80 + (1 - t) * 40);
-  const fg = t > 0.55 ? "#fff" : "#c9d1d9";
-  return `background:rgb(${r},${g},${b});border-color:rgba(255,255,255,0.12);color:${fg}`;
-}
-
-function cellLabel(sx: number, sy: number, info: SectorDensityInfo): string {
-  if (sx === 0 && sy === 0) return "HQ";
-  if (info.blocked) return "壁";
-  return info.distance.toString();
-}
-
 /** Short intel tokens only — never YieldBag / salvage. */
-function baseIntelFlags(info: SectorDensityInfo): string[] {
+function baseIntelFlags(sx: number, sy: number): string[] {
+  const info = sectorDensityAt(sx, sy);
   const flags: string[] = ["routeHint"];
   if (info.distance >= SECTOR_FRONT_DISTANCE) flags.push("frontLine");
   if (info.density >= 0.7) flags.push("rareSignal");
   return flags;
 }
 
-function ensureBoard(sel: SectorSel, info: SectorDensityInfo): MsBoard {
-  if (
-    board != null &&
-    board.sectorX === sel.sx &&
-    board.sectorY === sel.sy
-  ) {
-    return board;
-  }
-  board = generateBoard(sel.sx, sel.sy, info.density);
-  lastBoardLog = `セクター (${sel.sx},${sel.sy}) 進入 — HQ 開放 · 敵 ${board.mineCount}（density ${info.density.toFixed(2)}）`;
-  return board;
-}
-
 function sectorPayload(
   sel: SectorSel,
-  info: SectorDensityInfo,
 ): InvadeToTradePayload & InvadeToExplorePayload {
-  const b = ensureBoard(sel, info);
+  const info = sectorDensityAt(sel.sx, sel.sy);
   return {
     sectorX: sel.sx,
     sectorY: sel.sy,
-    density: densityAfterBoard(info.density, b),
-    intelFlags: mergeBoardIntel(baseIntelFlags(info), b),
+    density: densityAfterBoard(info.density, board),
+    intelFlags: mergeBoardIntel(baseIntelFlags(sel.sx, sel.sy), board),
   };
 }
 
@@ -147,137 +114,75 @@ function inboundSummaryHtml(): string {
   `;
 }
 
-function handoffActionsHtml(
-  sel: SectorSel | null,
-  info: SectorDensityInfo | null,
-): string {
-  if (sel == null || info == null || info.blocked) {
-    return `<p class="muted">セクター選択後に Hub / 探索へのハンドオフリンクが表示されます。</p>`;
+function handoffActionsHtml(sel: SectorSel | null): string {
+  if (sel == null) {
+    return `<p class="muted">セルを開く／旗／選択すると Hub / 探索へのハンドオフリンクが表示されます。</p>`;
   }
-  const payload = sectorPayload(sel, info);
+  const info = sectorDensityAt(sel.sx, sel.sy);
+  if (info.blocked) {
+    return `<p class="muted">壁セルはルートにできません。内側のセクターを選んでください。</p>`;
+  }
+  const payload = sectorPayload(sel);
   const toTrade = buildInvadeToTradeUrl(payload, tradeBaseUrl());
   const toExplore = buildInvadeToExploreUrl(payload, exploreBaseUrl());
   const flags = (payload.intelFlags ?? []).join(", ") || "—";
   return `
-    <p class="muted mono">density: ${payload.density.toFixed(3)} · intelFlags: ${escapeHtml(flags)}</p>
+    <p class="muted mono">route (${sel.sx},${sel.sy}) · density: ${payload.density.toFixed(3)} · intelFlags: ${escapeHtml(flags)}</p>
     <div class="actions">
       <a class="btn" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">格納庫へ渡す（invade→trade）</a>
       <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">探索へ渡す（invade→explore）</a>
     </div>
-    <p class="muted" style="margin-top:0.5rem">地雷マス＝敵位置の概念インテル。探索は当面 threat スケールに利用（本 salvage なし）。</p>
+    <p class="muted" style="margin-top:0.5rem">地雷マス＝敵位置。探索へ渡すと Module 1 で掃討する概念インテル（本 salvage なし）。</p>
   `;
 }
 
-function statusJa(b: MsBoard): string {
-  if (b.status === "won") return "セクター掃討完了";
-  if (b.status === "hazard") return "接触（hazard・前線は継続可）";
+function statusJa(): string {
+  if (board.status === "won") return "前線掃討完了";
+  if (board.status === "hazard") return "接触（hazard・前線は継続可）";
   return "偵察中";
 }
 
-function minesweeperPanelHtml(
-  sel: SectorSel | null,
-  info: SectorDensityInfo | null,
-): string {
-  if (sel == null || info == null || info.blocked) {
-    return `
-      <div class="card">
-        <h2 class="card-title">セクター内マインスイーパ</h2>
-        <p class="muted">セクターを選ぶと ${BOARD_SIZE}×${BOARD_SIZE} の内盤が開きます。HQ 開放＝拠点 · 空白＝探索済 · 数字＝周囲の敵感知 · ✕＝敵（→ Module 1）。</p>
-      </div>
-    `;
+function cellTitle(cell: ReturnType<typeof getCell>): string {
+  if (!cell) return "";
+  if (cell.blocked) return `(${cell.sx},${cell.sy}) WALL d≥${SECTOR_WALL_DISTANCE}`;
+  if (cell.open) {
+    if (cell.mine) return `(${cell.sx},${cell.sy}) 敵接触`;
+    if (cell.isHq) return "HQ (0,0) — 拠点（開始開放）";
+    if (cell.adjacent === 0) return `(${cell.sx},${cell.sy}) 探索済セーフ`;
+    return `(${cell.sx},${cell.sy}) 周囲敵 ${cell.adjacent}`;
   }
-  const b = ensureBoard(sel, info);
-  const expected = mineCountFromDensity(info.density);
-  const cells: string[] = [];
-  for (let y = 0; y < b.size; y++) {
-    for (let x = 0; x < b.size; x++) {
-      const c = b.cells[y]![x]!;
-      const cls = [
-        "ms-cell",
-        c.open ? "open" : "closed",
-        c.isHq ? "hq" : "",
-        c.flagged && !c.open ? "flagged" : "",
-        c.open && c.mine ? "mine" : "",
-        c.open && !c.mine && c.adjacent > 0 ? `n${c.adjacent}` : "",
-        c.open && !c.mine && c.adjacent === 0 ? "blank" : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      const title = c.open
-        ? c.mine
-          ? "敵接触"
-          : c.isHq
-            ? "HQ / base"
-            : c.adjacent === 0
-              ? "探索済セーフ"
-              : `周囲敵 ${c.adjacent}`
-        : c.flagged
-          ? "旗"
-          : "未開";
-      cells.push(
-        `<button type="button" class="${cls}" data-mx="${x}" data-my="${y}" title="${escapeHtml(title)}">${escapeHtml(cellGlyph(c))}</button>`,
-      );
-    }
-  }
-  const statusBanner =
-    b.status === "won"
-      ? `<div class="banner ok-banner" role="status">セクター掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
-      : b.status === "hazard"
-        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。前線マップはロックしません — 続行・旗立て・ハンドオフ可。</div>`
-        : "";
-
-  return `
-    <div class="card">
-      <h2 class="card-title">セクター内マインスイーパ（${BOARD_SIZE}×${BOARD_SIZE}）</h2>
-      <p class="muted">密度→敵数: ${MIN_MINES}…${MAX_MINES}（今 ${expected}）。左クリック＝開く / 旗モード＝旗。HQ は開始時から開放。</p>
-      <table>
-        <tr><td>状態</td><td>${escapeHtml(statusJa(b))}</td></tr>
-        <tr><td>敵（地雷）</td><td>${b.mineCount}</td></tr>
-        <tr><td>残敵（概算）</td><td>${minesRemaining(b)}</td></tr>
-        <tr><td>旗</td><td>${countFlagged(b)}</td></tr>
-      </table>
-      ${statusBanner}
-      ${
-        lastBoardLog
-          ? `<p class="mono" style="margin-top:0.5rem">${escapeHtml(lastBoardLog)}</p>`
-          : ""
-      }
-      <div class="ms-grid" style="--ms:${b.size}">${cells.join("")}</div>
-      <div class="actions">
-        <button type="button" class="btn ${flagMode ? "secondary" : ""}" id="btn-flag-mode">${flagMode ? "旗モード ON" : "旗モード"}</button>
-        <button type="button" class="btn ghost" id="btn-regen">盤を再生成</button>
-      </div>
-      <p class="ok" style="margin-top:0.75rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
-    </div>
-  `;
+  if (cell.flagged) return `(${cell.sx},${cell.sy}) 旗`;
+  return `(${cell.sx},${cell.sy}) 未開 d=${sectorDensityAt(cell.sx, cell.sy).distance}`;
 }
 
 function render(): void {
-  const cols = AOI_HALF * 2 + 1;
-  const cells: string[] = [];
-  for (let y = AOI_HALF; y >= -AOI_HALF; y--) {
-    for (let x = -AOI_HALF; x <= AOI_HALF; x++) {
-      const info = sectorDensityAt(x, y);
-      const isHq = x === 0 && y === 0;
+  const cols = board.span;
+  const cellsHtml: string[] = [];
+  // Paint top→bottom (sy = +half … −half) so north is up
+  for (let sy = AOI_HALF; sy >= -AOI_HALF; sy--) {
+    for (let sx = -AOI_HALF; sx <= AOI_HALF; sx++) {
+      const c = getCell(board, sx, sy)!;
       const isSel =
-        selected != null && selected.sx === x && selected.sy === y;
+        selected != null && selected.sx === sx && selected.sy === sy;
       const cls = [
         "cell",
-        isHq ? "hq" : "",
-        info.blocked ? "blocked" : "pickable",
+        "ms-cell",
+        c.blocked ? "blocked" : "",
+        c.open ? "open" : c.blocked ? "" : "closed",
+        c.isHq ? "hq" : "",
+        c.flagged && !c.open ? "flagged" : "",
+        c.open && c.mine ? "mine" : "",
+        c.open && !c.mine && !c.blocked && c.adjacent > 0 ? `n${c.adjacent}` : "",
+        c.open && !c.mine && !c.blocked && c.adjacent === 0 ? "blank" : "",
         isSel ? "selected" : "",
-        !info.blocked && info.distance >= SECTOR_FRONT_DISTANCE ? "front" : "",
+        !c.blocked && !c.open ? "pickable" : "",
+        c.open && !c.blocked ? "focusable" : "",
       ]
         .filter(Boolean)
         .join(" ");
-      const title = isHq
-        ? "HQ (0,0)"
-        : `(${x},${y}) d=${info.distance} dens=${info.density.toFixed(2)}${
-            info.blocked ? " WALL" : ""
-          }`;
-      const disabled = info.blocked ? "disabled" : "";
-      cells.push(
-        `<button type="button" class="${cls}" data-sx="${x}" data-sy="${y}" title="${escapeHtml(title)}" style="${densityStyle(info)}" ${disabled}>${escapeHtml(cellLabel(x, y, info))}</button>`,
+      const disabled = c.blocked ? "disabled" : "";
+      cellsHtml.push(
+        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}" title="${escapeHtml(cellTitle(c))}" ${disabled}>${escapeHtml(cellGlyph(c))}</button>`,
       );
     }
   }
@@ -289,10 +194,17 @@ function render(): void {
     !selInfo.blocked &&
     selInfo.distance >= SECTOR_FRONT_DISTANCE;
 
+  const statusBanner =
+    board.status === "won"
+      ? `<div class="banner ok-banner" role="status">前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
+      : board.status === "hazard"
+        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。前線マップはロックしません — 続行・旗立て・ハンドオフ可。</div>`
+        : "";
+
   root.innerHTML = `
-    <p class="pill">MODULE 4 · INVADE / FRONT · SECTOR MINESWEEPER</p>
+    <p class="pill">MODULE 4 · INVADE / FRONT · FRONT = MINESWEEPER</p>
     <h1>戦線マップ</h1>
-    <p class="muted">HQ 中心の小 AOI。セクター選択 → 内盤マインスイーパ → Hub または探索へルート／インテルを渡す（本 salvage なし）。</p>
+    <p class="muted">HQ 中心の前線格子<strong>そのもの</strong>がマインスイーパ。空白＝探索済 · 数字＝周囲の敵感知 · ✕＝敵（→ Module 1）· 壁 d≥${SECTOR_WALL_DISTANCE}。</p>
 
     <div class="card">
       <h2 class="card-title">到着（trade→invade）</h2>
@@ -301,18 +213,20 @@ function render(): void {
 
     ${
       showFrontWarn
-        ? `<div class="banner warn-banner" role="status">⚠ 前線帯 d≥${SECTOR_FRONT_DISTANCE} — 高密度ルート。内盤の敵も多い（仮）。</div>`
+        ? `<div class="banner warn-banner" role="status">⚠ ルート焦点 d≥${SECTOR_FRONT_DISTANCE} — 高密度帯（遠方ほど敵が濃い）。</div>`
         : ""
     }
+    ${statusBanner}
 
     <div class="card">
-      <p class="muted">AOI ${cols}×${cols}（半辺 ${AOI_HALF}）。色＝仮 density / 数字＝Chebyshev d。壁 d≥${SECTOR_WALL_DISTANCE} は選択不可。選択後に内盤が開く。</p>
-      <div class="grid" style="--cols:${cols}">${cells.join("")}</div>
-    </div>
-
-    <div class="card">
+      <h2 class="card-title">前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）</h2>
+      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。左クリック＝開く / 旗モードまたは右クリック＝旗。開いたセルをクリックでルート焦点。</p>
       <table>
-        <tr><td>選択ルート</td><td>${
+        <tr><td>状態</td><td>${escapeHtml(statusJa())}</td></tr>
+        <tr><td>敵（地雷）</td><td>${board.mineCount}</td></tr>
+        <tr><td>残敵（概算）</td><td>${minesRemaining(board)}</td></tr>
+        <tr><td>旗</td><td>${countFlagged(board)}</td></tr>
+        <tr><td>ルート焦点</td><td>${
           selected
             ? `(${selected.sx}, ${selected.sy})`
             : skipped
@@ -320,97 +234,98 @@ function render(): void {
               : "未選択"
         }</td></tr>
         <tr><td>距離 d</td><td>${selInfo ? String(selInfo.distance) : "—"}</td></tr>
-        <tr><td>仮 density</td><td>${selInfo ? selInfo.density.toFixed(2) : "—"}</td></tr>
-        <tr><td>フロント目安</td><td>d = ${SECTOR_FRONT_DISTANCE}</td></tr>
+        <tr><td>仮 density</td><td>${selInfo && !selInfo.blocked ? selInfo.density.toFixed(2) : "—"}</td></tr>
         <tr><td>壁</td><td>d ≥ ${SECTOR_WALL_DISTANCE}</td></tr>
       </table>
+      ${
+        lastBoardLog
+          ? `<p class="mono" style="margin-top:0.5rem">${escapeHtml(lastBoardLog)}</p>`
+          : ""
+      }
+      <div class="grid front-ms" style="--cols:${cols}">${cellsHtml.join("")}</div>
       <div class="actions">
-        <button type="button" class="btn" id="btn-clear" ${selected == null ? "disabled" : ""}>選択クリア</button>
+        <button type="button" class="btn ${flagMode ? "secondary" : ""}" id="btn-flag-mode">${flagMode ? "旗モード ON" : "旗モード"}</button>
+        <button type="button" class="btn ghost" id="btn-regen">盤を再生成</button>
+        <button type="button" class="btn ghost" id="btn-clear" ${selected == null ? "disabled" : ""}>焦点クリア</button>
         <button type="button" class="btn ghost" id="btn-skip">スキップ（quick-battle・ナビなし）</button>
       </div>
+      <p class="ok" style="margin-top:0.75rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
     </div>
-
-    ${minesweeperPanelHtml(selected, selInfo)}
 
     <div class="card">
       <h2 class="card-title">出発ハンドオフ</h2>
-      ${handoffActionsHtml(selected, selInfo)}
+      ${handoffActionsHtml(selected)}
     </div>
   `;
 
-  root.querySelectorAll<HTMLButtonElement>("button.cell.pickable").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const sx = Number(btn.dataset.sx);
-      const sy = Number(btn.dataset.sy);
-      if (!Number.isFinite(sx) || !Number.isFinite(sy)) return;
-      const info = sectorDensityAt(sx, sy);
-      if (info.blocked) return;
-      selected = { sx, sy };
-      skipped = false;
-      board = null;
-      flagMode = false;
-      lastBoardLog = null;
-      ensureBoard(selected, info);
-      render();
-    });
+  root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
+    flagMode = !flagMode;
+    lastBoardLog = flagMode
+      ? "旗モード ON — セルクリックで旗トグル"
+      : "旗モード OFF — クリックで開く";
+    render();
+  });
+
+  root.querySelector("#btn-regen")?.addEventListener("click", () => {
+    board = generateBoard(AOI_HALF, () => Math.random());
+    selected = { sx: 0, sy: 0 };
+    skipped = false;
+    flagMode = false;
+    lastBoardLog = `盤再生成 — 敵 ${board.mineCount} · HQ 開放`;
+    render();
   });
 
   root.querySelector("#btn-clear")?.addEventListener("click", () => {
-    selected = null;
-    board = null;
-    flagMode = false;
-    lastBoardLog = null;
+    selected = { sx: 0, sy: 0 };
+    lastBoardLog = "ルート焦点を HQ に戻した";
     render();
   });
 
   root.querySelector("#btn-skip")?.addEventListener("click", () => {
     selected = null;
-    board = null;
     skipped = true;
     flagMode = false;
-    lastBoardLog = null;
+    lastBoardLog = "quick-battle スキップ（ナビなし）";
     render();
   });
 
-  root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
-    flagMode = !flagMode;
-    lastBoardLog = flagMode ? "旗モード ON — セルクリックで旗トグル" : "旗モード OFF — クリックで開く";
-    render();
-  });
+  root.querySelectorAll<HTMLButtonElement>("button.cell:not(.blocked)").forEach((btn) => {
+    const sx = Number(btn.dataset.sx);
+    const sy = Number(btn.dataset.sy);
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) return;
 
-  root.querySelector("#btn-regen")?.addEventListener("click", () => {
-    if (selected == null) return;
-    const info = sectorDensityAt(selected.sx, selected.sy);
-    if (info.blocked) return;
-    // Nudge seed via density epsilon so layout changes while staying in-bucket-ish
-    board = generateBoard(
-      selected.sx,
-      selected.sy,
-      info.density,
-      BOARD_SIZE,
-      () => Math.random(),
-    );
-    lastBoardLog = `盤再生成 — 敵 ${board.mineCount}`;
-    render();
-  });
+    const onPrimary = () => {
+      const cell = getCell(board, sx, sy);
+      if (!cell || cell.blocked) return;
 
-  root.querySelectorAll<HTMLButtonElement>("button.ms-cell").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (board == null) return;
-      const x = Number(btn.dataset.mx);
-      const y = Number(btn.dataset.my);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      // Already open → set route focus only
+      if (cell.open && !cell.mine) {
+        selected = { sx, sy };
+        skipped = false;
+        lastBoardLog = `ルート焦点 (${sx},${sy})`;
+        render();
+        return;
+      }
 
       if (flagMode) {
-        const r = toggleFlag(board, x, y);
+        const r = toggleFlag(board, sx, sy);
         if (r.ok) {
-          lastBoardLog = r.flagged ? `旗立て (${x},${y})` : `旗解除 (${x},${y})`;
+          selected = { sx, sy };
+          skipped = false;
+          lastBoardLog = r.flagged ? `旗立て (${sx},${sy})` : `旗解除 (${sx},${sy})`;
         }
         render();
         return;
       }
 
-      const r = openCell(board, x, y);
+      if (cell.open && cell.mine) {
+        selected = { sx, sy };
+        skipped = false;
+        render();
+        return;
+      }
+
+      const r = openCell(board, sx, sy);
       if (!r.ok) {
         if (r.reason === "flagged") {
           lastBoardLog = "旗付きセルは開けません（旗モードで解除）";
@@ -418,25 +333,29 @@ function render(): void {
         render();
         return;
       }
-      if (board.hitMine && board.cells[y]![x]!.mine) {
-        lastBoardLog = `敵接触 (${x},${y}) → scoutHazard（前線は継続可）`;
+      selected = { sx, sy };
+      skipped = false;
+      if (board.hitMine && getCell(board, sx, sy)?.mine) {
+        lastBoardLog = `敵接触 (${sx},${sy}) → scoutHazard（前線は継続可）`;
       } else if (board.status === "won") {
         lastBoardLog = `掃討完了 — 開放 ${r.opened} → sectorCleared`;
       } else {
-        lastBoardLog = `開放 (${x},${y}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
+        lastBoardLog = `開放 (${sx},${sy}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
       }
       render();
-    });
+    };
+
+    btn.addEventListener("click", onPrimary);
 
     btn.addEventListener("contextmenu", (ev) => {
       ev.preventDefault();
-      if (board == null) return;
-      const x = Number(btn.dataset.mx);
-      const y = Number(btn.dataset.my);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      const r = toggleFlag(board, x, y);
+      const cell = getCell(board, sx, sy);
+      if (!cell || cell.blocked) return;
+      const r = toggleFlag(board, sx, sy);
       if (r.ok) {
-        lastBoardLog = r.flagged ? `旗立て (${x},${y})` : `旗解除 (${x},${y})`;
+        selected = { sx, sy };
+        skipped = false;
+        lastBoardLog = r.flagged ? `旗立て (${sx},${sy})` : `旗解除 (${sx},${sy})`;
       }
       render();
     });
@@ -444,3 +363,5 @@ function render(): void {
 }
 
 render();
+
+// Silence unused import when tree-shaken oddly in some bundlers

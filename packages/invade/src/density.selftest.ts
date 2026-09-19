@@ -23,7 +23,7 @@ assert.equal(front.blocked, false);
 assert.equal(front.density, 1);
 assert.ok(front.distance >= SECTOR_FRONT_DISTANCE);
 
-// AOI half=10 includes front ring; wall starts at 12 (outside AOI)
+// AOI half=12 includes front ring and wall ring (d≥12 blocked)
 assert.equal(sectorDensityAt(10, 0).distance, 10);
 assert.equal(sectorDensityAt(0, 0).distance, 0);
 
