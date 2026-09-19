@@ -20,12 +20,32 @@ import {
   emptyYieldBag,
   type YieldBag,
 } from "./sort-yield";
+import {
+  isCircuitOutcome,
+  normalizeCircuitBoard,
+  type CircuitBoardState,
+  type CircuitOutcome,
+} from "./circuit-board";
 
 export { HUB_SAVE_STORAGE_KEY };
 
 /**
+ * One circuit board known to the hub (Module 5 restore results).
+ * Additive on HubSave v2 — missing → [].
+ */
+export type HubCircuitRecord = {
+  circuitId: string;
+  circuitBoard: CircuitBoardState;
+  /** Last restore→trade outcome (also mirrored onto board.outcome). */
+  outcome: CircuitOutcome;
+  /** ISO timestamp of last upsert (optional). */
+  updatedAt?: string;
+};
+
+/**
  * Current hub snapshot. `fleet` holds owned instances (not bare MechId).
  * Legacy saves with `MechId[]` are migrated in normalize / parse.
+ * `circuits` holds Module 5 restore boards (additive; missing → []).
  */
 export type HubSnapshot = {
   credits: number;
@@ -34,6 +54,11 @@ export type HubSnapshot = {
   ammoLoad: AmmoLoad;
   /** Typed materials / parts from sort Yield v2 (additive; missing → {}). */
   inventory: YieldBag;
+  /**
+   * Module 5 circuit boards (restore results). Additive on HubSave v2;
+   * missing / invalid → []. Upserted by circuitId (most recent first).
+   */
+  circuits: HubCircuitRecord[];
   importedMaterials: number;
   selectedMechId: MechId;
   selectedAmmoId: AmmoId;
@@ -70,6 +95,7 @@ export const INITIAL_HUB: HubSnapshot = {
   fleet: [],
   ammoLoad: { ...INITIAL_AMMO_LOAD },
   inventory: emptyYieldBag(),
+  circuits: [],
   importedMaterials: 0,
   selectedMechId: "mech_gen1",
   selectedAmmoId: "ammo_standard",
@@ -79,6 +105,8 @@ export const HUB_LIMITS = {
   maxMechs: 3,
   maxAmmo: 100,
   materialUnitPrice: 10,
+  /** Cap of persisted restore circuits (most recent kept). */
+  maxCircuits: 8,
 } as const;
 
 function finiteNonNeg(n: unknown, fallback: number): number {
@@ -92,6 +120,73 @@ function normalizeInventory(raw: unknown, fallback: YieldBag = emptyYieldBag()):
     return compactYieldBag(fallback);
   }
   return compactYieldBag(raw as YieldBag);
+}
+
+const CIRCUIT_ID_RE = /^[a-zA-Z0-9_.:-]{1,64}$/;
+
+function sanitizeCircuitId(raw: unknown, fallback = "circuit"): string {
+  if (typeof raw !== "string") return fallback;
+  const t = raw.trim().slice(0, 64);
+  if (!t || !CIRCUIT_ID_RE.test(t)) return fallback;
+  return t;
+}
+
+/**
+ * Normalize HubSnapshot.circuits (array or id→record map). Dedupes by circuitId;
+ * most recent / first-seen wins order; capped at HUB_LIMITS.maxCircuits.
+ */
+export function normalizeCircuits(
+  raw: unknown,
+  fallback: HubCircuitRecord[] = [],
+  max = HUB_LIMITS.maxCircuits,
+): HubCircuitRecord[] {
+  let list: unknown[] = [];
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (raw && typeof raw === "object") {
+    list = Object.entries(raw as Record<string, unknown>).map(([id, v]) => {
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        return { circuitId: id, ...(v as Record<string, unknown>) };
+      }
+      return null;
+    });
+  } else if (raw == null) {
+    list = fallback;
+  } else {
+    list = fallback;
+  }
+
+  const out: HubCircuitRecord[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const obj = item as Record<string, unknown>;
+    const board = normalizeCircuitBoard(obj.circuitBoard ?? obj.board);
+    if (!board) continue;
+    const outcomeRaw = obj.outcome ?? board.outcome;
+    if (!isCircuitOutcome(outcomeRaw)) continue;
+    const circuitId = sanitizeCircuitId(
+      obj.circuitId ?? board.puzzleId,
+      `circuit_${out.length}`,
+    );
+    if (seen.has(circuitId)) continue;
+    seen.add(circuitId);
+    const boardWithOutcome: CircuitBoardState = {
+      ...board,
+      outcome: outcomeRaw,
+    };
+    const rec: HubCircuitRecord = {
+      circuitId,
+      circuitBoard: boardWithOutcome,
+      outcome: outcomeRaw,
+    };
+    if (typeof obj.updatedAt === "string" && obj.updatedAt.trim()) {
+      rec.updatedAt = obj.updatedAt.trim().slice(0, 40);
+    }
+    out.push(rec);
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 export function normalizeHubSnapshot(
@@ -134,6 +229,11 @@ export function normalizeHubSnapshot(
     fallback.inventory ?? emptyYieldBag(),
   );
 
+  const circuits = normalizeCircuits(
+    (raw as HubSnapshot | undefined)?.circuits,
+    fallback.circuits ?? [],
+  );
+
   return {
     credits: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.credits,
@@ -146,6 +246,7 @@ export function normalizeHubSnapshot(
     fleet,
     ammoLoad,
     inventory,
+    circuits,
     importedMaterials: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.importedMaterials,
       fallback.importedMaterials,
@@ -268,6 +369,41 @@ export function importYieldBagIntoHub(
     ...hub,
     inventory: next,
   });
+}
+
+
+/** Upsert a restore circuit into hub.circuits (most recent first; capped). */
+export function upsertCircuitIntoHub(
+  hub: HubSnapshot,
+  input: {
+    circuitId?: string;
+    circuitBoard: CircuitBoardState;
+    outcome: CircuitOutcome;
+    updatedAt?: string;
+  },
+  at = new Date(),
+): HubSnapshot {
+  if (!isCircuitOutcome(input.outcome)) return hub;
+  const board = normalizeCircuitBoard(input.circuitBoard);
+  if (!board) return hub;
+  const circuitId = sanitizeCircuitId(
+    input.circuitId ?? board.puzzleId,
+    "circuit",
+  );
+  const boardWithOutcome: CircuitBoardState = { ...board, outcome: input.outcome };
+  const updatedAt =
+    typeof input.updatedAt === "string" && input.updatedAt.trim()
+      ? input.updatedAt.trim().slice(0, 40)
+      : at.toISOString();
+  const nextRec: HubCircuitRecord = {
+    circuitId,
+    circuitBoard: boardWithOutcome,
+    outcome: input.outcome,
+    updatedAt,
+  };
+  const rest = (hub.circuits ?? []).filter((c) => c.circuitId !== circuitId);
+  const circuits = normalizeCircuits([nextRec, ...rest]);
+  return normalizeHubSnapshot({ ...hub, circuits });
 }
 
 /** Purchase / add a fresh owned mech if under cap. */

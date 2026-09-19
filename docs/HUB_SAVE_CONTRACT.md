@@ -146,3 +146,12 @@ type HubSaveV1 = {
 
 `fleet` は **所有インスタンス**（`OwnedMech[]`）へ拡張。ペイロード版は **`v: 2`**（ストレージキー名は当面 `wreckline.hubSave.v1` のまま）。  
 詳細・仮バランス・マイグレーションは [`MECH_FLEET.md`](MECH_FLEET.md)。
+
+---
+
+## 10. 回路ボード（v2 追記）
+
+`HubSnapshot.circuits: HubCircuitRecord[]` を**加算**（欠落時は `[]`）。  
+各要素: `{ circuitId, circuitBoard: CircuitBoardState, outcome, updatedAt? }`。  
+版番号は **`v: 2` のまま**（inventory と同様）。ヘルパ: `upsertCircuitIntoHub` / `normalizeCircuits`。  
+詳細: [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)。

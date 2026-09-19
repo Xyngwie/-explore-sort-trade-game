@@ -119,6 +119,35 @@ export function isCircuitOutcome(x: unknown): x is CircuitOutcome {
   );
 }
 
+
+/**
+ * Normalize a loose board blob. Returns null if cols/rows/edgeState unusable.
+ * Does not invent a board from nothing (caller supplies fallback empty board if needed).
+ */
+export function normalizeCircuitBoard(
+  raw: unknown,
+): CircuitBoardState | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const v = obj.v === 1 || obj.v === "1" ? 1 : Number(obj.v);
+  const cols = Math.floor(Number(obj.cols));
+  const rows = Math.floor(Number(obj.rows));
+  if (v !== 1 || !Number.isFinite(cols) || !Number.isFinite(rows)) return null;
+  if (cols < 1 || rows < 1 || cols > 64 || rows > 64) return null;
+  const edgeState = typeof obj.edgeState === "string" ? obj.edgeState : "";
+  const board: CircuitBoardState = {
+    v: 1,
+    cols,
+    rows,
+    edgeState,
+  };
+  if (typeof obj.puzzleId === "string" && obj.puzzleId.trim()) {
+    board.puzzleId = obj.puzzleId.trim().replace(/\|/g, "").slice(0, 64);
+  }
+  if (isCircuitOutcome(obj.outcome)) board.outcome = obj.outcome;
+  return board;
+}
+
 /**
  * Compact URL / query encoding for CircuitBoardState.
  * Shape: `v|cols|rows|edgeState|puzzleId|outcome` (trailing empties ok).

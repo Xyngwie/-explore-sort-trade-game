@@ -39,10 +39,12 @@ import {
   selectDeployableInstanceIds,
   spendYieldBag,
   stripHandoffParams,
+  upsertCircuitIntoHub,
   wearFleetAfterSortie,
   yieldBagFromTypedRepairCost,
   type CircuitBoardState,
   type CircuitOutcome,
+  type HubCircuitRecord,
   type HubSnapshot,
   type InvadeToTradePayload,
   type MechId,
@@ -53,7 +55,7 @@ import {
 
 export type HangarLog = string[];
 
-/** Side stash for M4/M5 handoff results (not HubSave — no schema bump). */
+/** Side stash: invade sector (+ legacy circuit mirror). Circuits now live in HubSave.circuits. */
 export type HubM45Stash = {
   lastInvadeSector: InvadeToTradePayload | null;
   lastCircuit: RestoreToTradePayload | null;
@@ -76,7 +78,7 @@ export type HangarState = {
   notice: string;
   /** Last invade→trade sector (UI + localStorage stash; not in HubSave). */
   lastInvadeSector: InvadeToTradePayload | null;
-  /** Last restore→trade circuit outcome (UI + localStorage stash; not in HubSave). */
+  /** Active / most recent circuit (mirrors hub.circuits[0]; HubSave is source of truth). */
   lastCircuit: RestoreToTradePayload | null;
 };
 
@@ -159,31 +161,86 @@ export function buildSeedCircuitBoard(): CircuitBoardState {
   return createEmptyCircuitBoard(8, 8, SEED_CIRCUIT_PUZZLE_ID);
 }
 
+
+/** Map a HubCircuitRecord to restore→trade payload shape. */
+export function circuitRecordToPayload(
+  rec: HubCircuitRecord,
+): RestoreToTradePayload {
+  return {
+    circuitId: rec.circuitId,
+    circuitBoard: rec.circuitBoard,
+    outcome: rec.outcome,
+  };
+}
+
+/** Prefer hub.circuits[0]; fall back to stash payload. */
+export function resolveActiveCircuit(
+  hub: HubSnapshot,
+  stashCircuit: RestoreToTradePayload | null,
+): RestoreToTradePayload | null {
+  const head = hub.circuits?.[0];
+  if (head) return circuitRecordToPayload(head);
+  return stashCircuit;
+}
+
+export function findHubCircuit(
+  hub: HubSnapshot,
+  circuitId: string | null | undefined,
+): HubCircuitRecord | null {
+  if (!circuitId) return null;
+  const id = circuitId.trim();
+  if (!id) return null;
+  return hub.circuits.find((c) => c.circuitId === id) ?? null;
+}
+
 export function createInitialHangar(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
   const loaded = loadHubSaveFromLocalStorage(storage ?? undefined);
   const stash = loadM45StashFromLocalStorage(storage ?? undefined);
-  const hub = loaded?.hub
+  let hub = loaded?.hub
     ? normalizeHubSnapshot(loaded.hub)
     : normalizeHubSnapshot(INITIAL_HUB);
   const log: HangarLog = loaded
     ? [`セーブ読込 (${loaded.savedAt})`]
     : ["初期ハブ（セーブなし）"];
-  if (stash.lastInvadeSector || stash.lastCircuit) {
+
+  // Migrate legacy hubM45Stash circuit → HubSave.circuits (one-shot).
+  let migratedCircuit = false;
+  if (
+    (hub.circuits?.length ?? 0) === 0 &&
+    stash.lastCircuit?.circuitBoard &&
+    stash.lastCircuit.outcome
+  ) {
+    hub = upsertCircuitIntoHub(hub, {
+      circuitId: stash.lastCircuit.circuitId,
+      circuitBoard: stash.lastCircuit.circuitBoard,
+      outcome: stash.lastCircuit.outcome,
+    });
+    migratedCircuit = true;
+    log.unshift("回路を HubSave へ移行（旧 M45スタッシュ）");
+  }
+
+  if (stash.lastInvadeSector || (!migratedCircuit && stash.lastCircuit)) {
     log.unshift(
       `M45スタッシュ読込${stash.updatedAt ? ` (${stash.updatedAt})` : ""}`,
     );
   }
-  return {
+
+  const lastCircuit = resolveActiveCircuit(hub, stash.lastCircuit);
+  const state: HangarState = {
     hub,
     lastDeployedIds: [],
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
     log: log.slice(0, MAX_LOG),
     notice: "",
     lastInvadeSector: stash.lastInvadeSector,
-    lastCircuit: stash.lastCircuit,
+    lastCircuit,
   };
+  if (migratedCircuit) {
+    return persistHangar(state, storage ?? undefined);
+  }
+  return state;
 }
 
 export function persistHangar(
@@ -266,7 +323,12 @@ export function ingestLocationSearch(
 
   const restore = parseRestoreToTradeSearch(search);
   if (restore) {
-    lastCircuit = restore;
+    hub = upsertCircuitIntoHub(hub, {
+      circuitId: restore.circuitId,
+      circuitBoard: restore.circuitBoard,
+      outcome: restore.outcome,
+    });
+    lastCircuit = resolveActiveCircuit(hub, restore);
     const id = restore.circuitId ?? restore.circuitBoard.puzzleId ?? "—";
     log = pushLog(log, `restore 回路 ${id} → ${restore.outcome}`);
     notices.push(`回路修復 ${restore.outcome} (${id})`);
@@ -414,18 +476,22 @@ export function loadPlaytestSeed(
   state: HangarState,
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
-  const hub = buildPlaytestSeedHub();
   const seedBoard = buildSeedCircuitBoard();
+  const hub = upsertCircuitIntoHub(buildPlaytestSeedHub(), {
+    circuitId: SEED_CIRCUIT_ID,
+    circuitBoard: seedBoard,
+    outcome: "offline",
+  });
   const next: HangarState = {
     ...state,
     hub,
     lastDeployedIds: [],
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
-    lastCircuit: {
+    lastCircuit: resolveActiveCircuit(hub, {
       circuitId: SEED_CIRCUIT_ID,
       circuitBoard: seedBoard,
       outcome: "offline",
-    },
+    }),
     log: pushLog(state.log, "シード読込"),
     notice: "プレイテスト用シードを読込（健在2 + 要修理1 · 回路デモ）",
   };
@@ -503,11 +569,24 @@ export function buildInvadeUrl(state: HangarState): string {
 
 /**
  * trade → restore preview URL.
- * Prefers lastCircuit stash / seed circuit; otherwise opens with demo board.
- * HubSave has no CircuitBoardState field yet — stash only.
+ * Prefers hub.circuits (optional circuitId) → lastCircuit → demo seed board.
+ * Prior outcome is not forwarded into the restore session.
  */
-export function buildRestoreUrl(state: HangarState): string {
-  const stash = state.lastCircuit;
+export function buildRestoreUrl(
+  state: HangarState,
+  circuitId?: string | null,
+): string {
+  const fromHub = findHubCircuit(state.hub, circuitId);
+  const stash =
+    fromHub != null
+      ? circuitRecordToPayload(fromHub)
+      : circuitId
+        ? null
+        : state.lastCircuit ??
+          (state.hub.circuits[0]
+            ? circuitRecordToPayload(state.hub.circuits[0])
+            : null);
+
   if (stash?.circuitBoard) {
     const board: CircuitBoardState = {
       v: 1,
@@ -516,7 +595,6 @@ export function buildRestoreUrl(state: HangarState): string {
       edgeState: stash.circuitBoard.edgeState,
     };
     if (stash.circuitBoard.puzzleId) board.puzzleId = stash.circuitBoard.puzzleId;
-    // Do not forward prior outcome into a new restore session.
     return buildTradeToRestoreUrl(
       {
         circuitId: stash.circuitId ?? SEED_CIRCUIT_ID,
@@ -525,8 +603,6 @@ export function buildRestoreUrl(state: HangarState): string {
       resolveModuleBaseUrl("restore"),
     );
   }
-  // Seed / inventory note: mat_circuit is YieldBag material, not a board.
-  // Always attach a demo CircuitBoardState so restore has something to load.
   return buildTradeToRestoreUrl(
     {
       circuitId: SEED_CIRCUIT_ID,
@@ -534,6 +610,20 @@ export function buildRestoreUrl(state: HangarState): string {
     },
     resolveModuleBaseUrl("restore"),
   );
+}
+
+/** Select a circuit as the active lastCircuit (UI highlight / default restore). */
+export function selectCircuit(
+  state: HangarState,
+  circuitId: string,
+): HangarState {
+  const rec = findHubCircuit(state.hub, circuitId);
+  if (!rec) return { ...state, notice: "回路なし" };
+  return {
+    ...state,
+    lastCircuit: circuitRecordToPayload(rec),
+    notice: `回路選択 ${rec.circuitId}`,
+  };
 }
 
 export function circuitOutcomeLabelJa(outcome: CircuitOutcome): string {

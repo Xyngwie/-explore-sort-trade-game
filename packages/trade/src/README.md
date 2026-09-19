@@ -13,8 +13,8 @@ npm run dev:trade
 
 ## データの流れ
 
-1. localStorage `wreckline.hubSave.v1` から HubSave v2 をロード（+ `wreckline.hubM45Stash.v0`）  
-2. （任意）sort / explore wear / invade / restore クエリを取り込み  
+1. localStorage `wreckline.hubSave.v1` から HubSave v2 をロード（`hub.circuits` 含む；旧 `wreckline.hubM45Stash.v0` の回路は移行）  
+2. （任意）sort / explore wear / invade / restore クエリを取り込み（restore → `hub.circuits` upsert）  
 3. 健在機だけ出撃リンク（`deployedInstanceIds` + `mechDurability`）を生成  
 4. explore から `returnKind`/`mechWear` 帰還、またはシミュ帰還で摩耗適用・セーブ更新  
 5. 修理（集計 / 型付き）· スクラップ  
