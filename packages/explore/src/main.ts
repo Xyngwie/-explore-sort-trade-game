@@ -16,6 +16,7 @@ import {
   rallyWingman,
   scatterSearch,
   setCampOrDeposit,
+  unloadAtCamp,
 } from "./game/orders";
 import {
   boardingCargoEta,
@@ -73,6 +74,11 @@ window.addEventListener("keydown", (e) => {
   if (k === "c" && world.phase === "sortie") {
     e.preventDefault();
     setCampOrDeposit(world);
+    needsDom = true;
+  }
+  if (k === "u" && world.phase === "sortie") {
+    e.preventDefault();
+    unloadAtCamp(world);
     needsDom = true;
   }
   if (k === "g" && world.phase === "sortie") {
@@ -229,7 +235,7 @@ function renderDom(): void {
           }
         </table>
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
-        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · C キャンプ設置／預ける · G キャンプから積込 · 右パネルで僚機命令（画面外も可）</p>
+        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · C キャンプ設置 · U 荷下ろし · G キャンプから積込 · 右パネルで僚機命令（画面外も可）</p>
       </div>`;
     document.getElementById("btn-start")?.addEventListener("click", () => {
       startSortie(world);
@@ -336,12 +342,13 @@ function renderDom(): void {
         </div>
         <div class="row">
           <button type="button" id="btn-extract" ${boardingActive ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。">${boardingActive ? "抽出シーケンス中…" : "抽出要請（搭乗円）"}</button>
-          <button type="button" class="secondary" id="btn-camp" title="隊長位置に仮設キャンプを設置／付近で積載を預ける（C）。">キャンプ設置／預ける</button>
+          <button type="button" class="secondary" id="btn-camp" title="隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。">キャンプ設置</button>
+          <button type="button" class="secondary" id="btn-camp-unload" title="キャンプ付近で積載を置場へ荷下ろし（U）。">荷下ろし</button>
           <button type="button" class="secondary" id="btn-camp-pickup" title="キャンプ付近で置場から積込（G）。">キャンプから積込</button>
           <button type="button" class="stance-raid" id="btn-scatter" title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。積載が多いほど移動が遅くなる（BALANCE.cargoSpeedMulMin）。C で仮設キャンプ設置／預ける・G で取り上げ。遊撃は地点指定なし。抽出はどこからでも要請→搭乗円・僚機自動哨戒・貨物10s／離昇15s。</p>
+        <p class="help">未発見コンテナは非表示。発見後に黄四角。積載が多いほど移動が遅くなる（BALANCE.cargoSpeedMulMin）。C で仮設キャンプ設置・U で荷下ろし・G で取り上げ。遊撃は地点指定なし。抽出はどこからでも要請→搭乗円・僚機自動哨戒・貨物10s／離昇15s。</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -362,6 +369,10 @@ function renderDom(): void {
   });
   document.getElementById("btn-camp")?.addEventListener("click", () => {
     setCampOrDeposit(world);
+    needsDom = true;
+  });
+  document.getElementById("btn-camp-unload")?.addEventListener("click", () => {
+    unloadAtCamp(world);
     needsDom = true;
   });
   document.getElementById("btn-camp-pickup")?.addEventListener("click", () => {
