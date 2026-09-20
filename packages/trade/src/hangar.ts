@@ -71,8 +71,24 @@ import {
   type RestoreToTradePayload,
   type SortieReturnKind,
   type YieldBag,
-  type YieldItemId,
 } from "@estg/shared";
+
+import {
+  RARE_SELL_PRICE_CREDITS,
+  isRareYieldItemId,
+} from "./rare-sell-prices";
+
+export {
+  RARE_SELL_PRICE_TABLE,
+  RARE_SELL_PRICE_CREDITS,
+  RARE_YIELD_ITEM_IDS,
+  isRareYieldItemId,
+  rareSellPriceCredits,
+  rareSellPriceRow,
+  type RareSellPriceRow,
+  type RareYieldItemId,
+  type RareSellBalanceMark,
+} from "./rare-sell-prices";
 
 export type HangarLog = string[];
 
@@ -1162,43 +1178,8 @@ export function simulateReturn(
 
 
 /**
- * 「レア」売却対象の小さな仮サブセット（balance TBD）。
- * parts sell higher than basic mats; only these ids show sell buttons for now.
- */
-export const RARE_YIELD_ITEM_IDS = [
-  "mat_circuit",
-  "part_actuator",
-  "part_armor_plate",
-  "part_power_cell",
-  "part_sensor_array",
-] as const satisfies readonly YieldItemId[];
-
-export type RareYieldItemId = (typeof RARE_YIELD_ITEM_IDS)[number];
-
-/**
- * Placeholder sell prices in credits (仮 / TBD).
- * Parts > basic rare mats. Constants TBD — do not treat as final economy.
- */
-export const RARE_SELL_PRICE_CREDITS: Record<RareYieldItemId, number> = {
-  // TBD: placeholder prices (仮)
-  mat_circuit: 8,
-  part_actuator: 35,
-  part_armor_plate: 40,
-  part_power_cell: 45,
-  part_sensor_array: 55,
-};
-
-export function isRareYieldItemId(id: string): id is RareYieldItemId {
-  return (RARE_YIELD_ITEM_IDS as readonly string[]).includes(id);
-}
-
-export function rareSellPriceCredits(id: YieldItemId): number | null {
-  if (!isRareYieldItemId(id)) return null;
-  return RARE_SELL_PRICE_CREDITS[id];
-}
-
-/**
- * Sell one unit of a rare YieldBag item → +credits, −inventory, HubSave persist.
+ * Sell rare YieldBag items using {@link RARE_SELL_PRICE_TABLE} unit prices
+ * → +credits, −inventory, HubSave persist. Prices are 仮 / TBD.
  */
 export function sellRareItem(
   state: HangarState,

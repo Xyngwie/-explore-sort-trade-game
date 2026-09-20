@@ -49,6 +49,7 @@ import {
   applyRepairDiscountToCost,
   isRareYieldItemId,
   rareSellPriceCredits,
+  RARE_SELL_PRICE_TABLE,
   sellRareItem,
   isCircuitLocked,
   isCraftSignatureLocked,
@@ -116,6 +117,19 @@ function inventoryRows(hub: HangarState["hub"]): string {
       </tr>`;
     })
     .join("");
+}
+
+
+function rarePriceTableRows(): string {
+  return RARE_SELL_PRICE_TABLE.map((row) => {
+    const label = labelYield(row.id);
+    return `<tr>
+        <td>${escapeHtml(label)} <span class="pill rare-tag">レア</span><div class="mono muted">${escapeHtml(row.id)}</div></td>
+        <td class="mono">${row.kind}</td>
+        <td>仮 ${row.credits}c</td>
+        <td><span class="pill tbd-tag">${escapeHtml(row.balance)}</span></td>
+      </tr>`;
+  }).join("");
 }
 
 function fleetCards(s: HangarState): string {
@@ -309,7 +323,16 @@ function render() {
         <thead><tr><th>アイテム</th><th>数量</th><th>売却（仮）</th></tr></thead>
         <tbody>${inventoryRows(state.hub)}</tbody>
       </table>
-      <p class="muted" style="margin-top:0.5rem">「レア」タグ付きのみ売却可。価格は仮（TBD）。型付き修理例: ${EXAMPLE_TYPED_REPAIR_COST.credits}c + ${escapeHtml(typedCostText || "—")}</p>
+      <p class="muted" style="margin-top:0.5rem">「レア」タグ付きのみ売却可。単価は下の仮価格表（TBD）。型付き修理例: ${EXAMPLE_TYPED_REPAIR_COST.credits}c + ${escapeHtml(typedCostText || "—")}</p>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem;margin:0 0 0.5rem">レア売却 仮価格表 <span class="pill tbd-tag">TBD</span></h2>
+      <p class="muted" style="margin:0 0 0.5rem">明示テーブル（<span class="mono">RARE_SELL_PRICE_TABLE</span>）。バランス未調整のプレースホルダ。売却ボタンと <span class="mono">sellRareItem</span> はここを参照。</p>
+      <table>
+        <thead><tr><th>アイテム</th><th>種別</th><th>仮価格</th><th>状態</th></tr></thead>
+        <tbody>${rarePriceTableRows()}</tbody>
+      </table>
     </div>
 
     <div class="card">
