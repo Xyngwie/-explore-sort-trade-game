@@ -189,12 +189,13 @@ function depositUnitIntoCamp(world: World, unit: Unit): number {
 }
 
 /**
- * Set camp at captain position, or deposit into existing camp when in range.
+ * Set camp at captain position, or relocate when stash is empty.
+ * Depositing into an existing camp is explicit via unloadAtCamp（荷下ろし）.
  * Relocating an occupied camp is denied — clear stash first or return to it.
  */
 export function setCampOrDeposit(
   world: World,
-): "camp_set" | "deposited" | "moved" | "denied" {
+): "camp_set" | "moved" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";
   const leader = world.leader;
   const r = world.balance.interactRadius * 1.5;
@@ -216,19 +217,9 @@ export function setCampOrDeposit(
   }
 
   if (dist(leader.pos, world.camp.pos) <= r) {
-    let deposited = 0;
-    for (const u of friendliesNear(world, world.camp.pos, r)) {
-      deposited += depositUnitIntoCamp(world, u);
-    }
-    if (deposited <= 0) {
-      pushLog(world, "キャンプ付近に預ける貨物なし。");
-      return "denied";
-    }
-    pushLog(
-      world,
-      `キャンプへ預けた：${deposited}（置場 ${world.camp.stashedCount}）。軽装で探索可。`,
-    );
-    return "deposited";
+    // Deposit is explicit via unloadAtCamp（荷下ろし）— C only sets / relocates.
+    pushLog(world, "キャンプは付近にある。荷下ろしは U / 荷下ろしボタン。");
+    return "denied";
   }
 
   if (world.camp.stashedCount > 0) {
@@ -251,6 +242,39 @@ export function setCampOrDeposit(
       : "キャンプ移設（隊長位置）。",
   );
   return "moved";
+}
+
+
+/**
+ * Explicit unload（荷下ろし）: deposit carried salvage into camp stash when near camp.
+ * Does not set or relocate camp — use setCampOrDeposit for that.
+ */
+export function unloadAtCamp(world: World): "unloaded" | "denied" {
+  if (world.phase !== "sortie" || !world.leader.alive || !world.camp) {
+    if (world.phase === "sortie" && world.leader.alive && !world.camp) {
+      pushLog(world, "キャンプ未設置。先に C で設置せよ。");
+    }
+    return "denied";
+  }
+  const camp = world.camp;
+  const r = world.balance.interactRadius * 1.5;
+  if (dist(world.leader.pos, camp.pos) > r) {
+    pushLog(world, "キャンプが遠い。近づいてから荷下ろしせよ。");
+    return "denied";
+  }
+  let deposited = 0;
+  for (const u of friendliesNear(world, camp.pos, r)) {
+    deposited += depositUnitIntoCamp(world, u);
+  }
+  if (deposited <= 0) {
+    pushLog(world, "キャンプ付近に預ける貨物なし。");
+    return "denied";
+  }
+  pushLog(
+    world,
+    `荷下ろし：${deposited}（置場 ${camp.stashedCount}）。軽装で探索可。`,
+  );
+  return "unloaded";
 }
 
 /**

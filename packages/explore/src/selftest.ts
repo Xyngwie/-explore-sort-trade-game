@@ -11,6 +11,7 @@ import {
   cargoSpeedMul,
   pickUpFromCamp,
   setCampOrDeposit,
+  unloadAtCamp,
 } from "./game/orders";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import {
@@ -653,7 +654,7 @@ function advancePinned(
   );
 }
 
-// --- camp set / deposit / pick up ---
+// --- camp set / unload（荷下ろし）/ pick up ---
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
@@ -674,6 +675,7 @@ function advancePinned(
   world.leader.salvagedCount = 1;
   world.salvaged = 3;
   assert.equal(setCampOrDeposit(world), "denied");
+  assert.equal(unloadAtCamp(world), "denied"); // too far
   assert.equal(world.camp!.stashedCount, 2);
 
   // Return and pick up
@@ -684,10 +686,18 @@ function advancePinned(
   assert.equal(world.leader.salvagedCount, 2);
   assert.equal(world.camp!.stashedCount, 0);
 
-  // Deposit again near camp
-  assert.equal(setCampOrDeposit(world), "deposited");
+  // C near existing camp does not deposit (use unload)
+  assert.equal(setCampOrDeposit(world), "denied");
+  assert.equal(world.leader.salvagedCount, 2);
+  assert.equal(world.camp!.stashedCount, 0);
+
+  // Explicit 荷下ろし near camp
+  assert.equal(unloadAtCamp(world), "unloaded");
   assert.equal(world.leader.salvagedCount, 0);
   assert.equal(world.camp!.stashedCount, 2);
+
+  // Unload with no cargo denied
+  assert.equal(unloadAtCamp(world), "denied");
 }
 
 
