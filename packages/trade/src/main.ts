@@ -24,8 +24,11 @@ import {
   formatTypedRepairSpend,
   grantDemoInventory,
   grantStarterFleet,
+  grantVerifyPerfectLockedCircuit,
+  grantVerifyTrueCircuit,
   ingestLocationSearch,
   loadPlaytestSeed,
+  VERIFY_TRUE_SOLUTION_HINT,
   markDeployed,
   repairClassic,
   repairCost,
@@ -277,7 +280,12 @@ function render() {
         <button type="button" class="secondary" id="btn-inv">デモ資材バッグ</button>
         <button type="button" class="secondary" id="btn-reset">デモ初期化</button>
       </div>
+      <div class="row" style="margin-top:0.5rem">
+        <button type="button" class="secondary" id="btn-verify-true" title="可解な 2×2 真盤（未解）を HubSave.circuits へ">検証用真盤を受領</button>
+        <button type="button" class="secondary" id="btn-verify-perfect" title="既に完璧ロック済みの検証盤（刻印付き）">検証用・既に完璧</button>
+      </div>
       <p class="muted" style="margin-top:0.5rem">「シード読込」= 健在2機 + 要修理1機・クレジット/型付き資材（EXAMPLE_TYPED_REPAIR_COST×3）/弾薬入り。要修理機を型付き修理 → 出撃選択に載るループ用。</p>
+      <p class="muted" style="margin-top:0.35rem">検証用真盤 = 保証可解の小さな回路（解く→完璧ロック）。検証用・既に完璧 = ロック UI / 刻印の即確認用。</p>
     </div>
 
     <div class="card">
@@ -352,6 +360,7 @@ function render() {
           : `<p class="muted" style="margin-top:0.75rem">セクター未取込（invade → ?sectorX=&sectorY=&density=）</p>`
       }
       <h3 style="font-size:0.9rem;margin:0.75rem 0 0">保有回路（HubSave）</h3>
+      <p class="muted" style="margin:0.35rem 0 0;font-size:0.75rem">検証用ヒント（ネタバレ軽め）: ${escapeHtml(VERIFY_TRUE_SOLUTION_HINT)}</p>
       ${circuitRows(state)}
       <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(invadeUrl)}</p>
       <p class="mono muted" style="margin-top:0.35rem">${escapeHtml(restoreUrl)}</p>
@@ -384,6 +393,14 @@ function render() {
   });
   document.getElementById("btn-reset")?.addEventListener("click", () => {
     state = resetHangar();
+    render();
+  });
+  document.getElementById("btn-verify-true")?.addEventListener("click", () => {
+    state = grantVerifyTrueCircuit(state);
+    render();
+  });
+  document.getElementById("btn-verify-perfect")?.addEventListener("click", () => {
+    state = grantVerifyPerfectLockedCircuit(state);
     render();
   });
   document.getElementById("btn-select-all")?.addEventListener("click", () => {

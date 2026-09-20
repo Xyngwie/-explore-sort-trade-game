@@ -43,6 +43,11 @@ import {
   isCircuitLocked,
   DEFAULT_CRAFT_SIGNATURE,
   CRAFT_SIGNATURE_STORAGE_KEY,
+  grantVerifyTrueCircuit,
+  grantVerifyPerfectLockedCircuit,
+  VERIFY_TRUE_CIRCUIT_ID,
+  VERIFY_PERFECT_CIRCUIT_ID,
+  VERIFY_TRUE_PUZZLE_ID,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -516,6 +521,48 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     "回路職人",
   );
   assert.equal(store.getItem(CRAFT_SIGNATURE_STORAGE_KEY), "回路職人");
+}
+
+
+// --- verify-true / verify-perfect hangar grants ---
+{
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = resetHangar(store);
+  hs = setCraftSignature(hs, "検証プレイヤ", store);
+  hs = grantVerifyTrueCircuit(hs);
+  const trueRec = hs.hub.circuits.find((c) => c.circuitId === VERIFY_TRUE_CIRCUIT_ID);
+  assert.ok(trueRec);
+  assert.equal(trueRec!.circuitBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(trueRec!.outcome, "offline");
+  assert.equal(isCircuitLocked(trueRec!), false);
+  assert.equal(trueRec!.circuitBoard.cols, 2);
+  assert.equal(hs.lastCircuit?.circuitId, VERIFY_TRUE_CIRCUIT_ID);
+
+  hs = grantVerifyPerfectLockedCircuit(hs, store);
+  const perf = hs.hub.circuits.find((c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID);
+  assert.ok(perf);
+  assert.equal(perf!.locked, true);
+  assert.equal(perf!.outcome, "fully_awakened");
+  assert.equal(perf!.lastEditorName, "検証プレイヤ");
+  assert.equal(isCircuitLocked(perf!), true);
+
+  const restoreLocked = buildRestoreUrl(hs, VERIFY_PERFECT_CIRCUIT_ID);
+  assert.ok(
+    restoreLocked.includes("circuitLocked=1") ||
+      restoreLocked.includes("circuitLocked=true"),
+  );
+  const restoreTrue = buildRestoreUrl(hs, VERIFY_TRUE_CIRCUIT_ID);
+  assert.ok(restoreTrue.includes("circuitId=verify_true"));
+  assert.ok(restoreTrue.includes("circuitBoard="));
+
+  const reloaded = createInitialHangar(store);
+  assert.ok(reloaded.hub.circuits.some((c) => c.circuitId === VERIFY_TRUE_CIRCUIT_ID));
+  assert.ok(
+    reloaded.hub.circuits.some(
+      (c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID && c.locked === true,
+    ),
+  );
 }
 
 console.log("trade hangar selftest: ok");

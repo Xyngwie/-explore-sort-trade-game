@@ -97,6 +97,24 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 
 探索戦闘ルール・sort ルールは変更しない（trade スタブのみ）。
 
+### 4.5.2 検証用真盤（Perfect Circuit seed）
+
+ロック／刻印のプレイテスト用に、**保証可解**な 2×2 Slitherlink を HubSave.circuits へ授与できる。
+
+| ボタン | circuitId | 内容 |
+|---|---|---|
+| **検証用真盤を受領** | `verify_true` | 未解・可解（`puzzleId=verify-true-2`）。restore で解く → `fully_awakened` + perfect lock |
+| **検証用・既に完璧** | `verify_perfect` | 解答済み + `locked` + `lastEditorName`（署名があればそれを刻印） |
+
+共有データ: `@estg/shared` の `perfect-circuit-seed`（`buildVerifyTrueUnsolvedBoard` / `buildVerifyPerfectLockedBoard`）。restore は同 `puzzleId` で固定手がかりを返す（`generatePuzzle`）。
+
+<details>
+<summary>ネタバレ（解答ヒント）</summary>
+
+外周を一周（内部の十字辺は線にしない）。各マスの周囲辺数は 2。定数 `VERIFY_TRUE_SOLUTION_HINT` と同文。
+
+</details>
+
 ## 4. スタブしているもの
 
 - 弾薬の購入 UI（初期 `ammoLoad` のまま出撃に載せるだけ）
@@ -134,6 +152,7 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 ブラウザで `http://localhost:5175/` を開き:
 
 0. （推奨）「シード読込」→ 健在2 + 要修理1・資材/弾薬入りで即プレイテスト可  
+0c. **回路ロック:** 「検証用・既に完璧」→ 一覧に完璧·編集不可 →「閲覧へ」で restore が編集不可表示。または「検証用真盤を受領」→「修復へ」→ 外周一周で完全覚醒 → 拠点へ戻すとロック  
 0b. **修理ループ:** 要修理機の「修理（型付き）」→ 在庫/クレジット減・健在化 → 出撃チェックに載る → 「探索へ配備」  
 1. または「機体を受領」→ 健在機を選択 → 「探索へ配備」の URL を確認（`deployedInstanceIds` + `mechDurability`）  
 2. **実往復:** リンクで explore へ → 撤退 or EXTRACT →「拠点へ摩耗報告」→ trade で耐久減少を確認  

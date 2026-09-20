@@ -141,6 +141,8 @@ trade ハンガーの一覧から選択して trade→restore URL を開ける�
 
 加算フィールド（HubSave v2 のまま）: `lastEditorName?`, `locked?`（board 側に `perfect?` も可）。ヘルパ: `isCircuitLocked` / `isPerfectCircuitClearance` / `stampCircuitEditor` / `sanitizeEditorName`。
 
+プレイテスト用の保証可解盤（`puzzleId=verify-true-2` · 2×2 · 手がかり全 2）は trade ハンガーから授与。詳細・ネタバレは [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md) §4.5.2。
+
 ## 5.5. ハンドオフ契約（キーのみ）
 
 正本: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
