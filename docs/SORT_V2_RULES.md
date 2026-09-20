@@ -1,6 +1,6 @@
 # Sort v2 ルール（精製 / Athanor）
 
-**ステータス:** 採用方針（2026-09-16）・実装は後続（`packages/sort` 最小実装）  
+**ステータス:** 採用方針（2026-09-16）。`packages/sort` の #47 実装は provisional であり、置き換え可能。
 **目的:** 現行 Athanor の「先に配合を決めてからパズル」より、因果が読めるルールにする。
 
 関連: `packages/shared` の `PlayerExpeditionState` / `CraftingPuzzleResult` / explore→sort ハンドオフ。
@@ -86,9 +86,12 @@ invalidPieceCount = floor(validPieceBudget * invalidRatio)
 
 ## 5. プレイ中
 
+- **意図する手触り:** Panel de Pon / Zoo Keeper 系の落下パネル。盤面でパネルをそろえてマッチさせ、消去後の落下から連鎖を生む。**Columns のような 3 個 1 列の落下操作を意味しない。**
 - マッチ3（または同等の消去パズル）で**有効ピースだけ**消せる
 - 無効ピースは選択・マッチ対象外（移動でどかせるかは実装任せ。最初は「消せない壁／ゴミ」で可）
 - 制限: 手数 or 時間のどちらか一方を v0 で固定（推奨: **手数**の方が成果との対応が明確）
+
+> 現行 #47 の `packages/sort` はこの契約を確認するための Columns-like provisional。パズル UI／操作は将来置き換えてよいが、コンテナ予算・無効ピース・成果・ハンドオフの契約は維持する。
 
 ---
 
@@ -110,7 +113,7 @@ craftMultiplier = f(連鎖数, 残り手数, …)   # 1.000〜1.100 程度
 
 v2 最小実装では `craftMultiplier = 1` でもよい。
 
-Hub 回路の集計 `craftMultiplier`（trade→explore の `circuitBonuses` → explore→sort の `craftMultiplier` / `circuitBonuses`）を受け取った場合は、その値を成果倍率に使う。パズル連鎖由来の倍率とは別系統。Columns 手触りは `packages/sort` 実装（[`SORT_V0.md`](./SORT_V0.md)）・**経済ルールは本仕様のまま**。
+Hub 回路の集計 `craftMultiplier`（trade→explore の `circuitBonuses` → explore→sort の `craftMultiplier` / `circuitBonuses`）を受け取った場合は、その値を成果倍率に使う。パズル連鎖由来の倍率とは別系統。Panel de Pon / Zoo Keeper 系の手触りは [`SORT_V0.md`](./SORT_V0.md) に記録する。**経済ルールは本仕様のまま**。
 
 ロス:
 

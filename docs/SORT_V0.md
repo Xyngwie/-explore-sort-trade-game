@@ -1,13 +1,21 @@
-# Sort v0（Module 2 精製 — Columns）
+# Sort v0（Module 2 精製 — Panel de Pon / Zoo Keeper 型）
 
-**ステータス:** Columns 実装（`packages/sort`）· 2026-09-20  
-**目的:** SORT_V2_RULES / SORT_YIELD_V2 の契約を**触って確認**できるループ。手触りは Columns 系落下／連鎖。
+**ステータス:** Module 2 の意図は Panel de Pon / Zoo Keeper 系。現行 `packages/sort` は #47 の Columns-like provisional 実装で、置き換え可能 · 2026-09-21
+**目的:** SORT_V2_RULES / SORT_YIELD_V2 の契約を**触って確認**できるループ。
+
+> **重要:** 目指す手触りは、落下パネルを盤面で操作し、同色をマッチ消去して連鎖させるもの。**Columns のような 3 個 1 列の落下パズルではない。** 現行の 3 個落下列・回転実装は #47 の仮置きであり、製品仕様の正本ではない。経済・成果・ハンドオフの契約は `SORT_V2_RULES` / `SORT_YIELD_V2` を参照する。
 
 関連: [`SORT_V2_RULES.md`](./SORT_V2_RULES.md)、[`SORT_YIELD_V2.md`](./SORT_YIELD_V2.md)、explore / trade ハンドオフ。
 
 ---
 
-## 1. スコープ
+## 1. 意図する手触り（製品方針）
+
+- パネルが落下し、盤面上のパネルを操作して同色をそろえる。
+- マッチしたパネルが消え、上のパネルが落ちて次のマッチを生む。連鎖が気持ちよさの中心。
+- 操作単位や盤面 UI はこの感触を実現する方向で決める。3 個の宝石を縦列で操作する Columns 方式を前提にしない。
+
+## 2. 現行 provisional 実装（#47 / Columns-like）
 
 | 含む | 含まない（本実装外） |
 |---|---|
@@ -20,7 +28,7 @@
 
 ---
 
-## 2. 画面 / フロー
+## 3. 画面 / フロー（現行 provisional #47）
 
 ```text
 起動
@@ -36,7 +44,7 @@
 
 ---
 
-## 3. 実装メモ（Columns）
+## 4. 実装メモ（現行 provisional #47 / Columns-like）
 
 - 盤は **6×12**。袋（予算＋ジャンク）から都度 3 個の落下列をスポーン（残り 1–2 個なら短い列）
 - 操作: 左右移動・回転（下→上サイクル）・ソフト／ハードドロップ。画面ボタン＋キー＋スワイプ
@@ -48,7 +56,7 @@
 
 ---
 
-## 4. 受け入れ条件
+## 5. 受け入れ条件（現行 provisional #47 の確認項目）
 
 1. explore 相当のクエリで `validPieceBudget` が変わる  
 2. ジャンクはマッチ／消去されず、有効ピースの直線 3+ だけ消える  
@@ -60,7 +68,7 @@
 
 ---
 
-## 5. 試し方
+## 6. 試し方（現行 provisional #47）
 
 ```bash
 npm install
@@ -98,7 +106,7 @@ http://localhost:5174/?salvagedContainers=2&totalStockPieces=50&isExtracted=0
 
 ---
 
-## 6. 主なファイル
+## 7. 主なファイル
 
 | パス | 役割 |
 |---|---|
