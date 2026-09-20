@@ -1,10 +1,12 @@
 # Sort Yield v2（Module 2 成果の型付き再接続）
 
-**ステータス:** 採用方針（2026-09-17）・契約型は `packages/shared`、sort / trade UI 実装は後続  
+**ステータス:** 採用方針（2026-09-17）・契約型は `packages/shared`。現行 `packages/sort` UI は #47 の provisional 実装で、置き換え可能。
 **目的:** 精製パズルの消去成果を、集計 `yieldFood` / `yieldMaterial` / `yieldEnergy` だけでなく、修理で消費できる **汎用資材 ID** と **特定パーツ ID** のバッグとしても trade に渡せるようにする。
 
 関連: `docs/SORT_V2_RULES.md`、`docs/MECH_FLEET.md`、`docs/EXPLORE_IO_V2.md`、`packages/shared` の `sort-yield.ts` / `handoff.ts` / `expedition.ts`。
 
+> **Module 2 の手触りメモ:** 意図するパズルは Panel de Pon / Zoo Keeper 系の落下パネル・マッチ消去・連鎖であり、Columns の 3 個 1 列を固定しない。#47 の Columns-like 実装は provisional で、置き換えても本出力契約は維持する。
+>
 > **Module 3 メモ（本 PR では実装しない）:** 型付き修理コストでバッグを減らす UI・セーブ v3 は後続。本仕様は Module 2 の**出力契約**と shared ヘルパのみ。
 
 ---
