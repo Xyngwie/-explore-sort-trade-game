@@ -11,6 +11,9 @@ import {
   VERIFY_TRUE_CLUES,
   buildVerifyTrueSolutionMarks,
   buildVerifyTrueUnsolvedBoard,
+  PERFECT_CIRCUIT_DEV_RATE,
+  PERFECT_CIRCUIT_PROD_RATE,
+  resolvePerfectCircuitInjectRate,
   type EdgeMark,
 } from "@estg/shared";
 import {
@@ -18,6 +21,7 @@ import {
   deriveStubOutcome,
   digitSatisfaction,
   isCellDigitActivated,
+  generateFlawedClues,
   generatePuzzle,
   hEdgeIndex,
   isLoopClosed,
@@ -272,6 +276,54 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.equal(session.puzzle.cols, 2);
   assert.equal(session.locked, false);
   assert.equal(session.marks.every((m) => m === 0), true);
+}
+
+
+// --- Perfect Circuit injection rates on generatePuzzle ---
+{
+  assert.equal(PERFECT_CIRCUIT_PROD_RATE, 0.01);
+  assert.equal(PERFECT_CIRCUIT_DEV_RATE, 0.33);
+  assert.equal(
+    resolvePerfectCircuitInjectRate({ isDev: true }),
+    PERFECT_CIRCUIT_DEV_RATE,
+  );
+  assert.equal(
+    resolvePerfectCircuitInjectRate({ hostname: "cdn.example" }),
+    PERFECT_CIRCUIT_PROD_RATE,
+  );
+
+  const trueBoard = generatePuzzle("roll-me", 6, 6, { forceKind: "true" });
+  assert.equal(trueBoard.injectedTrue, true);
+  assert.equal(trueBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(trueBoard.cols, 2);
+  assert.deepEqual(trueBoard.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
+  const sol = buildVerifyTrueSolutionMarks();
+  assert.equal(isLoopClosed(sol, 2, 2), true);
+  assert.equal(digitSatisfaction(trueBoard.clues, sol, 2, 2).rate, 1);
+
+  const flawed = generatePuzzle("flaw-path", 6, 6, { forceKind: "flawed" });
+  assert.equal(flawed.injectedTrue, false);
+  assert.equal(flawed.puzzleId, "flaw-path");
+  assert.equal(flawed.cols, 6);
+  assert.deepEqual(flawed.clues, generateFlawedClues("flaw-path", 6, 6));
+
+  // rate 0 → always flawed; rate 1 → always true
+  const never = generatePuzzle("r0", 6, 6, { injectRate: 0, rng: () => 0 });
+  assert.equal(never.injectedTrue, false);
+  const always = generatePuzzle("r1", 6, 6, { injectRate: 1, rng: () => 0.99 });
+  assert.equal(always.injectedTrue, true);
+  assert.equal(always.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+
+  // bootstrap with explicit DEV rate + rng-forced inject via injectRate 1
+  const injectedSession = bootstrapFromSearch("", { injectRate: 1 });
+  assert.equal(injectedSession.injectedTrue, true);
+  assert.equal(injectedSession.puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.ok(injectedSession.note.includes("真盤"));
+
+  const flawedSession = bootstrapFromSearch("", { injectRate: 0 });
+  assert.equal(flawedSession.injectedTrue, false);
+  assert.equal(flawedSession.puzzle.puzzleId, "restore-stub-6");
+  assert.equal(flawedSession.puzzle.cols, 6);
 }
 
 console.log("restore circuit.selftest ok");

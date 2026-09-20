@@ -11,6 +11,7 @@ import {
   loadHubSaveFromLocalStorage,
   parseTradeToRestoreSearch,
   resolveModuleBaseUrl,
+  resolvePerfectCircuitInjectRate,
   sanitizeEditorName,
   stripHandoffParams,
   type CircuitOutcome,
@@ -44,13 +45,68 @@ export type RestoreSession = {
   locked: boolean;
   /** Engraved name when locked (prefer HubSave lastEditorName). */
   engravedName?: string;
+  /** Rate used when generating a fresh board (demo / id-only). */
+  perfectInjectRate?: number;
+  /** True when generatePuzzle injected a seeded true board. */
+  injectedTrue?: boolean;
 };
+
+export type BootstrapRateOptions = {
+  /** Override hostname (default: window.location.hostname when available). */
+  hostname?: string | null;
+  /** Pass import.meta.env.DEV from the Vite entry. */
+  isDev?: boolean;
+  envRate?: string | number | null;
+  /**
+   * Explicit rate (wins over resolve). Use `0` in Node selftests that expect
+   * a stable flawed demo board.
+   */
+  injectRate?: number;
+};
+
+function resolveInjectRateForBootstrap(
+  search: string,
+  rateOpts?: BootstrapRateOptions,
+): number {
+  if (rateOpts?.injectRate != null) {
+    return rateOpts.injectRate;
+  }
+
+  // Browser (or explicit rateOpts from Vite entry): resolve DEV/prod/query.
+  // Bare Node selftests calling bootstrapFromSearch(search) with no opts
+  // stay at 0 so demo boards remain deterministic flawed stubs.
+  const inBrowser = typeof window !== "undefined";
+  if (!inBrowser && rateOpts == null) {
+    return 0;
+  }
+
+  let hostname = rateOpts?.hostname;
+  if (hostname === undefined && inBrowser) {
+    try {
+      hostname = window.location.hostname;
+    } catch {
+      hostname = null;
+    }
+  }
+  // Env rate is passed from Vite entry via rateOpts.envRate
+  // (import.meta.env.VITE_PERFECT_CIRCUIT_RATE) — avoid Node `process` here.
+  return resolvePerfectCircuitInjectRate({
+    search,
+    hostname,
+    isDev: rateOpts?.isDev,
+    envRate: rateOpts?.envRate ?? null,
+  });
+}
 
 /**
  * Parse trade→restore query. Hydrate marks from circuitBoard when present;
  * otherwise seed a demo puzzle (circuitId as seed when only id is given).
+ * Fresh boards (demo / id-only) apply Perfect Circuit injection rates.
  */
-export function bootstrapFromSearch(search: string): RestoreSession {
+export function bootstrapFromSearch(
+  search: string,
+  rateOpts?: BootstrapRateOptions,
+): RestoreSession {
   const inbound = parseTradeToRestoreSearch(search);
   const hubEditor = lookupHubCircuitLock(
     inbound?.circuitId,
@@ -74,19 +130,22 @@ export function bootstrapFromSearch(search: string): RestoreSession {
       (inbound.circuitId && inbound.circuitId.trim()) ||
       DEFAULT_SEED;
     // Fixed verify-true seed may override cols/rows to the known solvable size.
+    // Do NOT re-roll injection here — board geometry must match edgeState.
     const puzzle = generatePuzzle(seed, board.cols, board.rows);
     const cols = puzzle.cols;
     const rows = puzzle.rows;
     const n = edgeCount(cols, rows);
     const marks = decodeEdgeState(board.edgeState, n);
+    const injectedTrue = puzzle.injectedTrue === true;
     const session: RestoreSession = {
       puzzle,
       marks,
       source: "handoff-board",
       note: `HUB 受取 · 盤 hydrate ${cols}×${rows}${
         inbound.circuitId ? ` · id ${inbound.circuitId}` : ""
-      }`,
+      }${injectedTrue ? " · 真盤" : ""}`,
       locked,
+      injectedTrue,
     };
     if (inbound.circuitId) session.circuitId = inbound.circuitId;
     if (board.outcome != null) session.inboundOutcome = board.outcome;
@@ -100,39 +159,80 @@ export function bootstrapFromSearch(search: string): RestoreSession {
     return session;
   }
 
+  const injectRate = resolveInjectRateForBootstrap(search, rateOpts);
+
   if (inbound?.circuitId) {
-    const puzzle = generatePuzzle(inbound.circuitId, DEFAULT_COLS, DEFAULT_ROWS);
+    const puzzle = generatePuzzle(
+      inbound.circuitId,
+      DEFAULT_COLS,
+      DEFAULT_ROWS,
+      { injectRate },
+    );
     const n = edgeCount(puzzle.cols, puzzle.rows);
     const marks =
       loadMarksFromStorage(puzzle.puzzleId, n) ??
       freshMarks(puzzle.cols, puzzle.rows);
+    const injectedTrue = puzzle.injectedTrue === true;
     const session: RestoreSession = {
       circuitId: inbound.circuitId,
       puzzle,
       marks,
       source: "handoff-id",
-      note: `HUB 受取 · circuitId=${inbound.circuitId}（盤なし → シード生成）`,
+      note: `HUB 受取 · circuitId=${inbound.circuitId}（盤なし → シード生成 · inject ${(injectRate * 100).toFixed(1)}%）${
+        injectedTrue ? " · 真盤注入" : ""
+      }`,
       locked,
+      perfectInjectRate: injectRate,
+      injectedTrue,
     };
     if (passedEditor) session.editorName = passedEditor;
     if (locked) {
       session.engravedName = hubEditor?.lastEditorName ?? passedEditor;
     }
+    if (injectedTrue) {
+      try {
+        console.info(
+          "[restore] Perfect Circuit injected (true board)",
+          puzzle.puzzleId,
+          `rate=${injectRate}`,
+        );
+      } catch {
+        /* ignore */
+      }
+    }
     return session;
   }
 
-  const puzzle = generatePuzzle(DEFAULT_SEED, DEFAULT_COLS, DEFAULT_ROWS);
+  const puzzle = generatePuzzle(DEFAULT_SEED, DEFAULT_COLS, DEFAULT_ROWS, {
+    injectRate,
+  });
   const n = edgeCount(puzzle.cols, puzzle.rows);
   const marks =
     loadMarksFromStorage(puzzle.puzzleId, n) ??
     freshMarks(puzzle.cols, puzzle.rows);
+  const injectedTrue = puzzle.injectedTrue === true;
+  if (injectedTrue) {
+    try {
+      console.info(
+        "[restore] Perfect Circuit injected (true board)",
+        puzzle.puzzleId,
+        `rate=${injectRate}`,
+      );
+    } catch {
+      /* ignore */
+    }
+  }
   return {
     puzzle,
     marks,
     source: "demo",
-    note: "デモ盤 · クエリなし（trade→restore 未受信）",
+    note: `デモ盤 · クエリなし（inject ${(injectRate * 100).toFixed(1)}%）${
+      injectedTrue ? " · 真盤注入" : ""
+    }`,
     locked: false,
     editorName: passedEditor,
+    perfectInjectRate: injectRate,
+    injectedTrue,
   };
 }
 

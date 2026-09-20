@@ -28,6 +28,7 @@ import {
   grantVerifyTrueCircuit,
   ingestLocationSearch,
   loadPlaytestSeed,
+  resolveHangarPerfectInjectRate,
   VERIFY_TRUE_SOLUTION_HINT,
   markDeployed,
   repairClassic,
@@ -284,7 +285,7 @@ function render() {
         <button type="button" class="secondary" id="btn-verify-true" title="可解な 2×2 真盤（未解）を HubSave.circuits へ">検証用真盤を受領</button>
         <button type="button" class="secondary" id="btn-verify-perfect" title="既に完璧ロック済みの検証盤（刻印付き）">検証用・既に完璧</button>
       </div>
-      <p class="muted" style="margin-top:0.5rem">「シード読込」= 健在2機 + 要修理1機・クレジット/型付き資材（EXAMPLE_TYPED_REPAIR_COST×3）/弾薬入り。要修理機を型付き修理 → 出撃選択に載るループ用。</p>
+      <p class="muted" style="margin-top:0.5rem">「シード読込」= 健在2機 + 要修理1機・クレジット/型付き資材（EXAMPLE_TYPED_REPAIR_COST×3）/弾薬入り。要修理機を型付き修理 → 出撃選択に載るループ用。回路デモは Perfect inject（DEV/localhost 33% · 本番 1% · <span class="mono">?perfectRate=</span> 上書き）で稀に真盤。</p>
       <p class="muted" style="margin-top:0.35rem">検証用真盤 = 保証可解の小さな回路（解く→完璧ロック）。検証用・既に完璧 = ロック UI / 刻印の即確認用。</p>
     </div>
 
@@ -380,7 +381,16 @@ function render() {
     render();
   });
   document.getElementById("btn-seed")?.addEventListener("click", () => {
-    state = loadPlaytestSeed(state);
+    const injectRate = resolveHangarPerfectInjectRate({
+      search: window.location.search,
+      hostname: window.location.hostname,
+      isDev: Boolean(import.meta.env.DEV),
+      envRate:
+        (import.meta.env.VITE_PERFECT_CIRCUIT_RATE as string | undefined) ??
+        (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ??
+        null,
+    });
+    state = loadPlaytestSeed(state, { injectRate });
     render();
   });
   document.getElementById("btn-grant")?.addEventListener("click", () => {

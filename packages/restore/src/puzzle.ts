@@ -3,6 +3,7 @@
  * Uses @estg/shared CircuitBoardState encode/decode; rules are provisional.
  */
 import {
+  buildInjectedOrFlawedPuzzle,
   createEmptyCircuitBoard,
   decodeEdgeState,
   encodeEdgeState,
@@ -11,6 +12,7 @@ import {
   type CircuitBoardState,
   type CircuitOutcome,
   type EdgeMark,
+  type InjectedBoardKind,
 } from "@estg/shared";
 
 /** Simple seeded PRNG (mulberry32). */
@@ -42,6 +44,24 @@ export type RestorePuzzle = {
   puzzleId: string;
   /** Cell clues; null = no digit. */
   clues: ClueGrid;
+  /**
+   * True when this board is a seeded Perfect Circuit (verify-true / injection),
+   * not a flawed random fill.
+   */
+  injectedTrue?: boolean;
+};
+
+export type GeneratePuzzleOptions = {
+  /**
+   * When set, roll Perfect Circuit injection at this rate among flawed boards.
+   * Fixed verify-true puzzleId always returns the true board (no roll).
+   * Omit to keep legacy behavior (flawed random only, unless verify-true id).
+   */
+  injectRate?: number;
+  /** Optional Uniform[0,1) RNG (default: mulberry32 from seed). */
+  rng?: () => number;
+  /** Test hook: force true or flawed path. */
+  forceKind?: InjectedBoardKind;
 };
 
 /** Horizontal edge index: row of dots `y` (0..rows), col `x` (0..cols-1). */
@@ -84,25 +104,14 @@ export function countLineEdgesAroundCell(
   return n;
 }
 
-/**
- * Generate a small clue grid from puzzleSeed.
- * Clues are decorative/provisional (not solved from a hidden solution).
- */
-export function generatePuzzle(
+/** Flawed / random digit fill (majority path; not Perfect). */
+export function generateFlawedClues(
   puzzleSeed: string,
-  cols = 6,
-  rows = 6,
-): RestorePuzzle {
-  const fixed = resolveVerifyTrueClues(puzzleSeed, cols, rows);
-  if (fixed) {
-    return {
-      cols: fixed.cols,
-      rows: fixed.rows,
-      puzzleId: fixed.puzzleId,
-      clues: fixed.clues.map((row) => [...row]),
-    };
-  }
-  const rnd = mulberry32(hashSeed(puzzleSeed));
+  cols: number,
+  rows: number,
+  rng?: () => number,
+): (number | null)[][] {
+  const rnd = rng ?? mulberry32(hashSeed(puzzleSeed));
   const clues: (number | null)[][] = [];
   for (let y = 0; y < rows; y++) {
     const row: (number | null)[] = [];
@@ -113,7 +122,66 @@ export function generatePuzzle(
     }
     clues.push(row);
   }
-  return { cols, rows, puzzleId: puzzleSeed, clues };
+  return clues;
+}
+
+/**
+ * Generate a small clue grid from puzzleSeed.
+ * With `injectRate`, may inject a seeded true board (generate-from-solution);
+ * otherwise flawed/random as before. Never relies on natural random digits for Perfect.
+ */
+export function generatePuzzle(
+  puzzleSeed: string,
+  cols = 6,
+  rows = 6,
+  opts?: GeneratePuzzleOptions,
+): RestorePuzzle {
+  const fixed = resolveVerifyTrueClues(puzzleSeed, cols, rows);
+  if (fixed) {
+    return {
+      cols: fixed.cols,
+      rows: fixed.rows,
+      puzzleId: fixed.puzzleId,
+      clues: fixed.clues.map((row) => [...row]),
+      injectedTrue: true,
+    };
+  }
+
+  const useInject =
+    opts?.injectRate != null || opts?.forceKind != null || opts?.rng != null;
+
+  if (!useInject) {
+    // Legacy: flawed only (deterministic from seed).
+    return {
+      cols,
+      rows,
+      puzzleId: puzzleSeed,
+      clues: generateFlawedClues(puzzleSeed, cols, rows),
+      injectedTrue: false,
+    };
+  }
+
+  // Separate streams: roll vs clue digits so flawed layouts stay seed-stable.
+  const rollRng =
+    opts?.rng ?? mulberry32(hashSeed(`${puzzleSeed}:perfect-roll`));
+  const built = buildInjectedOrFlawedPuzzle({
+    seed: puzzleSeed,
+    cols,
+    rows,
+    rate: opts?.injectRate ?? 0,
+    rng: rollRng,
+    forceKind: opts?.forceKind,
+    generateFlawed: (seed, c, r) =>
+      generateFlawedClues(seed, c, r, mulberry32(hashSeed(seed))),
+  });
+
+  return {
+    cols: built.cols,
+    rows: built.rows,
+    puzzleId: built.puzzleId,
+    clues: built.clues.map((row) => [...row]),
+    injectedTrue: built.injectedTrue,
+  };
 }
 
 export type DigitStats = {

@@ -26,7 +26,12 @@ import {
   VERIFY_TRUE_CIRCUIT_ID,
   VERIFY_TRUE_PUZZLE_ID,
   VERIFY_TRUE_SOLUTION_HINT,
+  PERFECT_CIRCUIT_DEV_RATE,
+  PERFECT_CIRCUIT_PROD_RATE,
+  PERFECT_CIRCUIT_PROD_RATE_ALT,
   resolveModuleBaseUrl,
+  resolvePerfectCircuitInjectRate,
+  rollPerfectCircuit,
   canAffordRepair,
   canAffordYieldCost,
   canDeploy,
@@ -237,8 +242,26 @@ export function clearM45StashFromLocalStorage(
   store?.removeItem(HUB_M45_STASH_STORAGE_KEY);
 }
 
-/** Fresh demo CircuitBoardState for trade→restore when no stash/seed board. */
-export function buildSeedCircuitBoard(): CircuitBoardState {
+export type SeedCircuitBoardOptions = {
+  /** When set, roll Perfect Circuit injection at this rate. */
+  injectRate?: number;
+  /** Uniform[0,1) RNG (default Math.random). */
+  rng?: () => number;
+};
+
+/**
+ * Fresh demo CircuitBoardState for trade→restore when no stash/seed board.
+ * With `injectRate`, may grant the seeded verify-true board instead of stub-8.
+ */
+export function buildSeedCircuitBoard(
+  opts?: SeedCircuitBoardOptions,
+): CircuitBoardState {
+  if (opts?.injectRate != null) {
+    const rng = opts.rng ?? (() => Math.random());
+    if (rollPerfectCircuit(rng, { rate: opts.injectRate })) {
+      return buildVerifyTrueUnsolvedBoard();
+    }
+  }
   return createEmptyCircuitBoard(8, 8, SEED_CIRCUIT_PUZZLE_ID);
 }
 
@@ -649,14 +672,38 @@ export function buildPlaytestSeedHub(): HubSnapshot {
   });
 }
 
+export type LoadPlaytestSeedOptions = {
+  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null;
+  /** Perfect Circuit injection rate for the demo circuit board. */
+  injectRate?: number;
+  rng?: () => number;
+};
+
 /** Replace hub with playtest seed and persist via HubSave (+ demo circuit stash). */
 export function loadPlaytestSeed(
   state: HangarState,
-  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+  storageOrOpts?:
+    | Pick<Storage, "getItem" | "setItem" | "removeItem">
+    | null
+    | LoadPlaytestSeedOptions,
 ): HangarState {
-  const seedBoard = buildSeedCircuitBoard();
+  const opts: LoadPlaytestSeedOptions =
+    storageOrOpts != null &&
+    typeof storageOrOpts === "object" &&
+    ("injectRate" in storageOrOpts ||
+      "rng" in storageOrOpts ||
+      "storage" in storageOrOpts)
+      ? (storageOrOpts as LoadPlaytestSeedOptions)
+      : { storage: storageOrOpts as LoadPlaytestSeedOptions["storage"] };
+  const storage = opts.storage ?? undefined;
+  const seedBoard = buildSeedCircuitBoard({
+    injectRate: opts.injectRate,
+    rng: opts.rng,
+  });
+  const injected = seedBoard.puzzleId === VERIFY_TRUE_PUZZLE_ID;
+  const circuitId = injected ? VERIFY_TRUE_CIRCUIT_ID : SEED_CIRCUIT_ID;
   const hub = upsertCircuitIntoHub(buildPlaytestSeedHub(), {
-    circuitId: SEED_CIRCUIT_ID,
+    circuitId,
     circuitBoard: seedBoard,
     outcome: "offline",
   });
@@ -666,15 +713,35 @@ export function loadPlaytestSeed(
     lastDeployedIds: [],
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
     lastCircuit: resolveActiveCircuit(hub, {
-      circuitId: SEED_CIRCUIT_ID,
+      circuitId,
       circuitBoard: seedBoard,
       outcome: "offline",
     }),
-    craftSignature: state.craftSignature || loadCraftSignature(storage ?? undefined),
-    log: pushLog(state.log, "シード読込"),
-    notice: "プレイテスト用シードを読込（健在2 + 要修理1 · 回路デモ）",
+    craftSignature: state.craftSignature || loadCraftSignature(storage),
+    log: pushLog(
+      state.log,
+      injected
+        ? `シード読込 · 真盤注入 ${VERIFY_TRUE_PUZZLE_ID}`
+        : "シード読込",
+    ),
+    notice: injected
+      ? `プレイテスト用シード · 真盤気配（${VERIFY_TRUE_PUZZLE_ID}）`
+      : "プレイテスト用シードを読込（健在2 + 要修理1 · 回路デモ）",
   };
-  return persistHangar(next, storage ?? undefined);
+  return persistHangar(next, storage);
+}
+
+/**
+ * Resolve hangar Perfect inject rate (DEV 33% / prod 1% / query / env).
+ * Call from Vite UI with hostname + import.meta.env.DEV.
+ */
+export function resolveHangarPerfectInjectRate(ctx?: {
+  search?: string | null;
+  hostname?: string | null;
+  isDev?: boolean;
+  envRate?: string | number | null;
+}): number {
+  return resolvePerfectCircuitInjectRate(ctx ?? {});
 }
 
 export function resetHangar(
@@ -1193,4 +1260,9 @@ export {
   VERIFY_PERFECT_CIRCUIT_ID,
   VERIFY_TRUE_PUZZLE_ID,
   VERIFY_TRUE_SOLUTION_HINT,
+  PERFECT_CIRCUIT_DEV_RATE,
+  PERFECT_CIRCUIT_PROD_RATE,
+  PERFECT_CIRCUIT_PROD_RATE_ALT,
+  resolvePerfectCircuitInjectRate,
+  rollPerfectCircuit,
 };
