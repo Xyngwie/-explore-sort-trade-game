@@ -3,6 +3,7 @@
 **ステータス:** 願望・与太話由来の構想メモ · §6 刻印/ロックは薄い実装あり  
 **位置づけ:** **NOT V0 acceptance / NOT implementation ticket**  
 **Related:** [`PRODUCT_VISION.md`](./PRODUCT_VISION.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)（flawed boards / perfect rare）
+**Probability analysis:** [`PERFECT_CIRCUIT_PROBABILITY.md`](./PERFECT_CIRCUIT_PROBABILITY.md) — random digit boards ≈ never unique Perfect on 6×6/8×8; use seeded injection for ~1% / ~0.1% targets.
 
 > これは Module 5 の先にある「もしも」のスケール感を記録するための拡張メモである。現行の V0 受入条件、実装チケット、バランス仕様、セーブ契約を追加・変更しない。矛盾を含む盤（flawed boards）と、稀にしか現れない完全盤（perfect rare）の対比も、ここでは世界観上の仮説として扱う。
 
