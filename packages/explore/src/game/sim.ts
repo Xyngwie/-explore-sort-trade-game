@@ -1,5 +1,10 @@
 import { decideWingman } from "./brain";
-import { applyOrder, onSalvageCompleted, pushLog } from "./orders";
+import {
+  applyOrder,
+  cargoSpeedMul,
+  onSalvageCompleted,
+  pushLog,
+} from "./orders";
 import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
 import type { Bullet, Unit, World } from "./types";
 
@@ -287,6 +292,7 @@ function resolveBoardingLiftOff(world: World): void {
   }
 
   world.boarding = null;
+  world.camp = null;
   world.phase = "result";
 
   if (captainIn) {
@@ -326,6 +332,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     world.failReason = "timeout";
     world.salvaged = 0;
     world.boarding = null;
+  world.camp = null;
     pushLog(world, "時間切れ。未脱出のため失敗。");
     return;
   }
@@ -337,6 +344,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     world.failReason = "leader_down";
     world.salvaged = 0;
     world.boarding = null;
+  world.camp = null;
     pushLog(world, "隊長撃破。作戦失敗。");
     return;
   }
@@ -353,7 +361,9 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   } else if (input.clickMove) {
     leader.moveTarget = { ...input.clickMove };
   }
-  moveToward(leader, leader.moveTarget, world.balance.moveSpeed, dt, world);
+  const leadSpeed =
+    world.balance.moveSpeed * cargoSpeedMul(leader, world.balance);
+  moveToward(leader, leader.moveTarget, leadSpeed, dt, world);
 
   // Leader fire: movement stays player-led; auto-engage nearest threat in weapon
   // range (escort-style reaction fire). Space/F also requests the same shot.
@@ -391,7 +401,9 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     w.cooldown = Math.max(0, w.cooldown - dt);
     const intent = decideWingman(world, w, dt);
     w.moveTarget = intent.moveTarget;
-    moveToward(w, intent.moveTarget, world.balance.wingmanSpeed, dt, world);
+    const wingSpeed =
+      world.balance.wingmanSpeed * cargoSpeedMul(w, world.balance);
+    moveToward(w, intent.moveTarget, wingSpeed, dt, world);
     if (intent.fireAt) tryFire(world, w, intent.fireAt, false);
     updateSalvage(world, w, intent.trySalvage, dt);
   }

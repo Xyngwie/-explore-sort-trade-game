@@ -96,6 +96,14 @@ export type ExtractPoint = { pos: Vec2; radius: number };
 
 export type Camera = { x: number; y: number; w: number; h: number };
 
+/** Temporary staging depot for stashed salvaged containers. */
+export type CampState = {
+  /** World position (= captain pos when set / last moved). */
+  pos: Vec2;
+  /** Containers deposited here (still counted in world.salvaged). */
+  stashedCount: number;
+};
+
 export type World = {
   balance: Balance;
   phase: Phase;
@@ -110,6 +118,8 @@ export type World = {
   extract: ExtractPoint;
   /** Active extract / boarding phase; null when idle. */
   boarding: BoardingState | null;
+  /** Optional staging camp; null when unset. */
+  camp: CampState | null;
   bullets: Bullet[];
   logs: LogLine[];
   salvaged: number;

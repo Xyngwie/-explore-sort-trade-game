@@ -1,4 +1,5 @@
 import { clamp, dist } from "./math";
+import type { Balance } from "./balance";
 import type { Stance, Unit, World } from "./types";
 import { STANCE_LABEL } from "./types";
 
@@ -158,4 +159,140 @@ export function onSalvageCompleted(world: World, unit: Unit): void {
   } else {
     pushLog(world, `${unit.name}：コンテナ回収完了。`);
   }
+}
+
+/**
+ * Move-speed multiplier from carried cargo (empty → 1, full capacity → cargoSpeedMulMin).
+ */
+export function cargoSpeedMul(unit: Unit, balance: Balance): number {
+  if (unit.capacity <= 0) return 1;
+  const load = Math.min(1, Math.max(0, unit.salvagedCount / unit.capacity));
+  return 1 - load * (1 - balance.cargoSpeedMulMin);
+}
+
+function friendliesNear(
+  world: World,
+  pos: { x: number; y: number },
+  radius: number,
+): Unit[] {
+  return [world.leader, ...world.wingmen].filter(
+    (u) => u.alive && dist(u.pos, pos) <= radius,
+  );
+}
+
+function depositUnitIntoCamp(world: World, unit: Unit): number {
+  if (!world.camp || unit.salvagedCount <= 0) return 0;
+  const n = unit.salvagedCount;
+  world.camp.stashedCount += n;
+  unit.salvagedCount = 0;
+  return n;
+}
+
+/**
+ * Set camp at captain position, or deposit into existing camp when in range.
+ * Relocating an occupied camp is denied — clear stash first or return to it.
+ */
+export function setCampOrDeposit(
+  world: World,
+): "camp_set" | "deposited" | "moved" | "denied" {
+  if (world.phase !== "sortie" || !world.leader.alive) return "denied";
+  const leader = world.leader;
+  const r = world.balance.interactRadius * 1.5;
+
+  if (!world.camp) {
+    world.camp = { pos: { ...leader.pos }, stashedCount: 0 };
+    let deposited = depositUnitIntoCamp(world, leader);
+    for (const u of friendliesNear(world, world.camp.pos, r)) {
+      if (u.id === leader.id) continue;
+      deposited += depositUnitIntoCamp(world, u);
+    }
+    pushLog(
+      world,
+      deposited > 0
+        ? `仮設キャンプ設置（隊長位置）。貨物 ${deposited} を預けた。`
+        : "仮設キャンプ設置（隊長位置）。",
+    );
+    return "camp_set";
+  }
+
+  if (dist(leader.pos, world.camp.pos) <= r) {
+    let deposited = 0;
+    for (const u of friendliesNear(world, world.camp.pos, r)) {
+      deposited += depositUnitIntoCamp(world, u);
+    }
+    if (deposited <= 0) {
+      pushLog(world, "キャンプ付近に預ける貨物なし。");
+      return "denied";
+    }
+    pushLog(
+      world,
+      `キャンプへ預けた：${deposited}（置場 ${world.camp.stashedCount}）。軽装で探索可。`,
+    );
+    return "deposited";
+  }
+
+  if (world.camp.stashedCount > 0) {
+    pushLog(
+      world,
+      "既存キャンプに貨物あり。取上げてから移設するか、キャンプへ戻れ。",
+    );
+    return "denied";
+  }
+  world.camp.pos = { ...leader.pos };
+  let deposited = depositUnitIntoCamp(world, leader);
+  for (const u of friendliesNear(world, world.camp.pos, r)) {
+    if (u.id === leader.id) continue;
+    deposited += depositUnitIntoCamp(world, u);
+  }
+  pushLog(
+    world,
+    deposited > 0
+      ? `キャンプ移設（隊長位置）。貨物 ${deposited} を預けた。`
+      : "キャンプ移設（隊長位置）。",
+  );
+  return "moved";
+}
+
+/**
+ * Captain (and nearby friendlies) pick up stashed cargo into free capacity.
+ */
+export function pickUpFromCamp(world: World): "picked" | "denied" {
+  if (world.phase !== "sortie" || !world.leader.alive || !world.camp) {
+    return "denied";
+  }
+  const camp = world.camp;
+  const r = world.balance.interactRadius * 1.5;
+  if (dist(world.leader.pos, camp.pos) > r) {
+    pushLog(world, "キャンプが遠い。近づいてから取り上げよ。");
+    return "denied";
+  }
+  if (camp.stashedCount <= 0) {
+    pushLog(world, "キャンプに貨物なし。");
+    return "denied";
+  }
+
+  let taken = 0;
+  const near = friendliesNear(world, camp.pos, r);
+  const order = [
+    ...near.filter((u) => u.kind === "leader"),
+    ...near.filter((u) => u.kind !== "leader"),
+  ];
+  for (const u of order) {
+    if (camp.stashedCount <= 0) break;
+    const free = Math.max(0, u.capacity - u.salvagedCount);
+    if (free <= 0) continue;
+    const n = Math.min(free, camp.stashedCount);
+    u.salvagedCount += n;
+    camp.stashedCount -= n;
+    taken += n;
+  }
+  if (taken <= 0) {
+    pushLog(world, "積載に空きなし。預けたまま軽装を維持。");
+    return "denied";
+  }
+  pushLog(
+    world,
+    `キャンプから積込：${taken}（残置場 ${camp.stashedCount}）。`,
+  );
+  return "picked";
 }

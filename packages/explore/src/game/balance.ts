@@ -69,6 +69,12 @@ export const BALANCE = {
   engageRaidHpMul: 1.0,
   /** World units to fan out on 散開捜索 (raid search). */
   scatterSearchDist: 280,
+  /**
+   * Carried-cargo move slowdown (friendly units).
+   * speedMul = lerp(1, cargoSpeedMulMin, salvagedCount / capacity).
+   * Empty → 1.0; full personal capacity → cargoSpeedMulMin.
+   */
+  cargoSpeedMulMin: 0.45,
 } as const;
 
 export type Balance = typeof BALANCE;
