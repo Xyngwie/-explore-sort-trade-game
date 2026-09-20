@@ -129,6 +129,23 @@ invade マインスイーパから探索へ渡す戦闘モード。キー契約�
 
 ---
 
+
+## 5.4 積載遅延と仮設キャンプ（cargo camp）
+
+**ステータス:** 薄実装済
+
+| 項目 | 挙動 |
+|---|---|
+| 積載遅延 | 友軍の移動速度に `cargoSpeedMul = lerp(1, cargoSpeedMulMin, salvagedCount/capacity)` を掛ける。空荷は等速、個人積載満杯で `BALANCE.cargoSpeedMulMin`（既定 0.45） |
+| キャンプ設置／預ける | ボタンまたは `C`。未設置なら隊長位置に仮設キャンプを置き、付近友軍の積載を置場へ移す。既存キャンプ付近なら預けのみ。貨物ありのキャンプは遠方から移設不可 |
+| 取り上げ | ボタンまたは `G`。キャンプ付近で置場から隊長→僚機の順に空き積載へ戻す |
+| 会計 | `world.salvaged` は回収時点で加算済みのまま（預けても没収しない）。置場は速度管理用の一時ステージング |
+| HUD | 隊長の速度％（積載遅延）とキャンプ状態（未設置／置場 N） |
+
+定数: `packages/explore/src/game/balance.ts` の `cargoSpeedMulMin`。API: `cargoSpeedMul` / `setCampOrDeposit` / `pickUpFromCamp`（`orders.ts`）。
+
+---
+
 ## 6. I/O v2 との関係
 
 本ドキュメントは **振る舞い** の正本。機体インスタンス入出力は `docs/EXPLORE_IO_V2.md`。
@@ -174,6 +191,7 @@ Wingman の学習や癖についての未成熟なビジョンは [`PRODUCT_VISI
 10. 隊長は発見済みコンテナに接触していれば E を押さなくても回収チャネルが進み、時間経過で回収完了する
 11. invade→explore の `sectorX`/`sectorY`/`density` を取込み、ブリーフィングに表示し、density で敵数・スポーン距離・敵速度が変わる。取込後に当該クエリを strip する
 12. `engage=forced` でブリーフィングに「強制交戦・周囲引き込み」を出し、`enemyCells`（または density＋neighbor 相当）に応じてより多い／硬い敵をスポーンする。`engage=raid` では「任意侵入」と少数集中スポーン
+13. 積載が増えると隊長／僚機の移動が遅くなる。キャンプ設置／預ける・取り上げができ、HUD に速度ペナルティとキャンプ状態が出る
 
 ---
 

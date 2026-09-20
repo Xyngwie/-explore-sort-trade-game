@@ -58,6 +58,27 @@ export function renderWorld(
     ctx.fillText(label, cx - 48, cy - rr - 6);
   }
 
+  // Temporary staging camp
+  if (world.camp) {
+    const c = world.camp;
+    const cx = tx(c.pos.x);
+    const cy = ty(c.pos.y);
+    ctx.fillStyle = "#c9a22744";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 22 * sx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#e8c547";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 22 * sx, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ffe08acc";
+    ctx.font = "11px sans-serif";
+    ctx.fillText(`CAMP · ${c.stashedCount}`, cx - 28, cy - 28);
+  }
+
   // Containers: only discovered
   for (const c of world.containers) {
     if (!c.discovered || c.taken) continue;

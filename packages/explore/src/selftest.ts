@@ -3,7 +3,15 @@
  */
 import assert from "node:assert/strict";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
-import { applyOrder, onSalvageCompleted, rallyWingman, scatterSearch } from "./game/orders";
+import {
+  applyOrder,
+  onSalvageCompleted,
+  rallyWingman,
+  scatterSearch,
+  cargoSpeedMul,
+  pickUpFromCamp,
+  setCampOrDeposit,
+} from "./game/orders";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import {
   boardingCargoEta,
@@ -588,6 +596,98 @@ function advancePinned(
   const worldRaid = createWorld(bootRaid);
   assert.equal(worldRaid.enemies.length, 1);
   assert.ok(worldRaid.enemies.length < worldForced.enemies.length);
+}
+
+
+
+// --- cargo slowdown scales with salvagedCount / capacity ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  const leader = world.leader;
+  assert.equal(leader.capacity, BALANCE.carrierSlotsPerCraft);
+  assert.ok(Math.abs(cargoSpeedMul(leader, world.balance) - 1) < 1e-9);
+  leader.salvagedCount = leader.capacity;
+  assert.ok(
+    Math.abs(cargoSpeedMul(leader, world.balance) - BALANCE.cargoSpeedMulMin) < 1e-9,
+  );
+  leader.salvagedCount = leader.capacity / 2;
+  const mid = cargoSpeedMul(leader, world.balance);
+  assert.ok(mid < 1 && mid > BALANCE.cargoSpeedMulMin);
+
+  // Full load travels slower than empty over same WASD input
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  leader.salvagedCount = 0;
+  leader.pos = { x: 400, y: 500 };
+  leader.moveTarget = null;
+  const emptyStart = { ...leader.pos };
+  for (let i = 0; i < 10; i++) {
+    tickWorld(world, 0.05, {
+      move: { x: 1, y: 0 },
+      clickMove: null,
+      fire: false,
+      interact: false,
+    });
+  }
+  const emptyDist = Math.hypot(leader.pos.x - emptyStart.x, leader.pos.y - emptyStart.y);
+
+  leader.salvagedCount = leader.capacity;
+  leader.pos = { x: 400, y: 500 };
+  leader.moveTarget = null;
+  const fullStart = { ...leader.pos };
+  for (let i = 0; i < 10; i++) {
+    tickWorld(world, 0.05, {
+      move: { x: 1, y: 0 },
+      clickMove: null,
+      fire: false,
+      interact: false,
+    });
+  }
+  const fullDist = Math.hypot(leader.pos.x - fullStart.x, leader.pos.y - fullStart.y);
+  assert.ok(
+    fullDist < emptyDist * 0.7,
+    `full ${fullDist} should be << empty ${emptyDist}`,
+  );
+}
+
+// --- camp set / deposit / pick up ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  world.leader.pos = { x: 600, y: 400 };
+  world.leader.salvagedCount = 2;
+  world.salvaged = 2;
+  assert.equal(world.camp, null);
+  const set = setCampOrDeposit(world);
+  assert.equal(set, "camp_set");
+  assert.ok(world.camp);
+  assert.equal(world.camp!.stashedCount, 2);
+  assert.equal(world.leader.salvagedCount, 0);
+  assert.equal(world.salvaged, 2); // accounting unchanged
+  assert.ok(Math.abs(cargoSpeedMul(world.leader, world.balance) - 1) < 1e-9);
+
+  // Far relocate denied while stash remains
+  world.leader.pos = { x: 100, y: 100 };
+  world.leader.salvagedCount = 1;
+  world.salvaged = 3;
+  assert.equal(setCampOrDeposit(world), "denied");
+  assert.equal(world.camp!.stashedCount, 2);
+
+  // Return and pick up
+  world.leader.pos = { ...world.camp!.pos };
+  world.leader.salvagedCount = 0;
+  const picked = pickUpFromCamp(world);
+  assert.equal(picked, "picked");
+  assert.equal(world.leader.salvagedCount, 2);
+  assert.equal(world.camp!.stashedCount, 0);
+
+  // Deposit again near camp
+  assert.equal(setCampOrDeposit(world), "deposited");
+  assert.equal(world.leader.salvagedCount, 0);
+  assert.equal(world.camp!.stashedCount, 2);
 }
 
 
