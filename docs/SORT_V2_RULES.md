@@ -110,7 +110,7 @@ craftMultiplier = f(連鎖数, 残り手数, …)   # 1.000〜1.100 程度
 
 v2 最小実装では `craftMultiplier = 1` でもよい。
 
-Hub 回路の集計 `craftMultiplier`（trade→explore の `circuitBonuses` → explore→sort の `craftMultiplier` / `circuitBonuses`）を受け取った場合は、その値を成果倍率に使う。パズル連鎖由来の倍率とは別系統。Columns 化は未実装（ビジョンのみ・経済ルールは本仕様のまま）。
+Hub 回路の集計 `craftMultiplier`（trade→explore の `circuitBonuses` → explore→sort の `craftMultiplier` / `circuitBonuses`）を受け取った場合は、その値を成果倍率に使う。パズル連鎖由来の倍率とは別系統。Columns 手触りは `packages/sort` 実装（[`SORT_V0.md`](./SORT_V0.md)）・**経済ルールは本仕様のまま**。
 
 ロス:
 
