@@ -1,6 +1,7 @@
 /**
- * Sort v2 minimal refine loop — honest rules, simplified board.
- * Tap connected groups of 3+ valid pieces to clear; junk cannot be cleared.
+ * Sort v2 Columns-style refine loop.
+ * Falling 3-gem columns: position / rotate / drop; line matches clear with
+ * gravity and chains. Junk never matches. SORT_V2 economy unchanged.
  */
 import {
   type CraftingPuzzleResult,
@@ -12,13 +13,16 @@ import {
   yieldBagFromClearedWithMultiplier,
 } from "@estg/shared";
 
-/** Provisional invalid ratio from docs/SORT_V2_RULES.md */
+/** Provisional rules — economy from docs/SORT_V2_RULES.md; play is Columns. */
 export const SORT_V0_RULES = {
   invalidRatio: 0.2,
-  minClearGroup: 3,
+  /** Classic Columns: 3+ same kind in a straight line. */
+  minClearLine: 3,
+  /** Falling column height (gems per drop). */
+  fallingHeight: 3,
   boardCols: 6,
-  boardRows: 8,
-  /** Moves scale with budget so small demos stay short. */
+  boardRows: 12,
+  /** Placements scale with budget so small demos stay short. */
   movesPerValidPiece: 0.2,
   minMoves: 8,
   maxMoves: 40,
@@ -50,6 +54,14 @@ export type RefinePhase = "blocked" | "briefing" | "play" | "result";
 
 export type Cell = PieceKind | null;
 
+/** Active falling column: gems[0] is top, gems[n-1] is bottom. */
+export type FallingPiece = {
+  col: number;
+  /** Board row of the top gem. */
+  row: number;
+  gems: PieceKind[];
+};
+
 export type RefineLive = {
   phase: RefinePhase;
   inbound: ExploreToSortPayload;
@@ -57,14 +69,18 @@ export type RefineLive = {
   blockReason: string | null;
   validPieceBudget: number;
   invalidPieceCount: number;
-  /** Remaining pieces not yet on the board (or still in play on board). */
   bag: PieceKind[];
   board: Cell[];
   cols: number;
   rows: number;
   movesLeft: number;
   cleared: ClearedCounts;
-  selected: number | null;
+  falling: FallingPiece | null;
+  /** Preview of next drop (up to fallingHeight gems). */
+  nextGems: PieceKind[];
+  /** Last chain length after a lock (for UI). */
+  lastChain: number;
+  statusMsg: string | null;
 };
 
 function mulberry32(seed: number): () => number {
@@ -143,28 +159,10 @@ function emptyBoard(cols: number, rows: number): Cell[] {
   return Array.from({ length: cols * rows }, () => null);
 }
 
-/** Drop pieces from bag into empty cells (top→bottom fill via gravity later). */
-export function fillBoardFromBag(
-  board: Cell[],
-  bag: PieceKind[],
-  cols: number,
-  rows: number,
-): { board: Cell[]; bag: PieceKind[] } {
-  const nextBoard = [...board];
-  const nextBag = [...bag];
-  // Fill empty cells from bottom-left upward so gravity looks natural after.
-  for (let r = rows - 1; r >= 0; r--) {
-    for (let c = 0; c < cols; c++) {
-      const i = r * cols + c;
-      if (nextBoard[i] == null && nextBag.length > 0) {
-        nextBoard[i] = nextBag.shift()!;
-      }
-    }
-  }
-  return { board: nextBoard, bag: nextBag };
+export function indexOf(cols: number, r: number, c: number): number {
+  return r * cols + c;
 }
 
-/** Gravity: pieces fall down within each column. */
 export function applyGravity(
   board: Cell[],
   cols: number,
@@ -185,22 +183,7 @@ export function applyGravity(
   return next;
 }
 
-export function settleBoard(
-  board: Cell[],
-  bag: PieceKind[],
-  cols: number,
-  rows: number,
-): { board: Cell[]; bag: PieceKind[] } {
-  let b = applyGravity(board, cols, rows);
-  const filled = fillBoardFromBag(b, bag, cols, rows);
-  b = applyGravity(filled.board, cols, rows);
-  return { board: b, bag: filled.bag };
-}
-
-export function indexOf(cols: number, r: number, c: number): number {
-  return r * cols + c;
-}
-
+/** @deprecated Prefer line matching; kept for callers that inspect connectivity. */
 export function floodGroup(
   board: Cell[],
   cols: number,
@@ -228,7 +211,97 @@ export function floodGroup(
   return out;
 }
 
-export function countOnBoard(board: Cell[]): ClearedCounts & { junk: number; empty: number } {
+const LINE_DIRS: ReadonlyArray<readonly [number, number]> = [
+  [0, 1], // horizontal
+  [1, 0], // vertical
+  [1, 1], // diagonal ↘
+  [1, -1], // diagonal ↙
+];
+
+/**
+ * Classic Columns matching: 3+ same *valid* kind in a straight line
+ * (horizontal / vertical / diagonal). Junk never matches.
+ */
+export function findLineMatches(
+  board: Cell[],
+  cols: number,
+  rows: number,
+  minLen = SORT_V0_RULES.minClearLine,
+): Set<number> {
+  const marked = new Set<number>();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const start = indexOf(cols, r, c);
+      const kind = board[start];
+      if (kind == null || kind === "junk") continue;
+      for (const [dr, dc] of LINE_DIRS) {
+        // Only start a ray from the "beginning" of a potential line
+        // (previous cell in opposite dir differs / OOB) to avoid duplicates.
+        const pr = r - dr;
+        const pc = c - dc;
+        if (pr >= 0 && pr < rows && pc >= 0 && pc < cols) {
+          if (board[indexOf(cols, pr, pc)] === kind) continue;
+        }
+        const cells: number[] = [start];
+        let rr = r + dr;
+        let cc = c + dc;
+        while (rr >= 0 && rr < rows && cc >= 0 && cc < cols) {
+          const i = indexOf(cols, rr, cc);
+          if (board[i] !== kind) break;
+          cells.push(i);
+          rr += dr;
+          cc += dc;
+        }
+        if (cells.length >= minLen) {
+          for (const i of cells) marked.add(i);
+        }
+      }
+    }
+  }
+  return marked;
+}
+
+export function clearMatches(
+  board: Cell[],
+  matches: Set<number>,
+): { board: Cell[]; cleared: ClearedCounts } {
+  const next = [...board];
+  const cleared: ClearedCounts = { food: 0, material: 0, energy: 0 };
+  for (const i of matches) {
+    const kind = next[i];
+    if (kind === "food" || kind === "material" || kind === "energy") {
+      cleared[kind]++;
+    }
+    next[i] = null;
+  }
+  return { board: next, cleared };
+}
+
+/** Gravity + re-match until stable. Returns chain count (number of clear waves). */
+export function resolveChains(
+  board: Cell[],
+  cols: number,
+  rows: number,
+): { board: Cell[]; cleared: ClearedCounts; chain: number } {
+  let b = board;
+  const total: ClearedCounts = { food: 0, material: 0, energy: 0 };
+  let chain = 0;
+  for (;;) {
+    const matches = findLineMatches(b, cols, rows);
+    if (matches.size === 0) break;
+    chain++;
+    const cleared = clearMatches(b, matches);
+    total.food += cleared.cleared.food;
+    total.material += cleared.cleared.material;
+    total.energy += cleared.cleared.energy;
+    b = applyGravity(cleared.board, cols, rows);
+  }
+  return { board: b, cleared: total, chain };
+}
+
+export function countOnBoard(
+  board: Cell[],
+): ClearedCounts & { junk: number; empty: number } {
   const out = { food: 0, material: 0, energy: 0, junk: 0, empty: 0 };
   for (const cell of board) {
     if (cell == null) out.empty++;
@@ -245,21 +318,86 @@ export function remainingValidOnBoard(board: Cell[]): number {
   return n;
 }
 
-export function hasClearableGroup(
+function peekNext(
+  bag: PieceKind[],
+  n = SORT_V0_RULES.fallingHeight,
+): PieceKind[] {
+  return bag.slice(0, Math.min(n, bag.length));
+}
+
+function takeFromBag(
+  bag: PieceKind[],
+  n = SORT_V0_RULES.fallingHeight,
+): { gems: PieceKind[]; bag: PieceKind[] } {
+  const take = Math.min(n, bag.length);
+  return { gems: bag.slice(0, take), bag: bag.slice(take) };
+}
+
+/** Cell occupied if board has a piece, or if falling covers it. */
+export function cellBlocked(
   board: Cell[],
   cols: number,
   rows: number,
-  minSize = SORT_V0_RULES.minClearGroup,
+  r: number,
+  c: number,
 ): boolean {
-  const seen = new Set<number>();
-  for (let i = 0; i < board.length; i++) {
-    const kind = board[i];
-    if (kind == null || kind === "junk" || seen.has(i)) continue;
-    const group = floodGroup(board, cols, rows, i);
-    for (const g of group) seen.add(g);
-    if (group.length >= minSize) return true;
+  if (c < 0 || c >= cols || r < 0 || r >= rows) return true;
+  return board[indexOf(cols, r, c)] != null;
+}
+
+/** True if falling piece at (col,row) with given height fits without overlap. */
+export function canPlaceFalling(
+  board: Cell[],
+  cols: number,
+  rows: number,
+  col: number,
+  row: number,
+  height: number,
+): boolean {
+  if (col < 0 || col >= cols) return false;
+  if (row < 0) return false;
+  for (let i = 0; i < height; i++) {
+    const r = row + i;
+    if (r >= rows) return false;
+    if (board[indexOf(cols, r, col)] != null) return false;
   }
-  return false;
+  return true;
+}
+
+export function spawnFalling(
+  board: Cell[],
+  bag: PieceKind[],
+  cols: number,
+  rows: number,
+): { falling: FallingPiece | null; bag: PieceKind[]; blocked: boolean } {
+  if (bag.length === 0) {
+    return { falling: null, bag, blocked: false };
+  }
+  const { gems, bag: rest } = takeFromBag(bag);
+  const height = gems.length;
+  const col = Math.floor((cols - 1) / 2);
+  // Spawn with top at row 0; if that overlaps, try to finish (top-out).
+  if (!canPlaceFalling(board, cols, rows, col, 0, height)) {
+    // Put gems back — cannot spawn.
+    return { falling: null, bag: [...gems, ...rest], blocked: true };
+  }
+  return {
+    falling: { col, row: 0, gems },
+    bag: rest,
+    blocked: false,
+  };
+}
+
+function mergeCleared(a: ClearedCounts, b: ClearedCounts): ClearedCounts {
+  return {
+    food: a.food + b.food,
+    material: a.material + b.material,
+    energy: a.energy + b.energy,
+  };
+}
+
+function withNextPreview(s: RefineLive): RefineLive {
+  return { ...s, nextGems: peekNext(s.bag) };
 }
 
 export function parseInboundOrDemo(search: string): {
@@ -292,7 +430,6 @@ export function parseInboundOrDemo(search: string): {
       fromQuery: true,
     };
   }
-  // Demo default so `npm run dev:sort` is playable without a query.
   const containers = 2;
   const stock = stockFromContainers(containers);
   return {
@@ -313,39 +450,25 @@ export function createRefineFromLocationSearch(search: string): RefineLive {
   const cols = SORT_V0_RULES.boardCols;
   const rows = SORT_V0_RULES.boardRows;
 
-  if (!gate.ok) {
-    return {
-      phase: "blocked",
-      inbound,
-      note,
-      blockReason: gate.reason,
-      validPieceBudget,
-      invalidPieceCount,
-      bag: [],
-      board: emptyBoard(cols, rows),
-      cols,
-      rows,
-      movesLeft: 0,
-      cleared: { food: 0, material: 0, energy: 0 },
-      selected: null,
-    };
-  }
-
-  return {
-    phase: "briefing",
+  const base: RefineLive = {
+    phase: gate.ok ? "briefing" : "blocked",
     inbound,
     note,
-    blockReason: null,
+    blockReason: gate.reason,
     validPieceBudget,
     invalidPieceCount,
     bag: [],
     board: emptyBoard(cols, rows),
     cols,
     rows,
-    movesLeft: moveBudgetFor(validPieceBudget),
+    movesLeft: gate.ok ? moveBudgetFor(validPieceBudget) : 0,
     cleared: { food: 0, material: 0, energy: 0 },
-    selected: null,
+    falling: null,
+    nextGems: [],
+    lastChain: 0,
+    statusMsg: null,
   };
+  return base;
 }
 
 export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
@@ -355,78 +478,155 @@ export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
     s.invalidPieceCount,
     seed,
   );
-  const settled = settleBoard(
+  const spawned = spawnFalling(
     emptyBoard(s.cols, s.rows),
     bag,
     s.cols,
     s.rows,
   );
-  return {
-    ...s,
-    phase: "play",
-    bag: settled.bag,
-    board: settled.board,
-    movesLeft: moveBudgetFor(s.validPieceBudget),
-    cleared: { food: 0, material: 0, energy: 0 },
-    selected: null,
-  };
-}
-
-/**
- * Tap a cell. Junk / null / groups smaller than minClearGroup do nothing.
- * Valid group ≥3 → clear, count yields, gravity+refill, spend a move.
- */
-export function tapCell(s: RefineLive, index: number): RefineLive {
-  if (s.phase !== "play") return s;
-  if (index < 0 || index >= s.board.length) return s;
-  const kind = s.board[index];
-  if (kind == null) return { ...s, selected: null };
-  if (kind === "junk") {
-    // Invalid pieces cannot be matched / cleared.
-    return { ...s, selected: index };
-  }
-
-  const group = floodGroup(s.board, s.cols, s.rows, index);
-  if (group.length < SORT_V0_RULES.minClearGroup) {
-    return { ...s, selected: index };
-  }
-
-  const nextBoard = [...s.board];
-  for (const i of group) nextBoard[i] = null;
-
-  const cleared: ClearedCounts = { ...s.cleared };
-  if (kind === "food" || kind === "material" || kind === "energy") {
-    cleared[kind] += group.length;
-  }
-
-  const settled = settleBoard(nextBoard, s.bag, s.cols, s.rows);
-  const movesLeft = Math.max(0, s.movesLeft - 1);
-
   let next: RefineLive = {
     ...s,
-    board: settled.board,
-    bag: settled.bag,
-    cleared,
-    movesLeft,
-    selected: null,
+    phase: "play",
+    bag: spawned.bag,
+    board: emptyBoard(s.cols, s.rows),
+    movesLeft: moveBudgetFor(s.validPieceBudget),
+    cleared: { food: 0, material: 0, energy: 0 },
+    falling: spawned.falling,
+    lastChain: 0,
+    statusMsg: null,
   };
-
-  if (movesLeft <= 0 || !hasClearableGroup(next.board, next.cols, next.rows)) {
-    next = finishRefine(next);
+  next = withNextPreview(next);
+  if (spawned.blocked || spawned.falling == null) {
+    return finishRefine(next);
   }
   return next;
 }
 
+function lockAndContinue(s: RefineLive): RefineLive {
+  if (s.falling == null || s.phase !== "play") return s;
+  const { falling } = s;
+  const nextBoard = [...s.board];
+  for (let i = 0; i < falling.gems.length; i++) {
+    const r = falling.row + i;
+    const idx = indexOf(s.cols, r, falling.col);
+    nextBoard[idx] = falling.gems[i]!;
+  }
+
+  const resolved = resolveChains(nextBoard, s.cols, s.rows);
+  const cleared = mergeCleared(s.cleared, resolved.cleared);
+  const movesLeft = Math.max(0, s.movesLeft - 1);
+
+  let next: RefineLive = {
+    ...s,
+    board: resolved.board,
+    cleared,
+    movesLeft,
+    falling: null,
+    lastChain: resolved.chain,
+    statusMsg:
+      resolved.chain > 1
+        ? `連鎖 ×${resolved.chain}`
+        : resolved.chain === 1
+          ? "マッチ消去"
+          : null,
+  };
+
+  if (movesLeft <= 0) {
+    return finishRefine(withNextPreview(next));
+  }
+
+  const spawned = spawnFalling(next.board, next.bag, next.cols, next.rows);
+  next = {
+    ...next,
+    bag: spawned.bag,
+    falling: spawned.falling,
+  };
+  next = withNextPreview(next);
+
+  if (spawned.blocked) {
+    return finishRefine({
+      ...next,
+      statusMsg: "盤面が埋まりました",
+    });
+  }
+  if (spawned.falling == null && next.bag.length === 0) {
+    return finishRefine({
+      ...next,
+      statusMsg: "袋が空になりました",
+    });
+  }
+  return next;
+}
+
+export type ControlAction =
+  | "left"
+  | "right"
+  | "rotate"
+  | "softDrop"
+  | "hardDrop";
+
+export function applyControl(s: RefineLive, action: ControlAction): RefineLive {
+  if (s.phase !== "play" || s.falling == null) return s;
+  const f = s.falling;
+  const h = f.gems.length;
+
+  if (action === "left") {
+    if (canPlaceFalling(s.board, s.cols, s.rows, f.col - 1, f.row, h)) {
+      return { ...s, falling: { ...f, col: f.col - 1 }, statusMsg: null };
+    }
+    return s;
+  }
+  if (action === "right") {
+    if (canPlaceFalling(s.board, s.cols, s.rows, f.col + 1, f.row, h)) {
+      return { ...s, falling: { ...f, col: f.col + 1 }, statusMsg: null };
+    }
+    return s;
+  }
+  if (action === "rotate") {
+    if (h <= 1) return s;
+    // Cycle: bottom → top (classic Columns feel).
+    const gems = [...f.gems];
+    const bottom = gems.pop()!;
+    gems.unshift(bottom);
+    return { ...s, falling: { ...f, gems }, statusMsg: null };
+  }
+  if (action === "softDrop") {
+    if (canPlaceFalling(s.board, s.cols, s.rows, f.col, f.row + 1, h)) {
+      return { ...s, falling: { ...f, row: f.row + 1 }, statusMsg: null };
+    }
+    return lockAndContinue(s);
+  }
+  if (action === "hardDrop") {
+    let row = f.row;
+    while (canPlaceFalling(s.board, s.cols, s.rows, f.col, row + 1, h)) {
+      row++;
+    }
+    return lockAndContinue({ ...s, falling: { ...f, row } });
+  }
+  return s;
+}
+
+/** @deprecated Use applyControl. Kept briefly for migration; no-op on junk. */
+export function tapCell(s: RefineLive, _index: number): RefineLive {
+  return s;
+}
+
 export function finishRefine(s: RefineLive): RefineLive {
   if (s.phase !== "play" && s.phase !== "result") return s;
-  return { ...s, phase: "result", selected: null };
+  return {
+    ...s,
+    phase: "result",
+    falling: null,
+    nextGems: [],
+  };
 }
 
 export function scrapLossFromState(s: RefineLive): number {
   const onBoard = remainingValidOnBoard(s.board);
   const inBag = s.bag.filter((k) => k !== "junk").length;
-  // Minimal: uncleared valid pieces (board + bag). Junk omitted per docs "min ok".
-  return onBoard + inBag;
+  const inFalling =
+    s.falling?.gems.filter((k) => k !== "junk").length ?? 0;
+  return onBoard + inBag + inFalling;
 }
 
 export function resolveCraftMultiplier(inbound: ExploreToSortPayload): number {
@@ -458,4 +658,29 @@ export function toCraftingResult(s: RefineLive): CraftingPuzzleResult {
 export function demoQueryExample(): string {
   const cans = 2;
   return `?salvagedContainers=${cans}&totalStockPieces=${cans * PIECES_PER_CONTAINER}&isExtracted=1`;
+}
+
+/** Overlay falling gems onto a board copy for rendering. */
+export function boardWithFalling(s: RefineLive): Cell[] {
+  const out = [...s.board];
+  if (s.falling == null) return out;
+  const { col, row, gems } = s.falling;
+  for (let i = 0; i < gems.length; i++) {
+    const r = row + i;
+    if (r < 0 || r >= s.rows) continue;
+    out[indexOf(s.cols, r, col)] = gems[i]!;
+  }
+  return out;
+}
+
+/** Ghost landing row for the active piece (top row after hard drop). */
+export function ghostRow(s: RefineLive): number | null {
+  if (s.falling == null) return null;
+  const f = s.falling;
+  const h = f.gems.length;
+  let row = f.row;
+  while (canPlaceFalling(s.board, s.cols, s.rows, f.col, row + 1, h)) {
+    row++;
+  }
+  return row;
 }
