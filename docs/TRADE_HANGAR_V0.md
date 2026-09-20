@@ -16,6 +16,7 @@
 | 帰還ウェア適用（URL またはシミュ） | sort パズル本編 |
 | 集計修理（`applyRepair`）と型付き修理（`EXAMPLE_TYPED_REPAIR_COST`） | 部位別修理・バランス本調整 |
 | 解体（`applyScrap`） | 見た目のアート |
+| レア YieldBag 売却（明示仮価格表 · TBD） | 本格ショップ / 経済バランス |
 | HubSave v2 永続化 + `inventory: YieldBag` + `circuits` | HubSave v3 版上げ |
 | sort→trade 取込（`importMaterials` + `yieldBag`） | |
 
@@ -115,10 +116,30 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 
 </details>
 
+
+## 3.5. レア売却 仮価格表（TBD）
+
+レア mats / parts の売却単価は **明示テーブル** `RARE_SELL_PRICE_TABLE`（`packages/trade/src/rare-sell-prices.ts`）に置く。  
+UI の「レア売却 仮価格表」と在庫の「売却 仮Nc」ボタン、および `sellRareItem` はすべてこの表を参照する（アドホックな単価ハードコード禁止）。
+
+| id | kind | 仮価格 (credits) | balance |
+|---|---|---:|---|
+| `mat_circuit` | mat | 8 | **TBD** |
+| `part_actuator` | part | 35 | **TBD** |
+| `part_armor_plate` | part | 40 | **TBD** |
+| `part_power_cell` | part | 45 | **TBD** |
+| `part_sensor_array` | part | 55 | **TBD** |
+
+- 意図（仮）: parts > basic rare mat。表に無い YieldBag id は売却不可。  
+- **バランス未調整** — 各行 `balance: "TBD"`。経済パスまで数値を最終扱いしない。  
+- 調整時は表の `credits`（と必要なら行追加）だけ触る。
+
+---
+
 ## 4. スタブしているもの
 
 - 弾薬の購入 UI（初期 `ammoLoad` のまま出撃に載せるだけ）
-- クレジット獲得以外の経済（解体・搬入のみ）
+- 本格経済（レア売却は明示仮価格表のみ · バランス TBD）
 - explore イベント積み上げ摩耗（現状は returnKind フラット減；URL 往復は実装済み）
 - 型付き修理と集計修理の統一コスト表（並存させて契約を両方見せる）
 
@@ -138,6 +159,7 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 10. 「戦線へ」URL に `fromHub=1`（+ 任意 `deployableMechs` / `startingAmmo`）が付く  
 11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（HubSave.circuits 選択またはシード優先）  
 12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
+13. レア仮価格表が UI に見え、レア在庫の売却が表の単価でクレジット加算・HubSave に残る（非レアは売却不可）
 
 ---
 
@@ -158,6 +180,8 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 2. **実往復:** リンクで explore へ → 撤退 or EXTRACT →「拠点へ摩耗報告」→ trade で耐久減少を確認  
 3. **シミュ:** 「シミュ帰還 fail」で要修理化 → 「修理（集計）」  
 4. 「デモ資材バッグ」→ 再度要修理化 → 「修理（型付き）」  
+4b. **レア売却:** 仮価格表を確認 → レア在庫の「売却 仮Nc」→ クレジット増加（TBD 単価）  
+
 5. 例: `?importMaterials=10&yieldBag=mat_scrap:5;part_actuator:1` を付けてリロード  
 
 詳細: [`docs/EXPLORE_IO_V2.md`](./EXPLORE_IO_V2.md) §9  

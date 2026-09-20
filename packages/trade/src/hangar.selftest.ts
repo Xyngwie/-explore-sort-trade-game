@@ -36,6 +36,9 @@ import {
   sellRareItem,
   isRareYieldItemId,
   RARE_SELL_PRICE_CREDITS,
+  RARE_SELL_PRICE_TABLE,
+  RARE_YIELD_ITEM_IDS,
+  rareSellPriceCredits,
   grantDemoInventory,
   setCraftSignature,
   loadCraftSignature,
@@ -424,15 +427,35 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 }
 
 
-// --- rare sell (YieldBag → credits, HubSave persist) ---
+// --- rare sell (explicit 仮 price table → credits, HubSave persist) ---
 {
   // Earlier blocks swap globalThis.localStorage; restore so persistHangar hits this store.
   (globalThis as unknown as { localStorage: Storage }).localStorage = storage;
+
+  // Table is the single source of truth (TBD placeholders).
+  assert.ok(RARE_SELL_PRICE_TABLE.length >= 1);
+  assert.equal(RARE_SELL_PRICE_TABLE.length, RARE_YIELD_ITEM_IDS.length);
+  for (const row of RARE_SELL_PRICE_TABLE) {
+    assert.equal(row.balance, "TBD", `${row.id} must stay TBD until economy pass`);
+    assert.ok(row.credits > 0, `${row.id} placeholder credits`);
+    assert.equal(RARE_SELL_PRICE_CREDITS[row.id], row.credits);
+    assert.equal(rareSellPriceCredits(row.id), row.credits);
+    assert.ok(isRareYieldItemId(row.id));
+  }
+  const matRow = RARE_SELL_PRICE_TABLE.find((r) => r.id === "mat_circuit");
+  const partRows = RARE_SELL_PRICE_TABLE.filter((r) => r.kind === "part");
+  assert.ok(matRow);
+  assert.ok(partRows.length >= 1);
+  for (const p of partRows) {
+    assert.ok(p.credits > matRow!.credits, "parts 仮価格 > basic rare mat");
+  }
+
   let s = resetHangar(storage);
   s = grantDemoInventory(s);
   assert.ok(isRareYieldItemId("part_actuator"));
   assert.ok(isRareYieldItemId("mat_circuit"));
   assert.equal(isRareYieldItemId("mat_scrap"), false);
+  assert.equal(rareSellPriceCredits("mat_scrap"), null);
   const beforeC = s.hub.credits;
   const beforeAct = s.hub.inventory.part_actuator ?? 0;
   assert.ok(beforeAct >= 1);

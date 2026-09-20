@@ -85,3 +85,5 @@ th:nth-child(2), th:nth-child(3), td:nth-child(2), td:nth-child(3) { text-align:
 
 .engraved { color: #f0c674; font-weight: 600; }
 .lock-tag { color: #d29922; border: 1px solid #d29922; background: #21262d; }
+
+.tbd-tag { background: #3d2a1a; color: #d29922; }
