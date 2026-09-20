@@ -1,6 +1,7 @@
 import "./style.css";
 import {
   encodeEdgeState,
+  isPerfectCircuitDebugContext,
   isPerfectCircuitClearance,
   sanitizeEditorName,
   type CircuitOutcome,
@@ -28,8 +29,21 @@ import {
 } from "./session";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
+const showInjectionDetails = isPerfectCircuitDebugContext({
+  search: window.location.search,
+  hostname: window.location.hostname,
+  isDev: Boolean(import.meta.env.DEV),
+});
 
-const session: RestoreSession = bootstrapFromSearch(window.location.search);
+const session: RestoreSession = bootstrapFromSearch(window.location.search, {
+  hostname: window.location.hostname,
+  isDev: Boolean(import.meta.env.DEV),
+  envRate:
+    (import.meta.env.VITE_PERFECT_CIRCUIT_RATE as string | undefined) ??
+    (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ??
+    null,
+  showInjectionDetails,
+});
 /** Keep circuitId stable for restore→trade even if URL is stripped. */
 const circuitId = session.circuitId;
 const puzzle = session.puzzle;
@@ -207,6 +221,18 @@ function render(): void {
           ? ` · circuitId <span class="mono">${escapeHtml(circuitId)}</span>`
           : ""
       }</p>
+      ${
+        showInjectionDetails &&
+        (session.injectedTrue || puzzle.injectedTrue)
+          ? `<p class="ok" title="seeded true board (Perfect Circuit injection)">真盤気配 · Perfect inject${
+              session.perfectInjectRate != null
+                ? ` (${(session.perfectInjectRate * 100).toFixed(1)}%)`
+                : ""
+            }</p>`
+          : showInjectionDetails && session.perfectInjectRate != null
+            ? `<p class="muted">Perfect inject rate ${(session.perfectInjectRate * 100).toFixed(1)}%（未注入）</p>`
+            : ""
+      }
       ${
         !locked
           ? `<p class="muted">署名（刻印）: <span class="engraved">${escapeHtml(sanitizeEditorName(editorName) ?? "（未設定）")}</span></p>`

@@ -48,6 +48,9 @@ import {
   VERIFY_TRUE_CIRCUIT_ID,
   VERIFY_PERFECT_CIRCUIT_ID,
   VERIFY_TRUE_PUZZLE_ID,
+  resolveHangarPerfectInjectRate,
+  PERFECT_CIRCUIT_DEV_RATE,
+  PERFECT_CIRCUIT_PROD_RATE,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -563,6 +566,52 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
       (c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID && c.locked === true,
     ),
   );
+}
+
+
+// --- Perfect Circuit inject rates on hangar seed ---
+{
+  assert.equal(PERFECT_CIRCUIT_PROD_RATE, 0.01);
+  assert.equal(PERFECT_CIRCUIT_DEV_RATE, 0.33);
+  assert.equal(
+    resolveHangarPerfectInjectRate({ isDev: true }),
+    PERFECT_CIRCUIT_DEV_RATE,
+  );
+  assert.equal(
+    resolveHangarPerfectInjectRate({ hostname: "example.com" }),
+    PERFECT_CIRCUIT_PROD_RATE,
+  );
+  assert.equal(
+    resolveHangarPerfectInjectRate({ search: "?perfectRate=0.33" }),
+    0.33,
+  );
+
+  const flawed = buildSeedCircuitBoard({ injectRate: 0, rng: () => 0 });
+  assert.equal(flawed.puzzleId, "stub-8");
+  assert.equal(flawed.cols, 8);
+
+  const injected = buildSeedCircuitBoard({ injectRate: 1, rng: () => 0.99 });
+  assert.equal(injected.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(injected.cols, 2);
+
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = resetHangar(store);
+  hs = loadPlaytestSeed(hs, { storage: store, injectRate: 1, rng: () => 0 });
+  assert.equal(hs.lastCircuit?.circuitBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.ok(hs.notice.includes("真盤") || hs.log.some((l) => l.includes("真盤")));
+  hs = loadPlaytestSeed(hs, {
+    storage: store,
+    injectRate: 1,
+    rng: () => 0,
+    showInjectionDetails: false,
+  });
+  assert.equal(hs.lastCircuit?.circuitBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(hs.notice.includes("真盤"), false);
+  assert.equal(hs.log.at(-1)?.includes("真盤") ?? false, false);
+
+  hs = loadPlaytestSeed(hs, { storage: store, injectRate: 0, rng: () => 0 });
+  assert.equal(hs.lastCircuit?.circuitBoard.puzzleId, "stub-8");
 }
 
 console.log("trade hangar selftest: ok");

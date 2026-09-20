@@ -1,6 +1,6 @@
 # Perfect Circuit probability (random Slitherlink-like boards)
 
-**Status:** analysis note (not V0 acceptance) · 2026-09-20 (JST)  
+**Status:** analysis note + injection-rate wiring (restore/hangar) · 2026-09-20 (JST)  
 **Related:** [`RESTORE_V0.md`](./RESTORE_V0.md), [`RESTORE_CIRCUIT_PARADOX_V0.md`](./RESTORE_CIRCUIT_PARADOX_V0.md)
 
 > Question: if we fill a restore-sized board with **random digit clues**, how often is it a **fully solvable unique Perfect Circuit** (classic Slitherlink: exactly one simple loop satisfying all clues)?
@@ -149,3 +149,28 @@ Natural random generation **cannot** replace seeded injection for restore-sized 
 ## 7. Repro sketch
 
 Propagating edge DFS counting solutions ≤2; dense / sparse / seeded generators as in §1. Re-run locally with a short script under analysis tooling if needed; this note is the contract for design, not a CI gate.
+
+
+---
+
+## 8. Implemented injection rates (runtime)
+
+Seeded true boards are mixed into restore generation / hangar demo grants via **injection rate**, not natural random digits.
+
+| Constant | Value | When |
+|---|---:|---|
+| `PERFECT_CIRCUIT_PROD_RATE` | **0.01** (1%) | Production / formal default |
+| `PERFECT_CIRCUIT_PROD_RATE_ALT` | **0.001** (0.1%) | Docs alternate — select with env `PERFECT_CIRCUIT_RATE` / `VITE_PERFECT_CIRCUIT_RATE=0.001` |
+| `PERFECT_CIRCUIT_DEV_RATE` | **0.33** (33%) | Vite `import.meta.env.DEV`, localhost / 127.0.0.1, or temporary playtest |
+
+**Resolution order** (`resolvePerfectCircuitInjectRate`):
+
+1. Query `?perfectRate=0.33` (wins)
+2. Env `PERFECT_CIRCUIT_RATE` / `VITE_PERFECT_CIRCUIT_RATE`
+3. DEV / localhost → 33%
+4. else → **1%** prod
+
+**API:** `rollPerfectCircuit(rng, { rate })` · `buildInjectedOrFlawedPuzzle` / restore `generatePuzzle(..., { injectRate })` · true path = `buildTruePuzzleFromSolution()` (verify-true 2×2 from known loop). Flawed path keeps random digit fill.
+
+**UI:** restore HUD and hangar seed log/notice show 「真盤気配」 / 真盤注入 only in DEV, localhost, tests, or an explicit `?perfectRate=` debug URL. Formal/production player-facing UI suppresses the marker (and injection-rate debug text), so production players must not be told that a board was a true-board injection. Majority of boards remain flawed.
+

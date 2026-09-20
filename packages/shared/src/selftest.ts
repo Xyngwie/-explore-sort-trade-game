@@ -565,6 +565,14 @@ import {
   buildVerifyPerfectLockedBoard,
   resolveVerifyTrueClues,
   isVerifyTruePuzzleId,
+  PERFECT_CIRCUIT_PROD_RATE,
+  PERFECT_CIRCUIT_PROD_RATE_ALT,
+  PERFECT_CIRCUIT_DEV_RATE,
+  rollPerfectCircuit,
+  resolvePerfectCircuitInjectRate,
+  isPerfectCircuitDebugContext,
+  buildTruePuzzleFromSolution,
+  buildInjectedOrFlawedPuzzle,
 } from "./perfect-circuit-seed";
 
 // --- Perfect Circuit verify-true seed (2×2 outer loop) ---
@@ -636,6 +644,115 @@ import {
     before,
   );
   console.log("shared perfect-circuit-seed selftest: ok");
+}
+
+// --- Perfect Circuit injection rates ---
+{
+  assert.equal(PERFECT_CIRCUIT_PROD_RATE, 0.01);
+  assert.equal(PERFECT_CIRCUIT_PROD_RATE_ALT, 0.001);
+  assert.equal(PERFECT_CIRCUIT_DEV_RATE, 0.33);
+
+  assert.equal(rollPerfectCircuit(() => 0.0, { rate: 0.01 }), true);
+  assert.equal(rollPerfectCircuit(() => 0.01, { rate: 0.01 }), false);
+  assert.equal(rollPerfectCircuit(() => 0.5, { rate: 0 }), false);
+  assert.equal(rollPerfectCircuit(() => 0.99, { rate: 1 }), true);
+
+  assert.equal(
+    resolvePerfectCircuitInjectRate({ isDev: true }),
+    PERFECT_CIRCUIT_DEV_RATE,
+  );
+  assert.equal(
+    resolvePerfectCircuitInjectRate({ hostname: "localhost" }),
+    PERFECT_CIRCUIT_DEV_RATE,
+  );
+  assert.equal(
+    resolvePerfectCircuitInjectRate({ hostname: "example.com" }),
+    PERFECT_CIRCUIT_PROD_RATE,
+  );
+  assert.equal(
+    resolvePerfectCircuitInjectRate({
+      hostname: "example.com",
+      search: "?perfectRate=0.33",
+    }),
+    0.33,
+  );
+  assert.equal(
+    resolvePerfectCircuitInjectRate({
+      isDev: true,
+      search: "perfectRate=0.05",
+    }),
+    0.05,
+    "query wins over DEV",
+  );
+  assert.equal(
+    resolvePerfectCircuitInjectRate({
+      hostname: "example.com",
+      envRate: "0.001",
+    }),
+    PERFECT_CIRCUIT_PROD_RATE_ALT,
+  );
+
+  assert.equal(isPerfectCircuitDebugContext({ isDev: true }), true);
+  assert.equal(
+    isPerfectCircuitDebugContext({ hostname: "localhost" }),
+    true,
+  );
+  assert.equal(
+    isPerfectCircuitDebugContext({
+      hostname: "example.com",
+      search: "?perfectRate=0.05",
+    }),
+    true,
+  );
+  assert.equal(
+    isPerfectCircuitDebugContext({ hostname: "example.com" }),
+    false,
+  );
+  assert.equal(
+    isPerfectCircuitDebugContext({
+      hostname: "example.com",
+      search: "?perfectRate=not-a-rate",
+    }),
+    false,
+  );
+
+  const trueP = buildTruePuzzleFromSolution();
+  assert.equal(trueP.kind, "true");
+  assert.equal(trueP.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.deepEqual(trueP.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
+
+  const injected = buildInjectedOrFlawedPuzzle({
+    seed: "any-seed",
+    cols: 6,
+    rows: 6,
+    rate: 1,
+    rng: () => 0,
+    forceKind: "true",
+    generateFlawed: () => [[1]],
+  });
+  assert.equal(injected.injectedTrue, true);
+  assert.equal(injected.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(injected.cols, 2);
+
+  const flawed = buildInjectedOrFlawedPuzzle({
+    seed: "flaw-seed",
+    cols: 4,
+    rows: 4,
+    rate: 0,
+    rng: () => 0.99,
+    forceKind: "flawed",
+    generateFlawed: (seed, c, r) =>
+      Array.from({ length: r }, () =>
+        Array.from({ length: c }, () => 1 as number | null),
+      ),
+  });
+  assert.equal(flawed.injectedTrue, false);
+  assert.equal(flawed.kind, "flawed");
+  assert.equal(flawed.puzzleId, "flaw-seed");
+  assert.equal(flawed.cols, 4);
+  assert.equal(flawed.clues[0]![0], 1);
+
+  console.log("shared perfect-circuit-inject selftest: ok");
 }
 
 
