@@ -68,14 +68,15 @@ export function bootstrapFromSearch(search: string): RestoreSession {
 
   if (inbound?.circuitBoard != null) {
     const board = inbound.circuitBoard;
-    const cols = board.cols;
-    const rows = board.rows;
     // Prefer board.puzzleId so return payload matches inbound.
     const seed =
       (board.puzzleId && board.puzzleId.trim()) ||
       (inbound.circuitId && inbound.circuitId.trim()) ||
       DEFAULT_SEED;
-    const puzzle = generatePuzzle(seed, cols, rows);
+    // Fixed verify-true seed may override cols/rows to the known solvable size.
+    const puzzle = generatePuzzle(seed, board.cols, board.rows);
+    const cols = puzzle.cols;
+    const rows = puzzle.rows;
     const n = edgeCount(cols, rows);
     const marks = decodeEdgeState(board.edgeState, n);
     const session: RestoreSession = {

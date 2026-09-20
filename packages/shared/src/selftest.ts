@@ -555,6 +555,89 @@ import {
   stampCircuitEditor,
   type EdgeMark,
 } from "./circuit-board";
+import {
+  VERIFY_TRUE_PUZZLE_ID,
+  VERIFY_TRUE_CIRCUIT_ID,
+  VERIFY_PERFECT_CIRCUIT_ID,
+  VERIFY_TRUE_CLUES,
+  buildVerifyTrueSolutionMarks,
+  buildVerifyTrueUnsolvedBoard,
+  buildVerifyPerfectLockedBoard,
+  resolveVerifyTrueClues,
+  isVerifyTruePuzzleId,
+} from "./perfect-circuit-seed";
+
+// --- Perfect Circuit verify-true seed (2×2 outer loop) ---
+{
+  assert.equal(isVerifyTruePuzzleId(VERIFY_TRUE_PUZZLE_ID), true);
+  assert.equal(isVerifyTruePuzzleId("stub-8"), false);
+  const fixed = resolveVerifyTrueClues(VERIFY_TRUE_PUZZLE_ID);
+  assert.ok(fixed);
+  assert.equal(fixed!.cols, 2);
+  assert.equal(fixed!.rows, 2);
+  assert.deepEqual(fixed!.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
+
+  const marks = buildVerifyTrueSolutionMarks();
+  assert.equal(marks.length, edgeCount(2, 2));
+  assert.equal(marks.filter((m) => m === 1).length, 8);
+
+  const unsolved = buildVerifyTrueUnsolvedBoard();
+  assert.equal(unsolved.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(unsolved.outcome, "offline");
+  assert.ok(!unsolved.locked);
+  assert.equal(
+    decodeEdgeState(unsolved.edgeState, edgeCount(2, 2)).every((m) => m === 0),
+    true,
+  );
+
+  const lockedBoard = buildVerifyPerfectLockedBoard("テスト職人");
+  assert.equal(lockedBoard.locked, true);
+  assert.equal(lockedBoard.perfect, true);
+  assert.equal(lockedBoard.outcome, "fully_awakened");
+  assert.equal(lockedBoard.lastEditorName, "テスト職人");
+  assert.equal(isCircuitLocked(lockedBoard), true);
+  assert.equal(
+    isPerfectCircuitClearance({
+      outcome: lockedBoard.outcome,
+      perfect: lockedBoard.perfect,
+      locked: lockedBoard.locked,
+    }),
+    true,
+  );
+
+  let hubV = { ...INITIAL_HUB, circuits: [] as typeof INITIAL_HUB.circuits };
+  hubV = upsertCircuitIntoHub(hubV, {
+    circuitId: VERIFY_TRUE_CIRCUIT_ID,
+    circuitBoard: unsolved,
+    outcome: "offline",
+  });
+  assert.equal(hubV.circuits[0]!.circuitId, VERIFY_TRUE_CIRCUIT_ID);
+  hubV = upsertCircuitIntoHub(hubV, {
+    circuitId: VERIFY_PERFECT_CIRCUIT_ID,
+    circuitBoard: lockedBoard,
+    outcome: "fully_awakened",
+    lastEditorName: lockedBoard.lastEditorName,
+    perfect: true,
+  });
+  const perf = hubV.circuits.find((c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID);
+  assert.ok(perf);
+  assert.equal(perf!.locked, true);
+  assert.equal(perf!.lastEditorName, "テスト職人");
+  const before = perf!.circuitBoard.edgeState;
+  hubV = upsertCircuitIntoHub(hubV, {
+    circuitId: VERIFY_PERFECT_CIRCUIT_ID,
+    circuitBoard: createEmptyCircuitBoard(4, 4, "hack"),
+    outcome: "offline",
+    lastEditorName: "侵入者",
+  });
+  assert.equal(
+    hubV.circuits.find((c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID)!
+      .circuitBoard.edgeState,
+    before,
+  );
+  console.log("shared perfect-circuit-seed selftest: ok");
+}
+
 
 // --- sector density placeholders ---
 assert.equal(chebyshevDistance(0, 0, 3, 1), 3);

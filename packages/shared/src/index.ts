@@ -9,3 +9,4 @@ export * from "./sort-yield";
 export * from "./sector-density";
 export * from "./circuit-board";
 export * from "./circuit-bonuses";
+export * from "./perfect-circuit-seed";

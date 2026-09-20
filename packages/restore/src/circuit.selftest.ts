@@ -7,6 +7,10 @@ import {
   encodeEdgeState,
   edgeCount,
   parseRestoreToTradeSearch,
+  VERIFY_TRUE_PUZZLE_ID,
+  VERIFY_TRUE_CLUES,
+  buildVerifyTrueSolutionMarks,
+  buildVerifyTrueUnsolvedBoard,
   type EdgeMark,
 } from "@estg/shared";
 import {
@@ -18,6 +22,7 @@ import {
   hEdgeIndex,
   isLoopClosed,
   vEdgeIndex,
+  lineEdgeCount,
 } from "./puzzle";
 import {
   bootstrapFromSearch,
@@ -237,6 +242,36 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.equal(parsed!.lastEditorName, "刻印テスト");
   assert.equal(parsed!.locked, true);
   assert.equal(parsed!.perfect, true);
+}
+
+
+// --- verify-true fixed puzzle is solvable → fully_awakened ---
+{
+  const puzzle = generatePuzzle(VERIFY_TRUE_PUZZLE_ID, 8, 8);
+  assert.equal(puzzle.cols, 2);
+  assert.equal(puzzle.rows, 2);
+  assert.equal(puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.deepEqual(puzzle.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
+
+  const solution = buildVerifyTrueSolutionMarks();
+  assert.equal(isLoopClosed(solution, 2, 2), true);
+  const digits = digitSatisfaction(puzzle.clues, solution, 2, 2);
+  assert.equal(digits.rate, 1);
+  assert.equal(
+    deriveStubOutcome(true, digits.rate, lineEdgeCount(solution)),
+    "fully_awakened",
+  );
+
+  const board = buildVerifyTrueUnsolvedBoard();
+  const ttr = buildTradeToRestoreUrl({
+    circuitId: "verify_true",
+    circuitBoard: board,
+  });
+  const session = bootstrapFromSearch(new URL(ttr).search);
+  assert.equal(session.puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(session.puzzle.cols, 2);
+  assert.equal(session.locked, false);
+  assert.equal(session.marks.every((m) => m === 0), true);
 }
 
 console.log("restore circuit.selftest ok");

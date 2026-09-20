@@ -20,6 +20,12 @@ import {
   buildTradeToInvadeUrl,
   buildTradeToRestoreUrl,
   createEmptyCircuitBoard,
+  buildVerifyPerfectLockedBoard,
+  buildVerifyTrueUnsolvedBoard,
+  VERIFY_PERFECT_CIRCUIT_ID,
+  VERIFY_TRUE_CIRCUIT_ID,
+  VERIFY_TRUE_PUZZLE_ID,
+  VERIFY_TRUE_SOLUTION_HINT,
   resolveModuleBaseUrl,
   canAffordRepair,
   canAffordYieldCost,
@@ -507,6 +513,74 @@ export function grantDemoInventory(state: HangarState): HangarState {
     hub,
     log: pushLog(state.log, "デモ資材バッグ付与"),
     notice: "型付き在庫を加算",
+  };
+  return persistHangar(next);
+}
+
+/**
+ * Grant unsolved but guaranteed-solvable verify-true board into hub.circuits.
+ * Hangar button 「検証用真盤を受領」 — solve in restore → perfect lock path.
+ */
+export function grantVerifyTrueCircuit(state: HangarState): HangarState {
+  const board = buildVerifyTrueUnsolvedBoard();
+  const hub = upsertCircuitIntoHub(state.hub, {
+    circuitId: VERIFY_TRUE_CIRCUIT_ID,
+    circuitBoard: board,
+    outcome: "offline",
+  });
+  const next: HangarState = {
+    ...state,
+    hub,
+    lastCircuit: resolveActiveCircuit(hub, {
+      circuitId: VERIFY_TRUE_CIRCUIT_ID,
+      circuitBoard: board,
+      outcome: "offline",
+    }),
+    log: pushLog(state.log, `検証用真盤受領 ${VERIFY_TRUE_CIRCUIT_ID}`),
+    notice: `検証用真盤を受領（${VERIFY_TRUE_PUZZLE_ID} · 未解·可解）`,
+  };
+  return persistHangar(next);
+}
+
+/**
+ * Grant already solved+locked Perfect Circuit for lock / 刻印 UI smoke test.
+ * Hangar button 「検証用・既に完璧」.
+ */
+export function grantVerifyPerfectLockedCircuit(
+  state: HangarState,
+  storage?: Pick<Storage, "getItem" | "setItem"> | null,
+): HangarState {
+  const editor =
+    sanitizeEditorName(state.craftSignature) ??
+    sanitizeEditorName(loadCraftSignature(storage ?? undefined)) ??
+    undefined;
+  const board = buildVerifyPerfectLockedBoard(editor);
+  const hub = upsertCircuitIntoHub(state.hub, {
+    circuitId: VERIFY_PERFECT_CIRCUIT_ID,
+    circuitBoard: board,
+    outcome: "fully_awakened",
+    lastEditorName: board.lastEditorName,
+    perfect: true,
+  });
+  const rec = hub.circuits.find((c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID);
+  const next: HangarState = {
+    ...state,
+    hub,
+    lastCircuit: resolveActiveCircuit(
+      hub,
+      rec
+        ? circuitRecordToPayload(rec)
+        : {
+            circuitId: VERIFY_PERFECT_CIRCUIT_ID,
+            circuitBoard: board,
+            outcome: "fully_awakened",
+          },
+    ),
+    log: pushLog(
+      state.log,
+      `検証用完璧回路受領 ${VERIFY_PERFECT_CIRCUIT_ID} · 刻印 ${board.lastEditorName}`,
+    ),
+    notice: `検証用・既に完璧を受領（ロック · 刻印 ${board.lastEditorName}）`,
   };
   return persistHangar(next);
 }
@@ -1115,4 +1189,8 @@ export {
   applyRepairDiscountToCost,
   isCircuitLocked,
   CRAFT_SIGNATURE_STORAGE_KEY,
+  VERIFY_TRUE_CIRCUIT_ID,
+  VERIFY_PERFECT_CIRCUIT_ID,
+  VERIFY_TRUE_PUZZLE_ID,
+  VERIFY_TRUE_SOLUTION_HINT,
 };

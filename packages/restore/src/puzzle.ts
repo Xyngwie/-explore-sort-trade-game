@@ -7,6 +7,7 @@ import {
   decodeEdgeState,
   encodeEdgeState,
   edgeCount,
+  resolveVerifyTrueClues,
   type CircuitBoardState,
   type CircuitOutcome,
   type EdgeMark,
@@ -92,6 +93,15 @@ export function generatePuzzle(
   cols = 6,
   rows = 6,
 ): RestorePuzzle {
+  const fixed = resolveVerifyTrueClues(puzzleSeed, cols, rows);
+  if (fixed) {
+    return {
+      cols: fixed.cols,
+      rows: fixed.rows,
+      puzzleId: fixed.puzzleId,
+      clues: fixed.clues.map((row) => [...row]),
+    };
+  }
   const rnd = mulberry32(hashSeed(puzzleSeed));
   const clues: (number | null)[][] = [];
   for (let y = 0; y < rows; y++) {
