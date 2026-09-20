@@ -677,6 +677,8 @@ export type LoadPlaytestSeedOptions = {
   /** Perfect Circuit injection rate for the demo circuit board. */
   injectRate?: number;
   rng?: () => number;
+  /** Allow player-facing injected-board details in DEV/local/debug UI. */
+  showInjectionDetails?: boolean;
 };
 
 /** Replace hub with playtest seed and persist via HubSave (+ demo circuit stash). */
@@ -701,6 +703,8 @@ export function loadPlaytestSeed(
     rng: opts.rng,
   });
   const injected = seedBoard.puzzleId === VERIFY_TRUE_PUZZLE_ID;
+  const showInjectionDetails =
+    opts.showInjectionDetails ?? typeof window === "undefined";
   const circuitId = injected ? VERIFY_TRUE_CIRCUIT_ID : SEED_CIRCUIT_ID;
   const hub = upsertCircuitIntoHub(buildPlaytestSeedHub(), {
     circuitId,
@@ -720,11 +724,11 @@ export function loadPlaytestSeed(
     craftSignature: state.craftSignature || loadCraftSignature(storage),
     log: pushLog(
       state.log,
-      injected
+      injected && showInjectionDetails
         ? `シード読込 · 真盤注入 ${VERIFY_TRUE_PUZZLE_ID}`
         : "シード読込",
     ),
-    notice: injected
+    notice: injected && showInjectionDetails
       ? `プレイテスト用シード · 真盤気配（${VERIFY_TRUE_PUZZLE_ID}）`
       : "プレイテスト用シードを読込（健在2 + 要修理1 · 回路デモ）",
   };

@@ -600,6 +600,16 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   hs = loadPlaytestSeed(hs, { storage: store, injectRate: 1, rng: () => 0 });
   assert.equal(hs.lastCircuit?.circuitBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
   assert.ok(hs.notice.includes("真盤") || hs.log.some((l) => l.includes("真盤")));
+  hs = loadPlaytestSeed(hs, {
+    storage: store,
+    injectRate: 1,
+    rng: () => 0,
+    showInjectionDetails: false,
+  });
+  assert.equal(hs.lastCircuit?.circuitBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(hs.notice.includes("真盤"), false);
+  assert.equal(hs.log.at(-1)?.includes("真盤") ?? false, false);
+
   hs = loadPlaytestSeed(hs, { storage: store, injectRate: 0, rng: () => 0 });
   assert.equal(hs.lastCircuit?.circuitBoard.puzzleId, "stub-8");
 }

@@ -570,6 +570,7 @@ import {
   PERFECT_CIRCUIT_DEV_RATE,
   rollPerfectCircuit,
   resolvePerfectCircuitInjectRate,
+  isPerfectCircuitDebugContext,
   buildTruePuzzleFromSolution,
   buildInjectedOrFlawedPuzzle,
 } from "./perfect-circuit-seed";
@@ -689,6 +690,30 @@ import {
       envRate: "0.001",
     }),
     PERFECT_CIRCUIT_PROD_RATE_ALT,
+  );
+
+  assert.equal(isPerfectCircuitDebugContext({ isDev: true }), true);
+  assert.equal(
+    isPerfectCircuitDebugContext({ hostname: "localhost" }),
+    true,
+  );
+  assert.equal(
+    isPerfectCircuitDebugContext({
+      hostname: "example.com",
+      search: "?perfectRate=0.05",
+    }),
+    true,
+  );
+  assert.equal(
+    isPerfectCircuitDebugContext({ hostname: "example.com" }),
+    false,
+  );
+  assert.equal(
+    isPerfectCircuitDebugContext({
+      hostname: "example.com",
+      search: "?perfectRate=not-a-rate",
+    }),
+    false,
   );
 
   const trueP = buildTruePuzzleFromSolution();

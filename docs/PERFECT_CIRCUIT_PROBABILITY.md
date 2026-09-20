@@ -172,5 +172,5 @@ Seeded true boards are mixed into restore generation / hangar demo grants via **
 
 **API:** `rollPerfectCircuit(rng, { rate })` · `buildInjectedOrFlawedPuzzle` / restore `generatePuzzle(..., { injectRate })` · true path = `buildTruePuzzleFromSolution()` (verify-true 2×2 from known loop). Flawed path keeps random digit fill.
 
-**UI:** restore HUD shows 「真盤気配」 when a true board was injected; hangar seed log/notice notes 真盤注入. Majority of boards remain flawed.
+**UI:** restore HUD and hangar seed log/notice show 「真盤気配」 / 真盤注入 only in DEV, localhost, tests, or an explicit `?perfectRate=` debug URL. Formal/production player-facing UI suppresses the marker (and injection-rate debug text), so production players must not be told that a board was a true-board injection. Majority of boards remain flawed.
 

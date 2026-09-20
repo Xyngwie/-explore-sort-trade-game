@@ -4,6 +4,7 @@ import {
   PART_LABEL_JA,
   isBasicMaterialId,
   isPartId,
+  isPerfectCircuitDebugContext,
   type YieldItemId,
 } from "@estg/shared";
 import {
@@ -55,6 +56,11 @@ import {
 } from "./hangar";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
+const showInjectionDetails = isPerfectCircuitDebugContext({
+  search: window.location.search,
+  hostname: window.location.hostname,
+  isDev: Boolean(import.meta.env.DEV),
+});
 
 /** M4/M5: trade→invade / trade→restore links + invade/restore query ingest (HANDOFF_M45). */
 
@@ -390,7 +396,7 @@ function render() {
         (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ??
         null,
     });
-    state = loadPlaytestSeed(state, { injectRate });
+    state = loadPlaytestSeed(state, { injectRate, showInjectionDetails });
     render();
   });
   document.getElementById("btn-grant")?.addEventListener("click", () => {

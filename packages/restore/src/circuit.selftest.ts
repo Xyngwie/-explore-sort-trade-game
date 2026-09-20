@@ -320,6 +320,14 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.equal(injectedSession.puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
   assert.ok(injectedSession.note.includes("真盤"));
 
+  const hiddenSession = bootstrapFromSearch("", {
+    injectRate: 1,
+    showInjectionDetails: false,
+  });
+  assert.equal(hiddenSession.injectedTrue, true);
+  assert.equal(hiddenSession.note.includes("真盤"), false);
+  assert.equal(hiddenSession.note.includes("inject"), false);
+
   const flawedSession = bootstrapFromSearch("", { injectRate: 0 });
   assert.equal(flawedSession.injectedTrue, false);
   assert.equal(flawedSession.puzzle.puzzleId, "restore-stub-6");

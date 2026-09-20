@@ -57,6 +57,8 @@ export type BootstrapRateOptions = {
   /** Pass import.meta.env.DEV from the Vite entry. */
   isDev?: boolean;
   envRate?: string | number | null;
+  /** Allow player-facing injected-board details in DEV/local/debug UI. */
+  showInjectionDetails?: boolean;
   /**
    * Explicit rate (wins over resolve). Use `0` in Node selftests that expect
    * a stable flawed demo board.
@@ -107,6 +109,8 @@ export function bootstrapFromSearch(
   search: string,
   rateOpts?: BootstrapRateOptions,
 ): RestoreSession {
+  const showInjectionDetails =
+    rateOpts?.showInjectionDetails ?? typeof window === "undefined";
   const inbound = parseTradeToRestoreSearch(search);
   const hubEditor = lookupHubCircuitLock(
     inbound?.circuitId,
@@ -143,7 +147,7 @@ export function bootstrapFromSearch(
       source: "handoff-board",
       note: `HUB 受取 · 盤 hydrate ${cols}×${rows}${
         inbound.circuitId ? ` · id ${inbound.circuitId}` : ""
-      }${injectedTrue ? " · 真盤" : ""}`,
+      }${showInjectionDetails && injectedTrue ? " · 真盤" : ""}`,
       locked,
       injectedTrue,
     };
@@ -178,9 +182,13 @@ export function bootstrapFromSearch(
       puzzle,
       marks,
       source: "handoff-id",
-      note: `HUB 受取 · circuitId=${inbound.circuitId}（盤なし → シード生成 · inject ${(injectRate * 100).toFixed(1)}%）${
-        injectedTrue ? " · 真盤注入" : ""
-      }`,
+      note: `HUB 受取 · circuitId=${inbound.circuitId}（盤なし → シード生成${
+        showInjectionDetails
+          ? ` · inject ${(injectRate * 100).toFixed(1)}%${
+              injectedTrue ? " · 真盤注入" : ""
+            }`
+          : ""
+      }）`,
       locked,
       perfectInjectRate: injectRate,
       injectedTrue,
@@ -226,8 +234,12 @@ export function bootstrapFromSearch(
     puzzle,
     marks,
     source: "demo",
-    note: `デモ盤 · クエリなし（inject ${(injectRate * 100).toFixed(1)}%）${
-      injectedTrue ? " · 真盤注入" : ""
+    note: `デモ盤 · クエリなし${
+      showInjectionDetails
+        ? `（inject ${(injectRate * 100).toFixed(1)}%${
+            injectedTrue ? " · 真盤注入" : ""
+          }）`
+        : ""
     }`,
     locked: false,
     editorName: passedEditor,

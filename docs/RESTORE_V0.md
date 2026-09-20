@@ -143,7 +143,7 @@ trade ハンガーの一覧から選択して trade→restore URL を開ける�
 
 プレイテスト用の保証可解盤（`puzzleId=verify-true-2` · 2×2 · 手がかり全 2）は trade ハンガーから授与。詳細・ネタバレは [`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md) §4.5.2。
 
-**Perfect Circuit 注入率（実装メモ）:** デモ／シード生成では、自然な乱数手がかりではなく **seeded true-board injection** で稀に真盤を混ぜる。本番既定 **1%**（`PERFECT_CIRCUIT_PROD_RATE`）、DEV/localhost または `?perfectRate=` で一時 **33%**（`PERFECT_CIRCUIT_DEV_RATE`）。ドキュメント上の代替 **0.1%** は `PERFECT_CIRCUIT_PROD_RATE_ALT` / env `VITE_PERFECT_CIRCUIT_RATE=0.001`。詳細は [`PERFECT_CIRCUIT_PROBABILITY.md`](./PERFECT_CIRCUIT_PROBABILITY.md) §8。
+**Perfect Circuit 注入率（実装メモ）:** デモ／シード生成では、自然な乱数手がかりではなく **seeded true-board injection** で稀に真盤を混ぜる。本番既定 **1%**（`PERFECT_CIRCUIT_PROD_RATE`）、DEV/localhost または `?perfectRate=` で一時 **33%**（`PERFECT_CIRCUIT_DEV_RATE`）。ドキュメント上の代替 **0.1%** は `PERFECT_CIRCUIT_PROD_RATE_ALT` / env `VITE_PERFECT_CIRCUIT_RATE=0.001`。なお、正式版のプレイヤー向け UI では「真盤気配」等の注入表示を抑止し、真盤注入だったことをプレイヤーに知らせない。詳細は [`PERFECT_CIRCUIT_PROBABILITY.md`](./PERFECT_CIRCUIT_PROBABILITY.md) §8。
 
 ## 5.5. ハンドオフ契約（キーのみ）
 

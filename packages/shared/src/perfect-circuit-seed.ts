@@ -206,6 +206,39 @@ export type PerfectCircuitRateContext = {
 };
 
 /**
+ * Player-facing injection details are a DEV/local/debug aid only. Keep this
+ * gate aligned with the DEV/localhost branch used by the rate resolver, while
+ * allowing an explicit `?perfectRate=` query to opt into playtest HUD text.
+ */
+export function isPerfectCircuitDebugContext(
+  ctx: PerfectCircuitRateContext = {},
+): boolean {
+  let params: URLSearchParams | null = null;
+  if (typeof ctx.search === "string") {
+    const q = ctx.search.startsWith("?") ? ctx.search.slice(1) : ctx.search;
+    try {
+      params = new URLSearchParams(q);
+    } catch {
+      params = null;
+    }
+  } else if (ctx.search instanceof URLSearchParams) {
+    params = ctx.search;
+  }
+
+  const hasDebugRate =
+    parsePerfectCircuitRate(
+      params?.get(PERFECT_CIRCUIT_RATE_QUERY_KEY) ?? undefined,
+    ) != null;
+  const host = (ctx.hostname ?? "").trim().toLowerCase();
+  return (
+    ctx.isDev === true ||
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    hasDebugRate
+  );
+}
+
+/**
  * Resolve injection rate:
  * 1. `?perfectRate=` query (wins)
  * 2. `envRate` (prod alternate / ops knob)
