@@ -3,8 +3,10 @@
  */
 import {
   areAdjacent,
+  areHorizontalAdjacent,
   buildSupplyBag,
   canStartRefine,
+  canSwapAdjacent,
   commitClearStep,
   computeBudgets,
   createRefineFromLocationSearch,
@@ -234,11 +236,96 @@ function idx(cols: number, r: number, c: number): number {
   );
 }
 
-// areAdjacent helper
+// areAdjacent / canSwapAdjacent — vertical allowed (departure from classic)
 {
   assert(areAdjacent(6, 0, 1), "horiz adjacent");
   assert(areAdjacent(6, 0, 6), "vert adjacent");
   assert(!areAdjacent(6, 0, 2), "not adjacent");
+  assert(canSwapAdjacent(6, 0, 1), "can swap horiz");
+  assert(canSwapAdjacent(6, 0, 6), "can swap vert (intentional)");
+  assert(!canSwapAdjacent(6, 0, 7), "no diagonal swap");
+  assert(areHorizontalAdjacent(6, 0, 1), "classic horiz");
+  assert(!areHorizontalAdjacent(6, 0, 6), "classic rejects vert");
+}
+
+// Idle vertical swap creates a match (above/below neighbors)
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 11);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  // food food | material  on bottom; food above material → vertical swap
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "food";
+  board[idx(cols, r, 2)] = "material";
+  board[idx(cols, r - 1, 2)] = "food";
+  s = {
+    ...s,
+    board,
+    movesLeft: 10,
+    pendingClear: [],
+    playMode: "idle",
+    selected: null,
+  };
+  const movesBefore = s.movesLeft;
+  s = swapPanels(s, idx(cols, r, 2), idx(cols, r - 1, 2));
+  assert(s.playMode === "clearing", "vertical swap enters clearing");
+  assert(s.movesLeft === movesBefore - 1, "vertical idle swap costs a move");
+  assert(s.pendingClear.length >= 3, "vertical swap pending clear");
+  assert(s.board[idx(cols, r, 2)] === "food", "food swapped down");
+}
+
+// tapCell vertical neighbors swap
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=20&isExtracted=1",
+  );
+  s = startRefine(s, 12);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "material";
+  board[idx(cols, r - 1, 0)] = "energy";
+  s = { ...s, board, playMode: "idle", pendingClear: [], selected: null };
+  s = tapCell(s, idx(cols, r, 0));
+  assert(s.selected === idx(cols, r, 0), "selected bottom");
+  s = tapCell(s, idx(cols, r - 1, 0));
+  assert(s.board[idx(cols, r, 0)] === "energy", "tap vertical swap a");
+  assert(s.board[idx(cols, r - 1, 0)] === "material", "tap vertical swap b");
+}
+
+// Diagonal / non-adjacent swap rejected
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=20&isExtracted=1",
+  );
+  s = startRefine(s, 13);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r - 1, 1)] = "food";
+  s = { ...s, board, playMode: "idle", pendingClear: [], selected: null, movesLeft: 5 };
+  const before = s.board.slice();
+  s = swapPanels(s, idx(cols, r, 0), idx(cols, r - 1, 1));
+  assert(s.board[idx(cols, r, 0)] === before[idx(cols, r, 0)], "diagonal no-op a");
+  assert(s.board[idx(cols, r - 1, 1)] === before[idx(cols, r - 1, 1)], "diagonal no-op b");
+  assert(s.movesLeft === 5, "rejected swap costs nothing");
 }
 
 // Raise spends a move and adds a bottom row

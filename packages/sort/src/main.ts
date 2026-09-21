@@ -111,7 +111,7 @@ function controlsHtml(s: RefineLive): string {
   const chainHint =
     s.playMode === "clearing"
       ? `<p class="hint ok">連鎖ウィンドウ！ 消える前にスワップしてコンボを伸ばそう（×${s.chainCount}）</p>`
-      : `<p class="hint muted">タップで選択→隣をタップ、またはスワイプでスワップ。せり上げで新しい列。</p>`;
+      : `<p class="hint muted">タップで選択→上下左右の隣をタップ、またはスワイプ（上下も可）でスワップ。せり上げで新しい列。</p>`;
   return `
     <div class="controls" aria-label="操作">
       <button type="button" class="ctrl primary" data-act="raise" aria-label="せり上げ" ${s.playMode === "clearing" ? "disabled" : ""}>⬆ せり上げ</button>
@@ -147,7 +147,7 @@ function render() {
   root.innerHTML = `
     <p class="pill">MODULE 2 · SORT · PANEL DE PON</p>
     <h1>Athanor 精製（Panel de Pon）</h1>
-    <p class="muted">コンテナ予算→有効ピース。盤上のパネルをスワップして 3 つ以上そろえる。消去ウィンドウ中もスワップして連鎖を伸ばせる。ジャンクは消えない。</p>
+    <p class="muted">コンテナ予算→有効ピース。盤上のパネルを<strong>上下左右</strong>の隣とスワップして 3 つ以上そろえる（クラシック Panel de Pon は左右のみ — 上下は意図的な拡張）。消去ウィンドウ中もスワップして連鎖を伸ばせる。ジャンクは消えない。</p>
 
     <div class="card">
       <div class="muted">${escapeHtml(state.note)}</div>
@@ -176,7 +176,7 @@ function render() {
     ${
       state.phase === "briefing"
         ? `<div class="card">
-            <p>配合フェーズなし。盤に積まれたパネルを<strong>スワップ</strong>して同色を縦・横に 3 つ以上そろえると消去。消えるあいだもスワップでき、<strong>アクティブ連鎖</strong>でコンボを伸ばせます。ジャンクはマッチしません。</p>
+            <p>配合フェーズなし。盤に積まれたパネルを<strong>上下左右の隣とスワップ</strong>して同色を縦・横に 3 つ以上そろえると消去（クラシックは左右のみ — 上下スワップは意図的な拡張）。消えるあいだもスワップでき、<strong>アクティブ連鎖</strong>でコンボを伸ばせます。ジャンクはマッチしません。</p>
             <div class="row">
               <button type="button" id="btn-start">精製開始</button>
             </div>
@@ -291,7 +291,7 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// Touch swipe on board cells: swipe to adjacent swap
+// Touch swipe on board cells: swipe to adjacent swap (H + V; vertical is intentional)
 let touchStartX = 0;
 let touchStartY = 0;
 let touchIdx: number | null = null;
