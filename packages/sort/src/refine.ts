@@ -1,13 +1,11 @@
 /**
- * Sort v2 Panel de Pon / Puzzle League style refine loop.
- * Stacked panels on a grid; orthogonal (H+V) adjacent swap + raise;
- * H/V matches of 3+ clear with gravity; active chain window lets the
- * player keep swapping to extend combos. Junk never matches.
+ * Sort v2 Zoo Keeper + active-chain refine loop.
+ * Board starts filled; orthogonal (H+V) adjacent swap; H/V matches of 3+
+ * clear → gravity → refill from bag above → natural cascades.
+ * Active-chain window: player may keep swapping during blink/clear to
+ * set up the next match (skill). No rising stack / no top-out timer
+ * (not classic Panel de Pon pressure). Junk never matches; may fall.
  * SORT_V2 economy unchanged.
- *
- * Intentional departure from classic Panel de Pon / Puzzle League:
- * those titles only allow horizontal neighbor swaps; we also allow
- * vertical (above/below) swaps for touch swipe up/down and tap-select.
  */
 import {
   type CraftingPuzzleResult,
@@ -19,15 +17,18 @@ import {
   yieldBagFromClearedWithMultiplier,
 } from "@estg/shared";
 
-/** Panel de Pon play + SORT_V2 economy (docs/SORT_V2_RULES.md). */
+/** Zoo Keeper + active chain + SORT_V2 economy (docs/SORT_V2_RULES.md). */
 export const SORT_V0_RULES = {
   invalidRatio: 0.2,
   /** Match length (horizontal / vertical only — no diagonal). */
   minClearLine: 3,
   boardCols: 6,
   boardRows: 12,
-  /** How many bottom rows to prefill from the bag on start. */
-  initialFillRows: 5,
+  /**
+   * Prefill rows from the bag on start (Zoo Keeper: fill the whole board).
+   * Equals boardRows so play begins on a filled field — no rising pressure.
+   */
+  initialFillRows: 12,
   /**
    * Active-chain window (ms). UI ticks commitClearStep after this;
    * player may keep swapping while the window is open.
@@ -35,7 +36,7 @@ export const SORT_V0_RULES = {
   chainWindowMs: 550,
   /** Extra ms added when a mid-chain swap creates new matches. */
   chainWindowExtendMs: 280,
-  /** Swaps/raises scale with budget so small demos stay short. */
+  /** Swaps scale with budget so small demos stay short. */
   movesPerValidPiece: 0.35,
   minMoves: 12,
   maxMoves: 48,
@@ -67,7 +68,7 @@ export type RefinePhase = "blocked" | "briefing" | "play" | "result";
 
 export type Cell = PieceKind | null;
 
-/** idle = waiting for swap/raise; clearing = chain window open. */
+/** idle = waiting for swap; clearing = active-chain blink window open. */
 export type PlayMode = "idle" | "clearing";
 
 export type RefineLive = {
@@ -200,14 +201,39 @@ export function applyGravity(
   return next;
 }
 
+/**
+ * Zoo Keeper refill: after gravity, empty cells (top of each column) draw
+ * from the supply bag. No rising stack / no top-out.
+ */
+export function refillFromAbove(
+  board: Cell[],
+  bag: PieceKind[],
+  cols: number,
+  rows: number,
+): { board: Cell[]; bag: PieceKind[] } {
+  let rest = [...bag];
+  const next = [...board];
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      const i = indexOf(cols, r, c);
+      if (next[i] != null) continue;
+      if (rest.length === 0) break;
+      const taken = takeFromBag(rest, 1);
+      next[i] = taken.gems[0]!;
+      rest = taken.bag;
+    }
+  }
+  return { board: next, bag: rest };
+}
+
 const LINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [0, 1], // horizontal
   [1, 0], // vertical
 ];
 
 /**
- * Panel de Pon matching: 3+ same *valid* kind in a straight horizontal or
- * vertical line. No diagonals. Junk never matches.
+ * Zoo Keeper / match-3 line matching: 3+ same *valid* kind in a straight
+ * horizontal or vertical line. No diagonals. Junk never matches.
  */
 export function findLineMatches(
   board: Cell[],
@@ -263,18 +289,23 @@ export function clearMatches(
 }
 
 /**
- * Resolve all passive gravity chains (no player input). Used in tests and
- * for seeding. Live play uses the active-chain window instead.
+ * Resolve passive clear → gravity → (optional) refill cascades.
+ * Live play uses the active-chain window + commitClearStep instead.
+ * Pass a bag to refill empty cells from above after each gravity step
+ * (Zoo Keeper style). Omit bag for gravity-only cascade tests.
  */
 export function resolveChains(
   board: Cell[],
   cols: number,
   rows: number,
-): { board: Cell[]; cleared: ClearedCounts; chain: number } {
+  bag: PieceKind[] = [],
+): { board: Cell[]; cleared: ClearedCounts; chain: number; bag: PieceKind[] } {
   let b = board;
+  let rest = [...bag];
   const total: ClearedCounts = { food: 0, material: 0, energy: 0 };
   let chain = 0;
-  for (;;) {
+  const maxChains = 64;
+  while (chain < maxChains) {
     const matches = findLineMatches(b, cols, rows);
     if (matches.size === 0) break;
     chain++;
@@ -283,8 +314,13 @@ export function resolveChains(
     total.material += cleared.cleared.material;
     total.energy += cleared.cleared.energy;
     b = applyGravity(cleared.board, cols, rows);
+    if (rest.length > 0) {
+      const filled = refillFromAbove(b, rest, cols, rows);
+      b = filled.board;
+      rest = filled.bag;
+    }
   }
-  return { board: b, cleared: total, chain };
+  return { board: b, cleared: total, chain, bag: rest };
 }
 
 export function countOnBoard(
@@ -366,9 +402,42 @@ export function canSwapAdjacent(
   return areAdjacent(cols, a, b);
 }
 
+/** True if placing `kind` at (r,c) would complete a H or V run of 3+. */
+function wouldCreateMatch(
+  board: Cell[],
+  cols: number,
+  rows: number,
+  r: number,
+  c: number,
+  kind: PieceKind,
+): boolean {
+  if (kind === "junk") return false;
+  let horiz = 1;
+  for (let cc = c - 1; cc >= 0; cc--) {
+    if (board[indexOf(cols, r, cc)] !== kind) break;
+    horiz++;
+  }
+  for (let cc = c + 1; cc < cols; cc++) {
+    if (board[indexOf(cols, r, cc)] !== kind) break;
+    horiz++;
+  }
+  if (horiz >= SORT_V0_RULES.minClearLine) return true;
+  let vert = 1;
+  for (let rr = r - 1; rr >= 0; rr--) {
+    if (board[indexOf(cols, rr, c)] !== kind) break;
+    vert++;
+  }
+  for (let rr = r + 1; rr < rows; rr++) {
+    if (board[indexOf(cols, rr, c)] !== kind) break;
+    vert++;
+  }
+  return vert >= SORT_V0_RULES.minClearLine;
+}
+
 /**
- * Prefill bottom rows from bag. Avoids leaving immediate matches by
- * resolving passive chains without awarding clears (seed settle).
+ * Prefill the board from the bag (Zoo Keeper: start filled).
+ * Places pieces while avoiding immediate 3+ matches when possible.
+ * Bounded settle clears any leftover opening matches without scoring.
  */
 export function fillInitialBoard(
   bag: PieceKind[],
@@ -379,27 +448,57 @@ export function fillInitialBoard(
   let rest = [...bag];
   let board = emptyBoard(cols, rows);
   const startRow = Math.max(0, rows - fillRows);
+
   for (let r = startRow; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (rest.length === 0) break;
-      const { gems, bag: next } = takeFromBag(rest, 1);
-      board[indexOf(cols, r, c)] = gems[0]!;
-      rest = next;
+      let placeAt = -1;
+      for (let i = 0; i < rest.length; i++) {
+        if (!wouldCreateMatch(board, cols, rows, r, c, rest[i]!)) {
+          placeAt = i;
+          break;
+        }
+      }
+      if (placeAt < 0) placeAt = 0;
+      board[indexOf(cols, r, c)] = rest[placeAt]!;
+      rest.splice(placeAt, 1);
     }
   }
-  // Settle accidental opening matches without scoring; return pieces to bag.
-  let b = board;
-  for (;;) {
-    const matches = findLineMatches(b, cols, rows);
-    if (matches.size === 0) break;
+
+  // Bounded settle: return matched pieces to bag, gravity, optional refill.
+  const settleOnce = (refill: boolean) => {
+    const matches = findLineMatches(board, cols, rows);
+    if (matches.size === 0) return false;
     for (const i of matches) {
-      const kind = b[i];
+      const kind = board[i];
       if (kind != null) rest.push(kind);
     }
-    const cleared = clearMatches(b, matches);
-    b = applyGravity(cleared.board, cols, rows);
+    const cleared = clearMatches(board, matches);
+    board = applyGravity(cleared.board, cols, rows);
+    if (refill) {
+      const filled = refillFromAbove(board, rest, cols, rows);
+      board = filled.board;
+      rest = filled.bag;
+    }
+    return true;
+  };
+
+  for (let guard = 0; guard < 48 && settleOnce(false); guard++) {
+    /* gravity-only strip */
   }
-  return { board: b, bag: rest };
+  {
+    const filled = refillFromAbove(board, rest, cols, rows);
+    board = filled.board;
+    rest = filled.bag;
+  }
+  for (let guard = 0; guard < 24 && settleOnce(true); guard++) {
+    /* refill settle */
+  }
+  for (let guard = 0; guard < 16 && settleOnce(false); guard++) {
+    /* final no-refill strip */
+  }
+
+  return { board, bag: rest };
 }
 
 export function parseInboundOrDemo(search: string): {
@@ -552,7 +651,6 @@ function beginOrExtendClear(
 
 /**
  * Swap two orthogonally adjacent panels (horizontal or vertical).
- * Vertical is an intentional departure from classic Panel de Pon.
  * - Idle: costs 1 move; opens chain window if matches form.
  * - Clearing (active chain): free; new matches merge into pending clear
  *   and extend the window (skill expression).
@@ -630,73 +728,21 @@ export function swapPanels(
 }
 
 /**
- * Raise: push a new bottom row from the bag (stack rises).
- * Costs 1 move. Top-out finishes the run.
+ * @deprecated Zoo Keeper mode has no rising stack / top-out.
+ * Kept as a no-op shim so old callers do not crash.
  */
 export function raiseStack(s: RefineLive): RefineLive {
   if (s.phase !== "play") return s;
-  if (s.playMode === "clearing") {
-    return { ...s, statusMsg: "連鎖中はせり上げできません" };
-  }
-  if (s.movesLeft <= 0) return maybeFinishOnMoves(s);
-  if (s.bag.length === 0) {
-    return { ...s, statusMsg: "袋が空です" };
-  }
-
-  // Top-out if any cell in row 0 is occupied.
-  for (let c = 0; c < s.cols; c++) {
-    if (s.board[indexOf(s.cols, 0, c)] != null) {
-      return finishRefine({
-        ...s,
-        statusMsg: "トップアウト（盤面が埋まりました）",
-      });
-    }
-  }
-
-  const needed = s.cols;
-  const taken = takeFromBag(s.bag, needed);
-  const bag = taken.bag;
-  const rowGems: Cell[] = [...taken.gems];
-  while (rowGems.length < needed) rowGems.push(null);
-
-  const board = emptyBoard(s.cols, s.rows);
-  // Shift everything up one row.
-  for (let r = 1; r < s.rows; r++) {
-    for (let c = 0; c < s.cols; c++) {
-      board[indexOf(s.cols, r - 1, c)] = s.board[indexOf(s.cols, r, c)] ?? null;
-    }
-  }
-  // New bottom row.
-  for (let c = 0; c < s.cols; c++) {
-    board[indexOf(s.cols, s.rows - 1, c)] = rowGems[c] ?? null;
-  }
-
-  let next: RefineLive = {
+  return {
     ...s,
-    board,
-    bag,
-    movesLeft: s.movesLeft - 1,
-    selected: null,
-    statusMsg: "せり上げ",
+    statusMsg: "せり上げなし（上から補充）",
   };
-
-  const matches = findLineMatches(next.board, next.cols, next.rows);
-  if (matches.size > 0) {
-    next = beginOrExtendClear(
-      { ...next, pendingClear: [], chainCount: 0 },
-      matches,
-      { newChain: true, extendOnly: false },
-    );
-  } else {
-    next = maybeFinishOnMoves(next);
-  }
-  return next;
 }
 
 /**
- * Commit one clear step: erase pending → gravity → re-match.
- * Called by UI when the chain window timer fires.
- * If new matches appear, stays in clearing (chain++). Else returns to idle.
+ * Commit one clear step: erase pending → gravity → refill from bag → re-match.
+ * Called by UI when the active-chain window timer fires.
+ * If new matches appear (cascade or refill), stays in clearing (chain++).
  */
 export function commitClearStep(s: RefineLive): RefineLive {
   if (s.phase !== "play" || s.playMode !== "clearing") return s;
@@ -711,7 +757,10 @@ export function commitClearStep(s: RefineLive): RefineLive {
   }
 
   const clearedStep = clearMatches(s.board, s.pendingClear);
-  const board = applyGravity(clearedStep.board, s.cols, s.rows);
+  let board = applyGravity(clearedStep.board, s.cols, s.rows);
+  const refilled = refillFromAbove(board, s.bag, s.cols, s.rows);
+  board = refilled.board;
+  const bag = refilled.bag;
   const cleared = mergeCleared(s.cleared, clearedStep.cleared);
   const chainDone = s.chainCount;
 
@@ -720,6 +769,7 @@ export function commitClearStep(s: RefineLive): RefineLive {
     return {
       ...s,
       board,
+      bag,
       cleared,
       pendingClear: [...matches],
       playMode: "clearing",
@@ -734,6 +784,7 @@ export function commitClearStep(s: RefineLive): RefineLive {
   let next: RefineLive = {
     ...s,
     board,
+    bag,
     cleared,
     pendingClear: [],
     playMode: "idle",
@@ -777,14 +828,19 @@ export function finishRefine(s: RefineLive): RefineLive {
   if (s.phase !== "play" && s.phase !== "result") return s;
   // If finishing mid-clear, commit remaining clears passively for fairness.
   let board = s.board;
+  let bag = s.bag;
   let cleared = s.cleared;
   let lastChain = s.lastChain;
   if (s.playMode === "clearing" && s.pendingClear.length > 0) {
     const step = clearMatches(board, s.pendingClear);
     board = applyGravity(step.board, s.cols, s.rows);
+    const refilled = refillFromAbove(board, bag, s.cols, s.rows);
+    board = refilled.board;
+    bag = refilled.bag;
     cleared = mergeCleared(cleared, step.cleared);
-    const rest = resolveChains(board, s.cols, s.rows);
+    const rest = resolveChains(board, s.cols, s.rows, bag);
     board = rest.board;
+    bag = rest.bag;
     cleared = mergeCleared(cleared, rest.cleared);
     lastChain = Math.max(lastChain, s.chainCount + rest.chain);
   }
@@ -792,6 +848,7 @@ export function finishRefine(s: RefineLive): RefineLive {
     ...s,
     phase: "result",
     board,
+    bag,
     cleared,
     pendingClear: [],
     playMode: "idle",
@@ -839,7 +896,7 @@ export function demoQueryExample(): string {
   return `?salvagedContainers=${cans}&totalStockPieces=${cans * PIECES_PER_CONTAINER}&isExtracted=1`;
 }
 
-/** @deprecated Columns control API — no-op shim for old callers. */
+/** @deprecated Legacy control API — no-op shim (raise removed in Zoo Keeper). */
 export type ControlAction =
   | "left"
   | "right"
@@ -848,7 +905,6 @@ export type ControlAction =
   | "hardDrop"
   | "raise";
 
-export function applyControl(s: RefineLive, action: ControlAction): RefineLive {
-  if (action === "raise") return raiseStack(s);
+export function applyControl(s: RefineLive, _action: ControlAction): RefineLive {
   return s;
 }

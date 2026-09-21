@@ -1,5 +1,5 @@
 /**
- * Minimal assertions for Sort Panel de Pon refine rules (no test runner dep).
+ * Minimal assertions for Sort Zoo Keeper + active-chain refine rules.
  */
 import {
   areAdjacent,
@@ -11,7 +11,7 @@ import {
   computeBudgets,
   createRefineFromLocationSearch,
   findLineMatches,
-  raiseStack,
+  refillFromAbove,
   resolveChains,
   resolveCraftMultiplier,
   SORT_V0_RULES,
@@ -69,7 +69,7 @@ function idx(cols: number, r: number, c: number): number {
   assert(bag.filter((k) => k !== "junk").length === 30, "valid count");
 }
 
-// Start play fills board from bag (no falling column)
+// Start play: Zoo Keeper filled board (no rising stack)
 {
   let s = createRefineFromLocationSearch(
     "?salvagedContainers=1&totalStockPieces=25&isExtracted=1",
@@ -78,11 +78,22 @@ function idx(cols: number, r: number, c: number): number {
   assert(s.phase === "play", "starts play");
   assert(s.playMode === "idle", "idle mode");
   const filled = s.board.filter((c) => c != null).length;
+  const capacity = s.cols * s.rows;
+  const supply = s.validPieceBudget + s.invalidPieceCount;
   assert(filled > 0, "board prefilled");
+  assert(filled === Math.min(capacity, supply) || filled <= capacity, "fill uses bag");
+  // Prefer a dense start: with supply >= capacity expect near-full after settle
+  if (supply >= capacity) {
+    assert(filled >= capacity - 6, "board mostly filled Zoo Keeper style");
+  } else {
+    assert(filled >= Math.min(supply, capacity) - 6, "board uses most of bag");
+  }
   assert(
-    s.bag.length === s.validPieceBudget + s.invalidPieceCount - filled,
-    "bag after fill",
+    s.bag.length === supply - filled,
+    "bag after fill accounts for board",
   );
+  assert(findLineMatches(s.board, s.cols, s.rows).size === 0, "no opening matches");
+  assert(SORT_V0_RULES.initialFillRows === SORT_V0_RULES.boardRows, "fill all rows");
 }
 
 // Junk never appears in line matches
@@ -137,7 +148,7 @@ function idx(cols: number, r: number, c: number): number {
   assert(resolved.board.every((c) => c == null), "board empty after");
 }
 
-// Diagonal must NOT match (Panel de Pon is H/V only)
+// Diagonal must NOT match (H/V only)
 {
   const cols = 4;
   const rows = 4;
@@ -236,7 +247,7 @@ function idx(cols: number, r: number, c: number): number {
   );
 }
 
-// areAdjacent / canSwapAdjacent — vertical allowed (departure from classic)
+// areAdjacent / canSwapAdjacent — 4 directions
 {
   assert(areAdjacent(6, 0, 1), "horiz adjacent");
   assert(areAdjacent(6, 0, 6), "vert adjacent");
@@ -328,25 +339,60 @@ function idx(cols: number, r: number, c: number): number {
   assert(s.movesLeft === 5, "rejected swap costs nothing");
 }
 
-// Raise spends a move and adds a bottom row
+// refillFromAbove fills empty top cells from bag (Zoo Keeper)
+{
+  const cols = 3;
+  const rows = 4;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  board[idx(cols, rows - 1, 0)] = "food";
+  board[idx(cols, rows - 1, 1)] = "material";
+  const holes = cols * rows - 2;
+  const bag: RefineLive["bag"] = Array.from({ length: holes }, (_, i) =>
+    (["energy", "food", "material", "junk"] as const)[i % 4]!,
+  );
+  const filled = refillFromAbove(board, bag, cols, rows);
+  assert(filled.board.filter((c) => c != null).length === cols * rows, "board full");
+  assert(filled.bag.length === 0, "bag drained for holes");
+  assert(filled.board[idx(cols, 0, 0)] != null, "top refilled");
+}
+
+// commitClearStep refills from bag after gravity
 {
   let s = createRefineFromLocationSearch(
     "?salvagedContainers=1&totalStockPieces=40&isExtracted=1",
   );
   s = startRefine(s, 3);
-  // Clear top row so raise won't top-out
-  const board = [...s.board];
-  for (let c = 0; c < s.cols; c++) board[c] = null;
-  s = { ...s, board, movesLeft: 8, playMode: "idle", pendingClear: [] };
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "food";
+  board[idx(cols, r, 2)] = "food";
+  s = {
+    ...s,
+    board,
+    bag: ["energy", "energy", "energy", "material", "material", "material"],
+    pendingClear: [idx(cols, r, 0), idx(cols, r, 1), idx(cols, r, 2)],
+    playMode: "clearing",
+    chainCount: 1,
+    chainWindowMsLeft: 500,
+    cleared: { food: 0, material: 0, energy: 0 },
+  };
   const bagBefore = s.bag.length;
-  const movesBefore = s.movesLeft;
-  s = raiseStack(s);
-  assert(s.movesLeft === movesBefore - 1, "raise costs move");
-  assert(s.bag.length < bagBefore, "bag consumed");
-  const bottomFilled = s.board
-    .slice((s.rows - 1) * s.cols)
-    .filter((c) => c != null).length;
-  assert(bottomFilled > 0, "bottom row has panels");
+  s = commitClearStep(s);
+  assert(s.cleared.food === 3, "food cleared");
+  assert(s.bag.length < bagBefore, "bag used to refill");
+  const onBoard = s.board.filter((c) => c != null).length;
+  assert(onBoard === bagBefore - s.bag.length, "refilled count = bag spent");
+  assert(onBoard === 6, "all six bag pieces dropped in");
+  assert(s.bag.length === 0, "bag empty after refill");
 }
 
 // tapCell select then swap
