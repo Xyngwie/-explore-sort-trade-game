@@ -1,9 +1,13 @@
 /**
  * Sort v2 Panel de Pon / Puzzle League style refine loop.
- * Stacked panels on a grid; horizontal (or adjacent) swap + raise;
+ * Stacked panels on a grid; orthogonal (H+V) adjacent swap + raise;
  * H/V matches of 3+ clear with gravity; active chain window lets the
  * player keep swapping to extend combos. Junk never matches.
  * SORT_V2 economy unchanged.
+ *
+ * Intentional departure from classic Panel de Pon / Puzzle League:
+ * those titles only allow horizontal neighbor swaps; we also allow
+ * vertical (above/below) swaps for touch swipe up/down and tap-select.
  */
 import {
   type CraftingPuzzleResult,
@@ -318,7 +322,7 @@ function takeFromBag(
   return { gems: bag.slice(0, take), bag: bag.slice(take) };
 }
 
-/** True if two indices are orthogonally adjacent. */
+/** True if two indices are orthogonally adjacent (horizontal or vertical). */
 export function areAdjacent(
   cols: number,
   a: number,
@@ -333,7 +337,10 @@ export function areAdjacent(
   return (dr === 1 && dc === 0) || (dr === 0 && dc === 1);
 }
 
-/** Panel de Pon classic: horizontal neighbors only. */
+/**
+ * Classic Panel de Pon / Puzzle League: horizontal neighbors only.
+ * Kept for contrast — our swap rule intentionally includes vertical.
+ */
 export function areHorizontalAdjacent(
   cols: number,
   a: number,
@@ -344,6 +351,19 @@ export function areHorizontalAdjacent(
   const rb = Math.floor(b / cols);
   const cb = b % cols;
   return ra === rb && Math.abs(ca - cb) === 1;
+}
+
+/**
+ * Whether two panels may be swapped.
+ * Orthogonal neighbors (left/right **and** above/below).
+ * Intentional departure from classic horizontal-only swaps.
+ */
+export function canSwapAdjacent(
+  cols: number,
+  a: number,
+  b: number,
+): boolean {
+  return areAdjacent(cols, a, b);
 }
 
 /**
@@ -531,7 +551,8 @@ function beginOrExtendClear(
 }
 
 /**
- * Swap two orthogonally adjacent panels.
+ * Swap two orthogonally adjacent panels (horizontal or vertical).
+ * Vertical is an intentional departure from classic Panel de Pon.
  * - Idle: costs 1 move; opens chain window if matches form.
  * - Clearing (active chain): free; new matches merge into pending clear
  *   and extend the window (skill expression).
@@ -544,7 +565,7 @@ export function swapPanels(
   if (s.phase !== "play") return s;
   if (a === b) return s;
   if (a < 0 || b < 0 || a >= s.board.length || b >= s.board.length) return s;
-  if (!areAdjacent(s.cols, a, b)) return s;
+  if (!canSwapAdjacent(s.cols, a, b)) return s;
 
   const pending = new Set(s.pendingClear);
   if (pending.has(a) || pending.has(b)) {
@@ -725,7 +746,7 @@ export function commitClearStep(s: RefineLive): RefineLive {
   return maybeFinishOnMoves(next);
 }
 
-/** Tap a cell: select, or swap with selection if adjacent. */
+/** Tap a cell: select, or swap with selection if orthogonally adjacent (incl. vertical). */
 export function tapCell(s: RefineLive, index: number): RefineLive {
   if (s.phase !== "play") return s;
   if (index < 0 || index >= s.board.length) return s;
@@ -743,7 +764,7 @@ export function tapCell(s: RefineLive, index: number): RefineLive {
     return { ...s, selected: null };
   }
 
-  if (areAdjacent(s.cols, s.selected, index)) {
+  if (canSwapAdjacent(s.cols, s.selected, index)) {
     return swapPanels(s, s.selected, index);
   }
 
