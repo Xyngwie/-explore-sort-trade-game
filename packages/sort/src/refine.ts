@@ -1,7 +1,9 @@
 /**
- * Sort v2 Columns-style refine loop.
- * Falling 3-gem columns: position / rotate / drop; line matches clear with
- * gravity and chains. Junk never matches. SORT_V2 economy unchanged.
+ * Sort v2 Panel de Pon / Puzzle League style refine loop.
+ * Stacked panels on a grid; horizontal (or adjacent) swap + raise;
+ * H/V matches of 3+ clear with gravity; active chain window lets the
+ * player keep swapping to extend combos. Junk never matches.
+ * SORT_V2 economy unchanged.
  */
 import {
   type CraftingPuzzleResult,
@@ -13,19 +15,26 @@ import {
   yieldBagFromClearedWithMultiplier,
 } from "@estg/shared";
 
-/** Provisional rules — economy from docs/SORT_V2_RULES.md; play is Columns. */
+/** Panel de Pon play + SORT_V2 economy (docs/SORT_V2_RULES.md). */
 export const SORT_V0_RULES = {
   invalidRatio: 0.2,
-  /** Classic Columns: 3+ same kind in a straight line. */
+  /** Match length (horizontal / vertical only — no diagonal). */
   minClearLine: 3,
-  /** Falling column height (gems per drop). */
-  fallingHeight: 3,
   boardCols: 6,
   boardRows: 12,
-  /** Placements scale with budget so small demos stay short. */
-  movesPerValidPiece: 0.2,
-  minMoves: 8,
-  maxMoves: 40,
+  /** How many bottom rows to prefill from the bag on start. */
+  initialFillRows: 5,
+  /**
+   * Active-chain window (ms). UI ticks commitClearStep after this;
+   * player may keep swapping while the window is open.
+   */
+  chainWindowMs: 550,
+  /** Extra ms added when a mid-chain swap creates new matches. */
+  chainWindowExtendMs: 280,
+  /** Swaps/raises scale with budget so small demos stay short. */
+  movesPerValidPiece: 0.35,
+  minMoves: 12,
+  maxMoves: 48,
   craftMultiplier: 1,
 } as const;
 
@@ -54,13 +63,8 @@ export type RefinePhase = "blocked" | "briefing" | "play" | "result";
 
 export type Cell = PieceKind | null;
 
-/** Active falling column: gems[0] is top, gems[n-1] is bottom. */
-export type FallingPiece = {
-  col: number;
-  /** Board row of the top gem. */
-  row: number;
-  gems: PieceKind[];
-};
+/** idle = waiting for swap/raise; clearing = chain window open. */
+export type PlayMode = "idle" | "clearing";
 
 export type RefineLive = {
   phase: RefinePhase;
@@ -75,11 +79,20 @@ export type RefineLive = {
   rows: number;
   movesLeft: number;
   cleared: ClearedCounts;
-  falling: FallingPiece | null;
-  /** Preview of next drop (up to fallingHeight gems). */
-  nextGems: PieceKind[];
-  /** Last chain length after a lock (for UI). */
+  /** Indices marked to clear when the chain window commits. */
+  pendingClear: number[];
+  playMode: PlayMode;
+  /** Current chain wave count (0 when idle). */
+  chainCount: number;
+  /** Last finished chain length (for UI flash). */
   lastChain: number;
+  /**
+   * Remaining window ms (informational; UI owns the timer).
+   * Engine extends this when mid-chain swaps add matches.
+   */
+  chainWindowMsLeft: number;
+  /** Selected cell index for tap-tap swap (cursor-style). */
+  selected: number | null;
   statusMsg: string | null;
 };
 
@@ -183,44 +196,14 @@ export function applyGravity(
   return next;
 }
 
-/** @deprecated Prefer line matching; kept for callers that inspect connectivity. */
-export function floodGroup(
-  board: Cell[],
-  cols: number,
-  rows: number,
-  start: number,
-): number[] {
-  const kind = board[start];
-  if (kind == null) return [];
-  const seen = new Set<number>();
-  const out: number[] = [];
-  const stack = [start];
-  while (stack.length) {
-    const i = stack.pop()!;
-    if (seen.has(i)) continue;
-    seen.add(i);
-    if (board[i] !== kind) continue;
-    out.push(i);
-    const r = Math.floor(i / cols);
-    const c = i % cols;
-    if (c > 0) stack.push(indexOf(cols, r, c - 1));
-    if (c + 1 < cols) stack.push(indexOf(cols, r, c + 1));
-    if (r > 0) stack.push(indexOf(cols, r - 1, c));
-    if (r + 1 < rows) stack.push(indexOf(cols, r + 1, c));
-  }
-  return out;
-}
-
 const LINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [0, 1], // horizontal
   [1, 0], // vertical
-  [1, 1], // diagonal ↘
-  [1, -1], // diagonal ↙
 ];
 
 /**
- * Classic Columns matching: 3+ same *valid* kind in a straight line
- * (horizontal / vertical / diagonal). Junk never matches.
+ * Panel de Pon matching: 3+ same *valid* kind in a straight horizontal or
+ * vertical line. No diagonals. Junk never matches.
  */
 export function findLineMatches(
   board: Cell[],
@@ -235,8 +218,6 @@ export function findLineMatches(
       const kind = board[start];
       if (kind == null || kind === "junk") continue;
       for (const [dr, dc] of LINE_DIRS) {
-        // Only start a ray from the "beginning" of a potential line
-        // (previous cell in opposite dir differs / OOB) to avoid duplicates.
         const pr = r - dr;
         const pc = c - dc;
         if (pr >= 0 && pr < rows && pc >= 0 && pc < cols) {
@@ -263,7 +244,7 @@ export function findLineMatches(
 
 export function clearMatches(
   board: Cell[],
-  matches: Set<number>,
+  matches: Set<number> | number[],
 ): { board: Cell[]; cleared: ClearedCounts } {
   const next = [...board];
   const cleared: ClearedCounts = { food: 0, material: 0, energy: 0 };
@@ -277,7 +258,10 @@ export function clearMatches(
   return { board: next, cleared };
 }
 
-/** Gravity + re-match until stable. Returns chain count (number of clear waves). */
+/**
+ * Resolve all passive gravity chains (no player input). Used in tests and
+ * for seeding. Live play uses the active-chain window instead.
+ */
 export function resolveChains(
   board: Cell[],
   cols: number,
@@ -318,76 +302,6 @@ export function remainingValidOnBoard(board: Cell[]): number {
   return n;
 }
 
-function peekNext(
-  bag: PieceKind[],
-  n = SORT_V0_RULES.fallingHeight,
-): PieceKind[] {
-  return bag.slice(0, Math.min(n, bag.length));
-}
-
-function takeFromBag(
-  bag: PieceKind[],
-  n = SORT_V0_RULES.fallingHeight,
-): { gems: PieceKind[]; bag: PieceKind[] } {
-  const take = Math.min(n, bag.length);
-  return { gems: bag.slice(0, take), bag: bag.slice(take) };
-}
-
-/** Cell occupied if board has a piece, or if falling covers it. */
-export function cellBlocked(
-  board: Cell[],
-  cols: number,
-  rows: number,
-  r: number,
-  c: number,
-): boolean {
-  if (c < 0 || c >= cols || r < 0 || r >= rows) return true;
-  return board[indexOf(cols, r, c)] != null;
-}
-
-/** True if falling piece at (col,row) with given height fits without overlap. */
-export function canPlaceFalling(
-  board: Cell[],
-  cols: number,
-  rows: number,
-  col: number,
-  row: number,
-  height: number,
-): boolean {
-  if (col < 0 || col >= cols) return false;
-  if (row < 0) return false;
-  for (let i = 0; i < height; i++) {
-    const r = row + i;
-    if (r >= rows) return false;
-    if (board[indexOf(cols, r, col)] != null) return false;
-  }
-  return true;
-}
-
-export function spawnFalling(
-  board: Cell[],
-  bag: PieceKind[],
-  cols: number,
-  rows: number,
-): { falling: FallingPiece | null; bag: PieceKind[]; blocked: boolean } {
-  if (bag.length === 0) {
-    return { falling: null, bag, blocked: false };
-  }
-  const { gems, bag: rest } = takeFromBag(bag);
-  const height = gems.length;
-  const col = Math.floor((cols - 1) / 2);
-  // Spawn with top at row 0; if that overlaps, try to finish (top-out).
-  if (!canPlaceFalling(board, cols, rows, col, 0, height)) {
-    // Put gems back — cannot spawn.
-    return { falling: null, bag: [...gems, ...rest], blocked: true };
-  }
-  return {
-    falling: { col, row: 0, gems },
-    bag: rest,
-    blocked: false,
-  };
-}
-
 function mergeCleared(a: ClearedCounts, b: ClearedCounts): ClearedCounts {
   return {
     food: a.food + b.food,
@@ -396,8 +310,76 @@ function mergeCleared(a: ClearedCounts, b: ClearedCounts): ClearedCounts {
   };
 }
 
-function withNextPreview(s: RefineLive): RefineLive {
-  return { ...s, nextGems: peekNext(s.bag) };
+function takeFromBag(
+  bag: PieceKind[],
+  n: number,
+): { gems: PieceKind[]; bag: PieceKind[] } {
+  const take = Math.min(n, bag.length);
+  return { gems: bag.slice(0, take), bag: bag.slice(take) };
+}
+
+/** True if two indices are orthogonally adjacent. */
+export function areAdjacent(
+  cols: number,
+  a: number,
+  b: number,
+): boolean {
+  const ra = Math.floor(a / cols);
+  const ca = a % cols;
+  const rb = Math.floor(b / cols);
+  const cb = b % cols;
+  const dr = Math.abs(ra - rb);
+  const dc = Math.abs(ca - cb);
+  return (dr === 1 && dc === 0) || (dr === 0 && dc === 1);
+}
+
+/** Panel de Pon classic: horizontal neighbors only. */
+export function areHorizontalAdjacent(
+  cols: number,
+  a: number,
+  b: number,
+): boolean {
+  const ra = Math.floor(a / cols);
+  const ca = a % cols;
+  const rb = Math.floor(b / cols);
+  const cb = b % cols;
+  return ra === rb && Math.abs(ca - cb) === 1;
+}
+
+/**
+ * Prefill bottom rows from bag. Avoids leaving immediate matches by
+ * resolving passive chains without awarding clears (seed settle).
+ */
+export function fillInitialBoard(
+  bag: PieceKind[],
+  cols: number,
+  rows: number,
+  fillRows: number,
+): { board: Cell[]; bag: PieceKind[] } {
+  let rest = [...bag];
+  let board = emptyBoard(cols, rows);
+  const startRow = Math.max(0, rows - fillRows);
+  for (let r = startRow; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (rest.length === 0) break;
+      const { gems, bag: next } = takeFromBag(rest, 1);
+      board[indexOf(cols, r, c)] = gems[0]!;
+      rest = next;
+    }
+  }
+  // Settle accidental opening matches without scoring; return pieces to bag.
+  let b = board;
+  for (;;) {
+    const matches = findLineMatches(b, cols, rows);
+    if (matches.size === 0) break;
+    for (const i of matches) {
+      const kind = b[i];
+      if (kind != null) rest.push(kind);
+    }
+    const cleared = clearMatches(b, matches);
+    b = applyGravity(cleared.board, cols, rows);
+  }
+  return { board: b, bag: rest };
 }
 
 export function parseInboundOrDemo(search: string): {
@@ -450,7 +432,7 @@ export function createRefineFromLocationSearch(search: string): RefineLive {
   const cols = SORT_V0_RULES.boardCols;
   const rows = SORT_V0_RULES.boardRows;
 
-  const base: RefineLive = {
+  return {
     phase: gate.ok ? "briefing" : "blocked",
     inbound,
     note,
@@ -463,12 +445,14 @@ export function createRefineFromLocationSearch(search: string): RefineLive {
     rows,
     movesLeft: gate.ok ? moveBudgetFor(validPieceBudget) : 0,
     cleared: { food: 0, material: 0, energy: 0 },
-    falling: null,
-    nextGems: [],
+    pendingClear: [],
+    playMode: "idle",
+    chainCount: 0,
     lastChain: 0,
+    chainWindowMsLeft: 0,
+    selected: null,
     statusMsg: null,
   };
-  return base;
 }
 
 export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
@@ -478,155 +462,329 @@ export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
     s.invalidPieceCount,
     seed,
   );
-  const spawned = spawnFalling(
-    emptyBoard(s.cols, s.rows),
+  const filled = fillInitialBoard(
     bag,
     s.cols,
     s.rows,
+    SORT_V0_RULES.initialFillRows,
   );
-  let next: RefineLive = {
+  return {
     ...s,
     phase: "play",
-    bag: spawned.bag,
-    board: emptyBoard(s.cols, s.rows),
+    bag: filled.bag,
+    board: filled.board,
     movesLeft: moveBudgetFor(s.validPieceBudget),
     cleared: { food: 0, material: 0, energy: 0 },
-    falling: spawned.falling,
+    pendingClear: [],
+    playMode: "idle",
+    chainCount: 0,
     lastChain: 0,
+    chainWindowMsLeft: 0,
+    selected: null,
     statusMsg: null,
   };
-  next = withNextPreview(next);
-  if (spawned.blocked || spawned.falling == null) {
-    return finishRefine(next);
+}
+
+function maybeFinishOnMoves(s: RefineLive): RefineLive {
+  if (s.phase !== "play") return s;
+  if (s.playMode === "clearing") return s;
+  if (s.movesLeft <= 0) {
+    return finishRefine({ ...s, statusMsg: "手数切れ" });
   }
+  return s;
+}
+
+/**
+ * Enter / refresh clearing window with the given match set.
+ */
+function beginOrExtendClear(
+  s: RefineLive,
+  matches: Set<number>,
+  opts: { newChain: boolean; extendOnly: boolean },
+): RefineLive {
+  if (matches.size === 0) return s;
+  const pending = new Set(s.pendingClear);
+  for (const i of matches) pending.add(i);
+  const chainCount = opts.newChain
+    ? Math.max(1, s.chainCount)
+    : opts.extendOnly
+      ? s.chainCount
+      : s.chainCount + 1;
+  const windowMs = opts.extendOnly
+    ? Math.max(
+        s.chainWindowMsLeft,
+        SORT_V0_RULES.chainWindowExtendMs,
+      ) + SORT_V0_RULES.chainWindowExtendMs
+    : SORT_V0_RULES.chainWindowMs;
+  return {
+    ...s,
+    pendingClear: [...pending],
+    playMode: "clearing",
+    chainCount: opts.newChain ? 1 : chainCount,
+    chainWindowMsLeft: windowMs,
+    selected: null,
+    statusMsg:
+      (opts.newChain ? 1 : chainCount) > 1
+        ? `連鎖 ×${opts.newChain ? 1 : chainCount}（スワップで伸ばせる）`
+        : "マッチ！ 連鎖ウィンドウ中",
+  };
+}
+
+/**
+ * Swap two orthogonally adjacent panels.
+ * - Idle: costs 1 move; opens chain window if matches form.
+ * - Clearing (active chain): free; new matches merge into pending clear
+ *   and extend the window (skill expression).
+ */
+export function swapPanels(
+  s: RefineLive,
+  a: number,
+  b: number,
+): RefineLive {
+  if (s.phase !== "play") return s;
+  if (a === b) return s;
+  if (a < 0 || b < 0 || a >= s.board.length || b >= s.board.length) return s;
+  if (!areAdjacent(s.cols, a, b)) return s;
+
+  const pending = new Set(s.pendingClear);
+  if (pending.has(a) || pending.has(b)) {
+    return { ...s, statusMsg: "消去中のパネルは動かせません", selected: null };
+  }
+
+  const cellA = s.board[a];
+  const cellB = s.board[b];
+  if (cellA == null && cellB == null) return s;
+
+  const board = [...s.board];
+  board[a] = cellB;
+  board[b] = cellA;
+
+  const inChain = s.playMode === "clearing";
+  let movesLeft = s.movesLeft;
+  if (!inChain) {
+    if (movesLeft <= 0) return s;
+    movesLeft -= 1;
+  }
+
+  const matches = findLineMatches(board, s.cols, s.rows);
+  let next: RefineLive = {
+    ...s,
+    board,
+    movesLeft,
+    selected: null,
+  };
+
+  if (matches.size > 0) {
+    if (inChain) {
+      next = beginOrExtendClear(
+        { ...next, pendingClear: s.pendingClear, chainCount: s.chainCount },
+        matches,
+        { newChain: false, extendOnly: true },
+      );
+      // Keep existing pending + new; chain count unchanged until commit.
+      const merged = new Set(s.pendingClear);
+      for (const i of matches) merged.add(i);
+      next = {
+        ...next,
+        pendingClear: [...merged],
+        chainCount: s.chainCount,
+        statusMsg: `連鎖ウィンドウ · 追加マッチ！（×${s.chainCount}）`,
+      };
+    } else {
+      next = beginOrExtendClear(
+        { ...next, pendingClear: [], chainCount: 0 },
+        matches,
+        { newChain: true, extendOnly: false },
+      );
+    }
+  } else if (!inChain) {
+    next = {
+      ...next,
+      statusMsg: null,
+    };
+    next = maybeFinishOnMoves(next);
+  }
+
   return next;
 }
 
-function lockAndContinue(s: RefineLive): RefineLive {
-  if (s.falling == null || s.phase !== "play") return s;
-  const { falling } = s;
-  const nextBoard = [...s.board];
-  for (let i = 0; i < falling.gems.length; i++) {
-    const r = falling.row + i;
-    const idx = indexOf(s.cols, r, falling.col);
-    nextBoard[idx] = falling.gems[i]!;
+/**
+ * Raise: push a new bottom row from the bag (stack rises).
+ * Costs 1 move. Top-out finishes the run.
+ */
+export function raiseStack(s: RefineLive): RefineLive {
+  if (s.phase !== "play") return s;
+  if (s.playMode === "clearing") {
+    return { ...s, statusMsg: "連鎖中はせり上げできません" };
+  }
+  if (s.movesLeft <= 0) return maybeFinishOnMoves(s);
+  if (s.bag.length === 0) {
+    return { ...s, statusMsg: "袋が空です" };
   }
 
-  const resolved = resolveChains(nextBoard, s.cols, s.rows);
-  const cleared = mergeCleared(s.cleared, resolved.cleared);
-  const movesLeft = Math.max(0, s.movesLeft - 1);
+  // Top-out if any cell in row 0 is occupied.
+  for (let c = 0; c < s.cols; c++) {
+    if (s.board[indexOf(s.cols, 0, c)] != null) {
+      return finishRefine({
+        ...s,
+        statusMsg: "トップアウト（盤面が埋まりました）",
+      });
+    }
+  }
+
+  const needed = s.cols;
+  const taken = takeFromBag(s.bag, needed);
+  const bag = taken.bag;
+  const rowGems: Cell[] = [...taken.gems];
+  while (rowGems.length < needed) rowGems.push(null);
+
+  const board = emptyBoard(s.cols, s.rows);
+  // Shift everything up one row.
+  for (let r = 1; r < s.rows; r++) {
+    for (let c = 0; c < s.cols; c++) {
+      board[indexOf(s.cols, r - 1, c)] = s.board[indexOf(s.cols, r, c)] ?? null;
+    }
+  }
+  // New bottom row.
+  for (let c = 0; c < s.cols; c++) {
+    board[indexOf(s.cols, s.rows - 1, c)] = rowGems[c] ?? null;
+  }
 
   let next: RefineLive = {
     ...s,
-    board: resolved.board,
-    cleared,
-    movesLeft,
-    falling: null,
-    lastChain: resolved.chain,
-    statusMsg:
-      resolved.chain > 1
-        ? `連鎖 ×${resolved.chain}`
-        : resolved.chain === 1
-          ? "マッチ消去"
-          : null,
+    board,
+    bag,
+    movesLeft: s.movesLeft - 1,
+    selected: null,
+    statusMsg: "せり上げ",
   };
 
-  if (movesLeft <= 0) {
-    return finishRefine(withNextPreview(next));
-  }
-
-  const spawned = spawnFalling(next.board, next.bag, next.cols, next.rows);
-  next = {
-    ...next,
-    bag: spawned.bag,
-    falling: spawned.falling,
-  };
-  next = withNextPreview(next);
-
-  if (spawned.blocked) {
-    return finishRefine({
-      ...next,
-      statusMsg: "盤面が埋まりました",
-    });
-  }
-  if (spawned.falling == null && next.bag.length === 0) {
-    return finishRefine({
-      ...next,
-      statusMsg: "袋が空になりました",
-    });
+  const matches = findLineMatches(next.board, next.cols, next.rows);
+  if (matches.size > 0) {
+    next = beginOrExtendClear(
+      { ...next, pendingClear: [], chainCount: 0 },
+      matches,
+      { newChain: true, extendOnly: false },
+    );
+  } else {
+    next = maybeFinishOnMoves(next);
   }
   return next;
 }
 
-export type ControlAction =
-  | "left"
-  | "right"
-  | "rotate"
-  | "softDrop"
-  | "hardDrop";
+/**
+ * Commit one clear step: erase pending → gravity → re-match.
+ * Called by UI when the chain window timer fires.
+ * If new matches appear, stays in clearing (chain++). Else returns to idle.
+ */
+export function commitClearStep(s: RefineLive): RefineLive {
+  if (s.phase !== "play" || s.playMode !== "clearing") return s;
+  if (s.pendingClear.length === 0) {
+    return {
+      ...s,
+      playMode: "idle",
+      chainCount: 0,
+      chainWindowMsLeft: 0,
+      lastChain: s.lastChain,
+    };
+  }
 
-export function applyControl(s: RefineLive, action: ControlAction): RefineLive {
-  if (s.phase !== "play" || s.falling == null) return s;
-  const f = s.falling;
-  const h = f.gems.length;
+  const clearedStep = clearMatches(s.board, s.pendingClear);
+  const board = applyGravity(clearedStep.board, s.cols, s.rows);
+  const cleared = mergeCleared(s.cleared, clearedStep.cleared);
+  const chainDone = s.chainCount;
 
-  if (action === "left") {
-    if (canPlaceFalling(s.board, s.cols, s.rows, f.col - 1, f.row, h)) {
-      return { ...s, falling: { ...f, col: f.col - 1 }, statusMsg: null };
-    }
-    return s;
+  const matches = findLineMatches(board, s.cols, s.rows);
+  if (matches.size > 0) {
+    return {
+      ...s,
+      board,
+      cleared,
+      pendingClear: [...matches],
+      playMode: "clearing",
+      chainCount: chainDone + 1,
+      chainWindowMsLeft: SORT_V0_RULES.chainWindowMs,
+      lastChain: chainDone + 1,
+      selected: null,
+      statusMsg: `連鎖 ×${chainDone + 1}（スワップで伸ばせる）`,
+    };
   }
-  if (action === "right") {
-    if (canPlaceFalling(s.board, s.cols, s.rows, f.col + 1, f.row, h)) {
-      return { ...s, falling: { ...f, col: f.col + 1 }, statusMsg: null };
-    }
-    return s;
-  }
-  if (action === "rotate") {
-    if (h <= 1) return s;
-    // Cycle: bottom → top (classic Columns feel).
-    const gems = [...f.gems];
-    const bottom = gems.pop()!;
-    gems.unshift(bottom);
-    return { ...s, falling: { ...f, gems }, statusMsg: null };
-  }
-  if (action === "softDrop") {
-    if (canPlaceFalling(s.board, s.cols, s.rows, f.col, f.row + 1, h)) {
-      return { ...s, falling: { ...f, row: f.row + 1 }, statusMsg: null };
-    }
-    return lockAndContinue(s);
-  }
-  if (action === "hardDrop") {
-    let row = f.row;
-    while (canPlaceFalling(s.board, s.cols, s.rows, f.col, row + 1, h)) {
-      row++;
-    }
-    return lockAndContinue({ ...s, falling: { ...f, row } });
-  }
-  return s;
+
+  let next: RefineLive = {
+    ...s,
+    board,
+    cleared,
+    pendingClear: [],
+    playMode: "idle",
+    chainCount: 0,
+    chainWindowMsLeft: 0,
+    lastChain: chainDone,
+    selected: null,
+    statusMsg: chainDone > 1 ? `連鎖完了 ×${chainDone}` : "マッチ消去",
+  };
+  return maybeFinishOnMoves(next);
 }
 
-/** @deprecated Use applyControl. Kept briefly for migration; no-op on junk. */
-export function tapCell(s: RefineLive, _index: number): RefineLive {
-  return s;
+/** Tap a cell: select, or swap with selection if adjacent. */
+export function tapCell(s: RefineLive, index: number): RefineLive {
+  if (s.phase !== "play") return s;
+  if (index < 0 || index >= s.board.length) return s;
+
+  if (s.pendingClear.includes(index)) {
+    return { ...s, statusMsg: "消去中のパネルです", selected: null };
+  }
+
+  if (s.selected == null) {
+    if (s.board[index] == null) return s;
+    return { ...s, selected: index, statusMsg: null };
+  }
+
+  if (s.selected === index) {
+    return { ...s, selected: null };
+  }
+
+  if (areAdjacent(s.cols, s.selected, index)) {
+    return swapPanels(s, s.selected, index);
+  }
+
+  // Re-select
+  if (s.board[index] == null) return { ...s, selected: null };
+  return { ...s, selected: index, statusMsg: null };
 }
 
 export function finishRefine(s: RefineLive): RefineLive {
   if (s.phase !== "play" && s.phase !== "result") return s;
+  // If finishing mid-clear, commit remaining clears passively for fairness.
+  let board = s.board;
+  let cleared = s.cleared;
+  let lastChain = s.lastChain;
+  if (s.playMode === "clearing" && s.pendingClear.length > 0) {
+    const step = clearMatches(board, s.pendingClear);
+    board = applyGravity(step.board, s.cols, s.rows);
+    cleared = mergeCleared(cleared, step.cleared);
+    const rest = resolveChains(board, s.cols, s.rows);
+    board = rest.board;
+    cleared = mergeCleared(cleared, rest.cleared);
+    lastChain = Math.max(lastChain, s.chainCount + rest.chain);
+  }
   return {
     ...s,
     phase: "result",
-    falling: null,
-    nextGems: [],
+    board,
+    cleared,
+    pendingClear: [],
+    playMode: "idle",
+    chainCount: 0,
+    chainWindowMsLeft: 0,
+    lastChain,
+    selected: null,
   };
 }
 
 export function scrapLossFromState(s: RefineLive): number {
   const onBoard = remainingValidOnBoard(s.board);
   const inBag = s.bag.filter((k) => k !== "junk").length;
-  const inFalling =
-    s.falling?.gems.filter((k) => k !== "junk").length ?? 0;
-  return onBoard + inBag + inFalling;
+  return onBoard + inBag;
 }
 
 export function resolveCraftMultiplier(inbound: ExploreToSortPayload): number {
@@ -660,27 +818,16 @@ export function demoQueryExample(): string {
   return `?salvagedContainers=${cans}&totalStockPieces=${cans * PIECES_PER_CONTAINER}&isExtracted=1`;
 }
 
-/** Overlay falling gems onto a board copy for rendering. */
-export function boardWithFalling(s: RefineLive): Cell[] {
-  const out = [...s.board];
-  if (s.falling == null) return out;
-  const { col, row, gems } = s.falling;
-  for (let i = 0; i < gems.length; i++) {
-    const r = row + i;
-    if (r < 0 || r >= s.rows) continue;
-    out[indexOf(s.cols, r, col)] = gems[i]!;
-  }
-  return out;
-}
+/** @deprecated Columns control API — no-op shim for old callers. */
+export type ControlAction =
+  | "left"
+  | "right"
+  | "rotate"
+  | "softDrop"
+  | "hardDrop"
+  | "raise";
 
-/** Ghost landing row for the active piece (top row after hard drop). */
-export function ghostRow(s: RefineLive): number | null {
-  if (s.falling == null) return null;
-  const f = s.falling;
-  const h = f.gems.length;
-  let row = f.row;
-  while (canPlaceFalling(s.board, s.cols, s.rows, f.col, row + 1, h)) {
-    row++;
-  }
-  return row;
+export function applyControl(s: RefineLive, action: ControlAction): RefineLive {
+  if (action === "raise") return raiseStack(s);
+  return s;
 }

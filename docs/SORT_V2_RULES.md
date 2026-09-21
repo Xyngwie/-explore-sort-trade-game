@@ -1,6 +1,6 @@
 # Sort v2 ルール（精製 / Athanor）
 
-**ステータス:** 採用方針（2026-09-16）。`packages/sort` の #47 実装は provisional であり、置き換え可能。
+**ステータス:** 採用方針（2026-09-16）。パズル手触りは Panel de Pon 系（`SORT_V0`）。
 **目的:** 現行 Athanor の「先に配合を決めてからパズル」より、因果が読めるルールにする。
 
 関連: `packages/shared` の `PlayerExpeditionState` / `CraftingPuzzleResult` / explore→sort ハンドオフ。
@@ -91,7 +91,7 @@ invalidPieceCount = floor(validPieceBudget * invalidRatio)
 - 無効ピースは選択・マッチ対象外（移動でどかせるかは実装任せ。最初は「消せない壁／ゴミ」で可）
 - 制限: 手数 or 時間のどちらか一方を v0 で固定（推奨: **手数**の方が成果との対応が明確）
 
-> 現行 #47 の `packages/sort` はこの契約を確認するための Columns-like provisional。パズル UI／操作は将来置き換えてよいが、コンテナ予算・無効ピース・成果・ハンドオフの契約は維持する。
+> `packages/sort` は Panel de Pon 系 UI でこの契約を確認する。パズル UI／操作の細部は調整してよいが、コンテナ予算・無効ピース・成果・ハンドオフの契約は維持する。
 
 ---
 

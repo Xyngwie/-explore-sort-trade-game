@@ -69,8 +69,8 @@
 
 - 毎日触る精製レイヤ。薄利でも回数が効く。
 - 契約語彙は `SORT_V2` / `YieldBag` を参照（本ビジョンは上書きしない）。
-- **手触り（意図）:** **Panel de Pon / Zoo Keeper 系の落下パネル・マッチ消去・連鎖**。盤面上のパネルを動かして同色をそろえ、消去と落下で連鎖を起こす。**Columns のような 3 個 1 列の落下操作ではない。** 経済・成果ルールは `SORT_V2`（`YieldBag` / `craftMultiplier` 等）のまま。
-- **現行実装の注意:** #47 で入った `packages/sort` は Columns-like な 3 個落下列の provisional 実装であり、意図する手触りの確定実装ではない。置き換える可能性がある。詳細・現状の試し方は [`SORT_V0.md`](./SORT_V0.md)。
+- **手触り:** **Panel de Pon / Puzzle League / Zoo Keeper 系**の積載パネル・隣接スワップ・マッチ消去・**アクティブ連鎖**（消去ウィンドウ中もスワップしてコンボ延長）。**Columns のような 3 個 1 列の落下操作ではない。** 経済・成果ルールは `SORT_V2`（`YieldBag` / `craftMultiplier` 等）のまま。
+- **実装:** `packages/sort` はこの手触りで動作。試し方は [`SORT_V0.md`](./SORT_V0.md)。
 
 ### 3.3 Module 3 — trade
 
