@@ -11,22 +11,23 @@ import {
 } from "@estg/shared";
 import {
   PIECE_LABEL_JA,
-  applyControl,
-  boardWithFalling,
+  SORT_V0_RULES,
+  commitClearStep,
   createRefineFromLocationSearch,
   demoQueryExample,
   finishRefine,
-  ghostRow,
-  indexOf,
+  raiseStack,
   startRefine,
+  swapPanels,
+  tapCell,
   toCraftingResult,
-  type ControlAction,
   type PieceKind,
   type RefineLive,
 } from "./refine";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 let state: RefineLive = createRefineFromLocationSearch(window.location.search);
+let chainTimer: ReturnType<typeof setTimeout> | null = null;
 
 function tradeBaseUrl(): string {
   return resolveModuleBaseUrl("trade");
@@ -51,73 +52,71 @@ function pieceClass(kind: PieceKind | null): string {
   return `cell ${kind}`;
 }
 
-function boardHtml(s: RefineLive): string {
-  const display = boardWithFalling(s);
-  const ghost = ghostRow(s);
-  const fallingIndices = new Set<number>();
-  if (s.falling) {
-    for (let i = 0; i < s.falling.gems.length; i++) {
-      fallingIndices.add(indexOf(s.cols, s.falling.row + i, s.falling.col));
-    }
+function clearChainTimer() {
+  if (chainTimer != null) {
+    clearTimeout(chainTimer);
+    chainTimer = null;
   }
-  const ghostIndices = new Set<number>();
-  if (s.falling && ghost != null && ghost !== s.falling.row) {
-    for (let i = 0; i < s.falling.gems.length; i++) {
-      ghostIndices.add(indexOf(s.cols, ghost + i, s.falling.col));
-    }
-  }
+}
 
-  const cells = display
+function scheduleChainWindow() {
+  clearChainTimer();
+  if (state.phase !== "play" || state.playMode !== "clearing") return;
+  const delay = Math.max(120, state.chainWindowMsLeft || SORT_V0_RULES.chainWindowMs);
+  chainTimer = setTimeout(() => {
+    state = commitClearStep(state);
+    render();
+    if (state.playMode === "clearing") {
+      scheduleChainWindow();
+    }
+  }, delay);
+}
+
+function setState(next: RefineLive) {
+  const wasClearing = state.playMode === "clearing";
+  state = next;
+  if (state.playMode === "clearing") {
+    // (Re)arm window on enter or when mid-chain swap extends it.
+    scheduleChainWindow();
+  } else if (wasClearing) {
+    clearChainTimer();
+  }
+  render();
+}
+
+function boardHtml(s: RefineLive): string {
+  const pending = new Set(s.pendingClear);
+  const cells = s.board
     .map((kind, i) => {
-      const isFalling = fallingIndices.has(i);
-      const isGhost = ghostIndices.has(i) && !isFalling;
       const extras = [
-        isFalling ? "falling" : "",
-        isGhost ? "ghost" : "",
+        pending.has(i) ? "pending" : "",
+        s.selected === i ? "selected" : "",
       ]
         .filter(Boolean)
         .join(" ");
-      const label =
-        kind == null
-          ? ""
-          : isGhost
-            ? ""
-            : PIECE_LABEL_JA[kind].slice(0, 1);
+      const label = kind == null ? "" : PIECE_LABEL_JA[kind].slice(0, 1);
       const title =
         kind == null
           ? ""
           : kind === "junk"
             ? "ジャンク（消去不可）"
             : PIECE_LABEL_JA[kind];
-      return `<div class="${pieceClass(isGhost ? null : kind)}${extras ? ` ${extras}` : ""}" data-idx="${i}" title="${escapeHtml(title)}">${escapeHtml(label)}</div>`;
+      return `<button type="button" class="${pieceClass(kind)}${extras ? ` ${extras}` : ""}" data-idx="${i}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title || "空")}">${escapeHtml(label)}</button>`;
     })
     .join("");
   return `<div class="board" style="--cols:${s.cols}" role="grid" aria-label="精製盤">${cells}</div>`;
 }
 
-function nextHtml(s: RefineLive): string {
-  if (s.nextGems.length === 0) {
-    return `<div class="next muted">NEXT —</div>`;
-  }
-  const gems = s.nextGems
-    .map(
-      (k) =>
-        `<span class="swatch ${k}">${escapeHtml(PIECE_LABEL_JA[k].slice(0, 1))}</span>`,
-    )
-    .join("");
-  return `<div class="next"><span class="muted">NEXT</span> ${gems}</div>`;
-}
-
-function controlsHtml(): string {
+function controlsHtml(s: RefineLive): string {
+  const chainHint =
+    s.playMode === "clearing"
+      ? `<p class="hint ok">連鎖ウィンドウ！ 消える前にスワップしてコンボを伸ばそう（×${s.chainCount}）</p>`
+      : `<p class="hint muted">タップで選択→隣をタップ、またはスワイプでスワップ。せり上げで新しい列。</p>`;
   return `
     <div class="controls" aria-label="操作">
-      <button type="button" class="ctrl" data-act="left" aria-label="左へ">◀</button>
-      <button type="button" class="ctrl" data-act="rotate" aria-label="回転">⟳</button>
-      <button type="button" class="ctrl" data-act="right" aria-label="右へ">▶</button>
-      <button type="button" class="ctrl" data-act="softDrop" aria-label="ソフトドロップ">▼</button>
-      <button type="button" class="ctrl primary" data-act="hardDrop" aria-label="ハードドロップ">⏬ 落とす</button>
+      <button type="button" class="ctrl primary" data-act="raise" aria-label="せり上げ" ${s.playMode === "clearing" ? "disabled" : ""}>⬆ せり上げ</button>
     </div>
-    <p class="hint muted">キー: ← → ↑/X 回転 · ↓ ソフト · Space ハード · スワイプ可</p>
+    ${chainHint}
   `;
 }
 
@@ -136,11 +135,6 @@ function yieldBagRows(bag: Record<string, number | undefined>): string {
     .join("");
 }
 
-function doControl(action: ControlAction) {
-  state = applyControl(state, action);
-  render();
-}
-
 function render() {
   const result = state.phase === "result" ? toCraftingResult(state) : null;
   const handoffUrl =
@@ -151,9 +145,9 @@ function render() {
     result != null ? importedMaterialsFromResult(result) : 0;
 
   root.innerHTML = `
-    <p class="pill">MODULE 2 · SORT · COLUMNS</p>
-    <h1>Athanor 精製（Columns）</h1>
-    <p class="muted">コンテナ予算→有効ピース。落下列を位置／回転して落とす。3つ以上一直線で消去・重力連鎖。ジャンクは消えない。</p>
+    <p class="pill">MODULE 2 · SORT · PANEL DE PON</p>
+    <h1>Athanor 精製（Panel de Pon）</h1>
+    <p class="muted">コンテナ予算→有効ピース。盤上のパネルをスワップして 3 つ以上そろえる。消去ウィンドウ中もスワップして連鎖を伸ばせる。ジャンクは消えない。</p>
 
     <div class="card">
       <div class="muted">${escapeHtml(state.note)}</div>
@@ -182,7 +176,7 @@ function render() {
     ${
       state.phase === "briefing"
         ? `<div class="card">
-            <p>配合フェーズなし。<strong>3 個の落下列</strong>を左右移動・回転して配置。同色が縦・横・斜めに 3 つ以上そろると消去され、重力と連鎖が起きます。ジャンクはマッチしません。</p>
+            <p>配合フェーズなし。盤に積まれたパネルを<strong>スワップ</strong>して同色を縦・横に 3 つ以上そろえると消去。消えるあいだもスワップでき、<strong>アクティブ連鎖</strong>でコンボを伸ばせます。ジャンクはマッチしません。</p>
             <div class="row">
               <button type="button" id="btn-start">精製開始</button>
             </div>
@@ -194,11 +188,11 @@ function render() {
       state.phase === "play"
         ? `<div class="card play-card">
             <table>
-              <tr><td>残り手数（配置）</td><td>${state.movesLeft}</td></tr>
+              <tr><td>残り手数</td><td>${state.movesLeft}</td></tr>
               <tr><td>袋の残り</td><td>${state.bag.length}</td></tr>
               <tr><td>消去 食料/部品/電力</td><td>${state.cleared.food} / ${state.cleared.material} / ${state.cleared.energy}</td></tr>
+              <tr><td>連鎖</td><td>${state.playMode === "clearing" ? `進行中 ×${state.chainCount}` : state.lastChain > 0 ? `前回 ×${state.lastChain}` : "—"}</td></tr>
             </table>
-            ${nextHtml(state)}
             <div class="legend">
               <span class="swatch food">食</span>
               <span class="swatch material">部</span>
@@ -211,7 +205,7 @@ function render() {
                 ? `<p class="ok status-msg">${escapeHtml(state.statusMsg)}</p>`
                 : ""
             }
-            ${controlsHtml()}
+            ${controlsHtml(state)}
             <div class="row">
               <button type="button" class="secondary" id="btn-finish">精製を終える</button>
             </div>
@@ -230,6 +224,7 @@ function render() {
               <tr><td>scrapLossCount</td><td>${result.scrapLossCount}</td></tr>
               <tr><td>craftMultiplier</td><td>${result.craftMultiplier.toFixed(3)}</td></tr>
               <tr><td>importMaterials</td><td>${importMats}</td></tr>
+              <tr><td>lastChain</td><td>×${state.lastChain}</td></tr>
             </table>
             <h2 class="sub">YieldBag</h2>
             <table>${yieldBagRows(result.yieldBag ?? {})}</table>
@@ -244,77 +239,116 @@ function render() {
   `;
 
   document.getElementById("btn-start")?.addEventListener("click", () => {
-    state = startRefine(state);
-    render();
+    setState(startRefine(state));
   });
   document.getElementById("btn-finish")?.addEventListener("click", () => {
-    state = finishRefine(state);
-    render();
+    clearChainTimer();
+    setState(finishRefine(state));
   });
   document.getElementById("btn-again")?.addEventListener("click", () => {
-    state = createRefineFromLocationSearch(window.location.search);
-    render();
+    clearChainTimer();
+    setState(createRefineFromLocationSearch(window.location.search));
   });
   root.querySelectorAll<HTMLButtonElement>("button.ctrl[data-act]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const act = btn.dataset.act as ControlAction;
-      doControl(act);
+      if (btn.dataset.act === "raise") setState(raiseStack(state));
+    });
+  });
+  root.querySelectorAll<HTMLButtonElement>("button.cell[data-idx]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const idx = Number(btn.dataset.idx);
+      if (!Number.isFinite(idx)) return;
+      setState(tapCell(state, idx));
     });
   });
 }
 
+// Keyboard: arrows move selection / swap; R raise; Enter swap toward selection neighbor
 window.addEventListener("keydown", (e) => {
   if (state.phase !== "play") return;
-  const map: Record<string, ControlAction> = {
-    ArrowLeft: "left",
-    ArrowRight: "right",
-    ArrowDown: "softDrop",
-    ArrowUp: "rotate",
-    x: "rotate",
-    X: "rotate",
-    " ": "hardDrop",
-  };
-  const act = map[e.key];
-  if (!act) return;
+  if (e.key === "r" || e.key === "R") {
+    e.preventDefault();
+    setState(raiseStack(state));
+    return;
+  }
+  if (state.selected == null) return;
+  const cols = state.cols;
+  const sel = state.selected;
+  const r = Math.floor(sel / cols);
+  const c = sel % cols;
+  let target: number | null = null;
+  if (e.key === "ArrowLeft" && c > 0) target = sel - 1;
+  if (e.key === "ArrowRight" && c + 1 < cols) target = sel + 1;
+  if (e.key === "ArrowUp" && r > 0) target = sel - cols;
+  if (e.key === "ArrowDown" && r + 1 < state.rows) target = sel + cols;
+  if (target == null) return;
   e.preventDefault();
-  doControl(act);
+  if (e.shiftKey) {
+    setState({ ...state, selected: target });
+  } else {
+    setState(swapPanels(state, sel, target));
+  }
 });
 
-// Touch swipe on the board area
+// Touch swipe on board cells: swipe to adjacent swap
 let touchStartX = 0;
 let touchStartY = 0;
+let touchIdx: number | null = null;
 root.addEventListener(
   "touchstart",
   (e) => {
     if (state.phase !== "play" || e.touches.length !== 1) return;
-    touchStartX = e.touches[0]!.clientX;
-    touchStartY = e.touches[0]!.clientY;
+    const t = e.touches[0]!;
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    const cell = el?.closest?.("button.cell[data-idx]") as HTMLElement | null;
+    if (!cell) {
+      touchIdx = null;
+      return;
+    }
+    touchIdx = Number(cell.dataset.idx);
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
   },
   { passive: true },
 );
 root.addEventListener(
   "touchend",
   (e) => {
-    if (state.phase !== "play" || e.changedTouches.length !== 1) return;
-    const dx = e.changedTouches[0]!.clientX - touchStartX;
-    const dy = e.changedTouches[0]!.clientY - touchStartY;
-    const absX = Math.abs(dx);
-    const absY = Math.abs(dy);
-    const threshold = 28;
-    if (absX < threshold && absY < threshold) {
-      // Tap = rotate
-      doControl("rotate");
+    if (state.phase !== "play" || touchIdx == null || e.changedTouches.length !== 1) {
+      touchIdx = null;
       return;
     }
-    if (absX > absY) {
-      doControl(dx > 0 ? "right" : "left");
-    } else if (dy > 0) {
-      doControl(absY > 80 ? "hardDrop" : "softDrop");
-    } else {
-      doControl("rotate");
+    const t = e.changedTouches[0]!;
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    const threshold = 24;
+    const cols = state.cols;
+    const sel = touchIdx;
+    touchIdx = null;
+
+    if (absX < threshold && absY < threshold) {
+      // Tap handled by click on button
+      return;
     }
+
+    const r = Math.floor(sel / cols);
+    const c = sel % cols;
+    let target: number | null = null;
+    if (absX > absY) {
+      if (dx > 0 && c + 1 < cols) target = sel + 1;
+      if (dx < 0 && c > 0) target = sel - 1;
+    } else {
+      if (dy > 0 && r + 1 < state.rows) target = sel + cols;
+      if (dy < 0 && r > 0) target = sel - cols;
+    }
+    if (target == null) return;
+    e.preventDefault();
+    setState(swapPanels(state, sel, target));
   },
-  { passive: true },
+  { passive: false },
 );
 
 render();

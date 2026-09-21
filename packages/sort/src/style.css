@@ -6,7 +6,7 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
-#app { max-width: 28rem; margin: 0 auto; padding: 1rem 1.25rem 2rem; }
+#app { max-width: 28rem; margin: 0 auto; padding: 1rem 1.25rem 2.5rem; }
 h1 { font-size: 1.25rem; letter-spacing: 0.08em; margin: 0 0 0.25rem; }
 h2.sub { font-size: 0.95rem; margin: 0.85rem 0 0.35rem; color: #9aa0a6; font-weight: 600; }
 .muted { color: #9aa0a6; font-size: 0.85rem; }
@@ -75,14 +75,6 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .swatch.energy, .cell.energy { background: #1f4d6b; border-color: #58a6ff; color: #c8e1ff; }
 .swatch.junk, .cell.junk { background: #3a3a3a; border-color: #6e7681; color: #c9d1d9; }
 
-.next {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.65rem;
-  flex-wrap: wrap;
-}
-
 .board {
   display: grid;
   grid-template-columns: repeat(var(--cols, 6), 1fr);
@@ -99,47 +91,55 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   background: #0d1014;
   font-size: 0.75rem;
   font-weight: 700;
-  min-height: 1.85rem;
+  min-height: 2.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: inherit;
 }
 .cell.empty {
   background: #0d1014;
   border-color: #21262d;
 }
-.cell.falling {
+button.cell {
+  /* reset button chrome inside grid */
+  box-shadow: none;
+}
+.cell.selected {
   outline: 2px solid #f0883e;
   outline-offset: 0;
-  box-shadow: 0 0 8px rgba(240, 136, 62, 0.45);
+  box-shadow: 0 0 10px rgba(240, 136, 62, 0.55);
+  z-index: 1;
 }
-.cell.ghost {
-  border-style: dashed;
-  border-color: #6e7681;
-  background: transparent;
-  opacity: 0.55;
+.cell.pending {
+  animation: pulse-clear 0.45s ease-in-out infinite alternate;
+  outline: 2px solid #f85149;
+  outline-offset: 0;
+  opacity: 0.85;
+}
+@keyframes pulse-clear {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.35); }
 }
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: 0.45rem;
   margin-top: 0.85rem;
 }
 .controls .ctrl {
-  min-height: 3rem;
-  font-size: 1.15rem;
+  min-height: 3.1rem;
+  font-size: 1.05rem;
   background: #21262d;
   border-color: #3d444d;
 }
 .controls .ctrl.primary {
-  grid-column: 1 / -1;
   background: #1a4b8c;
   border-color: #3d8bfd;
-  font-size: 1rem;
 }
 .hint { margin: 0.45rem 0 0; font-size: 0.72rem; }
 
 @media (min-width: 420px) {
-  .cell { min-height: 2.1rem; font-size: 0.8rem; }
+  .cell { min-height: 2.35rem; font-size: 0.8rem; }
 }
