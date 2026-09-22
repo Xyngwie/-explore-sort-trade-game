@@ -3,8 +3,9 @@
  * Board starts filled; orthogonal (H+V) adjacent swap; H/V matches of 3+
  * clear → slow gravity + refill from bag above (visible settle) → cascades.
  * Active chain: during the slow fall/refill (before holes are fully filled),
- * the player may keep swapping to set up the next match. Blink is a short
- * preview; skill window is the settle. No rising stack / no top-out.
+ * the player may keep swapping already-landed panels; matches made then
+ * interrupt settle, clear, and increment the chain count. Blink is a short
+ * preview; skill window is the settle (~500ms/row). No rising stack / no top-out.
  * Supply: valid-first bag (food/material/energy only). When the valid bag
  * is empty, every subsequent top-spawn / refill is junk and packs holes.
  * Junk never matches; may fall. SORT_V2 economy otherwise unchanged.
@@ -52,9 +53,10 @@ export const SORT_V0_RULES = {
   chainWindowExtendMs: 140,
   /**
    * ms between one settle tick (fall one row + spawn into empty tops).
-   * Visible gradual refill; swaps stay free while settling (active chain).
+   * ~500ms per row so the active-chain skill window is readable;
+   * swaps stay free while settling (including already-landed panels).
    */
-  settleStepMs: 110,
+  settleStepMs: 500,
   /** Swaps scale with budget so small demos stay short. */
   movesPerValidPiece: 0.35,
   minMoves: 12,
@@ -809,8 +811,9 @@ function beginOrExtendClear(
  * - Idle: costs 1 move; opens blink if matches form.
  * - Clearing (blink): free; new matches merge into pending clear
  *   and extend the blink.
- * - Settling (slow fall/refill — main active chain): free; rearranges
- *   panels while holes fill. Matches resolve when settle completes.
+ * - Settling (slow fall/refill — main active chain): free; already-landed
+ *   panels stay swappable. A player-made match interrupts settle, enters
+ *   blink, and increments chainCount (same as a post-settle cascade wave).
  */
 export function swapPanels(
   s: RefineLive,
@@ -853,7 +856,14 @@ export function swapPanels(
   };
 
   if (inSettle) {
-    // Active chain during slow refill: rearrange freely; matches wait for settle.
+    // Already-landed panels stay live: a match interrupts settle → next chain wave.
+    if (matches.size > 0) {
+      return beginOrExtendClear(
+        { ...next, pendingClear: [], chainCount: s.chainCount },
+        matches,
+        { newChain: false, extendOnly: false },
+      );
+    }
     return {
       ...next,
       statusMsg: `落下補充中 · スワップで次を仕込む（×${Math.max(1, s.chainCount)}）`,
@@ -965,12 +975,14 @@ export function tickSettleStep(s: RefineLive): RefineLive {
   const bag = spawned.bag;
 
   if (boardNeedsSettle(board, bag, s.cols, s.rows)) {
+    const keepSel =
+      s.selected != null && board[s.selected] != null ? s.selected : null;
     return {
       ...s,
       board,
       bag,
       playMode: "settling",
-      selected: null,
+      selected: keepSel,
       statusMsg: `落下補充中（スワップで次を仕込む · ×${Math.max(1, s.chainCount)}）`,
     };
   }
