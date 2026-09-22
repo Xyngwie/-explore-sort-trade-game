@@ -1,11 +1,11 @@
 /**
  * Sort v2 Zoo Keeper + active-chain refine loop.
  * Board starts filled; orthogonal (H+V) adjacent swap; H/V matches of 3+
- * clear → gravity → refill from bag above → natural cascades.
- * Active-chain window: player may keep swapping during blink/clear to
- * set up the next match (skill). No rising stack / no top-out timer
- * (not classic Panel de Pon pressure). Junk never matches; may fall.
- * SORT_V2 economy unchanged.
+ * clear → slow gravity + refill from bag above (visible settle) → cascades.
+ * Active chain: during the slow fall/refill (before holes are fully filled),
+ * the player may keep swapping to set up the next match. Blink is a short
+ * preview; skill window is the settle. No rising stack / no top-out.
+ * Junk never matches; may fall. SORT_V2 economy unchanged.
  */
 import {
   type CraftingPuzzleResult,
@@ -30,12 +30,24 @@ export const SORT_V0_RULES = {
    */
   initialFillRows: 12,
   /**
-   * Active-chain window (ms). UI ticks commitClearStep after this;
-   * player may keep swapping while the window is open.
+   * Short blink before erase (ms). Not the main skill window —
+   * active chain is during slow settle below.
    */
-  chainWindowMs: 550,
-  /** Extra ms added when a mid-chain swap creates new matches. */
-  chainWindowExtendMs: 280,
+  clearBlinkMs: 280,
+  /** Extra blink ms when a mid-blink swap adds matches. */
+  clearBlinkExtendMs: 140,
+  /**
+   * @deprecated Prefer clearBlinkMs. Kept as alias for blink duration so
+   * older callers / tests that read chainWindowMs still work.
+   */
+  chainWindowMs: 280,
+  /** @deprecated Prefer clearBlinkExtendMs. */
+  chainWindowExtendMs: 140,
+  /**
+   * ms between one settle tick (fall one row + spawn into empty tops).
+   * Visible gradual refill; swaps stay free while settling (active chain).
+   */
+  settleStepMs: 110,
   /** Swaps scale with budget so small demos stay short. */
   movesPerValidPiece: 0.35,
   minMoves: 12,
@@ -68,8 +80,12 @@ export type RefinePhase = "blocked" | "briefing" | "play" | "result";
 
 export type Cell = PieceKind | null;
 
-/** idle = waiting for swap; clearing = active-chain blink window open. */
-export type PlayMode = "idle" | "clearing";
+/**
+ * idle = waiting for swap;
+ * clearing = short blink before erase;
+ * settling = slow gravity/refill (active-chain skill window — swaps free).
+ */
+export type PlayMode = "idle" | "clearing" | "settling";
 
 export type RefineLive = {
   phase: RefinePhase;
@@ -92,8 +108,9 @@ export type RefineLive = {
   /** Last finished chain length (for UI flash). */
   lastChain: number;
   /**
-   * Remaining window ms (informational; UI owns the timer).
-   * Engine extends this when mid-chain swaps add matches.
+   * Remaining blink ms while clearing (informational; UI owns the timer).
+   * Engine extends this when mid-blink swaps add matches.
+   * During settling, UI uses SORT_V0_RULES.settleStepMs instead.
    */
   chainWindowMsLeft: number;
   /** Selected cell index for tap-tap swap (cursor-style). */
@@ -199,6 +216,80 @@ export function applyGravity(
     }
   }
   return next;
+}
+
+/**
+ * One row of gravity: each panel falls at most one cell if the cell below
+ * is empty. Used for visible slow settle (not instant snap).
+ */
+export function stepGravityOnce(
+  board: Cell[],
+  cols: number,
+  rows: number,
+): { board: Cell[]; moved: boolean } {
+  const next = [...board];
+  let moved = false;
+  for (let c = 0; c < cols; c++) {
+    for (let r = rows - 2; r >= 0; r--) {
+      const from = indexOf(cols, r, c);
+      const to = indexOf(cols, r + 1, c);
+      if (next[from] != null && next[to] == null) {
+        next[to] = next[from]!;
+        next[from] = null;
+        moved = true;
+      }
+    }
+  }
+  return { board: next, moved };
+}
+
+/**
+ * Spawn at most one panel into the top empty cell of each column (from bag).
+ * Combined with stepGravityOnce, yields gradual fill from above.
+ */
+export function spawnTopFromBag(
+  board: Cell[],
+  bag: PieceKind[],
+  cols: number,
+  rows: number,
+): { board: Cell[]; bag: PieceKind[]; spawned: boolean } {
+  void rows;
+  let rest = [...bag];
+  const next = [...board];
+  let spawned = false;
+  for (let c = 0; c < cols; c++) {
+    const top = indexOf(cols, 0, c);
+    if (next[top] != null) continue;
+    if (rest.length === 0) break;
+    const taken = takeFromBag(rest, 1);
+    next[top] = taken.gems[0]!;
+    rest = taken.bag;
+    spawned = true;
+  }
+  return { board: next, bag: rest, spawned };
+}
+
+/** True if any panel can fall one cell, or bag can spawn into an empty top. */
+export function boardNeedsSettle(
+  board: Cell[],
+  bag: PieceKind[],
+  cols: number,
+  rows: number,
+): boolean {
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows - 1; r++) {
+      const i = indexOf(cols, r, c);
+      const below = indexOf(cols, r + 1, c);
+      if (board[i] != null && board[below] == null) return true;
+    }
+    if (bag.length > 0 && board[indexOf(cols, 0, c)] == null) return true;
+  }
+  return false;
+}
+
+/** Free-swap skill window: blink clearing or slow settle refill. */
+export function isActiveChain(s: RefineLive): boolean {
+  return s.playMode === "clearing" || s.playMode === "settling";
 }
 
 /**
@@ -606,7 +697,7 @@ export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
 
 function maybeFinishOnMoves(s: RefineLive): RefineLive {
   if (s.phase !== "play") return s;
-  if (s.playMode === "clearing") return s;
+  if (s.playMode === "clearing" || s.playMode === "settling") return s;
   if (s.movesLeft <= 0) {
     return finishRefine({ ...s, statusMsg: "手数切れ" });
   }
@@ -632,9 +723,9 @@ function beginOrExtendClear(
   const windowMs = opts.extendOnly
     ? Math.max(
         s.chainWindowMsLeft,
-        SORT_V0_RULES.chainWindowExtendMs,
-      ) + SORT_V0_RULES.chainWindowExtendMs
-    : SORT_V0_RULES.chainWindowMs;
+        SORT_V0_RULES.clearBlinkExtendMs,
+      ) + SORT_V0_RULES.clearBlinkExtendMs
+    : SORT_V0_RULES.clearBlinkMs;
   return {
     ...s,
     pendingClear: [...pending],
@@ -651,9 +742,11 @@ function beginOrExtendClear(
 
 /**
  * Swap two orthogonally adjacent panels (horizontal or vertical).
- * - Idle: costs 1 move; opens chain window if matches form.
- * - Clearing (active chain): free; new matches merge into pending clear
- *   and extend the window (skill expression).
+ * - Idle: costs 1 move; opens blink if matches form.
+ * - Clearing (blink): free; new matches merge into pending clear
+ *   and extend the blink.
+ * - Settling (slow fall/refill — main active chain): free; rearranges
+ *   panels while holes fill. Matches resolve when settle completes.
  */
 export function swapPanels(
   s: RefineLive,
@@ -678,9 +771,11 @@ export function swapPanels(
   board[a] = cellB;
   board[b] = cellA;
 
-  const inChain = s.playMode === "clearing";
+  const inBlink = s.playMode === "clearing";
+  const inSettle = s.playMode === "settling";
+  const freeSwap = inBlink || inSettle;
   let movesLeft = s.movesLeft;
-  if (!inChain) {
+  if (!freeSwap) {
     if (movesLeft <= 0) return s;
     movesLeft -= 1;
   }
@@ -693,21 +788,28 @@ export function swapPanels(
     selected: null,
   };
 
+  if (inSettle) {
+    // Active chain during slow refill: rearrange freely; matches wait for settle.
+    return {
+      ...next,
+      statusMsg: `落下補充中 · スワップで次を仕込む（×${Math.max(1, s.chainCount)}）`,
+    };
+  }
+
   if (matches.size > 0) {
-    if (inChain) {
+    if (inBlink) {
       next = beginOrExtendClear(
         { ...next, pendingClear: s.pendingClear, chainCount: s.chainCount },
         matches,
         { newChain: false, extendOnly: true },
       );
-      // Keep existing pending + new; chain count unchanged until commit.
       const merged = new Set(s.pendingClear);
       for (const i of matches) merged.add(i);
       next = {
         ...next,
         pendingClear: [...merged],
         chainCount: s.chainCount,
-        statusMsg: `連鎖ウィンドウ · 追加マッチ！（×${s.chainCount}）`,
+        statusMsg: `点滅中 · 追加マッチ！（×${s.chainCount}）`,
       };
     } else {
       next = beginOrExtendClear(
@@ -716,7 +818,7 @@ export function swapPanels(
         { newChain: true, extendOnly: false },
       );
     }
-  } else if (!inChain) {
+  } else if (!freeSwap) {
     next = {
       ...next,
       statusMsg: null,
@@ -740,13 +842,23 @@ export function raiseStack(s: RefineLive): RefineLive {
 }
 
 /**
- * Commit one clear step: erase pending → gravity → refill from bag → re-match.
- * Called by UI when the active-chain window timer fires.
- * If new matches appear (cascade or refill), stays in clearing (chain++).
+ * Commit blink: erase pending panels and enter slow settle (gravity + refill).
+ * Does NOT snap-fill — UI ticks tickSettleStep for visible gradual fill.
+ * Active-chain free swaps continue during settling.
  */
 export function commitClearStep(s: RefineLive): RefineLive {
   if (s.phase !== "play" || s.playMode !== "clearing") return s;
   if (s.pendingClear.length === 0) {
+    // Nothing to erase — if holes remain, settle; else idle.
+    if (boardNeedsSettle(s.board, s.bag, s.cols, s.rows)) {
+      return {
+        ...s,
+        playMode: "settling",
+        chainWindowMsLeft: 0,
+        selected: null,
+        statusMsg: `落下補充中（スワップ可 · ×${Math.max(1, s.chainCount)}）`,
+      };
+    }
     return {
       ...s,
       playMode: "idle",
@@ -757,27 +869,63 @@ export function commitClearStep(s: RefineLive): RefineLive {
   }
 
   const clearedStep = clearMatches(s.board, s.pendingClear);
-  let board = applyGravity(clearedStep.board, s.cols, s.rows);
-  const refilled = refillFromAbove(board, s.bag, s.cols, s.rows);
-  board = refilled.board;
-  const bag = refilled.bag;
   const cleared = mergeCleared(s.cleared, clearedStep.cleared);
   const chainDone = s.chainCount;
 
+  return {
+    ...s,
+    board: clearedStep.board,
+    bag: s.bag,
+    cleared,
+    pendingClear: [],
+    playMode: "settling",
+    chainCount: chainDone,
+    chainWindowMsLeft: 0,
+    lastChain: chainDone,
+    selected: null,
+    statusMsg: `落下補充中（スワップで次を仕込む · ×${chainDone}）`,
+  };
+}
+
+/**
+ * One visible settle tick: fall panels one row, then spawn into empty tops.
+ * When fully settled, detect matches → blink (chain++) or return to idle.
+ * Called by UI on settleStepMs while playMode === "settling".
+ */
+export function tickSettleStep(s: RefineLive): RefineLive {
+  if (s.phase !== "play" || s.playMode !== "settling") return s;
+
+  const fell = stepGravityOnce(s.board, s.cols, s.rows);
+  const spawned = spawnTopFromBag(fell.board, s.bag, s.cols, s.rows);
+  const board = spawned.board;
+  const bag = spawned.bag;
+
+  if (boardNeedsSettle(board, bag, s.cols, s.rows)) {
+    return {
+      ...s,
+      board,
+      bag,
+      playMode: "settling",
+      selected: null,
+      statusMsg: `落下補充中（スワップで次を仕込む · ×${Math.max(1, s.chainCount)}）`,
+    };
+  }
+
+  // Fully settled — resolve matches or end chain.
   const matches = findLineMatches(board, s.cols, s.rows);
+  const chainDone = s.chainCount;
   if (matches.size > 0) {
     return {
       ...s,
       board,
       bag,
-      cleared,
       pendingClear: [...matches],
       playMode: "clearing",
       chainCount: chainDone + 1,
-      chainWindowMsLeft: SORT_V0_RULES.chainWindowMs,
+      chainWindowMsLeft: SORT_V0_RULES.clearBlinkMs,
       lastChain: chainDone + 1,
       selected: null,
-      statusMsg: `連鎖 ×${chainDone + 1}（スワップで伸ばせる）`,
+      statusMsg: `連鎖 ×${chainDone + 1}（落下中もスワップ可）`,
     };
   }
 
@@ -785,7 +933,6 @@ export function commitClearStep(s: RefineLive): RefineLive {
     ...s,
     board,
     bag,
-    cleared,
     pendingClear: [],
     playMode: "idle",
     chainCount: 0,
@@ -826,7 +973,7 @@ export function tapCell(s: RefineLive, index: number): RefineLive {
 
 export function finishRefine(s: RefineLive): RefineLive {
   if (s.phase !== "play" && s.phase !== "result") return s;
-  // If finishing mid-clear, commit remaining clears passively for fairness.
+  // Mid-clear / mid-settle: resolve remaining clears + snap settle for fairness.
   let board = s.board;
   let bag = s.bag;
   let cleared = s.cleared;
@@ -838,6 +985,16 @@ export function finishRefine(s: RefineLive): RefineLive {
     board = refilled.board;
     bag = refilled.bag;
     cleared = mergeCleared(cleared, step.cleared);
+    const rest = resolveChains(board, s.cols, s.rows, bag);
+    board = rest.board;
+    bag = rest.bag;
+    cleared = mergeCleared(cleared, rest.cleared);
+    lastChain = Math.max(lastChain, s.chainCount + rest.chain);
+  } else if (s.playMode === "settling") {
+    board = applyGravity(board, s.cols, s.rows);
+    const refilled = refillFromAbove(board, bag, s.cols, s.rows);
+    board = refilled.board;
+    bag = refilled.bag;
     const rest = resolveChains(board, s.cols, s.rows, bag);
     board = rest.board;
     bag = rest.bag;

@@ -4,6 +4,7 @@
 import {
   areAdjacent,
   areHorizontalAdjacent,
+  boardNeedsSettle,
   buildSupplyBag,
   canStartRefine,
   canSwapAdjacent,
@@ -11,13 +12,17 @@ import {
   computeBudgets,
   createRefineFromLocationSearch,
   findLineMatches,
+  isActiveChain,
   refillFromAbove,
   resolveChains,
   resolveCraftMultiplier,
   SORT_V0_RULES,
+  spawnTopFromBag,
   startRefine,
+  stepGravityOnce,
   swapPanels,
   tapCell,
+  tickSettleStep,
   toCraftingResult,
   type RefineLive,
 } from "./refine";
@@ -29,6 +34,14 @@ function assert(cond: unknown, msg: string): asserts cond {
 
 function idx(cols: number, r: number, c: number): number {
   return r * cols + c;
+}
+
+function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
+  let cur = s;
+  for (let i = 0; i < maxTicks && cur.playMode === "settling"; i++) {
+    cur = tickSettleStep(cur);
+  }
+  return cur;
 }
 
 // Budget from containers / stock
@@ -199,7 +212,10 @@ function idx(cols: number, r: number, c: number): number {
 
   s = commitClearStep(s);
   assert(s.cleared.food >= 3, "food cleared on commit");
-  assert(s.playMode === "idle" || s.playMode === "clearing", "after commit");
+  assert(s.playMode === "settling", "commit enters slow settle (not snap fill)");
+  assert(isActiveChain(s), "settling is active chain");
+  s = settleUntilQuiet(s);
+  assert(s.playMode === "idle" || s.playMode === "clearing", "after settle");
 }
 
 // Active chain: mid-window swap is free and can add matches
@@ -359,7 +375,7 @@ function idx(cols: number, r: number, c: number): number {
   assert(filled.board[idx(cols, 0, 0)] != null, "top refilled");
 }
 
-// commitClearStep refills from bag after gravity
+// commitClearStep enters settle; tickSettleStep gradually refills from bag
 {
   let s = createRefineFromLocationSearch(
     "?salvagedContainers=1&totalStockPieces=40&isExtracted=1",
@@ -388,11 +404,78 @@ function idx(cols: number, r: number, c: number): number {
   const bagBefore = s.bag.length;
   s = commitClearStep(s);
   assert(s.cleared.food === 3, "food cleared");
-  assert(s.bag.length < bagBefore, "bag used to refill");
+  assert(s.playMode === "settling", "enters settle after clear");
+  // Immediately after clear, holes exist and bag not yet drained (slow refill)
+  assert(s.bag.length === bagBefore, "no snap refill on commit");
+  assert(s.board.filter((c) => c == null).length >= 3, "holes remain for slow fall");
+
+  s = settleUntilQuiet(s);
+  assert(s.bag.length < bagBefore, "bag used during settle");
   const onBoard = s.board.filter((c) => c != null).length;
   assert(onBoard === bagBefore - s.bag.length, "refilled count = bag spent");
   assert(onBoard === 6, "all six bag pieces dropped in");
-  assert(s.bag.length === 0, "bag empty after refill");
+  assert(s.bag.length === 0, "bag empty after settle");
+}
+
+// stepGravityOnce + spawnTopFromBag move one row / spawn tops (visible settle units)
+{
+  const cols = 3;
+  const rows = 4;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  board[idx(cols, 0, 0)] = "food";
+  board[idx(cols, 0, 1)] = "material";
+  const fell = stepGravityOnce(board, cols, rows);
+  assert(fell.moved, "gravity step moved");
+  assert(fell.board[idx(cols, 1, 0)] === "food", "food fell one row");
+  assert(fell.board[idx(cols, 0, 0)] == null, "top vacated");
+  const spawned = spawnTopFromBag(fell.board, ["energy", "junk"], cols, rows);
+  assert(spawned.spawned, "spawned into empty tops");
+  assert(spawned.board[idx(cols, 0, 0)] === "energy", "top spawn");
+  assert(boardNeedsSettle(spawned.board, spawned.bag, cols, rows), "still needs settle");
+}
+
+// Active chain during settle: free swap while holes refill
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 8);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  // Leave a hole under a panel so settle continues for several ticks
+  board[idx(cols, rows - 1, 0)] = "food";
+  board[idx(cols, rows - 3, 0)] = "material"; // floating — will fall
+  board[idx(cols, rows - 1, 1)] = "energy";
+  board[idx(cols, rows - 1, 2)] = "junk";
+  board[idx(cols, rows - 1, 3)] = "food";
+  board[idx(cols, rows - 1, 4)] = "material";
+  s = {
+    ...s,
+    board,
+    bag: ["energy", "energy", "energy", "food", "food", "food"],
+    pendingClear: [],
+    playMode: "settling",
+    chainCount: 1,
+    chainWindowMsLeft: 0,
+    movesLeft: 5,
+    selected: null,
+  };
+  assert(isActiveChain(s), "settling is active chain");
+  assert(boardNeedsSettle(s.board, s.bag, cols, rows), "holes/floaters remain");
+  const movesBefore = s.movesLeft;
+  // Swap two settled neighbors freely during refill
+  s = swapPanels(s, idx(cols, rows - 1, 1), idx(cols, rows - 1, 2));
+  assert(s.movesLeft === movesBefore, "settle swap is free (active chain)");
+  assert(s.playMode === "settling", "stays settling after swap");
+  assert(s.board[idx(cols, rows - 1, 1)] === "junk", "swapped during settle a");
+  assert(s.board[idx(cols, rows - 1, 2)] === "energy", "swapped during settle b");
 }
 
 // tapCell select then swap
@@ -509,7 +592,7 @@ function idx(cols: number, r: number, c: number): number {
   assert(resolved.chain === 2, "two-wave chain");
 }
 
-// Active chain multi-step: commit → gravity creates new match → still clearing
+// Active chain multi-step: commit → slow settle → gravity match → clearing again
 {
   let s = createRefineFromLocationSearch(
     "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
@@ -532,6 +615,7 @@ function idx(cols: number, r: number, c: number): number {
   s = {
     ...s,
     board,
+    bag: [],
     pendingClear: [
       idx(cols, rows - 1, 0),
       idx(cols, rows - 1, 1),
@@ -544,13 +628,25 @@ function idx(cols: number, r: number, c: number): number {
   };
   s = commitClearStep(s);
   assert(s.cleared.energy === 3, "first wave energy");
+  assert(s.playMode === "settling", "slow settle after clear");
+  s = settleUntilQuiet(s);
   assert(s.playMode === "clearing", "still in chain after gravity match");
   assert(s.chainCount === 2, "chain incremented");
   assert(s.pendingClear.length >= 3, "food pending");
   s = commitClearStep(s);
+  assert(s.playMode === "settling", "second settle");
+  s = settleUntilQuiet(s);
   assert(s.cleared.food === 3, "second wave food");
   assert(s.playMode === "idle", "chain ended");
   assert(s.lastChain === 2, "lastChain recorded");
+}
+
+// Timing constants exposed for UI / docs
+{
+  assert(SORT_V0_RULES.clearBlinkMs === 280, "clearBlinkMs");
+  assert(SORT_V0_RULES.settleStepMs === 110, "settleStepMs");
+  assert(SORT_V0_RULES.initialFillRows === SORT_V0_RULES.boardRows, "dense fill all rows");
+  assert(SORT_V0_RULES.chainWindowMs === SORT_V0_RULES.clearBlinkMs, "chainWindowMs alias");
 }
 
 console.log("sort refine.selftest: ok");
