@@ -54,19 +54,24 @@ validPieceBudget = totalStockPieces
 
 `PIECES_PER_CONTAINER` は shared の定数（現行 25）。
 
-### 4.2 無効ピース
+### 4.2 無効ピース（オジャマ / junk）
 
 無効ピースはマッチ／消去できない。盤を圧迫するロスの可視化。
 
-**比率（v2 仮・後で調整可）:**
+**供給（現行）: 有効が先 → 尽きたら全部ジャンク**
 
 ```text
-invalidRatio = 0.20   # 有効予算に対する追加割合（仮）
-invalidPieceCount = floor(validPieceBudget * invalidRatio)
+# 袋の初期構成は有効ピースのみ（food / material / energy）
+# invalidRatio による固定混入は使わない
+
+valid bag が空になったあと:
+  以降の落下・上補充スポーンはすべて junk
+  （通常のゆっくり settle / 頂上 refill と同じ経路で穴を埋める）
 ```
 
-- 最初は**固定比率**でよい（拠点スキルや探索品質で変えるのは後続）
-- 拒否や未設定時もこの既定値
+- 開始時・有効予算が残っているあいだはジャンクを混ぜない
+- 有効が尽きたあとのジャンク充填は意図した圧／終盤の可視化（せり上げ PdP は再導入しない）
+- ジャンクのみでマッチ不能になったら Finish 可能（実装は自動終了でも可）
 
 ### 4.3 色／種類
 
@@ -135,7 +140,7 @@ importMaterials = floor((yieldFood + yieldMaterial + yieldEnergy) * craftMultipl
 
 ## 7. UI フロー（v2）
 
-1. 受取表示（缶数・有効ピース予算・無効比率）  
+1. 受取表示（缶数・有効ピース予算・ジャンクは有効尽きたら供給）  
 2. すぐパズル開始（配合画面なし）  
 3. 結果: 種類別クリア数 → yield、搬入数プレビュー、`格納庫へ渡す`
 

@@ -5,7 +5,9 @@
  * Active chain: during the slow fall/refill (before holes are fully filled),
  * the player may keep swapping to set up the next match. Blink is a short
  * preview; skill window is the settle. No rising stack / no top-out.
- * Junk never matches; may fall. SORT_V2 economy unchanged.
+ * Supply: valid-first bag (food/material/energy only). When the valid bag
+ * is empty, every subsequent top-spawn / refill is junk and packs holes.
+ * Junk never matches; may fall. SORT_V2 economy otherwise unchanged.
  */
 import {
   type CraftingPuzzleResult,
@@ -19,6 +21,11 @@ import {
 
 /** Zoo Keeper + active chain + SORT_V2 economy (docs/SORT_V2_RULES.md). */
 export const SORT_V0_RULES = {
+  /**
+   * @deprecated Unused. Junk is no longer mixed into the bag at a fixed
+   * ratio. Valid pieces draw first; after the valid bag is empty, spawns
+   * are junk-only (see spawnTopFromBag / refillFromAbove).
+   */
   invalidRatio: 0.2,
   /** Match length (horizontal / vertical only — no diagonal). */
   minClearLine: 3,
@@ -144,9 +151,8 @@ export function computeBudgets(
     inbound.totalStockPieces > 0
       ? Math.floor(inbound.totalStockPieces)
       : stockFromContainers(inbound.salvagedContainers);
-  const invalidPieceCount = Math.floor(
-    validPieceBudget * SORT_V0_RULES.invalidRatio,
-  );
+  // Junk is on-demand after valid supply ends — no fixed mix count.
+  const invalidPieceCount = 0;
   return { validPieceBudget, invalidPieceCount };
 }
 
@@ -164,20 +170,22 @@ export function canStartRefine(inbound: ExploreToSortPayload): {
   return { ok: true, reason: null };
 }
 
-/** Build supply bag: valid kinds ~equal, plus junk. */
+/**
+ * Build supply bag: valid kinds only (~equal food/material/energy).
+ * Junk is NOT mixed in — after this bag empties, spawn/refill emit junk.
+ * `invalidPieceCount` is ignored (kept for call-site compatibility).
+ */
 export function buildSupplyBag(
   validPieceBudget: number,
-  invalidPieceCount: number,
+  invalidPieceCount = 0,
   seed = 1,
 ): PieceKind[] {
+  void invalidPieceCount;
   const bag: PieceKind[] = [];
   for (let i = 0; i < validPieceBudget; i++) {
     bag.push(VALID_KINDS[i % VALID_KINDS.length]!);
   }
-  for (let i = 0; i < invalidPieceCount; i++) {
-    bag.push("junk");
-  }
-  const rnd = mulberry32(seed ^ (validPieceBudget * 97) ^ invalidPieceCount);
+  const rnd = mulberry32(seed ^ (validPieceBudget * 97));
   shuffleInPlace(bag, rnd);
   return bag;
 }
@@ -260,7 +268,12 @@ export function spawnTopFromBag(
   for (let c = 0; c < cols; c++) {
     const top = indexOf(cols, 0, c);
     if (next[top] != null) continue;
-    if (rest.length === 0) break;
+    if (rest.length === 0) {
+      // Valid supply exhausted → junk-only refill.
+      next[top] = "junk";
+      spawned = true;
+      continue;
+    }
     const taken = takeFromBag(rest, 1);
     next[top] = taken.gems[0]!;
     rest = taken.bag;
@@ -269,20 +282,24 @@ export function spawnTopFromBag(
   return { board: next, bag: rest, spawned };
 }
 
-/** True if any panel can fall one cell, or bag can spawn into an empty top. */
+/**
+ * True if any panel can fall one cell, or an empty top needs a spawn.
+ * Empty tops always settle (when bag is empty, spawnTopFromBag emits junk).
+ */
 export function boardNeedsSettle(
   board: Cell[],
   bag: PieceKind[],
   cols: number,
   rows: number,
 ): boolean {
+  void bag;
   for (let c = 0; c < cols; c++) {
     for (let r = 0; r < rows - 1; r++) {
       const i = indexOf(cols, r, c);
       const below = indexOf(cols, r + 1, c);
       if (board[i] != null && board[below] == null) return true;
     }
-    if (bag.length > 0 && board[indexOf(cols, 0, c)] == null) return true;
+    if (board[indexOf(cols, 0, c)] == null) return true;
   }
   return false;
 }
@@ -296,11 +313,18 @@ export function isActiveChain(s: RefineLive): boolean {
  * Zoo Keeper refill: after gravity, empty cells (top of each column) draw
  * from the supply bag. No rising stack / no top-out.
  */
+/**
+ * Fill empty cells from the bag (column-major top→bottom).
+ * When `junkWhenEmpty` is true and the bag is drained, remaining holes
+ * become junk (valid-first → all-junk fill). Default false so passive
+ * cascade tests that omit a bag keep empty cells empty.
+ */
 export function refillFromAbove(
   board: Cell[],
   bag: PieceKind[],
   cols: number,
   rows: number,
+  junkWhenEmpty = false,
 ): { board: Cell[]; bag: PieceKind[] } {
   let rest = [...bag];
   const next = [...board];
@@ -308,7 +332,11 @@ export function refillFromAbove(
     for (let r = 0; r < rows; r++) {
       const i = indexOf(cols, r, c);
       if (next[i] != null) continue;
-      if (rest.length === 0) break;
+      if (rest.length === 0) {
+        if (!junkWhenEmpty) break;
+        next[i] = "junk";
+        continue;
+      }
       const taken = takeFromBag(rest, 1);
       next[i] = taken.gems[0]!;
       rest = taken.bag;
@@ -390,6 +418,7 @@ export function resolveChains(
   cols: number,
   rows: number,
   bag: PieceKind[] = [],
+  junkWhenEmpty = false,
 ): { board: Cell[]; cleared: ClearedCounts; chain: number; bag: PieceKind[] } {
   let b = board;
   let rest = [...bag];
@@ -405,8 +434,8 @@ export function resolveChains(
     total.material += cleared.cleared.material;
     total.energy += cleared.cleared.energy;
     b = applyGravity(cleared.board, cols, rows);
-    if (rest.length > 0) {
-      const filled = refillFromAbove(b, rest, cols, rows);
+    if (rest.length > 0 || junkWhenEmpty) {
+      const filled = refillFromAbove(b, rest, cols, rows, junkWhenEmpty);
       b = filled.board;
       rest = filled.bag;
     }
@@ -431,6 +460,23 @@ export function remainingValidOnBoard(board: Cell[]): number {
     if (cell != null && cell !== "junk") n++;
   }
   return n;
+}
+
+/** Valid pieces left in the supply bag (junk never sits in the bag). */
+export function remainingValidInBag(bag: PieceKind[]): number {
+  return bag.filter((k) => k !== "junk").length;
+}
+
+/**
+ * True when valid supply is gone and the board has no clearable panels —
+ * player cannot make progress; Finish / auto-end is appropriate.
+ */
+export function isJunkOnlyStalemate(s: RefineLive): boolean {
+  if (s.phase !== "play") return false;
+  if (s.playMode === "clearing" || s.playMode === "settling") return false;
+  if (remainingValidInBag(s.bag) > 0) return false;
+  if (remainingValidOnBoard(s.board) > 0) return false;
+  return true;
 }
 
 function mergeCleared(a: ClearedCounts, b: ClearedCounts): ClearedCounts {
@@ -557,6 +603,8 @@ export function fillInitialBoard(
   }
 
   // Bounded settle: return matched pieces to bag, gravity, optional refill.
+  // Initial fill stays valid-only (no junkWhenEmpty). Junk enters later via
+  // spawnTopFromBag once the valid bag is empty during play settle.
   const settleOnce = (refill: boolean) => {
     const matches = findLineMatches(board, cols, rows);
     if (matches.size === 0) return false;
@@ -678,6 +726,14 @@ export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
     s.rows,
     SORT_V0_RULES.initialFillRows,
   );
+  const needsJunkFill = boardNeedsSettle(
+    filled.board,
+    filled.bag,
+    s.cols,
+    s.rows,
+  );
+  // Valid bag already empty and holes remain → slow junk fill (Zoo Keeper).
+  const playMode = needsJunkFill ? "settling" : "idle";
   return {
     ...s,
     phase: "play",
@@ -686,12 +742,14 @@ export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
     movesLeft: moveBudgetFor(s.validPieceBudget),
     cleared: { food: 0, material: 0, energy: 0 },
     pendingClear: [],
-    playMode: "idle",
+    playMode,
     chainCount: 0,
     lastChain: 0,
     chainWindowMsLeft: 0,
     selected: null,
-    statusMsg: null,
+    statusMsg: needsJunkFill
+      ? "有効補充が尽きた · ジャンクが穴を埋める"
+      : null,
   };
 }
 
@@ -700,6 +758,12 @@ function maybeFinishOnMoves(s: RefineLive): RefineLive {
   if (s.playMode === "clearing" || s.playMode === "settling") return s;
   if (s.movesLeft <= 0) {
     return finishRefine({ ...s, statusMsg: "手数切れ" });
+  }
+  if (isJunkOnlyStalemate(s)) {
+    return finishRefine({
+      ...s,
+      statusMsg: "有効ピース尽き · ジャンクのみ",
+    });
   }
   return s;
 }
@@ -981,21 +1045,21 @@ export function finishRefine(s: RefineLive): RefineLive {
   if (s.playMode === "clearing" && s.pendingClear.length > 0) {
     const step = clearMatches(board, s.pendingClear);
     board = applyGravity(step.board, s.cols, s.rows);
-    const refilled = refillFromAbove(board, bag, s.cols, s.rows);
+    const refilled = refillFromAbove(board, bag, s.cols, s.rows, true);
     board = refilled.board;
     bag = refilled.bag;
     cleared = mergeCleared(cleared, step.cleared);
-    const rest = resolveChains(board, s.cols, s.rows, bag);
+    const rest = resolveChains(board, s.cols, s.rows, bag, true);
     board = rest.board;
     bag = rest.bag;
     cleared = mergeCleared(cleared, rest.cleared);
     lastChain = Math.max(lastChain, s.chainCount + rest.chain);
   } else if (s.playMode === "settling") {
     board = applyGravity(board, s.cols, s.rows);
-    const refilled = refillFromAbove(board, bag, s.cols, s.rows);
+    const refilled = refillFromAbove(board, bag, s.cols, s.rows, true);
     board = refilled.board;
     bag = refilled.bag;
-    const rest = resolveChains(board, s.cols, s.rows, bag);
+    const rest = resolveChains(board, s.cols, s.rows, bag, true);
     board = rest.board;
     bag = rest.bag;
     cleared = mergeCleared(cleared, rest.cleared);
@@ -1017,9 +1081,7 @@ export function finishRefine(s: RefineLive): RefineLive {
 }
 
 export function scrapLossFromState(s: RefineLive): number {
-  const onBoard = remainingValidOnBoard(s.board);
-  const inBag = s.bag.filter((k) => k !== "junk").length;
-  return onBoard + inBag;
+  return remainingValidOnBoard(s.board) + remainingValidInBag(s.bag);
 }
 
 export function resolveCraftMultiplier(inbound: ExploreToSortPayload): number {
@@ -1051,6 +1113,56 @@ export function toCraftingResult(s: RefineLive): CraftingPuzzleResult {
 export function demoQueryExample(): string {
   const cans = 2;
   return `?salvagedContainers=${cans}&totalStockPieces=${cans * PIECES_PER_CONTAINER}&isExtracted=1`;
+}
+
+/** Long local test session: 100 containers (valid budget = 100 * PIECES_PER_CONTAINER). */
+export const TEST_PLAY_CONTAINERS = 100;
+
+export function testPlayQueryExample(
+  containers = TEST_PLAY_CONTAINERS,
+): string {
+  const cans = Math.max(1, Math.floor(containers));
+  return `?salvagedContainers=${cans}&totalStockPieces=${cans * PIECES_PER_CONTAINER}&isExtracted=1`;
+}
+
+/**
+ * Build a briefing state for a long test run (default 100 containers).
+ * Explore handoffs are unchanged — this is only for the demo UI button.
+ */
+export function createTestPlayRefine(
+  containers = TEST_PLAY_CONTAINERS,
+): RefineLive {
+  const cans = Math.max(1, Math.floor(containers));
+  const stock = stockFromContainers(cans);
+  const inbound: ExploreToSortPayload = {
+    salvagedContainers: cans,
+    totalStockPieces: stock,
+    isExtracted: true,
+  };
+  const { validPieceBudget, invalidPieceCount } = computeBudgets(inbound);
+  const cols = SORT_V0_RULES.boardCols;
+  const rows = SORT_V0_RULES.boardRows;
+  return {
+    phase: "briefing",
+    inbound,
+    note: `テストプレイ · 缶 ${cans} · 予算 ${stock}`,
+    blockReason: null,
+    validPieceBudget,
+    invalidPieceCount,
+    bag: [],
+    board: emptyBoard(cols, rows),
+    cols,
+    rows,
+    movesLeft: moveBudgetFor(validPieceBudget),
+    cleared: { food: 0, material: 0, energy: 0 },
+    pendingClear: [],
+    playMode: "idle",
+    chainCount: 0,
+    lastChain: 0,
+    chainWindowMsLeft: 0,
+    selected: null,
+    statusMsg: null,
+  };
 }
 
 /** @deprecated Legacy control API — no-op shim (raise removed in Zoo Keeper). */

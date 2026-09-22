@@ -11,8 +11,10 @@ import {
   commitClearStep,
   computeBudgets,
   createRefineFromLocationSearch,
+  createTestPlayRefine,
   findLineMatches,
   isActiveChain,
+  isJunkOnlyStalemate,
   refillFromAbove,
   resolveChains,
   resolveCraftMultiplier,
@@ -22,10 +24,12 @@ import {
   stepGravityOnce,
   swapPanels,
   tapCell,
+  TEST_PLAY_CONTAINERS,
   tickSettleStep,
   toCraftingResult,
   type RefineLive,
 } from "./refine";
+import { PIECES_PER_CONTAINER } from "@estg/shared";
 import { yieldBagFromClearedCounts } from "@estg/shared";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -44,7 +48,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   return cur;
 }
 
-// Budget from containers / stock
+// Budget from containers / stock — no fixed junk mix ratio
 {
   const b = computeBudgets({
     salvagedContainers: 2,
@@ -52,10 +56,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     isExtracted: true,
   });
   assert(b.validPieceBudget === 50, "budget uses totalStockPieces");
-  assert(
-    b.invalidPieceCount === Math.floor(50 * SORT_V0_RULES.invalidRatio),
-    "invalid = floor(valid * 0.2)",
-  );
+  assert(b.invalidPieceCount === 0, "invalid mix count unused (junk on-demand)");
 }
 
 // Gate: not extracted / zero stock
@@ -74,39 +75,56 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(!b.ok, "blocks when budget 0");
 }
 
-// Supply bag composition
+// Supply bag composition — valid only (junk arg ignored)
 {
   const bag = buildSupplyBag(30, 6, 42);
-  assert(bag.length === 36, "bag length = valid + invalid");
-  assert(bag.filter((k) => k === "junk").length === 6, "junk count");
+  assert(bag.length === 30, "bag length = valid only");
+  assert(bag.filter((k) => k === "junk").length === 0, "no junk in bag");
   assert(bag.filter((k) => k !== "junk").length === 30, "valid count");
 }
 
-// Start play: Zoo Keeper filled board (no rising stack)
+// Start play: Zoo Keeper filled board — zero junk while valid remains
+{
+  // Budget >= capacity → full board of valid only, bag leftover, idle
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=4&totalStockPieces=100&isExtracted=1",
+  );
+  s = startRefine(s, 7);
+  assert(s.phase === "play", "starts play");
+  assert(s.playMode === "idle", "idle when bag still has valid");
+  const filled = s.board.filter((c) => c != null).length;
+  const capacity = s.cols * s.rows;
+  const junkOnBoard = s.board.filter((c) => c === "junk").length;
+  const junkInBag = s.bag.filter((k) => k === "junk").length;
+  assert(filled === capacity, "board full when budget >= capacity");
+  assert(junkOnBoard === 0, "no junk on board while valid supply remains");
+  assert(junkInBag === 0, "no junk in bag");
+  assert(s.bag.every((k) => k !== "junk"), "bag valid-only");
+  assert(s.bag.length === s.validPieceBudget - filled, "bag leftover valid");
+  assert(findLineMatches(s.board, s.cols, s.rows).size === 0, "no opening matches");
+  assert(SORT_V0_RULES.initialFillRows === SORT_V0_RULES.boardRows, "fill all rows");
+}
+
+// Small budget: valid-only fill; bag empty → settle packs holes with junk
 {
   let s = createRefineFromLocationSearch(
     "?salvagedContainers=1&totalStockPieces=25&isExtracted=1",
   );
   s = startRefine(s, 7);
-  assert(s.phase === "play", "starts play");
-  assert(s.playMode === "idle", "idle mode");
-  const filled = s.board.filter((c) => c != null).length;
-  const capacity = s.cols * s.rows;
-  const supply = s.validPieceBudget + s.invalidPieceCount;
-  assert(filled > 0, "board prefilled");
-  assert(filled === Math.min(capacity, supply) || filled <= capacity, "fill uses bag");
-  // Prefer a dense start: with supply >= capacity expect near-full after settle
-  if (supply >= capacity) {
-    assert(filled >= capacity - 6, "board mostly filled Zoo Keeper style");
-  } else {
-    assert(filled >= Math.min(supply, capacity) - 6, "board uses most of bag");
+  assert(s.phase === "play", "small budget starts");
+  const junkBefore = s.board.filter((c) => c === "junk").length;
+  assert(junkBefore === 0, "no junk placed during valid-only initial fill");
+  assert(s.bag.length === 0 || s.bag.every((k) => k !== "junk"), "bag has no junk");
+  if (s.playMode === "settling") {
+    s = settleUntilQuiet(s);
   }
+  const capacity = s.cols * s.rows;
+  const filled = s.board.filter((c) => c != null).length;
+  assert(filled === capacity, "junk settle fills board after valid exhausted");
   assert(
-    s.bag.length === supply - filled,
-    "bag after fill accounts for board",
+    s.board.some((c) => c === "junk"),
+    "junk present after valid bag empty settle",
   );
-  assert(findLineMatches(s.board, s.cols, s.rows).size === 0, "no opening matches");
-  assert(SORT_V0_RULES.initialFillRows === SORT_V0_RULES.boardRows, "fill all rows");
 }
 
 // Junk never appears in line matches
@@ -410,11 +428,17 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.board.filter((c) => c == null).length >= 3, "holes remain for slow fall");
 
   s = settleUntilQuiet(s);
-  assert(s.bag.length < bagBefore, "bag used during settle");
-  const onBoard = s.board.filter((c) => c != null).length;
-  assert(onBoard === bagBefore - s.bag.length, "refilled count = bag spent");
-  assert(onBoard === 6, "all six bag pieces dropped in");
   assert(s.bag.length === 0, "bag empty after settle");
+  const onBoard = s.board.filter((c) => c != null).length;
+  assert(onBoard === cols * rows, "after valid bag drains, junk packs full board");
+  const fromBag = s.board.filter(
+    (c) => c === "energy" || c === "material",
+  ).length;
+  assert(fromBag === bagBefore, "all six bag pieces dropped in");
+  assert(
+    s.board.filter((c) => c === "junk").length === cols * rows - bagBefore,
+    "remaining cells are junk",
+  );
 }
 
 // stepGravityOnce + spawnTopFromBag move one row / spawn tops (visible settle units)
@@ -639,6 +663,109 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.cleared.food === 3, "second wave food");
   assert(s.playMode === "idle", "chain ended");
   assert(s.lastChain === 2, "lastChain recorded");
+}
+
+// After valid bag empty, spawnTopFromBag / settle emit junk only
+{
+  const cols = 3;
+  const rows = 4;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  board[idx(cols, rows - 1, 0)] = "food";
+  const spawned = spawnTopFromBag(board, [], cols, rows);
+  assert(spawned.spawned, "spawned with empty bag");
+  assert(spawned.board[idx(cols, 0, 0)] === "junk", "empty bag → junk spawn");
+  assert(spawned.board[idx(cols, 0, 1)] === "junk", "all empty tops get junk");
+  assert(spawned.bag.length === 0, "bag stays empty");
+}
+
+// Live settle after valid drained → junk packs holes; junk still unmatchable
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=40&isExtracted=1",
+  );
+  s = startRefine(s, 3);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "food";
+  board[idx(cols, r, 2)] = "food";
+  s = {
+    ...s,
+    board,
+    bag: [], // valid exhausted
+    pendingClear: [idx(cols, r, 0), idx(cols, r, 1), idx(cols, r, 2)],
+    playMode: "clearing",
+    chainCount: 1,
+    chainWindowMsLeft: 500,
+    cleared: { food: 0, material: 0, energy: 0 },
+  };
+  s = commitClearStep(s);
+  assert(s.cleared.food === 3, "yields still count after valid-only bag");
+  assert(s.playMode === "settling", "settle after clear");
+  s = settleUntilQuiet(s);
+  assert(
+    s.board.filter((c) => c === "junk").length >= 3,
+    "junk filled cleared holes",
+  );
+  assert(findLineMatches(s.board, s.cols, s.rows).size === 0, "junk does not match");
+}
+
+// Junk-only stalemate → auto-finish eligible
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=12&isExtracted=1",
+  );
+  s = startRefine(s, 9);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => "junk" as const,
+  );
+  s = {
+    ...s,
+    board,
+    bag: [],
+    playMode: "idle",
+    pendingClear: [],
+    movesLeft: 5,
+    cleared: { food: 2, material: 0, energy: 0 },
+  };
+  assert(isJunkOnlyStalemate(s), "junk-only stalemate detected");
+  // One idle swap path triggers maybeFinish via tickSettle completing;
+  // finishRefine path: call tickSettle not needed — swap no-match still leaves stalemate.
+  // Directly verify helper; engine finishes on settle→idle via maybeFinishOnMoves.
+  s = tickSettleStep({ ...s, playMode: "settling" });
+  // With full junk board, settle ends immediately → idle → finish
+  assert(
+    s.phase === "result" || isJunkOnlyStalemate(s) || s.playMode === "idle",
+    "settle on full junk reaches idle/result",
+  );
+}
+
+// コンテナ100 test-play helper
+{
+  const t = createTestPlayRefine();
+  assert(t.phase === "briefing", "test play briefing");
+  assert(t.inbound.salvagedContainers === TEST_PLAY_CONTAINERS, "100 cans");
+  assert(
+    t.validPieceBudget === TEST_PLAY_CONTAINERS * PIECES_PER_CONTAINER,
+    "budget = 100 * PIECES_PER_CONTAINER",
+  );
+  assert(t.inbound.isExtracted === true, "extracted");
+  let s = startRefine(t, 1);
+  assert(s.phase === "play", "test play starts");
+  assert(s.board.every((c) => c != null && c !== "junk"), "long session starts valid-only full");
+  assert(s.bag.length > 0, "large leftover bag");
+  assert(s.bag.every((k) => k !== "junk"), "leftover bag valid-only");
 }
 
 // Timing constants exposed for UI / docs
