@@ -14,13 +14,16 @@ import {
   SORT_V0_RULES,
   commitClearStep,
   createRefineFromLocationSearch,
+  createTestPlayRefine,
   demoQueryExample,
   finishRefine,
   startRefine,
   swapPanels,
   tapCell,
+  testPlayQueryExample,
   tickSettleStep,
   toCraftingResult,
+  TEST_PLAY_CONTAINERS,
   type PieceKind,
   type RefineLive,
 } from "./refine";
@@ -166,18 +169,18 @@ function render() {
   root.innerHTML = `
     <p class="pill">MODULE 2 · SORT · ZOO KEEPER + ACTIVE CHAIN</p>
     <h1>Athanor 精製（Zoo Keeper）</h1>
-    <p class="muted">コンテナ予算→有効ピース。盤は<strong>最初から埋まっている</strong>。パネルを<strong>上下左右</strong>の隣とスワップして 3 つ以上そろえると消去→上から<strong>ゆっくり</strong>落下補充。落下中もスワップして<strong>アクティブ連鎖</strong>を伸ばせる。せり上げ／トップアウトなし。ジャンクは消えない。</p>
+    <p class="muted">コンテナ予算→有効ピースのみで開始。盤は<strong>最初から埋まっている</strong>。パネルを<strong>上下左右</strong>の隣とスワップして 3 つ以上そろえると消去→上から<strong>ゆっくり</strong>落下補充。落下中もスワップして<strong>アクティブ連鎖</strong>を伸ばせる。せり上げ／トップアウトなし。<strong>有効がなくなったらオジャマ（ジャンク）だけが落ちて盤を埋める</strong>（マッチ不可）。</p>
 
     <div class="card">
       <div class="muted">${escapeHtml(state.note)}</div>
       <table>
         <tr><td>salvagedContainers</td><td>${state.inbound.salvagedContainers}</td></tr>
         <tr><td>validPieceBudget</td><td>${state.validPieceBudget}</td></tr>
-        <tr><td>invalidPieceCount</td><td>${state.invalidPieceCount}</td></tr>
+        <tr><td>junk供給</td><td>有効袋が空になってから（固定比率なし）</td></tr>
         <tr><td>isExtracted</td><td>${String(state.inbound.isExtracted)}</td></tr>
         <tr><td>craftMultiplier</td><td>${(state.inbound.craftMultiplier ?? 1).toFixed(3)}</td></tr>
       </table>
-      <p class="mono muted" style="margin-top:0.5rem">サンプル: ${escapeHtml(demoQueryExample())}</p>
+      <p class="mono muted" style="margin-top:0.5rem">サンプル: ${escapeHtml(demoQueryExample())} · 長時間: ${escapeHtml(testPlayQueryExample())}</p>
     </div>
 
     ${
@@ -187,6 +190,7 @@ function render() {
             <p class="muted">クエリ例を付けてリロードしてください。</p>
             <div class="row">
               <a class="btn secondary" href="${escapeHtml(demoQueryExample())}">デモクエリで開く</a>
+              <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
             </div>
           </div>`
         : ""
@@ -195,9 +199,10 @@ function render() {
     ${
       state.phase === "briefing"
         ? `<div class="card">
-            <p>配合フェーズなし。<strong>盤面は開始時に埋まっています</strong>（Zoo Keeper）。パネルを<strong>上下左右の隣とスワップ</strong>して同色を縦・横に 3 つ以上そろえると消去→上から<strong>ゆっくり落下補充</strong>。<strong>穴が埋まりきるまえ</strong>もスワップでき、それが<strong>アクティブ連鎖</strong>です。せり上げ圧・トップアウトはありません。ジャンクはマッチしません。</p>
+            <p>配合フェーズなし。<strong>盤面は開始時に埋まっています</strong>（Zoo Keeper）。パネルを<strong>上下左右の隣とスワップ</strong>して同色を縦・横に 3 つ以上そろえると消去→上から<strong>ゆっくり落下補充</strong>。<strong>穴が埋まりきるまえ</strong>もスワップでき、それが<strong>アクティブ連鎖</strong>です。せり上げ圧・トップアウトはありません。最初は有効ピースのみ。<strong>有効がなくなったらオジャマだけが落ちて埋めます</strong>（マッチしません）。短いデモ予算なら下の「コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ」を使うと長時間遊べます。</p>
             <div class="row">
               <button type="button" id="btn-start">精製開始</button>
+              <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
             </div>
           </div>`
         : ""
@@ -259,6 +264,11 @@ function render() {
 
   document.getElementById("btn-start")?.addEventListener("click", () => {
     setState(startRefine(state));
+  });
+  document.getElementById("btn-test-play")?.addEventListener("click", () => {
+    clearChainTimer();
+    // Dedicated long demo — does not alter explore handoff query defaults.
+    setState(startRefine(createTestPlayRefine(TEST_PLAY_CONTAINERS)));
   });
   document.getElementById("btn-finish")?.addEventListener("click", () => {
     clearChainTimer();
