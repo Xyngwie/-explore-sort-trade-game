@@ -145,7 +145,7 @@ button.cell {
 }
 
 .board.settling .cell:not(.empty):not(.pending) {
-  transition: transform 0.1s linear;
+  transition: transform 0.5s linear;
 }
 .board.settling {
   box-shadow: inset 0 0 0 2px rgba(63, 185, 80, 0.35);

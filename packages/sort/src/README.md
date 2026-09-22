@@ -1,6 +1,6 @@
 # @estg/sort
 
-Module 2（Athanor）精製。**Zoo Keeper + アクティブ連鎖**: 開始時に盤が埋まり、隣接スワップでマッチ消去し、上から**ゆっくり**落下補充するあいだのスワップでコンボを伸ばす。
+Module 2（Athanor）精製。**Zoo Keeper + アクティブ連鎖**: 開始時に盤が埋まり、隣接スワップでマッチ消去し、上から**ゆっくり**落下補充（約 500ms/行）するあいだ、着地済みパネルもスワップしてコンボを伸ばす。
 
 - ルール: [`docs/SORT_V2_RULES.md`](../../../docs/SORT_V2_RULES.md)
 - Yield: [`docs/SORT_YIELD_V2.md`](../../../docs/SORT_YIELD_V2.md)

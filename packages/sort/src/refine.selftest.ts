@@ -768,10 +768,53 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.bag.every((k) => k !== "junk"), "leftover bag valid-only");
 }
 
+// Mid-settle swap of already-landed panels: match interrupts settle + chain++
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 21);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  // Floater keeps settle alive (column 0 hole under floating material).
+  board[idx(cols, rows - 1, 0)] = "junk";
+  board[idx(cols, rows - 3, 0)] = "material";
+  // Settled bottom row setup: food food | material | food → swap → match
+  board[idx(cols, rows - 1, 1)] = "food";
+  board[idx(cols, rows - 1, 2)] = "food";
+  board[idx(cols, rows - 1, 3)] = "material";
+  board[idx(cols, rows - 1, 4)] = "food";
+  s = {
+    ...s,
+    board,
+    bag: ["energy", "energy", "energy", "energy"],
+    pendingClear: [],
+    playMode: "settling",
+    chainCount: 1,
+    chainWindowMsLeft: 0,
+    movesLeft: 5,
+    selected: null,
+  };
+  assert(isActiveChain(s), "settling active before landed swap");
+  assert(boardNeedsSettle(s.board, s.bag, cols, rows), "floater keeps settle open");
+  const movesBefore = s.movesLeft;
+  // Swap settled material with food → food food food on bottom
+  s = swapPanels(s, idx(cols, rows - 1, 3), idx(cols, rows - 1, 4));
+  assert(s.movesLeft === movesBefore, "landed settle-match swap is free");
+  assert(s.playMode === "clearing", "match interrupts settle into blink");
+  assert(s.chainCount === 2, "landed settle match increments chain");
+  assert(s.pendingClear.length >= 3, "pending clear from landed match");
+  assert(s.board[idx(cols, rows - 1, 4)] === "material", "swapped pieces placed");
+}
+
 // Timing constants exposed for UI / docs
 {
   assert(SORT_V0_RULES.clearBlinkMs === 280, "clearBlinkMs");
-  assert(SORT_V0_RULES.settleStepMs === 110, "settleStepMs");
+  assert(SORT_V0_RULES.settleStepMs === 500, "settleStepMs");
   assert(SORT_V0_RULES.initialFillRows === SORT_V0_RULES.boardRows, "dense fill all rows");
   assert(SORT_V0_RULES.chainWindowMs === SORT_V0_RULES.clearBlinkMs, "chainWindowMs alias");
 }

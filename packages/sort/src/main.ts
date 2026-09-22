@@ -130,10 +130,10 @@ function boardHtml(s: RefineLive): string {
 function controlsHtml(s: RefineLive): string {
   const chainHint =
     s.playMode === "settling"
-      ? `<p class="hint ok">落下補充中！ 穴が埋まるまえにスワップして次のマッチを仕込もう（アクティブ連鎖 · ×${s.chainCount}）</p>`
+      ? `<p class="hint ok">落下補充中！ 着地済みの下段もスワップ可 — マッチすれば連鎖に加算（アクティブ連鎖 · ×${s.chainCount}）</p>`
       : s.playMode === "clearing"
-        ? `<p class="hint ok">マッチ点滅中… 消えたあとゆっくり落下。落下中もスワップ可（×${s.chainCount}）</p>`
-        : `<p class="hint muted">タップで選択→上下左右の隣をタップ、またはスワイプでスワップ。消えたあと上からゆっくり補充。落下中のスワップがアクティブ連鎖。せり上げ／トップアウトなし。</p>`;
+        ? `<p class="hint ok">マッチ点滅中… 消えたあとゆっくり落下（約0.5秒/行）。落下中もスワップ可（×${s.chainCount}）</p>`
+        : `<p class="hint muted">タップで選択→上下左右の隣をタップ、またはスワイプでスワップ。消えたあと上からゆっくり補充（約0.5秒/行）。着地パネルのスワップがアクティブ連鎖。せり上げ／トップアウトなし。</p>`;
   return `
     <div class="controls" aria-label="操作">
       <p class="hint muted" style="margin:0">スマホ: スワイプで隣と入れ替え · <strong>落下補充中</strong>もスワップ可（アクティブ連鎖）</p>
