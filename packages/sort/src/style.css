@@ -143,3 +143,19 @@ button.cell {
 @media (min-width: 420px) {
   .cell { min-height: 2.35rem; font-size: 0.8rem; }
 }
+
+.board.settling .cell:not(.empty):not(.pending) {
+  transition: transform 0.1s linear;
+}
+.board.settling {
+  box-shadow: inset 0 0 0 2px rgba(63, 185, 80, 0.35);
+}
+.board.settling::after {
+  content: "落下補充中 · スワップ可";
+  display: block;
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 0.7rem;
+  color: #3fb950;
+  margin-top: 0.25rem;
+}
