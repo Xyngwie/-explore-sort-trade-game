@@ -47,6 +47,7 @@
          · 着地パネルのスワップでマッチしたら settle を中断→点滅消去→連鎖数+1
          · 穴が埋まりきると再マッチ判定 → 自然連鎖
          · 有効袋が空になったら以降はジャンクのみ落下（マッチしない／重力では落ちる）
+         · idle でマッチしないスワップ → 即終了（連鎖中の仕込みスワップは対象外）
   → result: yield* + YieldBag + importMaterials
   → 「格納庫へ渡す」= buildSortToTradeUrlFromResult（localhost 時は :5175）
 ```
@@ -63,6 +64,7 @@
 - タイミング定数: `clearBlinkMs`（点滅 ≈ 280ms）、`settleStepMs`（1 行落下／頂上スポーン ≈ **500ms**）。UI は各 settle ティックで 1 行分の fall-in CSS アニメ（`var(--settle-ms)`）を掛け、見た目を滑らかにする
 - スワイプ判定: 移動 ≥ `swipeMinPx`（18px）。軸優位比 `swipeAxisDominanceRatio`（**1.15**）— `max(|dx|,|dy|) >= min * 1.15` なら強い軸で隣とスワップ。ほぼ斜めでも優勢軸を採用し、真の斜め（軸がほぼ等しい）のみ却下
 - 手数: 通常スワップ＝1。点滅・落下補充中のスワップは無料。せり上げ操作は無い
+- **終了（マッチなし）:** idle（`clearing` / `settling` のアクティブ連鎖外）でスワップしてもマッチができない場合、即 `finishRefine`（残りパネルの無限並べ替えを禁止）。落下・点滅中の非マッチ・仕込みスワップは終了しない
 - `craftMultiplier` 既定 1.0。explore→sort の `?craftMultiplier=` または `circuitBonuses` compact の craft があればそれを使う
 - **経済ルールは SORT_V2 のまま**（コンテナ予算→有効ピース、消した種類→ yield / YieldBag）
 
@@ -108,7 +110,7 @@ http://localhost:5174/?salvagedContainers=2&totalStockPieces=50&isExtracted=1&cr
 5. **穴が埋まりきるまえに別の場所をスワイプ**して次のマッチを仕込む → それが**アクティブ連鎖**（手数を消費しない）  
 6. 補充が終わって自然に次のマッチが続けば連鎖カウントが増える  
 7. 有効がなくなったらオジャマだけが落ちて埋める。ジャンクは消せない（重力では落ちる）  
-8. 「精製を終える」または手数切れ → 結果の `yield*` / YieldBag  
+8. 「精製を終える」／手数切れ／**idle でマッチしないスワップ** → 結果の `yield*` / YieldBag  
 9. 「格納庫へ渡す」で trade（`npm run dev:trade` → :5175）にクエリが渡る  
 
 キー: セル選択後 `←→↑↓` で隣とスワップ · `Shift+矢印` で選択移動。

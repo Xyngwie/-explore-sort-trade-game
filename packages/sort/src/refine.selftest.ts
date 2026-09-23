@@ -351,6 +351,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   s = tapCell(s, idx(cols, r - 1, 0));
   assert(s.board[idx(cols, r, 0)] === "energy", "tap vertical swap a");
   assert(s.board[idx(cols, r - 1, 0)] === "material", "tap vertical swap b");
+  assert(s.phase === "result", "idle no-match tap-tap finishes refine");
 }
 
 // Diagonal / non-adjacent swap rejected
@@ -526,6 +527,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   s = tapCell(s, idx(cols, r, 1));
   assert(s.board[idx(cols, r, 0)] === "energy", "swapped via tap-tap");
   assert(s.board[idx(cols, r, 1)] === "material", "swapped via tap-tap b");
+  assert(s.phase === "result", "idle no-match tap-tap finishes refine");
 }
 
 // Result → YieldBag + legacy yields
@@ -812,6 +814,158 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.chainCount === 2, "landed settle match increments chain");
   assert(s.pendingClear.length >= 3, "pending clear from landed match");
   assert(s.board[idx(cols, rows - 1, 4)] === "material", "swapped pieces placed");
+}
+
+// Idle no-match swap → finishRefine (yields locked; no endless leftover shuffle)
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=20&isExtracted=1",
+  );
+  s = startRefine(s, 21);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "material";
+  board[idx(cols, r, 2)] = "energy";
+  s = {
+    ...s,
+    board,
+    bag: ["food", "food"],
+    playMode: "idle",
+    pendingClear: [],
+    movesLeft: 8,
+    cleared: { food: 3, material: 1, energy: 0 },
+    selected: null,
+  };
+  s = swapPanels(s, idx(cols, r, 0), idx(cols, r, 1));
+  assert(s.phase === "result", "idle no-match → phase result");
+  assert(s.playMode === "idle", "result resets playMode idle");
+  assert(
+    s.statusMsg === "マッチなし · 精製終了",
+    "idle no-match status message",
+  );
+  const result = toCraftingResult(s);
+  assert(result.yieldFood === 3, "yield locked food");
+  assert(result.yieldMaterial === 1, "yield locked material");
+  assert(result.yieldBag != null, "yieldBag locked");
+  assert(s.board[idx(cols, r, 0)] === "material", "swap kept on board for scrap");
+  assert(s.board[idx(cols, r, 1)] === "food", "swap kept on board for scrap b");
+}
+
+// Mid-settle non-matching swap does NOT finish (active-chain setup stays free)
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 22);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  board[idx(cols, rows - 1, 0)] = "food";
+  board[idx(cols, rows - 3, 0)] = "material"; // floater keeps settle open
+  board[idx(cols, rows - 1, 1)] = "energy";
+  board[idx(cols, rows - 1, 2)] = "junk";
+  s = {
+    ...s,
+    board,
+    bag: ["food", "food", "food"],
+    pendingClear: [],
+    playMode: "settling",
+    chainCount: 2,
+    chainWindowMsLeft: 0,
+    movesLeft: 6,
+    cleared: { food: 2, material: 0, energy: 0 },
+    selected: null,
+  };
+  assert(isActiveChain(s), "settle is active chain");
+  const movesBefore = s.movesLeft;
+  s = swapPanels(s, idx(cols, rows - 1, 1), idx(cols, rows - 1, 2));
+  assert(s.phase === "play", "settle no-match does not finish");
+  assert(s.playMode === "settling", "stays settling after no-match setup swap");
+  assert(s.movesLeft === movesBefore, "settle no-match swap is free");
+  assert(s.board[idx(cols, rows - 1, 1)] === "junk", "settle setup swap applied");
+  assert(s.board[idx(cols, rows - 1, 2)] === "energy", "settle setup swap applied b");
+}
+
+// Mid-clearing (blink) non-matching swap does NOT finish
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 23);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "food";
+  board[idx(cols, r, 2)] = "food";
+  board[idx(cols, r, 3)] = "energy";
+  board[idx(cols, r, 4)] = "material";
+  s = {
+    ...s,
+    board,
+    pendingClear: [idx(cols, r, 0), idx(cols, r, 1), idx(cols, r, 2)],
+    playMode: "clearing",
+    chainCount: 1,
+    chainWindowMsLeft: SORT_V0_RULES.clearBlinkMs,
+    movesLeft: 4,
+    selected: null,
+  };
+  const movesBefore = s.movesLeft;
+  s = swapPanels(s, idx(cols, r, 3), idx(cols, r, 4));
+  assert(s.phase === "play", "blink no-match does not finish");
+  assert(s.playMode === "clearing", "stays clearing after no-match blink swap");
+  assert(s.movesLeft === movesBefore, "blink no-match swap is free");
+  assert(s.board[idx(cols, r, 3)] === "material", "blink setup swap applied");
+  assert(s.board[idx(cols, r, 4)] === "energy", "blink setup swap applied b");
+}
+
+// Matching idle swap still starts clear/chain (regression)
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 24);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "energy";
+  board[idx(cols, r, 1)] = "energy";
+  board[idx(cols, r, 2)] = "food";
+  board[idx(cols, r, 3)] = "energy";
+  s = {
+    ...s,
+    board,
+    bag: ["material", "material"],
+    playMode: "idle",
+    pendingClear: [],
+    movesLeft: 7,
+    cleared: { food: 0, material: 0, energy: 0 },
+    selected: null,
+  };
+  const movesBefore = s.movesLeft;
+  s = swapPanels(s, idx(cols, r, 2), idx(cols, r, 3));
+  assert(s.phase === "play", "matching idle stays in play");
+  assert(s.playMode === "clearing", "matching idle enters clearing");
+  assert(s.chainCount === 1, "matching idle starts chain at 1");
+  assert(s.movesLeft === movesBefore - 1, "matching idle costs a move");
+  assert(s.pendingClear.length >= 3, "matching idle sets pending clear");
 }
 
 // Timing constants exposed for UI / docs

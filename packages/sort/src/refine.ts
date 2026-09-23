@@ -881,11 +881,13 @@ function beginOrExtendClear(
 /**
  * Swap two orthogonally adjacent panels (horizontal or vertical).
  * - Idle: costs 1 move; opens blink if matches form.
+ *   **No-match idle swap immediately finishRefine** (forbids endless leftover shuffling).
  * - Clearing (blink): free; new matches merge into pending clear
- *   and extend the blink.
+ *   and extend the blink. Non-matching mid-blink swaps do NOT end play.
  * - Settling (slow fall/refill — main active chain): free; already-landed
  *   panels stay swappable. A player-made match interrupts settle, enters
  *   blink, and increments chainCount (same as a post-settle cascade wave).
+ *   Non-matching mid-settle swaps do NOT end play (setup stays free).
  */
 export function swapPanels(
   s: RefineLive,
@@ -965,11 +967,11 @@ export function swapPanels(
       );
     }
   } else if (!freeSwap) {
-    next = {
+    // Idle + no match → end session (no endless leftover redistribution).
+    next = finishRefine({
       ...next,
-      statusMsg: null,
-    };
-    next = maybeFinishOnMoves(next);
+      statusMsg: "マッチなし · 精製終了",
+    });
   }
 
   return next;
