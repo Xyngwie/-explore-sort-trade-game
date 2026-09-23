@@ -21,6 +21,7 @@ import {
   settleMotionIndices,
   startRefine,
   swapPanels,
+  resolveNearStuckHint,
   tapCell,
   testPlayQueryExample,
   tickSettleStep,
@@ -36,7 +37,10 @@ import {
   toStagePhase,
   type SessionSource,
 } from "./resultOverlay";
-import { buildPlayHudHtml } from "./playHud";
+import {
+  buildBriefingBagDifficultyHtml,
+  buildPlayHudHtml,
+} from "./playHud";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 let state: RefineLive = createRefineFromLocationSearch(window.location.search);
@@ -47,6 +51,26 @@ let fallInIndices: Set<number> = new Set();
 let suppressCellClick = false;
 /** Session start source — used by 「もう一度」 to keep test-play budget. */
 let sessionSource: SessionSource = "location";
+/** Until this timestamp (ms), show bag-difficulty intro flash at top HUD. */
+let bagIntroUntil = 0;
+let bagIntroTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearBagIntroTimer() {
+  if (bagIntroTimer != null) {
+    clearTimeout(bagIntroTimer);
+    bagIntroTimer = null;
+  }
+}
+
+function armBagIntroFlash(ms = 2800) {
+  clearBagIntroTimer();
+  bagIntroUntil = Date.now() + ms;
+  bagIntroTimer = setTimeout(() => {
+    bagIntroTimer = null;
+    bagIntroUntil = 0;
+    if (state.phase === "play") render();
+  }, ms);
+}
 
 function tradeBaseUrl(): string {
   return resolveModuleBaseUrl("trade");
@@ -124,16 +148,23 @@ function setState(next: RefineLive) {
   render();
 }
 
-function boardHtml(s: RefineLive, opts?: { inert?: boolean }): string {
+function boardHtml(
+  s: RefineLive,
+  opts?: { inert?: boolean; hint?: { a: number; b: number } | null },
+): string {
   const pending = new Set(s.pendingClear);
   const settleMs = SORT_V0_RULES.settleStepMs;
   const inert = opts?.inert === true;
+  const hintSet = new Set(
+    opts?.hint != null ? [opts.hint.a, opts.hint.b] : [],
+  );
   const cells = s.board
     .map((kind, i) => {
       const extras = [
         pending.has(i) ? "pending" : "",
         !inert && s.selected === i ? "selected" : "",
         !inert && fallInIndices.has(i) && kind != null ? "fall-in" : "",
+        !inert && hintSet.has(i) ? "hint" : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -163,11 +194,9 @@ function boardPlaceholderHtml(cols: number, rows: number): string {
 }
 
 function playHintHtml(s: RefineLive): string {
-  if (s.playMode === "settling") {
-    return `<p class="field-hint ok">落下補充中！ 着地済みもスワップ可 — マッチすれば連鎖（×${s.chainCount}）</p>`;
-  }
-  if (s.playMode === "clearing") {
-    return `<p class="field-hint ok">点滅中… 消えたあとゆっくり落下。落下中もスワップ可（×${s.chainCount}）</p>`;
+  // Mid-play chain/status live in the top HUD; footer stays a quiet control tip.
+  if (s.playMode === "settling" || s.playMode === "clearing") {
+    return `<p class="field-hint muted">操作: スワイプ／隣タップ（連鎖中は無料）</p>`;
   }
   return `<p class="field-hint muted">スワイプ／隣タップでスワップ · <strong>idle でマッチなしは即終了</strong> · 落下・点滅中の仕込みは無料</p>`;
 }
@@ -182,6 +211,7 @@ function briefingOverlayHtml(s: RefineLive): string {
           <li><span>コンテナ</span><strong>${s.inbound.salvagedContainers}</strong></li>
           <li><span>有効予算</span><strong>${s.validPieceBudget}</strong></li>
           <li><span>craft</span><strong>${(s.inbound.craftMultiplier ?? 1).toFixed(3)}</strong></li>
+          ${buildBriefingBagDifficultyHtml(s)}
         </ul>
         <p class="stage-copy">盤は開始時に埋まります。上下左右にスワップして 3 つ以上そろえると消去→ゆっくり落下補充。落下中もスワップして<strong>アクティブ連鎖</strong>。idle でマッチしないスワップは即終了。有効が尽きたらオジャマのみ。</p>
         <div class="row stage-actions">
@@ -265,8 +295,13 @@ function render() {
   const showPlaceholder =
     state.phase === "briefing" || state.phase === "blocked";
 
+  const showBagIntro =
+    state.phase === "play" && bagIntroUntil > Date.now();
+  const nearStuckHint =
+    state.phase === "play" ? resolveNearStuckHint(state) : null;
+
   const stageBoard = showLiveBoard
-    ? boardHtml(state)
+    ? boardHtml(state, { hint: nearStuckHint })
     : showResultBoard
       ? boardHtml(state, { inert: true })
       : boardPlaceholderHtml(state.cols, state.rows);
@@ -288,7 +323,11 @@ function render() {
       </header>
 
       <div class="play-field" data-phase="${escapeHtml(stage)}" aria-label="プレイフィールド">
-        ${state.phase === "play" ? buildPlayHudHtml(state) : ""}
+        ${
+          state.phase === "play"
+            ? buildPlayHudHtml(state, { showBagIntro })
+            : ""
+        }
         <div class="stage">
           ${stageBoard}
           ${overlay}
@@ -296,7 +335,6 @@ function render() {
         ${
           state.phase === "play"
             ? `
-          ${state.statusMsg ? `<p class="ok status-msg field-status">${escapeHtml(state.statusMsg)}</p>` : ""}
           ${playHintHtml(state)}
           <div class="hud-footer">
             <button type="button" class="secondary" id="btn-finish">精製を終える</button>
@@ -308,20 +346,26 @@ function render() {
   `;
 
   document.getElementById("btn-start")?.addEventListener("click", () => {
+    armBagIntroFlash();
     setState(startRefine(state));
   });
   document.getElementById("btn-test-play")?.addEventListener("click", () => {
     clearChainTimer();
     // Dedicated long demo — does not alter explore handoff query defaults.
     sessionSource = "test-play";
+    armBagIntroFlash();
     setState(startRefine(createTestPlayRefine(TEST_PLAY_CONTAINERS)));
   });
   document.getElementById("btn-finish")?.addEventListener("click", () => {
     clearChainTimer();
+    clearBagIntroTimer();
+    bagIntroUntil = 0;
     setState(finishRefine(state));
   });
   document.getElementById("btn-again")?.addEventListener("click", () => {
     clearChainTimer();
+    clearBagIntroTimer();
+    bagIntroUntil = 0;
     setState(resolveRestartState(sessionSource, window.location.search));
   });
   root.querySelectorAll<HTMLButtonElement>("button.cell[data-idx]").forEach((btn) => {

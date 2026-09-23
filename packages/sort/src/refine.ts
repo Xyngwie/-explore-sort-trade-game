@@ -138,6 +138,11 @@ export type RefineLive = {
   /** Selected cell index for tap-tap swap (cursor-style). */
   selected: number | null;
   statusMsg: string | null;
+  /**
+   * Cleared counts from the most recent commitClearStep (one blink wave).
+   * UI shows a brief top yield preview from this; cleared on return to idle.
+   */
+  lastClearDelta: ClearedCounts | null;
 };
 
 function mulberry32(seed: number): () => number {
@@ -784,6 +789,7 @@ export function createRefineFromLocationSearch(search: string): RefineLive {
     chainWindowMsLeft: 0,
     selected: null,
     statusMsg: null,
+    lastClearDelta: null,
   };
 }
 
@@ -824,6 +830,7 @@ export function startRefine(s: RefineLive, seed = Date.now()): RefineLive {
     statusMsg: needsJunkFill
       ? "有効補充が尽きた · ジャンクが穴を埋める"
       : null,
+    lastClearDelta: null,
   };
 }
 
@@ -1032,6 +1039,7 @@ export function commitClearStep(s: RefineLive): RefineLive {
     lastChain: chainDone,
     selected: null,
     statusMsg: `落下補充中（スワップで次を仕込む · ×${chainDone}）`,
+    lastClearDelta: clearedStep.cleared,
   };
 }
 
@@ -1090,6 +1098,7 @@ export function tickSettleStep(s: RefineLive): RefineLive {
     lastChain: chainDone,
     selected: null,
     statusMsg: chainDone > 1 ? `連鎖完了 ×${chainDone}` : "マッチ消去",
+    lastClearDelta: null,
   };
   return maybeFinishOnMoves(next);
 }
@@ -1163,6 +1172,7 @@ export function finishRefine(s: RefineLive): RefineLive {
     chainWindowMsLeft: 0,
     lastChain,
     selected: null,
+    lastClearDelta: null,
   };
 }
 
@@ -1248,6 +1258,7 @@ export function createTestPlayRefine(
     chainWindowMsLeft: 0,
     selected: null,
     statusMsg: null,
+    lastClearDelta: null,
   };
 }
 
@@ -1262,6 +1273,87 @@ export type ControlAction =
 
 export function applyControl(s: RefineLive, _action: ControlAction): RefineLive {
   return s;
+}
+
+
+/**
+ * Find one orthogonal adjacent swap that would create a H/V match of 3+.
+ * Scans top→bottom, left→right; prefers horizontal then vertical neighbor.
+ * Returns null when no matching swap exists (or board is junk-locked).
+ */
+export function findHintSwap(
+  board: Cell[],
+  cols: number,
+  rows: number,
+): { a: number; b: number } | null {
+  const n = cols * rows;
+  for (let a = 0; a < n; a++) {
+    if (board[a] == null) continue;
+    const r = Math.floor(a / cols);
+    const c = a % cols;
+    const candidates: number[] = [];
+    if (c + 1 < cols) candidates.push(a + 1);
+    if (r + 1 < rows) candidates.push(a + cols);
+    for (const b of candidates) {
+      if (board[a] === board[b]) continue; // identical swap is a no-op for matches
+      const trial = [...board];
+      trial[a] = board[b];
+      trial[b] = board[a];
+      if (findLineMatches(trial, cols, rows).size > 0) {
+        return { a, b };
+      }
+    }
+  }
+  return null;
+}
+
+/** Count distinct orthogonal adjacent swaps that create a match (each edge once). */
+export function countMatchingSwaps(
+  board: Cell[],
+  cols: number,
+  rows: number,
+): number {
+  let count = 0;
+  const n = cols * rows;
+  for (let a = 0; a < n; a++) {
+    if (board[a] == null) continue;
+    const r = Math.floor(a / cols);
+    const c = a % cols;
+    const candidates: number[] = [];
+    if (c + 1 < cols) candidates.push(a + 1);
+    if (r + 1 < rows) candidates.push(a + cols);
+    for (const b of candidates) {
+      if (board[a] === board[b]) continue;
+      const trial = [...board];
+      trial[a] = board[b];
+      trial[b] = board[a];
+      if (findLineMatches(trial, cols, rows).size > 0) count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Near-stuck: idle play with few moves left, or only one matching swap left.
+ * Never during active chain (blink/settle) — hints stay optional and rare.
+ */
+export function isNearStuckHint(s: RefineLive): boolean {
+  if (s.phase !== "play") return false;
+  if (s.playMode !== "idle") return false;
+  if (s.movesLeft <= 0) return false;
+  const matches = countMatchingSwaps(s.board, s.cols, s.rows);
+  if (matches <= 0) return false;
+  if (s.movesLeft <= 3) return true;
+  if (matches <= 1) return true;
+  return false;
+}
+
+/** Resolve a hint pair only when near-stuck; otherwise null (never always-on). */
+export function resolveNearStuckHint(
+  s: RefineLive,
+): { a: number; b: number } | null {
+  if (!isNearStuckHint(s)) return null;
+  return findHintSwap(s.board, s.cols, s.rows);
 }
 
 /** Snapshot for the play-HUD remaining-valid supply gauge (bag vs budget). */

@@ -13,12 +13,16 @@ import {
   computeBudgets,
   createRefineFromLocationSearch,
   createTestPlayRefine,
+  countMatchingSwaps,
+  findHintSwap,
   findLineMatches,
   isActiveChain,
   isJunkOnlyStalemate,
+  isNearStuckHint,
   refillFromAbove,
   resolveChains,
   resolveCraftMultiplier,
+  resolveNearStuckHint,
   resolveSwipeNeighbor,
   settleMotionIndices,
   SORT_V0_RULES,
@@ -42,7 +46,14 @@ import {
   resolveRestartState,
   toStagePhase,
 } from "./resultOverlay";
-import { buildPlayHudHtml, buildValidSupplyGaugeHtml } from "./playHud";
+import {
+  buildBriefingBagDifficultyHtml,
+  buildPlayHudHtml,
+  buildTopFeedbackHtml,
+  buildValidSupplyGaugeHtml,
+  buildYieldPreviewFromDelta,
+  formatYieldPreviewChips,
+} from "./playHud";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -1150,6 +1161,138 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   });
   assert(depletedHud.includes("depleted"), "depleted class when bag empty");
   assert(depletedHud.includes('aria-valuenow="0"'), "depleted valuenow 0");
+}
+
+
+// lastClearDelta set on commit, cleared when settle returns to idle
+{
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 31);
+  assert(s.lastClearDelta == null, "start has no clear delta");
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "food";
+  board[idx(cols, r, 2)] = "food";
+  s = {
+    ...s,
+    board,
+    bag: ["energy", "energy", "energy", "energy", "energy", "energy"],
+    pendingClear: [idx(cols, r, 0), idx(cols, r, 1), idx(cols, r, 2)],
+    playMode: "clearing",
+    chainCount: 1,
+    chainWindowMsLeft: 280,
+    cleared: { food: 0, material: 0, energy: 0 },
+    lastClearDelta: null,
+  };
+  s = commitClearStep(s);
+  assert(s.lastClearDelta != null, "commit sets lastClearDelta");
+  assert(s.lastClearDelta!.food === 3, "delta food 3");
+  assert(s.lastClearDelta!.material === 0, "delta material 0");
+  const preview = buildYieldPreviewFromDelta(s.lastClearDelta, 1);
+  assert((preview.mat_ration ?? 0) === 3, "yield preview ration from food clear");
+  const chips = formatYieldPreviewChips(preview);
+  assert(chips.chips.includes("糧食パック"), "yield chip label ja");
+  assert(chips.chips.includes("+3"), "yield chip count");
+
+  const feedback = buildTopFeedbackHtml(s);
+  assert(feedback.includes("hud-flash-chain"), "top chain flash while settling");
+  assert(feedback.includes("hud-flash-yield"), "top yield flash after clear");
+  assert(feedback.includes("産出"), "yield flash label");
+  assert(!feedback.includes("stage-overlay"), "no center overlay class in feedback");
+
+  s = settleUntilQuiet(s);
+  if (s.playMode === "idle") {
+    assert(s.lastClearDelta == null, "idle clears lastClearDelta");
+  }
+}
+
+// findHintSwap / near-stuck optional hints
+{
+  const cols = 6;
+  const rows = 8;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  // food food | material | food → swap material with food makes match
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "food";
+  board[idx(cols, r, 2)] = "material";
+  board[idx(cols, r, 3)] = "food";
+  board[idx(cols, r, 4)] = "energy";
+  board[idx(cols, r, 5)] = "junk";
+  const hint = findHintSwap(board, cols, rows);
+  assert(hint != null, "hint finds a matching swap");
+  assert(
+    (hint!.a === idx(cols, r, 2) && hint!.b === idx(cols, r, 3)) ||
+      (hint!.a === idx(cols, r, 3) && hint!.b === idx(cols, r, 2)),
+    "hint points at the food-completing swap",
+  );
+  assert(countMatchingSwaps(board, cols, rows) >= 1, "at least one matching swap");
+
+  const noBoard: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => "junk" as const,
+  );
+  assert(findHintSwap(noBoard, cols, rows) == null, "junk board has no hint");
+  assert(countMatchingSwaps(noBoard, cols, rows) === 0, "junk board zero swaps");
+
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=20&isExtracted=1",
+  );
+  s = startRefine(s, 32);
+  s = {
+    ...s,
+    board,
+    bag: ["food"],
+    playMode: "idle",
+    pendingClear: [],
+    movesLeft: 2,
+    selected: null,
+    lastClearDelta: null,
+  };
+  assert(isNearStuckHint(s), "low moves → near-stuck");
+  const resolved = resolveNearStuckHint(s);
+  assert(resolved != null, "near-stuck resolves a hint pair");
+
+  s = { ...s, movesLeft: 20 };
+  // Only one matching swap on this sparse board → still near-stuck
+  assert(countMatchingSwaps(s.board, s.cols, s.rows) <= 2, "sparse board few swaps");
+  assert(isNearStuckHint(s), "few matching swaps → near-stuck even with moves");
+
+  s = { ...s, playMode: "settling", chainCount: 1 };
+  assert(!isNearStuckHint(s), "never hint during active chain");
+  assert(resolveNearStuckHint(s) == null, "no resolved hint while settling");
+}
+
+// Play HUD top feedback + bag intro + briefing bag difficulty (no center overlays)
+{
+  const briefing = createRefineFromLocationSearch(
+    "?salvagedContainers=2&totalStockPieces=50&isExtracted=1",
+  );
+  const bagLine = buildBriefingBagDifficultyHtml(briefing);
+  assert(bagLine.includes("ジャンクまで"), "briefing shows until-junk");
+  assert(bagLine.includes("50"), "briefing budget in until-junk");
+  assert(bagLine.includes("brief-bag"), "briefing bag class");
+
+  const playing = startRefine(briefing, 7);
+  const hudIntro = buildPlayHudHtml(playing, { showBagIntro: true });
+  assert(hudIntro.includes("hud-flash-bag"), "bag intro flash when armed");
+  assert(hudIntro.includes("袋スケール"), "bag scale label");
+  assert(hudIntro.includes("ジャンク変換まで"), "until junk conversion copy");
+  assert(hudIntro.includes("hud-feedback"), "top feedback container");
+
+  const hudQuiet = buildPlayHudHtml(playing, { showBagIntro: false });
+  assert(!hudQuiet.includes("hud-flash-bag"), "no bag intro when not armed");
 }
 
 console.log("sort refine.selftest: ok");
