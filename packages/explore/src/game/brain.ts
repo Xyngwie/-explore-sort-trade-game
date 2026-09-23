@@ -95,12 +95,12 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       return { ...react, trySalvage: false };
     }
     case "recover": {
-      const full = self.salvagedCount >= self.capacity;
-      if (full || self.salvageId) {
+      // No hard carry MAX — keep channeling current crate, else seek next.
+      if (self.salvageId) {
         return {
-          moveTarget: self.salvageId ? null : escortOffset(leader, 0),
+          moveTarget: null,
           fireAt: enemy && enemyDist < b.weaponRange * 0.7 ? enemy : null,
-          trySalvage: Boolean(self.salvageId),
+          trySalvage: true,
         };
       }
       const c =

@@ -121,6 +121,7 @@ function placeContainers(): Container[] {
     pos: { ...pos },
     taken: false,
     discovered: false,
+    glowT: 0,
   }));
 }
 
@@ -321,7 +322,10 @@ export function createWorld(boot: SortieBootstrap): World {
   }
 
   const craft = 1 + boot.wingmanCount;
-  const carrierCapacity = BALANCE.carrierSlotsPerCraft * craft;
+  // Soft personal speed ref still uses carrierSlotsPerCraft per craft;
+  // hard MAX carry abolished — handoff field stays informational / large.
+  void craft;
+  const carrierCapacity = BALANCE.carrierCapacityUnlimited;
 
   return {
     balance,

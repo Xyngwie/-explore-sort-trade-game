@@ -1,10 +1,11 @@
 import { decideWingman } from "./brain";
 import {
   applyOrder,
-  cargoSpeedMul,
+  campDamageTakenMul,
   onSalvageCompleted,
   pushLog,
   spawnContainersAt,
+  unitMoveSpeedMul,
 } from "./orders";
 import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
 import type { Bullet, Unit, World } from "./types";
@@ -108,12 +109,12 @@ function updateBullets(world: World, dt: number): void {
       if (!t.alive) continue;
       if (dist(b.pos, t.pos) <= t.radius + 4) {
         b.alive = false;
-        t.hp -= b.damage;
-        if (!b.fromEnemy) {
-          // friendly fire hit on enemy
-        } else {
+        let hitDmg = b.damage;
+        if (b.fromEnemy) {
+          hitDmg *= campDamageTakenMul(world, t);
           world.combatHitsTaken += 1;
         }
+        t.hp -= hitDmg;
         if (t.hp <= 0) {
           t.alive = false;
           t.hp = 0;
@@ -128,7 +129,7 @@ function updateBullets(world: World, dt: number): void {
         } else if (!inCamera(world, t.pos) || !inCamera(world, b.pos)) {
           reportBattle(
             world,
-            `${t.name} が被弾 (−${b.damage})`,
+            `${t.name} が被弾 (−${Math.round(hitDmg)})`,
             t.pos,
           );
         }
@@ -141,8 +142,7 @@ function updateBullets(world: World, dt: number): void {
 
 function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): void {
   if (!unit.alive) return;
-  if (unit.salvagedCount >= unit.capacity) return;
-  if (world.salvaged >= world.carrierCapacity) return;
+  // Hard MAX carry abolished — cargo only slows movement (soft ref curve).
 
   if (!want && !unit.salvageId) return;
 
@@ -260,9 +260,13 @@ export function spawnEnemyDeathDrops(
     discovered: true,
     idPrefix: "drop",
   });
+  const glow = world.balance.deathDropGlowSec;
+  for (const c of spawned) {
+    c.glowT = glow;
+  }
   pushLog(
     world,
-    `敵残骸からコンテナ ${spawned.length} を発見。`,
+    `敵撃破ドロップ：コンテナ ${spawned.length} 出現！（発光マーカー）`,
     "battle",
   );
   return spawned.length;
@@ -288,8 +292,8 @@ export type BoardingRequirementsHud = {
 };
 
 /**
- * Always-clear extract / return requirements for the center HUD.
- * Failures must not feel like unclear rules.
+ * Always-clear extract / return requirements for the top/edge HUD.
+ * Failures must not feel like unclear rules. Compact when idle.
  */
 export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
   const mustBeIn = "隊長が搭乗円内";
@@ -417,9 +421,32 @@ function resolveBoardingLiftOff(world: World): void {
   world.phase = "result";
 
   if (captainIn) {
+    // Escape-circle recovery: every untaken container inside the boarding
+    // circle is recovered (not a subset / not carry-only).
+    let circleCrates = 0;
+    for (const c of world.containers) {
+      if (c.taken) continue;
+      if (dist(c.pos, boarding.center) <= boarding.radius) {
+        c.taken = true;
+        c.discovered = true;
+        c.glowT = 0;
+        circleCrates += 1;
+        world.salvaged += 1;
+      }
+    }
     world.extracted = true;
     world.failReason = null;
-    pushLog(world, "脱出成功（隊長搭乗）。サルベージは現状ルールどおり保持。");
+    if (circleCrates > 0) {
+      pushLog(
+        world,
+        `脱出成功（隊長搭乗）。搭乗円内コンテナ ${circleCrates} を全回収（合計サルベージ ${world.salvaged}）。`,
+      );
+    } else {
+      pushLog(
+        world,
+        `脱出成功（隊長搭乗）。サルベージ ${world.salvaged} を保持。`,
+      );
+    }
   } else {
     world.extracted = false;
     world.failReason = "extract_missed";
@@ -483,7 +510,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     leader.moveTarget = { ...input.clickMove };
   }
   const leadSpeed =
-    world.balance.moveSpeed * cargoSpeedMul(leader, world.balance);
+    world.balance.moveSpeed * unitMoveSpeedMul(leader, world);
   moveToward(leader, leader.moveTarget, leadSpeed, dt, world);
 
   // Leader fire: movement stays player-led; auto-engage nearest threat in weapon
@@ -523,7 +550,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     const intent = decideWingman(world, w, dt);
     w.moveTarget = intent.moveTarget;
     const wingSpeed =
-      world.balance.wingmanSpeed * cargoSpeedMul(w, world.balance);
+      world.balance.wingmanSpeed * unitMoveSpeedMul(w, world);
     moveToward(w, intent.moveTarget, wingSpeed, dt, world);
     if (intent.fireAt) tryFire(world, w, intent.fireAt, false);
     updateSalvage(world, w, intent.trySalvage, dt);
@@ -532,6 +559,9 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   updateEnemies(world, dt);
   updateBullets(world, dt);
   revealVision(world);
+  for (const c of world.containers) {
+    if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
+  }
   updateCamera(world);
   updateBoarding(world);
 }

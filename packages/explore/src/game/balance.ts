@@ -23,7 +23,18 @@ export const BALANCE = {
   bulletSpeed: 320,
   bulletDamage: 12,
   enemyDamage: 8,
+  /**
+   * Soft personal cargo-speed reference (NOT a hard carry cap).
+   * speedMul hits cargoSpeedMulMin around this many carried containers.
+   */
   carrierSlotsPerCraft: 2,
+  /** Soft speed-curve reference (same idea as carrierSlotsPerCraft). */
+  cargoSpeedRefSlots: 2,
+  /**
+   * Informational / handoff ceiling only. Explore does not stop salvage at this
+   * count (MAX carry abolished).
+   */
+  carrierCapacityUnlimited: 9999,
   defaultTimeSec: 180,
   maxBattleReports: 24,
   maxTacticalLog: 40,
@@ -71,10 +82,18 @@ export const BALANCE = {
   scatterSearchDist: 280,
   /**
    * Carried-cargo move slowdown (friendly units).
-   * speedMul = lerp(1, cargoSpeedMulMin, salvagedCount / capacity).
-   * Empty → 1.0; full personal capacity → cargoSpeedMulMin.
+   * speedMul = lerp(1, cargoSpeedMulMin, min(1, salvagedCount / cargoSpeedRefSlots)).
+   * Empty → 1.0; at soft ref slots → cargoSpeedMulMin. No hard carry MAX.
    */
   cargoSpeedMulMin: 0.45,
+  /** Camp aura radius (world units) for combat DR + light-load speed tip. */
+  campAuraRadius: 70,
+  /** Incoming damage mul inside camp aura when stash > 0. */
+  campDamageTakenMul: 0.72,
+  /** Extra move mul when empty-handed inside stocked camp aura. */
+  campLightSpeedMul: 1.08,
+  /** Death-drop / purge crate glow duration (seconds). */
+  deathDropGlowSec: 8,
   /** Initial salvage crates placed on the wreck field (not counting death drops). */
   fieldContainerCount: 20,
   /** Max containers an enemy may drop on death (roll 0..max inclusive). */

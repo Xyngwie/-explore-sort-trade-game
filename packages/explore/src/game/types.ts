@@ -55,6 +55,10 @@ export type Unit = {
   salvageId: string | null;
   salvageT: number;
   salvagedCount: number;
+  /**
+   * Soft personal reference for cargo-speed curve only (not a hard carry cap).
+   * Hard MAX carry was abolished — units may carry any count.
+   */
   capacity: number;
   /** Bound owned-mech instance when I/O v2 ids present. */
   instanceId: string | null;
@@ -66,6 +70,11 @@ export type Container = {
   taken: boolean;
   /** True after any friendly unit has seen it. */
   discovered: boolean;
+  /**
+   * Remaining highlight seconds (death-drop / purge emphasis).
+   * 0 = no special glow. Ticked down during sortie.
+   */
+  glowT: number;
 };
 
 export type Bullet = {
@@ -123,6 +132,10 @@ export type World = {
   bullets: Bullet[];
   logs: LogLine[];
   salvaged: number;
+  /**
+   * Legacy expedition field (shared ExploreResult). Explore no longer enforces
+   * this as a hard MAX — set high / informational for handoff only.
+   */
   carrierCapacity: number;
   ammo: number;
   extracted: boolean;
