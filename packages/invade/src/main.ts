@@ -36,6 +36,14 @@ import {
   persistFrontSession,
   regenerateFrontSession,
 } from "./hub-persist";
+import {
+  ALL_DESTROYED_INTEL,
+  armForcedLockHistory,
+  isForcedCombatLock,
+  markForcedHandoffIntent,
+  resolveForcedBackWipe,
+  withAllDestroyedIntel,
+} from "./forced-combat";
 
 type SectorSel = { sx: number; sy: number };
 
@@ -69,6 +77,8 @@ let lastBoardLog: string | null = initialSession.restored
   : `前線盤生成 — ${BOARD_SPAN}×${BOARD_SPAN} · 敵 ${board.mineCount} · HQ 開放 · seed ${board.seed ?? "—"}`;
 /** Flag-mode: next cell click toggles flag instead of open. */
 let flagMode = false;
+/** History trap armed for current forced-combat lock. */
+let forcedLockHistoryArmed = false;
 
 function saveFrontProgress(): void {
   persistFrontSession(board, selected);
@@ -81,6 +91,108 @@ function tradeBaseUrl(): string {
 function exploreBaseUrl(): string {
   return resolveModuleBaseUrl("explore");
 }
+
+function forcedLockActive(): boolean {
+  return isForcedCombatLock(board);
+}
+
+function armForcedLockIfNeeded(): void {
+  if (!forcedLockActive() || forcedLockHistoryArmed) return;
+  armForcedLockHistory();
+  forcedLockHistoryArmed = true;
+}
+
+function bindForcedHandoffLinks(scope: ParentNode): void {
+  scope.querySelectorAll<HTMLAnchorElement>("a[data-forced-handoff]").forEach((a) => {
+    a.addEventListener("click", () => {
+      markForcedHandoffIntent();
+    });
+  });
+}
+
+/** Under-grid sortie CTAs — sortie from the focused cell without scrolling to handoff card. */
+function cellSortieBarHtml(sel: SectorSel | null): string {
+  if (sel == null) {
+    return `<p class="muted cell-sortie-hint">セルを開く／旗すると、この直下から「この漁場で出撃」できます。</p>`;
+  }
+  const info = sectorDensityAt(sel.sx, sel.sy);
+  if (info.blocked) {
+    return `<p class="muted cell-sortie-hint">壁セルでは出撃できません。</p>`;
+  }
+  const cell = getCell(board, sel.sx, sel.sy);
+  const locked = forcedLockActive();
+
+  const forcedTargets =
+    cell && cell.open && cell.mine
+      ? forcedEngageTargets(board, sel.sx, sel.sy)
+      : [];
+  const forcedPayload =
+    forcedTargets.length > 0
+      ? sectorPayload(sel, { mode: "forced", enemyCells: forcedTargets })
+      : null;
+  const toForced =
+    forcedPayload != null
+      ? buildInvadeToExploreUrl(forcedPayload, exploreBaseUrl())
+      : null;
+
+  if (locked) {
+    if (toForced == null) {
+      return `<div class="cell-sortie-bar locked" role="alert">
+        <p class="warn"><strong>強制戦闘ロック</strong> — 他操作不可。ブラウザ戻る＝全機大破（${ALL_DESTROYED_INTEL}）。</p>
+        <p class="muted">地雷マスを選ぶと「この漁場で強制出撃」が表示されます。</p>
+      </div>`;
+    }
+    return `<div class="cell-sortie-bar locked" role="alert">
+      <p class="warn"><strong>強制戦闘ロック</strong>（地雷踏み）— 解決／ハンドオフまで他操作不可。</p>
+      <p class="muted">ブラウザの戻る＝<strong>全機大破</strong>として格納庫へ渡します。</p>
+      <p class="muted mono">cell (${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}</p>
+      <div class="actions">
+        <a class="btn danger" data-forced-handoff href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で強制出撃</a>
+      </div>
+    </div>`;
+  }
+
+  const raidTargets =
+    cell && cell.flagged && !cell.open
+      ? raidEngageTarget(board, sel.sx, sel.sy)
+      : [];
+  const raidPayload =
+    raidTargets.length > 0
+      ? sectorPayload(sel, { mode: "raid", enemyCells: raidTargets })
+      : null;
+  const toRaid =
+    raidPayload != null
+      ? buildInvadeToExploreUrl(raidPayload, exploreBaseUrl())
+      : null;
+
+  const base = sectorPayload(sel);
+  const toExplore = buildInvadeToExploreUrl(base, exploreBaseUrl());
+
+  if (toRaid != null) {
+    return `<div class="cell-sortie-bar" role="status">
+      <p class="ok"><strong>このセルから出撃</strong>（旗 · engage=raid）</p>
+      <p class="muted mono">(${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(raidTargets))}</p>
+      <div class="actions">
+        <a class="btn" href="${escapeHtml(toRaid)}" target="_top" rel="noopener">この漁場で任意出撃</a>
+        <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
+      </div>
+    </div>`;
+  }
+
+  if (cell && (cell.open || cell.flagged)) {
+    return `<div class="cell-sortie-bar" role="status">
+      <p class="ok"><strong>このセルから出撃</strong>（${sel.sx},${sel.sy}）</p>
+      <div class="actions">
+        <a class="btn" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="cell-sortie-bar" role="status">
+    <p class="muted">セル (${sel.sx},${sel.sy}) を開くか旗を立てると、ここから出撃できます。</p>
+  </div>`;
+}
+
 
 function escapeHtml(s: string): string {
   return s
@@ -140,6 +252,10 @@ function inboundSummaryHtml(): string {
 }
 
 function handoffActionsHtml(sel: SectorSel | null): string {
+  if (forcedLockActive()) {
+    return `<p class="warn">強制戦闘ロック中 — グリッド直下の「この漁場で強制出撃」のみ可。ブラウザ戻る＝全機大破（${ALL_DESTROYED_INTEL}）。</p>
+      <p class="muted">格納庫へ渡す／通常出撃／盤面操作はハンドオフまで禁止。</p>`;
+  }
   if (sel == null) {
     return `<p class="muted">セルを開く／旗／選択すると「この漁場で出撃」（invade→explore）と格納庫リンクが表示されます。</p>`;
   }
@@ -188,7 +304,7 @@ function handoffActionsHtml(sel: SectorSel | null): string {
           <p class="warn"><strong>強制出撃</strong>（地雷踏み · engage=forced）</p>
           <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}（当該＋隣接敵）</p>
           <div class="actions">
-            <a class="btn danger" href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で強制出撃</a>
+            <a class="btn danger" data-forced-handoff href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で強制出撃</a>
           </div>
         </div>`;
     }
@@ -218,7 +334,7 @@ function handoffActionsHtml(sel: SectorSel | null): string {
 
 function statusJa(): string {
   if (board.status === "won") return "前線掃討完了";
-  if (board.status === "hazard") return "接触（hazard・前線は継続可）";
+  if (board.status === "hazard") return "接触（hazard・強制戦闘ロック中）";
   return "偵察中";
 }
 
@@ -278,7 +394,7 @@ function render(): void {
     board.status === "won"
       ? `<div class="banner ok-banner" role="status">前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
       : board.status === "hazard"
-        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。強制出撃リンクで隣接敵ごと explore へ。前線はロックしません。</div>`
+        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。強制戦闘ロック — 強制出撃のみ可。ブラウザ戻る＝全機大破。</div>`
         : "";
 
   root.innerHTML = `
@@ -322,12 +438,13 @@ function render(): void {
           ? `<p class="mono" style="margin-top:0.5rem">${escapeHtml(lastBoardLog)}</p>`
           : ""
       }
-      <div class="grid front-ms" style="--cols:${cols}">${cellsHtml.join("")}</div>
+      <div class="grid front-ms${forcedLockActive() ? " locked" : ""}" style="--cols:${cols}">${cellsHtml.join("")}</div>
+      ${cellSortieBarHtml(selected)}
       <div class="actions">
-        <button type="button" class="btn ${flagMode ? "secondary" : ""}" id="btn-flag-mode">${flagMode ? "旗モード ON" : "旗モード"}</button>
-        <button type="button" class="btn ghost" id="btn-regen" title="保存済みの開いたマス・旗・シードを破棄して新しい盤にします">盤を再生成（進捗リセット）</button>
-        <button type="button" class="btn ghost" id="btn-clear" ${selected == null ? "disabled" : ""}>焦点クリア</button>
-        <button type="button" class="btn ghost" id="btn-skip">スキップ（quick-battle・ナビなし）</button>
+        <button type="button" class="btn ${flagMode ? "secondary" : ""}" id="btn-flag-mode" ${forcedLockActive() ? "disabled" : ""}>${flagMode ? "旗モード ON" : "旗モード"}</button>
+        <button type="button" class="btn ghost" id="btn-regen" title="保存済みの開いたマス・旗・シードを破棄して新しい盤にします" ${forcedLockActive() ? "disabled" : ""}>盤を再生成（進捗リセット）</button>
+        <button type="button" class="btn ghost" id="btn-clear" ${selected == null || forcedLockActive() ? "disabled" : ""}>焦点クリア</button>
+        <button type="button" class="btn ghost" id="btn-skip" ${forcedLockActive() ? "disabled" : ""}>スキップ（quick-battle・ナビなし）</button>
       </div>
       <p class="muted" style="margin-top:0.5rem">開いたマス・旗・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。「盤を再生成」は確認のうえ進捗を消します。</p>
       <p class="ok" style="margin-top:0.5rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
@@ -339,7 +456,11 @@ function render(): void {
     </div>
   `;
 
-  root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
+    armForcedLockIfNeeded();
+  bindForcedHandoffLinks(root);
+
+root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
+    if (forcedLockActive()) return;
     flagMode = !flagMode;
     lastBoardLog = flagMode
       ? "旗モード ON — セルクリックで旗トグル"
@@ -348,6 +469,7 @@ function render(): void {
   });
 
   root.querySelector("#btn-regen")?.addEventListener("click", () => {
+    if (forcedLockActive()) return;
     const ok = window.confirm(
       "盤を再生成すると、保存済みの前線進捗（開いたマス・旗・地雷シード・ルート焦点）が消えます。よろしいですか？",
     );
@@ -358,11 +480,13 @@ function render(): void {
     selected = session.focus;
     skipped = false;
     flagMode = false;
+    forcedLockHistoryArmed = false;
     lastBoardLog = `盤再生成（進捗リセット）— 敵 ${board.mineCount} · HQ 開放 · seed ${board.seed ?? "—"}`;
     render();
   });
 
   root.querySelector("#btn-clear")?.addEventListener("click", () => {
+    if (forcedLockActive()) return;
     selected = { sx: 0, sy: 0 };
     skipped = false;
     lastBoardLog = "ルート焦点を HQ に戻した";
@@ -371,6 +495,7 @@ function render(): void {
   });
 
   root.querySelector("#btn-skip")?.addEventListener("click", () => {
+    if (forcedLockActive()) return;
     selected = null;
     skipped = true;
     flagMode = false;
@@ -387,6 +512,17 @@ function render(): void {
     const onPrimary = () => {
       const cell = getCell(board, sx, sy);
       if (!cell || cell.blocked) return;
+      if (forcedLockActive()) {
+        if (cell.open && cell.mine) {
+          selected = { sx, sy };
+          skipped = false;
+          const n = forcedEngageTargets(board, sx, sy).length;
+          lastBoardLog = `強制出撃対象 (${sx},${sy}) · 敵 ${n} マス（当該＋隣接）`;
+          saveFrontProgress();
+          render();
+        }
+        return;
+      }
 
       // Already open → set route focus only (mine → forced engage UI)
       if (cell.open && !cell.mine) {
@@ -472,6 +608,7 @@ function render(): void {
 
     btn.addEventListener("contextmenu", (ev) => {
       ev.preventDefault();
+      if (forcedLockActive()) return;
       const cell = getCell(board, sx, sy);
       if (!cell || cell.blocked) return;
       const r = toggleFlag(board, sx, sy);
@@ -489,3 +626,20 @@ function render(): void {
 render();
 
 // Silence unused import when tree-shaken oddly in some bundlers
+
+armForcedLockIfNeeded();
+
+window.addEventListener("popstate", () => {
+  if (!forcedLockActive()) return;
+  const focus = selected ?? { sx: 0, sy: 0 };
+  const sector = sectorPayload(focus);
+  sector.intelFlags = withAllDestroyedIntel(sector.intelFlags);
+  const resolved = resolveForcedBackWipe({
+    board,
+    sector,
+    tradeBaseUrl: tradeBaseUrl(),
+  });
+  if (resolved == null) return;
+  lastBoardLog = `ブラウザ戻る → 全機大破（${resolved.wipe.wipedCount}）· 格納庫へ`;
+  window.location.replace(resolved.url);
+});

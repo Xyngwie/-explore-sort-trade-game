@@ -194,3 +194,34 @@ a.btn {
   color: #fff;
 }
 .btn.danger:hover { filter: brightness(1.08); }
+
+/* Cell-local sortie bar (under grid) */
+.cell-sortie-hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+}
+.cell-sortie-bar {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #3d4450;
+  background: #1a2230;
+}
+.cell-sortie-bar .actions {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.cell-sortie-bar.locked {
+  border-color: #f85149;
+  background: #2a1515;
+  box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.25);
+}
+.grid.front-ms.locked {
+  outline: 1px solid #f85149;
+  opacity: 0.92;
+}
+.grid.front-ms.locked button.cell:not(.mine) {
+  cursor: not-allowed;
+}

@@ -849,3 +849,59 @@ function advancePinned(
 
 
 console.log("explore selftest: ok");
+
+// --- forced engage browser-back wipe helper ---
+import {
+  ALL_DESTROYED_INTEL,
+  resolveExploreForcedBackWipe,
+  wipeFleetAndBuildTradeUrl,
+} from "./game/forcedBackWipe";
+import {
+  HUB_SAVE_STORAGE_KEY,
+  INITIAL_HUB,
+  createHubSave,
+  createOwnedMech,
+  deserializeHubSave,
+  normalizeHubSnapshot,
+  serializeHubSave,
+} from "@estg/shared";
+
+{
+  const map = new Map<string, string>();
+  const storage = {
+    get length() { return map.size; },
+    clear() { map.clear(); },
+    getItem(k: string) { return map.has(k) ? map.get(k)! : null; },
+    key(i: number) { return [...map.keys()][i] ?? null; },
+    removeItem(k: string) { map.delete(k); },
+    setItem(k: string, v: string) { map.set(k, String(v)); },
+  } as Storage;
+  const fleet = [createOwnedMech("mech_gen1", { instanceId: "e1", durability: 70 })];
+  storage.setItem(
+    HUB_SAVE_STORAGE_KEY,
+    serializeHubSave(createHubSave(normalizeHubSnapshot({ ...INITIAL_HUB, fleet }))),
+  );
+  const url = wipeFleetAndBuildTradeUrl(
+    { sectorX: 1, sectorY: 2, density: 0.3, intelFlags: [] },
+    "http://localhost:5175/",
+    storage,
+  );
+  assert.ok(url.includes("allDestroyed") || url.includes(ALL_DESTROYED_INTEL));
+  assert.ok(url.includes("returnKind=fail"));
+  const saved = deserializeHubSave(storage.getItem(HUB_SAVE_STORAGE_KEY)!);
+  assert.equal(saved!.hub.fleet[0]!.durability, 0);
+  assert.equal(saved!.hub.fleet[0]!.status, "destroyed");
+
+  const session = {
+    getItem: () => "1",
+    setItem() {},
+    removeItem() {},
+  } as Pick<Storage, "getItem" | "setItem" | "removeItem">;
+  const suppressed = resolveExploreForcedBackWipe({
+    sector: null,
+    session,
+    storage,
+  });
+  assert.equal(suppressed, null);
+  console.log("explore forcedBackWipe helper ok");
+}
