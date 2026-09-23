@@ -146,7 +146,7 @@ function controlsHtml(s: RefineLive): string {
       ? `<p class="hint ok">落下補充中！ 着地済みの下段もスワップ可 — マッチすれば連鎖に加算（アクティブ連鎖 · ×${s.chainCount}）</p>`
       : s.playMode === "clearing"
         ? `<p class="hint ok">マッチ点滅中… 消えたあとゆっくり落下（約0.5秒/行）。落下中もスワップ可（×${s.chainCount}）</p>`
-        : `<p class="hint muted">タップで選択→上下左右の隣をタップ、またはスワイプでスワップ。消えたあと上からゆっくり補充（約0.5秒/行）。着地パネルのスワップがアクティブ連鎖。せり上げ／トップアウトなし。</p>`;
+        : `<p class="hint muted">タップで選択→上下左右の隣をタップ、またはスワイプでスワップ。<strong>idle でマッチしないスワップは即終了</strong>。消えたあと上からゆっくり補充（約0.5秒/行）。落下・点滅中の仕込みスワップは無料。せり上げ／トップアウトなし。</p>`;
   return `
     <div class="controls" aria-label="操作">
       <p class="hint muted" style="margin:0">スマホ: スワイプで隣と入れ替え · <strong>落下補充中</strong>もスワップ可（アクティブ連鎖）</p>
@@ -182,7 +182,7 @@ function render() {
   root.innerHTML = `
     <p class="pill">MODULE 2 · SORT · ZOO KEEPER + ACTIVE CHAIN</p>
     <h1>Athanor 精製（Zoo Keeper）</h1>
-    <p class="muted">コンテナ予算→有効ピースのみで開始。盤は<strong>最初から埋まっている</strong>。パネルを<strong>上下左右</strong>の隣とスワップして 3 つ以上そろえると消去→上から<strong>ゆっくり</strong>落下補充。落下中もスワップして<strong>アクティブ連鎖</strong>を伸ばせる。せり上げ／トップアウトなし。<strong>有効がなくなったらオジャマ（ジャンク）だけが落ちて盤を埋める</strong>（マッチ不可）。</p>
+    <p class="muted">コンテナ予算→有効ピースのみで開始。盤は<strong>最初から埋まっている</strong>。パネルを<strong>上下左右</strong>の隣とスワップして 3 つ以上そろえると消去→上から<strong>ゆっくり</strong>落下補充。落下中もスワップして<strong>アクティブ連鎖</strong>を伸ばせる。<strong>idle（連鎖外）でマッチしないスワップは即終了</strong>（残りを無限に並べ替えない）。せり上げ／トップアウトなし。<strong>有効がなくなったらオジャマ（ジャンク）だけが落ちて盤を埋める</strong>（マッチ不可）。</p>
 
     <div class="card">
       <div class="muted">${escapeHtml(state.note)}</div>
@@ -212,7 +212,7 @@ function render() {
     ${
       state.phase === "briefing"
         ? `<div class="card">
-            <p>配合フェーズなし。<strong>盤面は開始時に埋まっています</strong>（Zoo Keeper）。パネルを<strong>上下左右の隣とスワップ</strong>して同色を縦・横に 3 つ以上そろえると消去→上から<strong>ゆっくり落下補充</strong>。<strong>穴が埋まりきるまえ</strong>もスワップでき、それが<strong>アクティブ連鎖</strong>です。せり上げ圧・トップアウトはありません。最初は有効ピースのみ。<strong>有効がなくなったらオジャマだけが落ちて埋めます</strong>（マッチしません）。短いデモ予算なら下の「コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ」を使うと長時間遊べます。</p>
+            <p>配合フェーズなし。<strong>盤面は開始時に埋まっています</strong>（Zoo Keeper）。パネルを<strong>上下左右の隣とスワップ</strong>して同色を縦・横に 3 つ以上そろえると消去→上から<strong>ゆっくり落下補充</strong>。<strong>穴が埋まりきるまえ</strong>もスワップでき、それが<strong>アクティブ連鎖</strong>です。<strong>idle でマッチしないスワップは即終了</strong>（残り並べ替えの無限ループ防止）。せり上げ圧・トップアウトはありません。最初は有効ピースのみ。<strong>有効がなくなったらオジャマだけが落ちて埋めます</strong>（マッチしません）。短いデモ予算なら下の「コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ」を使うと長時間遊べます。</p>
             <div class="row">
               <button type="button" id="btn-start">精製開始</button>
               <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
