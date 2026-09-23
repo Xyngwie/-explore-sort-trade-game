@@ -278,3 +278,22 @@ a.btn.deploy-cta {
 a.btn.deploy-cta:hover {
   filter: brightness(1.08);
 }
+
+
+/* Effect digit contribution breakdown */
+.effect-breakdown {
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+  line-height: 1.35;
+}
+
+/* Compact next-sortie CTAs: 戦線 / 探索 / 修復 / 仕分 */
+.sortie-actions-tight {
+  gap: 0.4rem;
+}
+.sortie-actions-tight .btn,
+.sortie-actions-tight button {
+  min-width: 4.25rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+}

@@ -321,6 +321,22 @@ export function circuitDigitEffectContribution(
   return digit;
 }
 
+/** One satisfied digit cell and its contribution to 効果値. */
+export type CircuitEffectDigitContribution = {
+  /** Cell column (0-based). */
+  x: number;
+  /** Cell row (0-based). */
+  y: number;
+  /** Clue digit on the cell. */
+  digit: number;
+  /**
+   * Credits toward effect from this cell.
+   * 0 when satisfied but not on the active (smallest) loop,
+   * or digit 0 on a non-perfect board.
+   */
+  contribution: number;
+};
+
 export type CircuitEffectBreakdown = {
   /** Final effect value (0 when no loop). */
   effect: number;
@@ -334,6 +350,12 @@ export type CircuitEffectBreakdown = {
   digits: CircuitDigitStats;
   /** Satisfied zeros that counted as 4 (only when perfect). */
   zeroBonusApplied: number;
+  /**
+   * Per satisfied digit cell: how much it adds to 効果値
+   * (same scorer / smallest-loop rules). Includes 0-contribution cells
+   * that are satisfied but inactive (other loop / non-perfect 0).
+   */
+  contributions: readonly CircuitEffectDigitContribution[];
 };
 
 export type ComputeCircuitEffectInput = {
@@ -382,6 +404,7 @@ export function computeCircuitEffectValue(
 
   let rawSum = 0;
   let zeroBonusApplied = 0;
+  const contributions: CircuitEffectDigitContribution[] = [];
   if (activeEdges) {
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
@@ -392,16 +415,23 @@ export function computeCircuitEffectValue(
         if (c === 0) {
           // 0-cells never touch line edges; keep board-wide 0→4 on perfect
           // single-loop circuits only (perfect implies singleLoop or flag).
-          if (!perfect) continue;
+          if (!perfect) {
+            contributions.push({ x, y, digit: 0, contribution: 0 });
+            continue;
+          }
           rawSum += 4;
           zeroBonusApplied += 4;
+          contributions.push({ x, y, digit: 0, contribution: 4 });
           continue;
         }
 
         if (!circuitDigitTouchesLoop(marks, cols, rows, x, y, activeEdges)) {
+          contributions.push({ x, y, digit: c, contribution: 0 });
           continue;
         }
-        rawSum += circuitDigitEffectContribution(c, perfect);
+        const add = circuitDigitEffectContribution(c, perfect);
+        rawSum += add;
+        contributions.push({ x, y, digit: c, contribution: add });
       }
     }
   }
@@ -416,6 +446,7 @@ export function computeCircuitEffectValue(
     perfect,
     digits,
     zeroBonusApplied,
+    contributions,
   };
 }
 
@@ -433,4 +464,64 @@ export function formatCircuitEffectJa(
         ? " · Perfect"
         : "";
   return `効果 ${breakdown.effect}${zeroNote}`;
+}
+
+/** Group satisfied-digit contributions by digit value (display helper). */
+export type CircuitEffectDigitGroup = {
+  digit: number;
+  /** How many satisfied cells with this digit contribute (>0). */
+  count: number;
+  /** Sum of contributions from those cells. */
+  total: number;
+  /** Per-cell unit contribution (digit, or 4 for perfect 0). */
+  unit: number;
+};
+
+/**
+ * Aggregate {@link CircuitEffectBreakdown.contributions} by digit for UI.
+ * Only cells with contribution > 0 are included. Digits sorted ascending.
+ */
+export function groupCircuitEffectContributions(
+  breakdown: CircuitEffectBreakdown,
+): CircuitEffectDigitGroup[] {
+  const map = new Map<number, CircuitEffectDigitGroup>();
+  for (const c of breakdown.contributions) {
+    if (c.contribution <= 0) continue;
+    const g = map.get(c.digit);
+    if (g) {
+      g.count += 1;
+      g.total += c.contribution;
+    } else {
+      map.set(c.digit, {
+        digit: c.digit,
+        count: 1,
+        total: c.contribution,
+        unit: c.contribution,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.digit - b.digit);
+}
+
+/**
+ * Japanese breakdown line for hub UI, e.g.
+ * `内訳 2×4(+8)` or `内訳 0→4×1(+4) · 2×2(+4)` or `内訳なし（ループなし）`.
+ */
+export function formatCircuitEffectBreakdownJa(
+  breakdown: CircuitEffectBreakdown,
+): string {
+  if (!breakdown.hasLoop) {
+    return "内訳なし（ループなし）";
+  }
+  const groups = groupCircuitEffectContributions(breakdown);
+  if (groups.length === 0) {
+    return "内訳なし（充足寄与 0）";
+  }
+  const parts = groups.map((g) => {
+    if (g.digit === 0) {
+      return `0→4×${g.count}(+${g.total})`;
+    }
+    return `${g.digit}×${g.count}(+${g.total})`;
+  });
+  return `内訳 ${parts.join(" · ")}`;
 }

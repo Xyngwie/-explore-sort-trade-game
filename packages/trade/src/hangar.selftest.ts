@@ -61,6 +61,8 @@ import {
   formatIntelFlagJa,
   formatInvadeIntelBrief,
   formatCircuitHubBrief,
+  formatCircuitEffectBreakdownJa,
+  groupCircuitEffectContributions,
   sellCircuit,
   circuitSellPriceCredits,
   CIRCUIT_SELL_BASE_CREDITS,
@@ -845,6 +847,86 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(ingested.state.hub.materials, mats0, "no false refine materials");
   assert.deepEqual(ingested.state.hub.inventory, inv0);
   assert.ok(ingested.state.log.some((l) => l.includes("未開封コンテナ預け +4")));
+}
+
+
+// --- circuit effect breakdown display helpers (UI math) ---
+{
+  const empty = formatCircuitHubBrief([]);
+  assert.equal(empty.lines.length, 0);
+  assert.ok(empty.summaryJa.includes("回路"));
+
+  const seeded = loadPlaytestSeed(createInitialHangar());
+  const brief = formatCircuitHubBrief(seeded.hub.circuits, seeded.lastCircuit);
+  assert.ok(brief.lines.length >= 1);
+  for (const line of brief.lines) {
+    assert.ok(typeof line.effectBreakdownJa === "string");
+    assert.ok(
+      line.effectBreakdownJa.includes("内訳"),
+      `expected 内訳 in ${line.effectBreakdownJa}`,
+    );
+  }
+  const withEffect = brief.lines.find((l) => l.effect > 0);
+  if (withEffect) {
+    // Contributing digits should appear as N×count(+total)
+    assert.ok(
+      /\d+×\d+\(\+\d+\)/.test(withEffect.effectBreakdownJa) ||
+        withEffect.effectBreakdownJa.includes("0→4"),
+      withEffect.effectBreakdownJa,
+    );
+  }
+
+  // Direct formatter smoke via hangar re-exports
+  const groups = groupCircuitEffectContributions({
+    effect: 8,
+    rawSum: 8,
+    loopCount: 1,
+    hasLoop: true,
+    activeLoopEdgeCount: 8,
+    perfect: true,
+    digits: { clueCount: 4, satisfied: 4, satisfiedZeros: 0, rate: 1 },
+    zeroBonusApplied: 0,
+    contributions: [
+      { x: 0, y: 0, digit: 2, contribution: 2 },
+      { x: 1, y: 0, digit: 2, contribution: 2 },
+      { x: 0, y: 1, digit: 2, contribution: 2 },
+      { x: 1, y: 1, digit: 2, contribution: 2 },
+    ],
+  });
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0]!.digit, 2);
+  assert.equal(groups[0]!.count, 4);
+  assert.equal(groups[0]!.total, 8);
+  const ja = formatCircuitEffectBreakdownJa({
+    effect: 8,
+    rawSum: 8,
+    loopCount: 1,
+    hasLoop: true,
+    activeLoopEdgeCount: 8,
+    perfect: true,
+    digits: { clueCount: 4, satisfied: 4, satisfiedZeros: 0, rate: 1 },
+    zeroBonusApplied: 0,
+    contributions: [
+      { x: 0, y: 0, digit: 2, contribution: 2 },
+      { x: 1, y: 0, digit: 2, contribution: 2 },
+      { x: 0, y: 1, digit: 2, contribution: 2 },
+      { x: 1, y: 1, digit: 2, contribution: 2 },
+    ],
+  });
+  assert.equal(ja, "内訳 2×4(+8)");
+  assert.ok(
+    formatCircuitEffectBreakdownJa({
+      effect: 0,
+      rawSum: 0,
+      loopCount: 0,
+      hasLoop: false,
+      activeLoopEdgeCount: 0,
+      perfect: false,
+      digits: { clueCount: 0, satisfied: 0, satisfiedZeros: 0, rate: 1 },
+      zeroBonusApplied: 0,
+      contributions: [],
+    }).includes("ループなし"),
+  );
 }
 
 console.log("trade hangar selftest: ok");
