@@ -34,6 +34,10 @@ import {
 } from "./refine";
 import { PIECES_PER_CONTAINER } from "@estg/shared";
 import { yieldBagFromClearedCounts } from "@estg/shared";
+import {
+  buildResultRibbonHtml,
+  resolveRestartState,
+} from "./resultOverlay";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -1035,6 +1039,40 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(moved.includes(idx(cols, 1, 0)), "food fall destination marked");
   assert(moved.includes(idx(cols, 2, 1)), "energy fall destination marked");
   assert(!moved.includes(idx(cols, 0, 0)), "vacated cell not marked (empty)");
+}
+
+// Result ribbon overlay markup + restart session source
+{
+  const html = buildResultRibbonHtml(
+    "http://localhost:5175/?importMaterials=1&yieldFood=2",
+  );
+  assert(html.includes("仕分完了！"), "ribbon title");
+  assert(html.includes("格納庫へ"), "hangar CTA label");
+  assert(html.includes("もう一度"), "replay CTA label");
+  assert(html.includes('id="btn-hangar"'), "hangar button id");
+  assert(html.includes('id="btn-again"'), "again button id");
+  assert(html.includes("result-ribbon"), "ribbon class");
+  assert(
+    html.includes("http://localhost:5175/?importMaterials=1&amp;yieldFood=2"),
+    "handoff URL escaped in href",
+  );
+
+  const demoSearch =
+    "?salvagedContainers=2&totalStockPieces=50&isExtracted=1";
+  const fromLoc = resolveRestartState("location", demoSearch);
+  assert(fromLoc.phase === "briefing", "location restart → briefing");
+  assert(fromLoc.inbound.salvagedContainers === 2, "location keeps handoff cans");
+
+  const fromTest = resolveRestartState("test-play", demoSearch);
+  assert(fromTest.phase === "briefing", "test-play restart → briefing");
+  assert(
+    fromTest.inbound.salvagedContainers === TEST_PLAY_CONTAINERS,
+    "test-play restart keeps 100 cans even if URL is demo",
+  );
+  assert(
+    fromTest.note.includes("テストプレイ"),
+    "test-play restart note",
+  );
 }
 
 console.log("sort refine.selftest: ok");

@@ -29,6 +29,11 @@ import {
   type PieceKind,
   type RefineLive,
 } from "./refine";
+import {
+  buildResultRibbonHtml,
+  resolveRestartState,
+  type SessionSource,
+} from "./resultOverlay";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 let state: RefineLive = createRefineFromLocationSearch(window.location.search);
@@ -37,6 +42,8 @@ let chainTimer: ReturnType<typeof setTimeout> | null = null;
 let fallInIndices: Set<number> = new Set();
 /** Suppress the synthetic click that follows a successful touch/pen swipe. */
 let suppressCellClick = false;
+/** Session start source — used by 「もう一度」 to keep test-play budget. */
+let sessionSource: SessionSource = "location";
 
 function tradeBaseUrl(): string {
   return resolveModuleBaseUrl("trade");
@@ -252,24 +259,23 @@ function render() {
 
     ${
       state.phase === "result" && result
-        ? `<div class="card">
-            <p class="ok">精製結果</p>
-            <table>
-              <tr><td>yieldFood</td><td>${result.yieldFood}</td></tr>
-              <tr><td>yieldMaterial</td><td>${result.yieldMaterial}</td></tr>
-              <tr><td>yieldEnergy</td><td>${result.yieldEnergy}</td></tr>
-              <tr><td>scrapLossCount</td><td>${result.scrapLossCount}</td></tr>
-              <tr><td>craftMultiplier</td><td>${result.craftMultiplier.toFixed(3)}</td></tr>
-              <tr><td>importMaterials</td><td>${importMats}</td></tr>
-              <tr><td>lastChain</td><td>×${state.lastChain}</td></tr>
-            </table>
-            <h2 class="sub">YieldBag</h2>
-            <table>${yieldBagRows(result.yieldBag ?? {})}</table>
-            <div class="row">
-              <a class="btn" href="${escapeHtml(handoffUrl)}" target="_top" rel="noopener">格納庫へ渡す</a>
-              <button type="button" class="secondary" id="btn-again">もう一度</button>
+        ? `<div class="result-stage">
+            ${buildResultRibbonHtml(handoffUrl)}
+            <div class="card result-summary">
+              <p class="ok">精製結果</p>
+              <table>
+                <tr><td>yieldFood</td><td>${result.yieldFood}</td></tr>
+                <tr><td>yieldMaterial</td><td>${result.yieldMaterial}</td></tr>
+                <tr><td>yieldEnergy</td><td>${result.yieldEnergy}</td></tr>
+                <tr><td>scrapLossCount</td><td>${result.scrapLossCount}</td></tr>
+                <tr><td>craftMultiplier</td><td>${result.craftMultiplier.toFixed(3)}</td></tr>
+                <tr><td>importMaterials</td><td>${importMats}</td></tr>
+                <tr><td>lastChain</td><td>×${state.lastChain}</td></tr>
+              </table>
+              <h2 class="sub">YieldBag</h2>
+              <table>${yieldBagRows(result.yieldBag ?? {})}</table>
+              <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(handoffUrl)}</p>
             </div>
-            <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(handoffUrl)}</p>
           </div>`
         : ""
     }
@@ -281,6 +287,7 @@ function render() {
   document.getElementById("btn-test-play")?.addEventListener("click", () => {
     clearChainTimer();
     // Dedicated long demo — does not alter explore handoff query defaults.
+    sessionSource = "test-play";
     setState(startRefine(createTestPlayRefine(TEST_PLAY_CONTAINERS)));
   });
   document.getElementById("btn-finish")?.addEventListener("click", () => {
@@ -289,7 +296,7 @@ function render() {
   });
   document.getElementById("btn-again")?.addEventListener("click", () => {
     clearChainTimer();
-    setState(createRefineFromLocationSearch(window.location.search));
+    setState(resolveRestartState(sessionSource, window.location.search));
   });
   root.querySelectorAll<HTMLButtonElement>("button.cell[data-idx]").forEach((btn) => {
     btn.addEventListener("click", (e) => {

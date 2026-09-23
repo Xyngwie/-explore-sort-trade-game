@@ -48,8 +48,9 @@
          · 穴が埋まりきると再マッチ判定 → 自然連鎖
          · 有効袋が空になったら以降はジャンクのみ落下（マッチしない／重力では落ちる）
          · idle でマッチしないスワップ → 即終了（連鎖中の仕込みスワップは対象外）
-  → result: yield* + YieldBag + importMaterials
-  → 「格納庫へ渡す」= buildSortToTradeUrlFromResult（localhost 時は :5175）
+  → result: 中央リボン「仕分完了！」＋ CTA（格納庫へ / もう一度）＋ yield* 要約
+  → 「格納庫へ」= buildSortToTradeUrlFromResult（localhost 時は :5175）
+  → 「もう一度」= 同一セッション再開始（テストプレイ100なら予算維持／それ以外は現行クエリ）
 ```
 
 ---
