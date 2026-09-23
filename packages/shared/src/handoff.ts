@@ -52,6 +52,11 @@ export type SortToTradePayload = {
   craftMultiplier: number;
   /** Yield v2: typed bag (omit for v1-compatible handoff). */
   yieldBag?: YieldBag;
+  /**
+   * Sort skip-with-cargo: deposit inbound containers into Hub 未開封 stock.
+   * Additive — omit / 0 → no stock change. Zero-yield handoff otherwise.
+   */
+  depositUnopenedContainers?: number;
 };
 
 /**
@@ -285,6 +290,13 @@ export function buildSortToTradeUrl(
     const encoded = encodeYieldBagCompact(payload.yieldBag);
     if (encoded) u.searchParams.set("yieldBag", encoded);
   }
+  const deposit = Math.max(
+    0,
+    Math.floor(Number(payload.depositUnopenedContainers) || 0),
+  );
+  if (deposit > 0) {
+    u.searchParams.set("depositUnopenedContainers", String(deposit));
+  }
   return u.toString();
 }
 
@@ -346,7 +358,8 @@ export function parseSortToTradeSearch(
   if (
     !p.has("importMaterials") &&
     !p.has("craftMultiplier") &&
-    !p.has("yieldBag")
+    !p.has("yieldBag") &&
+    !p.has("depositUnopenedContainers")
   ) {
     return null;
   }
@@ -357,6 +370,10 @@ export function parseSortToTradeSearch(
   const bag = parseYieldBagCompact(p.get("yieldBag"));
   if (Object.keys(bag).length > 0) {
     payload.yieldBag = bag;
+  }
+  if (p.has("depositUnopenedContainers")) {
+    const deposit = parseNonNegInt(p.get("depositUnopenedContainers"), 0);
+    if (deposit > 0) payload.depositUnopenedContainers = deposit;
   }
   return payload;
 }

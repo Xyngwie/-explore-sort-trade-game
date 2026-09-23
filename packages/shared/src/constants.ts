@@ -58,6 +58,9 @@ export function resolveModuleBaseUrl(
 
 export const PIECES_PER_CONTAINER = 25;
 
+/** Hub purchase price for one 未開封コンテナ (provisional / 仮). */
+export const UNOPENED_CONTAINER_PRICE_CREDITS = 15;
+
 export const HUB_SAVE_STORAGE_KEY = "wreckline.hubSave.v1";
 
 /** Hangar craft signature (署名) — engraved as circuit lastEditorName. */
@@ -65,7 +68,7 @@ export const CRAFT_SIGNATURE_STORAGE_KEY = "wreckline.craftSignature.v0";
 
 export const HANDOFF_QUERY_KEYS = {
   exploreToSort: ["salvagedContainers", "totalStockPieces", "isExtracted", "craftMultiplier", "circuitBonuses"] as const,
-  sortToTrade: ["importMaterials", "craftMultiplier", "yieldBag"] as const,
+  sortToTrade: ["importMaterials", "craftMultiplier", "yieldBag", "depositUnopenedContainers"] as const,
   tradeToExplore: [
     "deployableMechs",
     "startingAmmo",

@@ -59,6 +59,9 @@ import {
   buildNextSortieReturnDigest,
   formatInvadeIntelBrief,
   formatCircuitHubBrief,
+  buyUnopenedContainers,
+  launchSortFromUnopened,
+  UNOPENED_CONTAINER_PRICE_CREDITS,
   type HangarState,
 } from "./hangar";
 
@@ -279,6 +282,47 @@ function circuitRows(s: HangarState): string {
     </tbody>
   </table>`;
 }
+
+function unopenedPanel(s: HangarState): string {
+  const stock = Math.max(0, Math.floor(s.hub.unopenedContainers ?? 0));
+  const unit = UNOPENED_CONTAINER_PRICE_CREDITS;
+  const credits = Math.floor(Number(s.hub.credits) || 0);
+  const maxAfford = Math.floor(credits / unit);
+  const buyDisabled = maxAfford < 1;
+  const sortDisabled = stock < 1;
+  return `
+    <div class="card" id="unopened-panel">
+      <h2 style="font-size:1rem;margin:0 0 0.5rem">未開封コンテナ</h2>
+      <p class="muted" style="margin:0 0 0.5rem;font-size:0.75rem">探索を経由せず仕分（Module 2）へ送れる在庫。スキップ預け / 購入（仮 ${unit}c/個）。</p>
+      <div class="stat-pills" style="margin-bottom:0.5rem">
+        <span class="stat-pill"><span class="stat-k">在庫</span> ${stock}</span>
+        <span class="stat-pill muted"><span class="stat-k">単価</span> ${unit}c</span>
+      </div>
+      <div class="row" style="align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">
+        <label class="muted" for="input-buy-unopened">購入数</label>
+        <input type="number" id="input-buy-unopened" min="1" step="1" value="1" ${buyDisabled ? "disabled" : ""} style="width:4.5rem" />
+        <button type="button" id="btn-buy-unopened" ${buyDisabled ? "disabled" : ""} title="クレジット不足時は無効">購入（${unit}c×数量）</button>
+        <span class="muted mono" id="buy-unopened-total">合計 ${unit}c</span>
+      </div>
+      <div class="row" style="align-items:center;flex-wrap:wrap;gap:0.5rem">
+        <label class="muted" for="input-sort-unopened">仕分数</label>
+        <input type="number" id="input-sort-unopened" min="1" max="${Math.max(1, stock)}" step="1" value="${stock > 0 ? stock : 1}" ${sortDisabled ? "disabled" : ""} style="width:4.5rem" />
+        <button type="button" id="btn-sort-unopened" ${sortDisabled ? "disabled" : ""} title="在庫から仕分へ出庫（Explore なし）">仕分へ送る</button>
+      </div>
+      ${
+        buyDisabled
+          ? `<p class="muted" style="margin-top:0.5rem;font-size:0.75rem">購入不可（要 ${unit}c 以上）</p>`
+          : ""
+      }
+      ${
+        sortDisabled
+          ? `<p class="muted" style="margin-top:0.35rem;font-size:0.75rem">仕分出庫できる未開封がありません</p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 function nextSortiePanel(s: HangarState): string {
   const ready = buildNextSortieReadiness(s);
   const digest = buildNextSortieReturnDigest(s);
@@ -414,6 +458,7 @@ function render() {
         <span class="stat-pill"><span class="stat-k">資材</span> ${state.hub.materials}</span>
         <span class="stat-pill"><span class="stat-k">弾薬</span> ${ammoTotal}</span>
         <span class="stat-pill"><span class="stat-k">艦隊</span> ${ready.total}/3</span>
+        <span class="stat-pill"><span class="stat-k">未開封</span> ${Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0))}</span>
         <span class="stat-pill muted"><span class="stat-k">搬入</span> ${state.hub.importedMaterials}</span>
       </div>
       <div class="row">
@@ -432,6 +477,7 @@ function render() {
       </details>
     </div>
 
+    ${unopenedPanel(state)}
 
     <div class="card">
       <div class="sortie-head">
@@ -530,6 +576,43 @@ function render() {
   });
   document.getElementById("btn-select-all")?.addEventListener("click", () => {
     state = selectAllDeployable(state);
+    render();
+  });
+  const buyQtyInput = document.getElementById(
+    "input-buy-unopened",
+  ) as HTMLInputElement | null;
+  const buyTotalEl = document.getElementById("buy-unopened-total");
+  const syncBuyTotal = () => {
+    if (!buyTotalEl || !buyQtyInput) return;
+    const q = Math.max(1, Math.floor(Number(buyQtyInput.value) || 1));
+    buyQtyInput.value = String(q);
+    const total = q * UNOPENED_CONTAINER_PRICE_CREDITS;
+    buyTotalEl.textContent = `合計 ${total}c`;
+    const btn = document.getElementById(
+      "btn-buy-unopened",
+    ) as HTMLButtonElement | null;
+    if (btn) {
+      btn.disabled = state.hub.credits < total;
+    }
+  };
+  buyQtyInput?.addEventListener("input", syncBuyTotal);
+  syncBuyTotal();
+  document.getElementById("btn-buy-unopened")?.addEventListener("click", () => {
+    const q = Math.max(1, Math.floor(Number(buyQtyInput?.value) || 1));
+    state = buyUnopenedContainers(state, q);
+    render();
+  });
+  document.getElementById("btn-sort-unopened")?.addEventListener("click", () => {
+    const input = document.getElementById(
+      "input-sort-unopened",
+    ) as HTMLInputElement | null;
+    const q = Math.max(1, Math.floor(Number(input?.value) || 1));
+    const launched = launchSortFromUnopened(state, q);
+    state = launched.state;
+    if (launched.url) {
+      window.location.assign(launched.url);
+      return;
+    }
     render();
   });
   document.getElementById("link-deploy")?.addEventListener("click", () => {

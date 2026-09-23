@@ -38,9 +38,14 @@ import {
   clearHubSaveFromLocalStorage,
   createOwnedMech,
   filterToDeployableIds,
+  UNOPENED_CONTAINER_PRICE_CREDITS,
+  PIECES_PER_CONTAINER,
+  addUnopenedContainers,
+  buildExploreToSortUrl,
   importMaterialsIntoHub,
   importYieldBagIntoHub,
   isCircuitLocked,
+  spendUnopenedContainers,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   parseExploreToHubWearSearch,
@@ -426,6 +431,16 @@ export function ingestLocationSearch(
         .map(([k, v]) => `${k}:${v}`)
         .join(", ");
       log = pushLog(log, `搬入 yieldBag ${keys}`);
+      consumed = true;
+    }
+    const deposit = Math.max(
+      0,
+      Math.floor(Number(sort.depositUnopenedContainers) || 0),
+    );
+    if (deposit > 0) {
+      hub = addUnopenedContainers(hub, deposit);
+      log = pushLog(log, `未開封コンテナ預け +${deposit}`);
+      notices.push(`未開封コンテナ +${deposit}`);
       consumed = true;
     }
   }
@@ -1257,6 +1272,102 @@ export function sellRareItem(
   };
   return persistHangar(next);
 }
+
+/**
+ * Buy unopened containers on HUB at {@link UNOPENED_CONTAINER_PRICE_CREDITS} each (仮).
+ * Deducts credits and adds `hub.unopenedContainers`.
+ */
+export function buyUnopenedContainers(
+  state: HangarState,
+  qty = 1,
+): HangarState {
+  const n = Math.max(1, Math.floor(qty));
+  const unit = UNOPENED_CONTAINER_PRICE_CREDITS;
+  const cost = unit * n;
+  const credits = Math.floor(Number(state.hub.credits) || 0);
+  if (credits < cost) {
+    return {
+      ...state,
+      notice: `クレジット不足（要 ${cost}c / 持 ${credits}c · 未開封 ${unit}c×${n}）`,
+    };
+  }
+  const hub = addUnopenedContainers(
+    normalizeHubSnapshot({
+      ...state.hub,
+      credits: credits - cost,
+    }),
+    n,
+  );
+  const next: HangarState = {
+    ...state,
+    hub,
+    log: pushLog(state.log, `未開封購入 ×${n} → −${cost}c（仮 ${unit}c）`),
+    notice: `未開封コンテナ +${n}（−${cost}c）`,
+  };
+  return persistHangar(next);
+}
+
+/**
+ * Build explore→sort URL from unopened stock (does not mutate state).
+ * Matches explore→sort contract: salvagedContainers / totalStockPieces / isExtracted.
+ * Preserves hub craftMultiplier when > 1; otherwise omits (sort defaults 1).
+ */
+export function buildSortFromUnopenedUrl(
+  state: HangarState,
+  qty: number,
+): string | null {
+  const n = Math.max(1, Math.floor(qty));
+  const have = Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0));
+  if (have < n) return null;
+  const craft = hubCircuitBonuses(state.hub).craftMultiplier;
+  return buildExploreToSortUrl(
+    {
+      salvagedContainers: n,
+      totalStockPieces: n * PIECES_PER_CONTAINER,
+      isExtracted: true,
+      ...(craft > 1 ? { craftMultiplier: craft } : {}),
+    },
+    resolveModuleBaseUrl("sort"),
+  );
+}
+
+/**
+ * Spend unopened stock then return Sort launch URL (HubSave persist).
+ * On insufficient stock / bad qty: notice only, no URL.
+ */
+export function launchSortFromUnopened(
+  state: HangarState,
+  qty = 1,
+): { state: HangarState; url: string | null } {
+  const n = Math.max(1, Math.floor(qty));
+  const url = buildSortFromUnopenedUrl(state, n);
+  if (!url) {
+    const have = Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0));
+    return {
+      state: {
+        ...state,
+        notice: `未開封不足（要 ${n} / 持 ${have}）`,
+      },
+      url: null,
+    };
+  }
+  const spent = spendUnopenedContainers(state.hub, n);
+  if (!spent) {
+    return {
+      state: { ...state, notice: `未開封不足（要 ${n}）` },
+      url: null,
+    };
+  }
+  const next: HangarState = {
+    ...state,
+    hub: spent,
+    log: pushLog(state.log, `未開封→仕分 出庫 ×${n}`),
+    notice: `仕分へ出庫 未開封 ×${n}`,
+  };
+  return { state: persistHangar(next), url };
+}
+
+export { UNOPENED_CONTAINER_PRICE_CREDITS };
 
 /**
  * Sell one HubSave circuit: price = {@link CIRCUIT_SELL_BASE_CREDITS} +

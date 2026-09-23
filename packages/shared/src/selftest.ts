@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildExploreToSortUrl,
   parseExploreToSortSearch,
+  buildSortToTradeUrl,
   buildSortToTradeUrlFromResult,
   parseSortToTradeSearch,
   wingmanCountFromMechs,
@@ -32,6 +33,7 @@ import {
   LOCAL_DEV_MODULE_URLS,
   MODULE_URLS,
   HANDOFF_QUERY_KEYS,
+  UNOPENED_CONTAINER_PRICE_CREDITS,
 } from "./constants";
 import {
   createHubSave,
@@ -44,6 +46,9 @@ import {
   setFrontProgressInHub,
   clearFrontProgressInHub,
   clearFrontProgressHitMine,
+  addUnopenedContainers,
+  spendUnopenedContainers,
+  clampUnopenedContainers,
   INITIAL_HUB,
   HUB_LIMITS,
 } from "./hub-save";
@@ -882,6 +887,62 @@ console.log("shared selftest: sector-density + circuit-board ok");
 }
 
 console.log("shared hub-circuits selftest: ok");
+
+// --- hub unopenedContainers (HubSave v2 additive) ---
+{
+  assert.equal(UNOPENED_CONTAINER_PRICE_CREDITS, 15);
+  assert.equal(INITIAL_HUB.unopenedContainers, 0);
+  assert.equal(clampUnopenedContainers(-3), 0);
+  assert.equal(clampUnopenedContainers(2.9), 2);
+
+  let hub = addUnopenedContainers(INITIAL_HUB, 3);
+  assert.equal(hub.unopenedContainers, 3);
+  hub = addUnopenedContainers(hub, 0);
+  assert.equal(hub.unopenedContainers, 3);
+  const spent = spendUnopenedContainers(hub, 2);
+  assert.ok(spent);
+  assert.equal(spent!.unopenedContainers, 1);
+  assert.equal(spendUnopenedContainers(hub, 99), null, "no partial spend");
+
+  const legacy = parseHubSave({
+    v: 2,
+    savedAt: "2026-09-01T00:00:00.000Z",
+    hub: {
+      credits: 10,
+      materials: 0,
+      fleet: [],
+      ammoLoad: { ammo_standard: 0, ammo_ap: 0, ammo_hp: 0 },
+      importedMaterials: 0,
+      selectedMechId: "mech_gen1",
+      selectedAmmoId: "ammo_standard",
+    },
+  });
+  assert.ok(legacy);
+  assert.equal(legacy!.hub.unopenedContainers, 0, "migrate missing → 0");
+
+  const withStock = createHubSave(addUnopenedContainers(INITIAL_HUB, 4));
+  assert.equal(parseHubSave(withStock)?.hub.unopenedContainers, 4);
+
+  const depositUrl = buildSortToTradeUrl(
+    {
+      importMaterials: 0,
+      craftMultiplier: 1,
+      depositUnopenedContainers: 5,
+    },
+    "http://localhost:5175/",
+  );
+  const depositParsed = parseSortToTradeSearch(new URL(depositUrl).search);
+  assert.equal(depositParsed?.depositUnopenedContainers, 5);
+  assert.equal(depositParsed?.importMaterials, 0);
+  assert.ok(
+    (HANDOFF_QUERY_KEYS.sortToTrade as readonly string[]).includes(
+      "depositUnopenedContainers",
+    ),
+  );
+}
+
+console.log("shared hub-unopened selftest: ok");
+
 
 // --- circuit authorship + Perfect lock (additive) ---
 {

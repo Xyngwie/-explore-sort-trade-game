@@ -41,14 +41,18 @@ import {
 import { PIECES_PER_CONTAINER } from "@estg/shared";
 import { yieldBagFromClearedCounts } from "@estg/shared";
 import {
+  buildCargoSkipHubCtaHtml,
+  buildCargoSkipToHubUrl,
   buildEmptySkipHubCtaHtml,
   buildEmptySkipToHubUrl,
   buildResultRibbonHtml,
   buildResultYieldCompactHtml,
+  canSkipWithCargo,
   isEmptyCargoEntry,
   resolveRestartState,
   toStagePhase,
 } from "./resultOverlay";
+import { parseSortToTradeSearch } from "@estg/shared";
 import {
   buildBriefingBagDifficultyHtml,
   buildPlayHudHtml,
@@ -1357,7 +1361,48 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     "?salvagedContainers=2&totalStockPieces=50&isExtracted=1",
   );
   assert(hasCargo.phase === "briefing", "cargo > 0 → briefing");
-  assert(!isEmptyCargoEntry(hasCargo), "cargo > 0 hides skip path");
+  assert(!isEmptyCargoEntry(hasCargo), "cargo > 0 hides empty-skip path");
+}
+
+// Cargo skip-with-deposit (briefing) — deposits N unopened, zero materials
+{
+  const cargo = createRefineFromLocationSearch(
+    "?salvagedContainers=3&totalStockPieces=75&isExtracted=1",
+  );
+  assert(cargo.phase === "briefing", "cargo briefing");
+  assert(canSkipWithCargo(cargo), "cargo skip available on briefing");
+  assert(cargo.validPieceBudget > 0, "budget > 0");
+
+  const empty = createRefineFromLocationSearch(
+    "?salvagedContainers=0&totalStockPieces=0&isExtracted=1",
+  );
+  assert(!canSkipWithCargo(empty), "empty cargo is not cargo-skip");
+  const emptyUrl = new URL(
+    buildEmptySkipToHubUrl(empty, "http://localhost:5175/"),
+  );
+  assert(
+    !emptyUrl.searchParams.has("depositUnopenedContainers"),
+    "empty skip deposits nothing",
+  );
+  assert(
+    emptyUrl.searchParams.get("importMaterials") === "0",
+    "empty skip still zero materials",
+  );
+
+  const skipUrl = buildCargoSkipToHubUrl(cargo, "http://localhost:5175/");
+  const parsed = parseSortToTradeSearch(new URL(skipUrl).search);
+  assert(parsed != null, "cargo skip parses as sort→trade");
+  assert(parsed!.depositUnopenedContainers === 3, "deposit N cans");
+  assert(parsed!.importMaterials === 0, "no material import");
+  assert(
+    parsed!.yieldBag == null || Object.keys(parsed!.yieldBag).length === 0,
+    "no yieldBag import",
+  );
+
+  const cta = buildCargoSkipHubCtaHtml(skipUrl);
+  assert(cta.includes("未開封のまま格納庫へ"), "cargo skip CTA JA");
+  assert(cta.includes('id="btn-skip-cargo-hub"'), "cargo skip button id");
+  assert(cta.includes("depositUnopenedContainers=3"), "CTA carries deposit");
 }
 
 console.log("sort refine.selftest: ok");
