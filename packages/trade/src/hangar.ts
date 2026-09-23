@@ -82,8 +82,10 @@ import {
   isRareYieldItemId,
 } from "./rare-sell-prices";
 import {
+  CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
   circuitSellPriceCredits,
+  formatCircuitSellPriceJa,
 } from "./circuit-sell-prices";
 
 export {
@@ -99,8 +101,10 @@ export {
 } from "./rare-sell-prices";
 
 export {
+  CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
   circuitSellPriceCredits,
+  formatCircuitSellPriceJa,
 } from "./circuit-sell-prices";
 
 export type HangarLog = string[];
@@ -1255,9 +1259,10 @@ export function sellRareItem(
 }
 
 /**
- * Sell one HubSave circuit: price = shared effect × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT}
- * (仮). Removes from inventory, credits wallet, clears active selection if needed.
- * Effect 0 → +0c (still allowed).
+ * Sell one HubSave circuit: price = {@link CIRCUIT_SELL_BASE_CREDITS} +
+ * floor(effect) × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT} (仮 · 最低+出来栄え).
+ * Removes from inventory, credits wallet, clears active selection if needed.
+ * Effect 0 → +30c (最低額 only; still allowed).
  */
 export function sellCircuit(
   state: HangarState,
@@ -1297,12 +1302,12 @@ export function sellCircuit(
     lastCircuit,
     log: pushLog(
       state.log,
-      `回路売却 ${rec.circuitId} · 効果 ${effect} → +${gained}c（仮 ${CIRCUIT_SELL_CREDITS_PER_EFFECT}c/効果）`,
+      `回路売却 ${rec.circuitId} · 効果 ${effect} → +${gained}c（仮 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え ${effect}*${CIRCUIT_SELL_CREDITS_PER_EFFECT}c）`,
     ),
-    notice:
-      gained > 0
-        ? `回路売却 +${gained}c（効果 ${effect} × ${CIRCUIT_SELL_CREDITS_PER_EFFECT}）`
-        : `回路売却 +0c（効果 0 · 在庫から除去）`,
+    notice: (() => {
+      const brk = formatCircuitSellPriceJa(effect);
+      return `回路売却 +${gained}c（最低 ${brk.base}c + 出来栄え ${brk.craft}c）`;
+    })(),
   };
   return persistHangar(next);
 }
