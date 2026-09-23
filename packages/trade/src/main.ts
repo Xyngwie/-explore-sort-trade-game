@@ -53,6 +53,9 @@ import {
   sellRareItem,
   isCircuitLocked,
   isCraftSignatureLocked,
+  buildNextSortieReadiness,
+  formatInvadeIntelBrief,
+  formatCircuitHubBrief,
   type HangarState,
 } from "./hangar";
 
@@ -194,21 +197,19 @@ function fleetCards(s: HangarState): string {
           <span class="${durabilityBarClass(m.status)}"><span style="width:${pct}%"></span></span>
         </div>
         <div class="row">
-          <button type="button" data-act="repair-classic" data-id="${escapeHtml(m.instanceId)}" ${
+          <button type="button" class="fleet-act" data-act="repair-classic" data-id="${escapeHtml(m.instanceId)}" ${
             classicClickable ? "" : "disabled"
           } title="集計クレジット/資材を消費して健在へ">${
             classicAfford
-              ? `修理（集計 −${MECH_FLEET_RULES.repairCredits}c/−${MECH_FLEET_RULES.repairMaterials}m）`
-              : `修理（集計 ${MECH_FLEET_RULES.repairCredits}c/${MECH_FLEET_RULES.repairMaterials}m）`
+              ? `集計 −${MECH_FLEET_RULES.repairCredits}c/−${MECH_FLEET_RULES.repairMaterials}m`
+              : `集計 ${MECH_FLEET_RULES.repairCredits}c/${MECH_FLEET_RULES.repairMaterials}m`
           }</button>
-          <button type="button" data-act="repair-typed" data-id="${escapeHtml(m.instanceId)}" ${
+          <button type="button" class="fleet-act" data-act="repair-typed" data-id="${escapeHtml(m.instanceId)}" ${
             typedClickable ? "" : "disabled"
           } title="型付き YieldBag + クレジットを消費して健在へ">${
-            typedAfford
-              ? `修理（型付き ${escapeHtml(typedSpend)}）`
-              : "修理（型付き）"
+            typedAfford ? `型付き ${escapeHtml(typedSpend)}` : "型付き修理"
           }</button>
-          <button type="button" class="secondary" data-act="scrap" data-id="${escapeHtml(m.instanceId)}">解体</button>
+          <button type="button" class="secondary fleet-act" data-act="scrap" data-id="${escapeHtml(m.instanceId)}">解体</button>
         </div>
         ${typedHint}${classicHint}
       </div>`;
@@ -264,104 +265,179 @@ function circuitRows(s: HangarState): string {
   </table>`;
 }
 
+
+function nextSortiePanel(s: HangarState): string {
+  const ready = buildNextSortieReadiness(s);
+  const deployUrl = buildDeployUrl(s);
+  const invadeUrl = buildInvadeUrl(s);
+  const restoreUrl = buildRestoreUrl(s);
+  const intel = formatInvadeIntelBrief(s.lastInvadeSector);
+  const circuits = formatCircuitHubBrief(s.hub.circuits, s.lastCircuit);
+  const bonuses = formatCircuitBonusesJa(hubCircuitBonuses(s.hub));
+
+  const deployList =
+    ready.selectedIds.length === 0
+      ? `<p class="muted sortie-line">配備対象なし — 健在機を修理するか受領してください。</p>`
+      : `<ul class="sortie-deploy-list">
+          ${ready.selectedIds
+            .map((id) => {
+              const m = s.hub.fleet.find((x) => x.instanceId === id);
+              if (!m) return `<li class="mono">${escapeHtml(id)}</li>`;
+              const pct = Math.round((m.durability / m.durabilityMax) * 100);
+              return `<li>
+                <strong>${escapeHtml(m.catalogId)}</strong>
+                <span class="muted">耐久 ${m.durability}/${m.durabilityMax} (${pct}%)</span>
+              </li>`;
+            })
+            .join("")}
+        </ul>`;
+
+  const repairLine =
+    ready.needsRepair === 0
+      ? `<p class="ok sortie-line">修理待ちなし</p>`
+      : `<p class="warn sortie-line">要修理 ${ready.needsRepair}機 — 下のハンガーで修理 / 解体</p>
+         <ul class="sortie-deploy-list">
+           ${ready.repairTargets
+             .map(
+               (t) =>
+                 `<li><strong>${escapeHtml(t.catalogId)}</strong>
+                   <span class="muted">${t.durability}/${t.durabilityMax}</span>
+                   <span class="mono muted">${escapeHtml(t.instanceId)}</span></li>`,
+             )
+             .join("")}
+         </ul>`;
+
+  const hasIntel = s.lastInvadeSector != null;
+  const hasCircuit = (s.hub.circuits?.length ?? 0) > 0;
+
+  return `
+    <div class="card sortie-card">
+      <div class="sortie-head">
+        <h2>次の出撃</h2>
+        <span class="pill sortie-ready">${escapeHtml(ready.readinessLabelJa)}</span>
+      </div>
+      <p class="muted sortie-sub">修理・解体で艦隊を整え、探索 / 戦線 / 回路へ送るハブです。</p>
+      <div class="sortie-grid">
+        <div>
+          <h3 class="sortie-h3">配備予定</h3>
+          ${deployList}
+        </div>
+        <div>
+          <h3 class="sortie-h3">摩耗 / 修理</h3>
+          ${repairLine}
+        </div>
+      </div>
+      <div class="sortie-handoff">
+        <h3 class="sortie-h3">戻りインテル</h3>
+        <p class="${hasIntel ? "ok" : "muted"} sortie-line">${escapeHtml(intel)}</p>
+        <p class="${hasCircuit ? "ok" : "muted"} sortie-line">${escapeHtml(circuits.summaryJa)}</p>
+        <p class="muted sortie-line">回路ボーナス: ${escapeHtml(bonuses)}</p>
+      </div>
+      <div class="row sortie-actions">
+        ${
+          deployUrl
+            ? `<a class="btn" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener">探索へ配備</a>`
+            : `<button type="button" disabled title="健在機が必要">探索へ配備</button>`
+        }
+        <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener">戦線へ</a>
+        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener">回路修復へ</a>
+      </div>
+      <details class="sortie-details">
+        <summary>シミュ帰還 · URL</summary>
+        <div class="row">
+          <button type="button" class="secondary" data-sim="extract">extract</button>
+          <button type="button" class="secondary" data-sim="abort">abort</button>
+          <button type="button" class="secondary" data-sim="fail">fail</button>
+        </div>
+        ${
+          deployUrl
+            ? `<p class="mono muted" style="margin-top:0.5rem">${escapeHtml(deployUrl)}</p>`
+            : ""
+        }
+        <p class="mono muted" style="margin-top:0.35rem">${escapeHtml(invadeUrl)}</p>
+        <p class="mono muted" style="margin-top:0.35rem">${escapeHtml(restoreUrl)}</p>
+      </details>
+    </div>`;
+}
+
 function render() {
-  const deployUrl = buildDeployUrl(state);
-  const invadeUrl = buildInvadeUrl(state);
-  const restoreUrl = buildRestoreUrl(state);
+  const ready = buildNextSortieReadiness(state);
   const typedCost = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
   const typedCostText = Object.entries(typedCost)
     .map(([k, v]) => `${k}:${v}`)
     .join(" · ");
+  const ammoTotal =
+    state.hub.ammoLoad.ammo_standard +
+    state.hub.ammoLoad.ammo_ap +
+    state.hub.ammoLoad.ammo_hp;
 
   root.innerHTML = `
     <p class="pill">MODULE 3 · TRADE · HANGAR V0</p>
-    <h1>BASE HUB 最小ハンガー</h1>
-    <p class="muted">フリート循環・ハンドオフ・型付き在庫の契約を見える化するスタブです。</p>
+    <h1>BASE HUB</h1>
+    <p class="muted">次の出撃に向けて艦隊・資材・戻りインテルを整える拠点。</p>
     ${
       state.notice
         ? `<p class="${noticeClass(state.notice)}">${escapeHtml(state.notice)}</p>`
         : ""
     }
 
-    <div class="card">
-      <table>
-        <tr><td>クレジット</td><td>${state.hub.credits}</td></tr>
-        <tr><td>資材（集計）</td><td>${state.hub.materials}</td></tr>
-        <tr><td>弾薬合計</td><td>${
-          state.hub.ammoLoad.ammo_standard +
-          state.hub.ammoLoad.ammo_ap +
-          state.hub.ammoLoad.ammo_hp
-        }</td></tr>
-        <tr><td>直近搬入</td><td>${state.hub.importedMaterials}</td></tr>
-        <tr><td>艦隊</td><td>${state.hub.fleet.length} / 3</td></tr>
-      </table>
+    <div class="card wallet-card">
+      <div class="stat-pills">
+        <span class="stat-pill"><span class="stat-k">Cr</span> ${state.hub.credits}</span>
+        <span class="stat-pill"><span class="stat-k">資材</span> ${state.hub.materials}</span>
+        <span class="stat-pill"><span class="stat-k">弾薬</span> ${ammoTotal}</span>
+        <span class="stat-pill"><span class="stat-k">艦隊</span> ${ready.total}/3</span>
+        <span class="stat-pill muted"><span class="stat-k">搬入</span> ${state.hub.importedMaterials}</span>
+      </div>
       <div class="row">
         <button type="button" id="btn-seed">シード読込</button>
         <button type="button" class="secondary" id="btn-grant">機体を受領</button>
-        <button type="button" class="secondary" id="btn-inv">デモ資材バッグ</button>
-        <button type="button" class="secondary" id="btn-reset">デモ初期化</button>
+        <button type="button" class="secondary" id="btn-inv">デモ資材</button>
+        <button type="button" class="secondary" id="btn-reset">初期化</button>
       </div>
-      <div class="row" style="margin-top:0.5rem">
-        <button type="button" class="secondary" id="btn-verify-true" title="可解な 2×2 真盤（未解）を HubSave.circuits へ">検証用真盤を受領</button>
-        <button type="button" class="secondary" id="btn-verify-perfect" title="既に完璧ロック済みの検証盤（刻印付き）">検証用・既に完璧</button>
-      </div>
-      <p class="muted" style="margin-top:0.5rem">「シード読込」= 健在2機 + 要修理1機・クレジット/型付き資材（EXAMPLE_TYPED_REPAIR_COST×3）/弾薬入り。要修理機を型付き修理 → 出撃選択に載るループ用。回路デモは Perfect inject（DEV/localhost 33% · 本番 1% · <span class="mono">?perfectRate=</span> 上書き）で稀に真盤。</p>
-      <p class="muted" style="margin-top:0.35rem">検証用真盤 = 保証可解の小さな回路（解く→完璧ロック）。検証用・既に完璧 = ロック UI / 刻印の即確認用。</p>
+      <details class="sortie-details">
+        <summary>検証用回路 · ヘルプ</summary>
+        <div class="row" style="margin-top:0.5rem">
+          <button type="button" class="secondary" id="btn-verify-true" title="可解な 2×2 真盤（未解）を HubSave.circuits へ">検証用真盤</button>
+          <button type="button" class="secondary" id="btn-verify-perfect" title="既に完璧ロック済みの検証盤（刻印付き）">検証用・完璧</button>
+        </div>
+        <p class="muted" style="margin-top:0.5rem">シード = 健在2 + 要修理1 · 型付き資材/弾薬。Perfect inject（DEV 33% / 本番 1% · <span class="mono">?perfectRate=</span>）。</p>
+      </details>
     </div>
 
+    ${nextSortiePanel(state)}
+
     <div class="card">
-      <h2 style="font-size:1rem;margin:0 0 0.5rem">ハンガー</h2>
+      <div class="sortie-head">
+        <h2 style="font-size:1rem;margin:0">ハンガー</h2>
+        <button type="button" class="secondary compact" id="btn-select-all">健在を全選択</button>
+      </div>
       ${fleetCards(state)}
-      <div class="row">
-        <button type="button" class="secondary" id="btn-select-all">健在を全選択</button>
-      </div>
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem;margin:0 0 0.5rem">型付き在庫 (YieldBag)</h2>
+      <h2 style="font-size:1rem;margin:0 0 0.5rem">型付き在庫</h2>
       <table>
-        <thead><tr><th>アイテム</th><th>数量</th><th>売却（仮）</th></tr></thead>
+        <thead><tr><th>アイテム</th><th>数量</th><th>売却</th></tr></thead>
         <tbody>${inventoryRows(state.hub)}</tbody>
       </table>
-      <p class="muted" style="margin-top:0.5rem">「レア」タグ付きのみ売却可。単価は下の仮価格表（TBD）。型付き修理例: ${EXAMPLE_TYPED_REPAIR_COST.credits}c + ${escapeHtml(typedCostText || "—")}</p>
+      <p class="muted" style="margin-top:0.5rem">レアのみ売却可。型付き修理例: ${EXAMPLE_TYPED_REPAIR_COST.credits}c + ${escapeHtml(typedCostText || "—")}</p>
+      <details class="sortie-details">
+        <summary>レア売却 仮価格表 <span class="pill tbd-tag">TBD</span></summary>
+        <p class="muted" style="margin:0.5rem 0">明示テーブル（<span class="mono">RARE_SELL_PRICE_TABLE</span>）。バランス未調整。</p>
+        <table>
+          <thead><tr><th>アイテム</th><th>種別</th><th>仮価格</th><th>状態</th></tr></thead>
+          <tbody>${rarePriceTableRows()}</tbody>
+        </table>
+      </details>
     </div>
-
-    <div class="card">
-      <h2 style="font-size:1rem;margin:0 0 0.5rem">レア売却 仮価格表 <span class="pill tbd-tag">TBD</span></h2>
-      <p class="muted" style="margin:0 0 0.5rem">明示テーブル（<span class="mono">RARE_SELL_PRICE_TABLE</span>）。バランス未調整のプレースホルダ。売却ボタンと <span class="mono">sellRareItem</span> はここを参照。</p>
-      <table>
-        <thead><tr><th>アイテム</th><th>種別</th><th>仮価格</th><th>状態</th></tr></thead>
-        <tbody>${rarePriceTableRows()}</tbody>
-      </table>
-    </div>
-
-    <div class="card">
-      <h2 style="font-size:1rem;margin:0 0 0.5rem">出撃 → Explore</h2>
-      <p class="ok" style="margin:0 0 0.5rem">回路ボーナス: ${escapeHtml(formatCircuitBonusesJa(hubCircuitBonuses(state.hub)))}</p>
-      ${
-        deployUrl
-          ? `<div class="row">
-              <a class="btn" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener">探索へ配備</a>
-            </div>
-            <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(deployUrl)}</p>`
-          : `<p class="warn">健在機がありません。受領するか修理してください。</p>`
-      }
-      <p class="muted" style="margin-top:0.5rem">帰還は explore の「拠点へ摩耗報告」（returnKind / mechWear）か下のシミュ。localhost では :5173 ↔ :5175。配備 URL に circuitBonuses（摩耗緩衝）が付きます。</p>
-      <div class="row">
-        <button type="button" class="secondary" data-sim="extract">シミュ帰還 extract</button>
-        <button type="button" class="secondary" data-sim="abort">シミュ帰還 abort</button>
-        <button type="button" class="secondary" data-sim="fail">シミュ帰還 fail</button>
-      </div>
-    </div>
-
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">署名（刻印）</h2>
-      <p class="muted" style="margin:0 0 0.5rem">回路を Hub に戻すときの職人名。一度確定すると変更不可。</p>
-      <div class="row" style="align-items:center">
+      <div class="row" style="align-items:center;margin-top:0.35rem">
         <input type="text" id="input-signature" maxlength="32" placeholder="署名" value="${escapeHtml(state.craftSignature)}" ${
           isCraftSignatureLocked() ? "disabled" : ""
-        } style="flex:1;min-width:8rem;padding:0.5rem 0.65rem;border-radius:8px;border:1px solid #3d444d;background:#0d1014;color:#e8eaed" />
+        } class="sig-input" />
         <button type="button" id="btn-signature" ${
           isCraftSignatureLocked() ? "disabled" : ""
         }>確定</button>
@@ -369,36 +445,19 @@ function render() {
       <p class="muted" style="margin-top:0.5rem">${
         isCraftSignatureLocked()
           ? `確定済み: <span class="engraved">${escapeHtml(state.craftSignature)}</span>`
-          : "未確定（初期値はプレースホルダ。確定で localStorage に刻印）"
+          : "未確定（確定で localStorage に刻印・変更不可）"
       }</p>
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem;margin:0 0 0.5rem">戦線 / 回路（M4·M5）</h2>
-      <p class="muted" style="margin:0 0 0.5rem">任意ルート。本 salvage は払わない。回路結果は HubSave.circuits に永続（旧 hubM45Stash から移行可）。セクターはスタッシュのみ。</p>
-      <div class="row">
-        <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener">戦線へ（任意）</a>
-        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener">回路修復へ（選択中）</a>
-      </div>
-      ${
-        state.lastInvadeSector
-          ? `<p class="ok" style="margin-top:0.75rem">直近セクター: (${state.lastInvadeSector.sectorX},${state.lastInvadeSector.sectorY}) dens=${state.lastInvadeSector.density.toFixed(3)}${
-              state.lastInvadeSector.intelFlags?.length
-                ? ` · ${escapeHtml(state.lastInvadeSector.intelFlags.join(", "))}`
-                : ""
-            }</p>`
-          : `<p class="muted" style="margin-top:0.75rem">セクター未取込（invade → ?sectorX=&sectorY=&density=）</p>`
-      }
-      <h3 style="font-size:0.9rem;margin:0.75rem 0 0">保有回路（HubSave）</h3>
-      <p class="muted" style="margin:0.35rem 0 0;font-size:0.75rem">検証用ヒント（ネタバレ軽め）: ${escapeHtml(VERIFY_TRUE_SOLUTION_HINT)}</p>
+      <h2 style="font-size:1rem;margin:0 0 0.5rem">保有回路</h2>
+      <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">検証ヒント: ${escapeHtml(VERIFY_TRUE_SOLUTION_HINT)}</p>
       ${circuitRows(state)}
-      <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(invadeUrl)}</p>
-      <p class="mono muted" style="margin-top:0.35rem">${escapeHtml(restoreUrl)}</p>
     </div>
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">ログ</h2>
-      <ul class="muted" style="margin:0;padding-left:1.1rem;font-size:0.8rem">
+      <ul class="muted log-list">
         ${state.log.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}
       </ul>
     </div>
