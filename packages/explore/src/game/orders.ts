@@ -162,12 +162,39 @@ export function onSalvageCompleted(world: World, unit: Unit): void {
 }
 
 /**
- * Move-speed multiplier from carried cargo (empty → 1, full capacity → cargoSpeedMulMin).
+ * Move-speed multiplier from carried cargo.
+ * Soft curve against cargoSpeedRefSlots (not a hard MAX). Empty → 1;
+ * at/above soft ref → cargoSpeedMulMin.
  */
 export function cargoSpeedMul(unit: Unit, balance: Balance): number {
-  if (unit.capacity <= 0) return 1;
-  const load = Math.min(1, Math.max(0, unit.salvagedCount / unit.capacity));
+  const ref = Math.max(1, balance.cargoSpeedRefSlots);
+  const load = Math.min(1, Math.max(0, unit.salvagedCount / ref));
   return 1 - load * (1 - balance.cargoSpeedMulMin);
+}
+
+/** True when unit is inside camp aura with a non-empty stash. */
+export function inCampAura(world: World, unit: Unit): boolean {
+  const camp = world.camp;
+  if (!camp || camp.stashedCount <= 0 || !unit.alive) return false;
+  return dist(unit.pos, camp.pos) <= world.balance.campAuraRadius;
+}
+
+/**
+ * Final move-speed mul: cargo slowdown × optional camp light-load tip
+ * (empty-handed near a stocked camp feels snappier).
+ */
+export function unitMoveSpeedMul(unit: Unit, world: World): number {
+  let mul = cargoSpeedMul(unit, world.balance);
+  if (unit.salvagedCount <= 0 && inCampAura(world, unit)) {
+    mul *= world.balance.campLightSpeedMul;
+  }
+  return mul;
+}
+
+/** Combat advantage: incoming damage scale while defending a stocked camp. */
+export function campDamageTakenMul(world: World, unit: Unit): number {
+  if (!inCampAura(world, unit)) return 1;
+  return world.balance.campDamageTakenMul;
 }
 
 function friendliesNear(
@@ -246,8 +273,9 @@ export function setCampOrDeposit(
 
 
 /**
- * Explicit unload（荷下ろし）: deposit carried salvage into camp stash when near camp.
- * Does not set or relocate camp — use setCampOrDeposit for that.
+ * Explicit unload（荷下ろし）: captain must be near camp; **whole living squad**
+ * dumps carried salvage into camp stash (not captain-only / not proximity-gated
+ * per craft). Does not set or relocate camp — use setCampOrDeposit for that.
  */
 export function unloadAtCamp(world: World): "unloaded" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive || !world.camp) {
@@ -259,20 +287,23 @@ export function unloadAtCamp(world: World): "unloaded" | "denied" {
   const camp = world.camp;
   const r = world.balance.interactRadius * 1.5;
   if (dist(world.leader.pos, camp.pos) > r) {
-    pushLog(world, "キャンプが遠い。近づいてから荷下ろしせよ。");
+    pushLog(world, "キャンプが遠い。近づいてから小隊荷下ろしせよ。");
     return "denied";
   }
   let deposited = 0;
-  for (const u of friendliesNear(world, camp.pos, r)) {
+  const squad = [world.leader, ...world.wingmen].filter((u) => u.alive);
+  for (const u of squad) {
     deposited += depositUnitIntoCamp(world, u);
+    abortSalvage(u);
   }
   if (deposited <= 0) {
-    pushLog(world, "キャンプ付近に預ける貨物なし。");
+    pushLog(world, "小隊に預ける貨物なし。");
     return "denied";
   }
+  const dr = Math.round((1 - world.balance.campDamageTakenMul) * 100);
   pushLog(
     world,
-    `荷下ろし：${deposited}（置場 ${camp.stashedCount}）。軽装で探索可。`,
+    `小隊荷下ろし：${deposited} → 置場 ${camp.stashedCount}。キャンプ圏で被弾−${dr}%・軽装探査可。`,
   );
   return "unloaded";
 }
@@ -301,17 +332,16 @@ export function pickUpFromCamp(world: World): "picked" | "denied" {
     ...near.filter((u) => u.kind === "leader"),
     ...near.filter((u) => u.kind !== "leader"),
   ];
+  // No hard carry MAX — load onto nearest friendlies (captain first).
   for (const u of order) {
     if (camp.stashedCount <= 0) break;
-    const free = Math.max(0, u.capacity - u.salvagedCount);
-    if (free <= 0) continue;
-    const n = Math.min(free, camp.stashedCount);
+    const n = camp.stashedCount;
     u.salvagedCount += n;
-    camp.stashedCount -= n;
+    camp.stashedCount = 0;
     taken += n;
   }
   if (taken <= 0) {
-    pushLog(world, "積載に空きなし。預けたまま軽装を維持。");
+    pushLog(world, "付近に積込可能な友軍なし。");
     return "denied";
   }
   pushLog(
@@ -362,6 +392,7 @@ export function spawnContainersAt(
       pos,
       taken: false,
       discovered,
+      glowT: 0,
     };
     world.containers.push(c);
     spawned.push(c);
@@ -375,10 +406,12 @@ function dropUnitCargoToField(world: World, unit: Unit): number {
   abortSalvage(unit);
   unit.salvagedCount = 0;
   world.salvaged = Math.max(0, world.salvaged - n);
-  spawnContainersAt(world, unit.pos, n, {
+  const spawned = spawnContainersAt(world, unit.pos, n, {
     discovered: true,
     idPrefix: "purge",
   });
+  const glow = world.balance.deathDropGlowSec;
+  for (const c of spawned) c.glowT = glow;
   return n;
 }
 
@@ -426,6 +459,23 @@ export function purgeCargo(
   if (dropped > 0) {
     parts.push(`戦場へ投下 ${dropped}（軽装化）`);
   }
-  pushLog(world, `パージ：${parts.join(" · ")}。`);
+  pushLog(world, `パージ（小隊全機）：${parts.join(" · ")}。`);
   return "purged";
+}
+
+/**
+ * Apply the same stance to every living wingman (mid-combat squad order UX).
+ * Returns how many orders were applied.
+ */
+export function applyOrderToAllWingmen(
+  world: World,
+  stance: Stance,
+  opts?: { waypoint?: { x: number; y: number } | null },
+): number {
+  let n = 0;
+  for (const w of world.wingmen) {
+    if (!w.alive) continue;
+    if (applyOrder(world, w, stance, opts) === "applied") n += 1;
+  }
+  return n;
 }

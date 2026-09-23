@@ -5,15 +5,19 @@ import assert from "node:assert/strict";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
 import {
   applyOrder,
-  onSalvageCompleted,
-  rallyWingman,
-  scatterSearch,
+  applyOrderToAllWingmen,
+  campDamageTakenMul,
   cargoSpeedMul,
+  inCampAura,
+  onSalvageCompleted,
   pickUpFromCamp,
   purgeCargo,
+  rallyWingman,
+  scatterSearch,
   setCampOrDeposit,
   spawnContainersAt,
   unloadAtCamp,
+  unitMoveSpeedMul,
 } from "./game/orders";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import {
@@ -309,6 +313,10 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
     w.pos = { x: 700, y: 400 };
   }
   world.salvaged = 2;
+  // Keep field crates outside boarding circle so salvage count stays exact.
+  for (const c of world.containers) {
+    c.pos = { x: 50, y: 50 };
+  }
   assert.ok(requestExtract(world));
   assert.ok(world.boarding);
   assert.equal(world.boarding!.center.x, 700);
@@ -641,22 +649,26 @@ function advancePinned(
   assert.ok(raidBan!.includes("敵セル 1"));
 }
 
-// --- cargo slowdown scales with salvagedCount / capacity ---
+// --- cargo slowdown scales with salvagedCount / soft ref (no hard MAX) ---
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
   const leader = world.leader;
-  assert.equal(leader.capacity, BALANCE.carrierSlotsPerCraft);
+  const ref = BALANCE.cargoSpeedRefSlots;
   assert.ok(Math.abs(cargoSpeedMul(leader, world.balance) - 1) < 1e-9);
-  leader.salvagedCount = leader.capacity;
+  leader.salvagedCount = ref;
   assert.ok(
     Math.abs(cargoSpeedMul(leader, world.balance) - BALANCE.cargoSpeedMulMin) < 1e-9,
   );
-  leader.salvagedCount = leader.capacity / 2;
+  leader.salvagedCount = ref / 2;
   const mid = cargoSpeedMul(leader, world.balance);
   assert.ok(mid < 1 && mid > BALANCE.cargoSpeedMulMin);
+  // Beyond soft ref still allowed (no hard MAX) and stays at min mul
+  leader.salvagedCount = ref * 5;
+  assert.ok(
+    Math.abs(cargoSpeedMul(leader, world.balance) - BALANCE.cargoSpeedMulMin) < 1e-9,
+  );
 
-  // Full load travels slower than empty over same WASD input
   for (const e of world.enemies) {
     e.alive = false;
     e.hp = 0;
@@ -675,7 +687,7 @@ function advancePinned(
   }
   const emptyDist = Math.hypot(leader.pos.x - emptyStart.x, leader.pos.y - emptyStart.y);
 
-  leader.salvagedCount = leader.capacity;
+  leader.salvagedCount = ref;
   leader.pos = { x: 400, y: 500 };
   leader.moveTarget = null;
   const fullStart = { ...leader.pos };
@@ -731,10 +743,20 @@ function advancePinned(
   assert.equal(world.leader.salvagedCount, 2);
   assert.equal(world.camp!.stashedCount, 0);
 
-  // Explicit 荷下ろし near camp
+  // Explicit 小隊荷下ろし near camp — whole squad, including far wingman
+  world.leader.salvagedCount = 2;
+  const far = world.wingmen[0]!;
+  far.alive = true;
+  far.pos = { x: 50, y: 50 }; // far from camp
+  far.salvagedCount = 3;
+  world.salvaged = 5;
   assert.equal(unloadAtCamp(world), "unloaded");
   assert.equal(world.leader.salvagedCount, 0);
-  assert.equal(world.camp!.stashedCount, 2);
+  assert.equal(far.salvagedCount, 0);
+  assert.equal(world.camp!.stashedCount, 5);
+  assert.ok(world.logs.some((l) => l.text.includes("小隊荷下ろし")));
+  assert.ok(inCampAura(world, world.leader));
+  assert.ok(campDamageTakenMul(world, world.leader) < 1);
 
   // Unload with no cargo denied
   assert.equal(unloadAtCamp(world), "denied");
@@ -768,8 +790,10 @@ function advancePinned(
   for (const c of drops) {
     assert.equal(c.taken, false);
     assert.equal(c.discovered, true);
+    assert.ok(c.glowT > 0);
     assert.ok(Math.hypot(c.pos.x - at.x, c.pos.y - at.y) < 40);
   }
+  assert.ok(world.logs.some((l) => l.text.includes("敵撃破ドロップ")));
   // Forced count clamps to enemyDeathDropMax
   assert.equal(spawnEnemyDeathDrops(world, at, 99), BALANCE.enemyDeathDropMax);
 }
@@ -847,6 +871,112 @@ function advancePinned(
   assert.ok(hud.lines.some((l) => l.includes("円内") && l.includes("生存")));
 }
 
+
+
+// --- unlimited carry: salvaged beyond soft ref / former MAX ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  assert.equal(world.carrierCapacity, BALANCE.carrierCapacityUnlimited);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  const crate = world.containers[0]!;
+  crate.discovered = true;
+  crate.taken = false;
+  world.leader.pos = { ...crate.pos };
+  world.leader.salvagedCount = BALANCE.cargoSpeedRefSlots + 3;
+  world.salvaged = world.leader.salvagedCount;
+  // Must still be able to channel another crate (no hard gate)
+  for (let i = 0; i < 50; i++) {
+    tickWorld(world, 0.1, {
+      move: { x: 0, y: 0 },
+      clickMove: null,
+      fire: false,
+      interact: true,
+    });
+    if (crate.taken) break;
+  }
+  assert.equal(crate.taken, true);
+  assert.ok(world.leader.salvagedCount > BALANCE.cargoSpeedRefSlots + 3);
+}
+
+// --- escape-circle recovers ALL ground containers inside boarding circle ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  const pin = { x: 600, y: 500 };
+  world.leader.pos = { ...pin };
+  world.salvaged = 1;
+  world.leader.salvagedCount = 1;
+  // Park every crate far away first, then place exactly 3 inside the circle
+  // but outside interactRadius so auto-salvage does not pick them up early.
+  for (const c of world.containers) {
+    c.discovered = true;
+    c.taken = false;
+    c.pos = { x: 40, y: 40 };
+  }
+  const inside = world.containers.slice(0, 3);
+  const outside = world.containers[3]!;
+  for (let i = 0; i < inside.length; i++) {
+    // ~80 units from center: inside boardingRadius(110), outside interactRadius(28)
+    inside[i]!.pos = { x: pin.x + 80, y: pin.y + i * 2 };
+  }
+  outside.pos = { x: 100, y: 100 };
+  assert.ok(requestExtract(world));
+  function advancePinnedLocal(dtBudget: number): void {
+    let left = dtBudget;
+    while (left > 1e-9 && world.phase === "sortie") {
+      world.leader.pos = { ...pin };
+      world.leader.moveTarget = null;
+      for (const w of world.wingmen) {
+        w.pos = { ...pin };
+        w.moveTarget = null;
+      }
+      const dt = Math.min(0.05, left);
+      tickWorld(world, dt, idleInput());
+      left -= dt;
+    }
+  }
+  advancePinnedLocal(world.balance.boardingLiftOffDelaySec + 0.1);
+  assert.equal(world.phase, "result");
+  assert.equal(world.extracted, true);
+  for (const c of inside) assert.equal(c.taken, true);
+  assert.equal(outside.taken, false);
+  assert.equal(world.salvaged, 1 + inside.length);
+  assert.ok(world.logs.some((l) => l.text.includes("搭乗円内コンテナ")));
+}
+
+// --- squad order applies to all living wingmen ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  assert.equal(applyOrderToAllWingmen(world, "raid"), world.wingmen.length);
+  for (const w of world.wingmen) {
+    assert.equal(w.stance, "raid");
+  }
+  world.wingmen[0]!.alive = false;
+  assert.equal(applyOrderToAllWingmen(world, "escort"), 1);
+  assert.equal(world.wingmen[1]!.stance, "escort");
+}
+
+// --- camp light-speed tip when empty in aura ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  world.leader.pos = { x: 400, y: 400 };
+  assert.equal(setCampOrDeposit(world), "camp_set");
+  world.camp!.stashedCount = 2;
+  world.leader.salvagedCount = 0;
+  world.leader.pos = { ...world.camp!.pos };
+  assert.ok(inCampAura(world, world.leader));
+  assert.ok(unitMoveSpeedMul(world.leader, world) > 1);
+}
 
 console.log("explore selftest: ok");
 

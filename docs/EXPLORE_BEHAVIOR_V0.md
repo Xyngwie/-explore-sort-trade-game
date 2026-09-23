@@ -87,11 +87,11 @@
 |---|---|---|
 | 要請 | ボタンまたは `X` | 要請時点の隊長位置を中心に **搭乗円**（半径 `BALANCE.boardingRadius`）を展開。生存僚機へ自動で **哨戒**（waypoint = 円中心）。進行中の再要請・キャンセルは v0 では不可 |
 | 貨物 | 要請から `boardingCargoDelaySec`（既定 **10s**） | `cargoArrived` フラグ + 戦術ログ（任意の視覚） |
-| 離昇 | 要請から `boardingLiftOffDelaySec`（既定 **15s**） | 円内の生存友軍を回収。円外の生存友軍は **置き去り**（ログに名前）。**隊長が円内なら出撃成功**（サルベージは現状どおり保持）。隊長が円外なら `extract_missed` で失敗（サルベージ没収） |
+| 離昇 | 要請から `boardingLiftOffDelaySec`（既定 **15s**） | 円内の生存友軍を回収。円外の生存友軍は **置き去り**（ログに名前）。**隊長が円内なら出撃成功**（保持＋**搭乗円内の全フィールドコンテナを回収**）。隊長が円外なら `extract_missed` で失敗（サルベージ没収） |
 
 HUD は貨物 ETA／離昇 ETA とマップ上の搭乗円を表示する。
 
-**中央 EXTRACT／帰還要件 HUD（常時）:** マップ中央付近に大きく表示。離昇までの秒数、誰が円内必須か（隊長）、円内／生存人数（円外の名前）を明示し、失敗が「ルール不明」に感じられないようにする。未要請時も要件の要約を薄く表示。
+**上端 EXTRACT／帰還要件 HUD:** マップ**上端**に表示（中央を常時塞がない）。未要請時はコンパクトな一行。要請中は離昇までの秒数、必須（隊長円内）、円内／生存人数を展開。離昇時は搭乗円内の**すべての**未回収フィールドコンテナをサルベージに加算する。
 
 定数は `packages/explore/src/game/balance.ts` の `boardingRadius` / `boardingCargoDelaySec` / `boardingLiftOffDelaySec`。
 
@@ -138,29 +138,30 @@ invade マインスイーパから探索へ渡す戦闘モード。キー契約�
 
 | 項目 | 挙動 |
 |---|---|
-| 積載遅延 | 友軍の移動速度に `cargoSpeedMul = lerp(1, cargoSpeedMulMin, salvagedCount/capacity)` を掛ける。空荷は等速、個人積載満杯で `BALANCE.cargoSpeedMulMin`（既定 0.45） |
+| 積載遅延 | 友軍の移動速度に `cargoSpeedMul = lerp(1, cargoSpeedMulMin, min(1, salvagedCount/cargoSpeedRefSlots))`。空荷は等速、ソフト基準スロット付近で `cargoSpeedMulMin`。**硬上限なし** |
 | キャンプ設置 | ボタンまたは `C`。未設置なら隊長位置に仮設キャンプを置き、付近友軍の積載を置場へ移す。既存キャンプ付近では設置のみ（預けない）。貨物ありのキャンプは遠方から移設不可 |
-| 荷下ろし | ボタンまたは `U`。キャンプ付近で積載サルベージを置場へ預ける（明示コマンド。C トグルに依存しない） |
-| 取り上げ | ボタンまたは `G`。キャンプ付近で置場から隊長→僚機の順に空き積載へ戻す |
-| 会計 | `world.salvaged` は回収時点で加算済みのまま（預けても没収しない）。置場は速度管理用の一時ステージング |
-| HUD | 隊長の速度％（積載遅延）とキャンプ状態（未設置／置場 N）。ボタン／キー: C 設置・U 荷下ろし・G 積込 |
+| 小隊荷下ろし | ボタン「小隊荷下ろし」または `U`。隊長がキャンプ付近なら**生存小隊全機**の積載を置場へ（距離不問）。トーストで置場数＋被弾軽減をフィードバック |
+| キャンプ防衛圏 | 置場 > 0 のとき半径 `campAuraRadius`：圏内友軍は被弾 ×`campDamageTakenMul`。空荷なら移動 ×`campLightSpeedMul` |
+| 取り上げ | ボタンまたは `G`。キャンプ付近で置場から隊長→僚機の順に積込（硬上限なし） |
+| 会計 | `world.salvaged` は回収時点で加算済みのまま（預けても没収しない）。置場は速度／防衛管理用の一時ステージング |
+| HUD | 隊長の速度％とキャンプ状態（未設置／置場 N·防衛）。ボタン／キー: C 設置・U 小隊荷下ろし・G 積込 |
 
-定数: `packages/explore/src/game/balance.ts` の `cargoSpeedMulMin`。API: `cargoSpeedMul` / `setCampOrDeposit` / `unloadAtCamp` / `pickUpFromCamp` / `purgeCargo`（`orders.ts`）。
+定数: `cargoSpeedMulMin` / `cargoSpeedRefSlots` / `campAuraRadius` / `campDamageTakenMul` / `campLightSpeedMul`。API: `cargoSpeedMul` / `unitMoveSpeedMul` / `setCampOrDeposit` / `unloadAtCamp` / `pickUpFromCamp` / `purgeCargo`（`orders.ts`）。
 
 ### 5.4.1 パージ（キャンプへ降ろす／戦場投下）
 
 | 項目 | 挙動 |
 |---|---|
-| 操作 | ボタン「パージ／キャンプへ降ろす」または `P` |
-| キャンプ付近 | 生存友軍の積載を置場へ預ける（`world.salvaged` は維持） |
-| それ以外 | 積載をその場のフィールドコンテナとして投下（発見済・再回収可）。`world.salvaged` と個人積載を減らし軽装化して戦闘しやすくする |
+| 操作 | ボタン「パージ／キャンプへ降ろす」または `P`（**小隊全機**） |
+| キャンプ付近 | 当該機の積載を置場へ預ける（`world.salvaged` は維持） |
+| それ以外 | 積載をその場のフィールドコンテナとして投下（発見済・発光・再回収可）。`world.salvaged` と個人積載を減らし軽装化 |
 
 ### 5.5 フィールドコンテナと敵撃破ドロップ
 
 | 項目 | 挙動 |
 |---|---|
 | 初期配置 | `BALANCE.fieldContainerCount`（既定 **20**）。旧 ~6 個キャップを廃止し、残骸フィールドに多数配置 |
-| 敵撃破 | 敵破壊時に死亡地点へ **0–2** コンテナをスポーン（`enemyDeathDropMax`、発見済） |
+| 敵撃破 | 敵破壊時に死亡地点へ **0–2** コンテナをスポーン（`enemyDeathDropMax`、発見済）。`glowT` 発光＋DROP ラベル＋戦報ログで見逃しにくくする |
 
 API: `spawnContainersAt` / `spawnEnemyDeathDrops`。
 

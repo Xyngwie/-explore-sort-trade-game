@@ -58,11 +58,23 @@ export function renderWorld(
     ctx.fillText(label, cx - 48, cy - rr - 6);
   }
 
-  // Temporary staging camp
+  // Temporary staging camp (+ aura when stash > 0)
   if (world.camp) {
     const c = world.camp;
     const cx = tx(c.pos.x);
     const cy = ty(c.pos.y);
+    if (c.stashedCount > 0) {
+      const aura = world.balance.campAuraRadius * sx;
+      ctx.fillStyle = "#c9a22722";
+      ctx.beginPath();
+      ctx.arc(cx, cy, aura, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#e8c54755";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, aura, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.fillStyle = "#c9a22744";
     ctx.beginPath();
     ctx.arc(cx, cy, 22 * sx, 0, Math.PI * 2);
@@ -76,16 +88,41 @@ export function renderWorld(
     ctx.setLineDash([]);
     ctx.fillStyle = "#ffe08acc";
     ctx.font = "11px sans-serif";
-    ctx.fillText(`CAMP · ${c.stashedCount}`, cx - 28, cy - 28);
+    const campLabel =
+      c.stashedCount > 0
+        ? `CAMP · ${c.stashedCount} · 防衛圏`
+        : `CAMP · ${c.stashedCount}`;
+    ctx.fillText(campLabel, cx - 36, cy - 28);
   }
 
-  // Containers: only discovered
+  // Containers: only discovered (death-drop / purge get pulsing glow)
   for (const c of world.containers) {
     if (!c.discovered || c.taken) continue;
-    ctx.fillStyle = "#f0b429";
-    ctx.fillRect(tx(c.pos.x) - 8, ty(c.pos.y) - 8, 16, 16);
-    ctx.strokeStyle = "#ffe08a";
-    ctx.strokeRect(tx(c.pos.x) - 8, ty(c.pos.y) - 8, 16, 16);
+    const px = tx(c.pos.x);
+    const py = ty(c.pos.y);
+    if (c.glowT > 0) {
+      const pulse = 0.55 + 0.45 * Math.sin(world.elapsed * 8);
+      const r = 14 + pulse * 6;
+      ctx.strokeStyle = `rgba(255, 120, 80, ${0.35 + pulse * 0.45})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255, 160, 60, ${0.12 + pulse * 0.18})`;
+      ctx.beginPath();
+      ctx.arc(px, py, r * 0.85, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = c.glowT > 0 ? "#ff8a3d" : "#f0b429";
+    ctx.fillRect(px - 8, py - 8, 16, 16);
+    ctx.strokeStyle = c.glowT > 0 ? "#ffd0a0" : "#ffe08a";
+    ctx.lineWidth = c.glowT > 0 ? 2 : 1;
+    ctx.strokeRect(px - 8, py - 8, 16, 16);
+    if (c.glowT > 0) {
+      ctx.fillStyle = "#ffc98a";
+      ctx.font = "10px sans-serif";
+      ctx.fillText("DROP", px - 14, py - 12);
+    }
   }
 
   // Enemies (only if in vision of any friendly — keep simple: always draw if in cam,
