@@ -8,6 +8,7 @@ import {
   buildSupplyBag,
   canStartRefine,
   canSwapAdjacent,
+  classifySwipeAxis,
   commitClearStep,
   computeBudgets,
   createRefineFromLocationSearch,
@@ -18,6 +19,8 @@ import {
   refillFromAbove,
   resolveChains,
   resolveCraftMultiplier,
+  resolveSwipeNeighbor,
+  settleMotionIndices,
   SORT_V0_RULES,
   spawnTopFromBag,
   startRefine,
@@ -817,6 +820,67 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(SORT_V0_RULES.settleStepMs === 500, "settleStepMs");
   assert(SORT_V0_RULES.initialFillRows === SORT_V0_RULES.boardRows, "dense fill all rows");
   assert(SORT_V0_RULES.chainWindowMs === SORT_V0_RULES.clearBlinkMs, "chainWindowMs alias");
+  assert(SORT_V0_RULES.swipeMinPx === 18, "swipeMinPx");
+  assert(SORT_V0_RULES.swipeAxisDominanceRatio === 1.15, "swipeAxisDominanceRatio");
+}
+
+// Swipe axis judgment: player-favorable dominance, reject true diagonal
+{
+  assert(classifySwipeAxis(0, 0) == null, "zero is tap");
+  assert(classifySwipeAxis(10, 0) == null, "below min px is tap");
+  assert(classifySwipeAxis(30, 0) === "horizontal", "pure horizontal");
+  assert(classifySwipeAxis(0, 30) === "vertical", "pure vertical");
+  assert(classifySwipeAxis(-40, 5) === "horizontal", "mostly left");
+  assert(classifySwipeAxis(5, 40) === "vertical", "mostly down");
+  // Almost-diagonal but dominant: 40 vs 34 → ratio ≈ 1.176 >= 1.15
+  assert(classifySwipeAxis(40, 34) === "horizontal", "almost-diagonal still horizontal");
+  assert(classifySwipeAxis(34, 40) === "vertical", "almost-diagonal still vertical");
+  // True / near-equal diagonal: 40 vs 38 → ratio ≈ 1.05 < 1.15
+  assert(classifySwipeAxis(40, 38) == null, "near-equal diagonal rejected");
+  assert(classifySwipeAxis(40, 40) == null, "exact diagonal rejected");
+  assert(classifySwipeAxis(-35, 35) == null, "exact diagonal rejected (signs)");
+
+  const cols = 6;
+  const rows = 12;
+  const center = idx(cols, 5, 2);
+  assert(
+    resolveSwipeNeighbor(cols, rows, center, 40, 10) === center + 1,
+    "swipe right → neighbor",
+  );
+  assert(
+    resolveSwipeNeighbor(cols, rows, center, -40, 10) === center - 1,
+    "swipe left → neighbor",
+  );
+  assert(
+    resolveSwipeNeighbor(cols, rows, center, 10, 40) === center + cols,
+    "swipe down → neighbor",
+  );
+  assert(
+    resolveSwipeNeighbor(cols, rows, center, 10, -40) === center - cols,
+    "swipe up → neighbor",
+  );
+  assert(
+    resolveSwipeNeighbor(cols, rows, center, 40, 40) == null,
+    "diagonal swipe → no neighbor",
+  );
+  assert(
+    resolveSwipeNeighbor(cols, rows, idx(cols, 0, 0), -40, 0) == null,
+    "edge swipe left → null",
+  );
+}
+
+// settleMotionIndices marks fall destinations / spawns for UI animation
+{
+  const cols = 3;
+  const rows = 3;
+  const before: RefineLive["board"] = Array.from({ length: cols * rows }, () => null);
+  before[idx(cols, 0, 0)] = "food";
+  before[idx(cols, 1, 1)] = "energy";
+  const stepped = stepGravityOnce(before, cols, rows);
+  const moved = settleMotionIndices(before, stepped.board);
+  assert(moved.includes(idx(cols, 1, 0)), "food fall destination marked");
+  assert(moved.includes(idx(cols, 2, 1)), "energy fall destination marked");
+  assert(!moved.includes(idx(cols, 0, 0)), "vacated cell not marked (empty)");
 }
 
 console.log("sort refine.selftest: ok");

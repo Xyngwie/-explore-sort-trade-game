@@ -57,6 +57,19 @@ export const SORT_V0_RULES = {
    * swaps stay free while settling (including already-landed panels).
    */
   settleStepMs: 500,
+  /**
+   * Min pointer travel (px) before a gesture is treated as a swipe.
+   * Kept modest so short mobile flicks still register.
+   */
+  swipeMinPx: 18,
+  /**
+   * Axis-dominance ratio for swipe direction (player-favorable).
+   * Accept when max(|dx|,|dy|) >= min(|dx|,|dy|) * swipeAxisDominanceRatio.
+   * 1.15 ≈ require the strong axis to be ≥15% larger → accept gestures within
+   * ~41° of a cardinal axis; reject only near-equal true diagonals (ratio < 1.15).
+   * More forgiving than a tight axial cone; still NG for fully diagonal.
+   */
+  swipeAxisDominanceRatio: 1.15,
   /** Swaps scale with budget so small demos stay short. */
   movesPerValidPiece: 0.35,
   minMoves: 12,
@@ -539,6 +552,65 @@ export function canSwapAdjacent(
   b: number,
 ): boolean {
   return areAdjacent(cols, a, b);
+}
+
+export type SwipeAxis = "horizontal" | "vertical";
+
+/**
+ * Classify a swipe into a cardinal axis, or null if it's a tap / true diagonal.
+ * See SORT_V0_RULES.swipeAxisDominanceRatio for the player-favorable threshold.
+ */
+export function classifySwipeAxis(dx: number, dy: number): SwipeAxis | null {
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+  const minPx = SORT_V0_RULES.swipeMinPx;
+  if (absX < minPx && absY < minPx) return null;
+  const max = Math.max(absX, absY);
+  const min = Math.min(absX, absY);
+  // Reject near-equal axes (true / almost-true diagonal).
+  if (max < min * SORT_V0_RULES.swipeAxisDominanceRatio) return null;
+  return absX >= absY ? "horizontal" : "vertical";
+}
+
+/**
+ * Resolve the orthogonal neighbor index for a swipe starting at `fromIdx`.
+ * Returns null for taps, rejected diagonals, or edge-of-board.
+ */
+export function resolveSwipeNeighbor(
+  cols: number,
+  rows: number,
+  fromIdx: number,
+  dx: number,
+  dy: number,
+): number | null {
+  if (fromIdx < 0 || fromIdx >= cols * rows) return null;
+  const axis = classifySwipeAxis(dx, dy);
+  if (axis == null) return null;
+  const r = Math.floor(fromIdx / cols);
+  const c = fromIdx % cols;
+  if (axis === "horizontal") {
+    if (dx > 0 && c + 1 < cols) return fromIdx + 1;
+    if (dx < 0 && c > 0) return fromIdx - 1;
+    return null;
+  }
+  if (dy > 0 && r + 1 < rows) return fromIdx + cols;
+  if (dy < 0 && r > 0) return fromIdx - cols;
+  return null;
+}
+
+/**
+ * Cell indices whose occupant changed during a settle tick (fell in or spawned).
+ * Used by the UI to play a one-row fall-in CSS animation without changing logic timing.
+ */
+export function settleMotionIndices(before: Cell[], after: Cell[]): number[] {
+  const out: number[] = [];
+  const n = Math.min(before.length, after.length);
+  for (let i = 0; i < n; i++) {
+    if (after[i] == null) continue;
+    if (before[i] === after[i]) continue;
+    out.push(i);
+  }
+  return out;
 }
 
 /** True if placing `kind` at (r,c) would complete a H or V run of 3+. */
