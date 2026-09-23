@@ -8,6 +8,7 @@ import {
   applyWearReportsToFleet,
   buildExploreToHubWearUrl,
   buildInvadeToTradeUrl,
+  clearFrontProgressHitMine,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   resolveModuleBaseUrl,
@@ -53,6 +54,24 @@ export function isForcedCombatLock(
 ): boolean {
   if (opts?.handoffIntent) return false;
   return board.hitMine === true;
+}
+
+/** Drop in-memory forced lock (does not touch HubSave). */
+export function releaseForcedCombatLock(board: { hitMine: boolean }): void {
+  board.hitMine = false;
+}
+
+/**
+ * Clear pending forced lock in HubSave.frontProgress (keep board progress).
+ * Call after forced combat reaches any terminal outcome, or on back-wipe.
+ */
+export function clearPendingForcedCombat(
+  storage?: Pick<Storage, "getItem" | "setItem"> | null,
+): boolean {
+  const hub = readHub(storage);
+  if (hub.frontProgress?.hitMine !== true) return false;
+  const next = clearFrontProgressHitMine(hub);
+  return saveHubSaveToLocalStorage(next, storage ?? undefined);
 }
 
 export function readHandoffIntent(
@@ -104,7 +123,10 @@ export function wipeAllMechsDestroyed(
     durabilityAfter: 0,
   }));
   const fleet = applyWearReportsToFleet(hub.fleet, mechWear);
-  const next = normalizeHubSnapshot({ ...hub, fleet });
+  // Back-wipe ends the forced obligation — do not leave stale lock on re-entry.
+  const next = clearFrontProgressHitMine(
+    normalizeHubSnapshot({ ...hub, fleet }),
+  );
   saveHubSaveToLocalStorage(next, storage ?? undefined);
   return { wipedCount: mechWear.length, mechWear, hub: next };
 }

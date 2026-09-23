@@ -43,6 +43,7 @@ import {
   normalizeFrontProgress,
   setFrontProgressInHub,
   clearFrontProgressInHub,
+  clearFrontProgressHitMine,
   INITIAL_HUB,
   HUB_LIMITS,
 } from "./hub-save";
@@ -1063,6 +1064,24 @@ console.log("shared circuit-lock selftest: ok");
   });
   assert.ok(legacy);
   assert.equal(legacy!.hub.frontProgress, null);
+
+  // clear hitMine only — keep opened/flagged/focus
+  hub = setFrontProgressInHub(INITIAL_HUB, {
+    seed: 7,
+    aoiHalf: 12,
+    opened: [{ sx: 0, sy: 0 }, { sx: 1, sy: 0 }],
+    flagged: [{ sx: 2, sy: 1 }],
+    focus: { sx: 1, sy: 0 },
+    hitMine: true,
+  } as never);
+  assert.equal(hub.frontProgress!.hitMine, true);
+  hub = clearFrontProgressHitMine(hub);
+  assert.equal(hub.frontProgress!.hitMine, false);
+  assert.equal(hub.frontProgress!.opened.length, 2);
+  assert.equal(hub.frontProgress!.flagged.length, 1);
+  assert.equal(hub.frontProgress!.focus?.sx, 1);
+  hub = clearFrontProgressHitMine(hub); // idempotent
+  assert.equal(hub.frontProgress!.hitMine, false);
 
   hub = clearFrontProgressInHub(hub);
   assert.equal(hub.frontProgress, null);

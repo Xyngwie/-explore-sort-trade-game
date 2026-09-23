@@ -984,7 +984,8 @@ console.log("explore selftest: ok");
 import {
   ALL_DESTROYED_INTEL,
   resolveExploreForcedBackWipe,
-  wipeFleetAndBuildTradeUrl,
+  clearInvadeForcedLockAfterResolve,
+wipeFleetAndBuildTradeUrl,
 } from "./game/forcedBackWipe";
 import {
   HUB_SAVE_STORAGE_KEY,
@@ -994,6 +995,7 @@ import {
   deserializeHubSave,
   normalizeHubSnapshot,
   serializeHubSave,
+  setFrontProgressInHub,
 } from "@estg/shared";
 
 {
@@ -1034,4 +1036,35 @@ import {
   });
   assert.equal(suppressed, null);
   console.log("explore forcedBackWipe helper ok");
+
+{
+  // wipe / resolve clear clears invade forced lock flag
+  const map = new Map<string, string>();
+  const storage = {
+    get length() { return map.size; },
+    clear() { map.clear(); },
+    getItem(k: string) { return map.has(k) ? map.get(k)! : null; },
+    key(i: number) { return [...map.keys()][i] ?? null; },
+    removeItem(k: string) { map.delete(k); },
+    setItem(k: string, v: string) { map.set(k, String(v)); },
+  } as Storage;
+  const fleet = [createOwnedMech("mech_gen1", { instanceId: "e2", durability: 60 })];
+  let hub = normalizeHubSnapshot({ ...INITIAL_HUB, fleet });
+  hub = setFrontProgressInHub(hub, {
+    seed: 3,
+    aoiHalf: 12,
+    opened: [{ sx: 1, sy: 1 }],
+    flagged: [],
+    focus: { sx: 1, sy: 1 },
+    hitMine: true,
+  });
+  storage.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(createHubSave(hub)));
+  assert.equal(clearInvadeForcedLockAfterResolve(storage), true);
+  const saved = deserializeHubSave(storage.getItem(HUB_SAVE_STORAGE_KEY)!);
+  assert.equal(saved!.hub.frontProgress!.hitMine, false);
+  assert.equal(saved!.hub.frontProgress!.opened.length, 1);
+  assert.equal(clearInvadeForcedLockAfterResolve(storage), false);
+  console.log("explore clearInvadeForcedLockAfterResolve ok");
+}
+
 }

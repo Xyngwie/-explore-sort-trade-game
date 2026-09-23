@@ -570,6 +570,8 @@ export function restoreBoardFromProgress(
   if (!Number.isFinite(progress.seed)) return null;
 
   const board = generateBoard(aoiHalf, progress.seed >>> 0);
+  // hitMine is the pending forced-combat lock flag only — do not re-derive
+  // from opened mine cells (those stay open for board state / visuals).
   board.hitMine = progress.hitMine === true;
 
   for (const o of progress.opened ?? []) {
@@ -577,7 +579,6 @@ export function restoreBoardFromProgress(
     if (!cell || cell.blocked) continue;
     cell.open = true;
     cell.flagged = false;
-    if (cell.mine) board.hitMine = true;
   }
 
   for (const f of progress.flagged ?? []) {
