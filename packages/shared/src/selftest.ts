@@ -584,6 +584,8 @@ import {
   computeCircuitEffectValue,
   formatCircuitEffectJa,
   isCircuitSingleLoopClosed,
+  listCircuitClosedLoops,
+  selectSmallestClosedLoop,
 } from "./circuit-effect";
 import {
   FLAWED_HAZARD_WEIGHTS,
@@ -1396,6 +1398,105 @@ console.log("shared handoff-m45 selftest: ok");
     puzzleId: VERIFY_TRUE_PUZZLE_ID,
   });
   assert.deepEqual(cluesResolved, VERIFY_TRUE_CLUES.map((row) => [...row]));
+
+  // Multi-loop: effect from the *smallest* closed loop only (not sum of all).
+  //  - Unit square (4 edges) around (0,0) with digit 4 → +4
+  //  - 2×1 rectangle (6 edges) around (2,1)-(3,1) with digit 3 → +3
+  // Old bug summed 7; new rule picks smallest → effect 4.
+  {
+    const c = 4;
+    const r = 3;
+    const clues: (number | null)[][] = [
+      [4, null, null, null],
+      [null, null, 3, null],
+      [null, null, null, null],
+    ];
+    const m: EdgeMark[] = Array.from(
+      { length: edgeCount(c, r) },
+      () => 0 as EdgeMark,
+    );
+    m[circuitHEdgeIndex(c, r, 0, 0)] = 1;
+    m[circuitVEdgeIndex(c, r, 1, 0)] = 1;
+    m[circuitHEdgeIndex(c, r, 0, 1)] = 1;
+    m[circuitVEdgeIndex(c, r, 0, 0)] = 1;
+    m[circuitHEdgeIndex(c, r, 2, 1)] = 1;
+    m[circuitHEdgeIndex(c, r, 3, 1)] = 1;
+    m[circuitVEdgeIndex(c, r, 4, 1)] = 1;
+    m[circuitHEdgeIndex(c, r, 3, 2)] = 1;
+    m[circuitHEdgeIndex(c, r, 2, 2)] = 1;
+    m[circuitVEdgeIndex(c, r, 2, 1)] = 1;
+
+    const loops = listCircuitClosedLoops(m, c, r);
+    assert.equal(loops.length, 2);
+    const smallest = selectSmallestClosedLoop(loops);
+    assert.ok(smallest);
+    assert.equal(smallest!.edgeIndices.length, 4);
+
+    const multi = computeCircuitEffectValue({
+      clues,
+      marks: m,
+      cols: c,
+      rows: r,
+      perfect: false,
+    });
+    assert.equal(multi.loopCount, 2);
+    assert.equal(multi.hasLoop, true);
+    assert.equal(multi.activeLoopEdgeCount, 4);
+    assert.equal(multi.effect, 4);
+    assert.equal(multi.digits.satisfied, 2);
+    assert.equal(multi.digits.clueCount, 2);
+  }
+
+  // Screenshot intent: smallest loop alone has satisfied digit 3 → effect 3.
+  // Disjoint loops (no shared vertices): small 2×1 (6 edges) + large 3×1 (8 edges).
+  // Both carry a satisfied digit 3; board-wide sum would be 6; active = 3.
+  {
+    const c = 5;
+    const r = 4;
+    const clues: (number | null)[][] = [
+      [3, null, null, null, null],
+      [null, null, null, null, null],
+      [null, null, null, 3, null],
+      [null, null, null, null, null],
+    ];
+    const m: EdgeMark[] = Array.from(
+      { length: edgeCount(c, r) },
+      () => 0 as EdgeMark,
+    );
+    // Large 3×1 around (0,0)(1,0)(2,0) — 8 edges
+    m[circuitHEdgeIndex(c, r, 0, 0)] = 1;
+    m[circuitHEdgeIndex(c, r, 1, 0)] = 1;
+    m[circuitHEdgeIndex(c, r, 2, 0)] = 1;
+    m[circuitVEdgeIndex(c, r, 3, 0)] = 1;
+    m[circuitHEdgeIndex(c, r, 2, 1)] = 1;
+    m[circuitHEdgeIndex(c, r, 1, 1)] = 1;
+    m[circuitHEdgeIndex(c, r, 0, 1)] = 1;
+    m[circuitVEdgeIndex(c, r, 0, 0)] = 1;
+    // Small 2×1 around (3,2)(4,2) — 6 edges; digit 3 at (3,2)
+    m[circuitHEdgeIndex(c, r, 3, 2)] = 1;
+    m[circuitHEdgeIndex(c, r, 4, 2)] = 1;
+    m[circuitVEdgeIndex(c, r, 5, 2)] = 1;
+    m[circuitHEdgeIndex(c, r, 4, 3)] = 1;
+    m[circuitHEdgeIndex(c, r, 3, 3)] = 1;
+    m[circuitVEdgeIndex(c, r, 3, 2)] = 1;
+
+    const loops = listCircuitClosedLoops(m, c, r);
+    assert.equal(loops.length, 2);
+    assert.equal(selectSmallestClosedLoop(loops)!.edgeIndices.length, 6);
+
+    const shot = computeCircuitEffectValue({
+      clues,
+      marks: m,
+      cols: c,
+      rows: r,
+      perfect: false,
+    });
+    assert.equal(shot.loopCount, 2);
+    assert.equal(shot.activeLoopEdgeCount, 6);
+    assert.equal(shot.effect, 3);
+    assert.equal(shot.digits.satisfied, 2);
+    assert.equal(shot.digits.clueCount, 2);
+  }
 }
 
 console.log("shared circuit-effect selftest: ok");

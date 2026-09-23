@@ -3,10 +3,17 @@
  *
  * Formula (神宮 / RESTORE_V0):
  * 1. If the board has **no closed loop**, effect = **0** (effects inactive).
- * 2. Otherwise sum contributions from **satisfied** digit cells:
- *    - digit **d ≥ 1**: contribute **d**
+ * 2. When multiple closed loops exist, pick **exactly one** active loop:
+ *    the **smallest** proper closed cycle by edge count (then by vertex count).
+ * 3. Sum contributions from **satisfied** digit cells on that active loop:
+ *    - digit **d ≥ 1**: contribute **d** if the cell touches the active loop
+ *      (at least one of its line edges is on the cycle)
  *    - digit **0**: contribute **0** on flawed / wounded-and-below boards;
- *      on a **perfect** circuit each satisfied 0 contributes **4**
+ *      on a **perfect** circuit (single loop) each board-wide satisfied 0
+ *      contributes **4** (0-cells have no line edges, so they never "touch"
+ *      a cycle; perfect single-loop keeps the prior board-wide 0→4 rule)
+ * 4. Digits satisfied only on non-active loops contribute **0** to effect
+ *    (satisfaction meter may still count them board-wide).
  *
  * "Perfect" means Perfect Circuit clearance (all digits satisfied +
  * single closed loop), or an explicit `perfect` / `locked` flag.
@@ -166,6 +173,79 @@ function buildLineAdjacency(
   return adj;
 }
 
+/** One proper closed cycle on the line-edge graph. */
+export type CircuitClosedLoop = {
+  /** Dot vertex ids on the cycle (length = edge count). */
+  vertices: number[];
+  /** Line-edge indices that form the cycle. */
+  edgeIndices: number[];
+};
+
+/** Map two adjacent dot vertices to their shared H/V edge index. */
+function edgeIndexBetweenVertices(
+  cols: number,
+  rows: number,
+  a: number,
+  b: number,
+): number {
+  const vw = cols + 1;
+  const ax = a % vw;
+  const ay = Math.floor(a / vw);
+  const bx = b % vw;
+  const by = Math.floor(b / vw);
+  if (ay === by && Math.abs(ax - bx) === 1) {
+    return circuitHEdgeIndex(cols, rows, Math.min(ax, bx), ay);
+  }
+  if (ax === bx && Math.abs(ay - by) === 1) {
+    return circuitVEdgeIndex(cols, rows, ax, Math.min(ay, by));
+  }
+  // Non-adjacent: treat as invalid graph (caller rejects).
+  return -1;
+}
+
+/**
+ * List closed loops on the line-edge graph.
+ * Requires every used vertex degree 2; each component is one cycle (≥4 verts).
+ * Returns [] if the graph is not a disjoint union of such cycles.
+ */
+export function listCircuitClosedLoops(
+  marks: readonly EdgeMark[],
+  cols: number,
+  rows: number,
+): CircuitClosedLoop[] {
+  const adj = buildLineAdjacency(marks, cols, rows);
+  if (!adj) return [];
+
+  const seen = new Set<number>();
+  const loops: CircuitClosedLoop[] = [];
+  for (let start = 0; start < adj.length; start++) {
+    if (adj[start]!.length === 0 || seen.has(start)) continue;
+
+    const vertices: number[] = [];
+    const edgeIndices: number[] = [];
+    const component = new Set<number>();
+    let prev = -1;
+    let cur = start;
+    for (;;) {
+      if (component.has(cur)) return [];
+      component.add(cur);
+      seen.add(cur);
+      vertices.push(cur);
+      const nbrs = adj[cur]!;
+      const next = nbrs[0] === prev ? nbrs[1]! : nbrs[0]!;
+      const ei = edgeIndexBetweenVertices(cols, rows, cur, next);
+      if (ei < 0) return [];
+      edgeIndices.push(ei);
+      prev = cur;
+      cur = next;
+      if (cur === start) break;
+    }
+    if (vertices.length < 4) return [];
+    loops.push({ vertices, edgeIndices });
+  }
+  return loops;
+}
+
 /**
  * Count closed loops on the line-edge graph.
  * Requires every used vertex degree 2; each component is one cycle (≥4 verts).
@@ -176,31 +256,41 @@ export function countCircuitClosedLoops(
   cols: number,
   rows: number,
 ): number {
-  const adj = buildLineAdjacency(marks, cols, rows);
-  if (!adj) return 0;
+  return listCircuitClosedLoops(marks, cols, rows).length;
+}
 
-  const seen = new Set<number>();
-  let loops = 0;
-  for (let start = 0; start < adj.length; start++) {
-    if (adj[start]!.length === 0 || seen.has(start)) continue;
-
-    const component = new Set<number>();
-    let prev = -1;
-    let cur = start;
-    for (;;) {
-      if (component.has(cur)) return 0;
-      component.add(cur);
-      seen.add(cur);
-      const nbrs = adj[cur]!;
-      const next = nbrs[0] === prev ? nbrs[1]! : nbrs[0]!;
-      prev = cur;
-      cur = next;
-      if (cur === start) break;
-    }
-    if (component.size < 4) return 0;
-    loops++;
+/**
+ * Multi-loop selection (product lock): the **smallest** proper closed cycle
+ * by edge count, then by vertex count. Digits on other loops do not score.
+ */
+export function selectSmallestClosedLoop(
+  loops: readonly CircuitClosedLoop[],
+): CircuitClosedLoop | null {
+  if (loops.length === 0) return null;
+  let best = loops[0]!;
+  for (let i = 1; i < loops.length; i++) {
+    const L = loops[i]!;
+    const be = best.edgeIndices.length;
+    const le = L.edgeIndices.length;
+    if (le < be) best = L;
+    else if (le === be && L.vertices.length < best.vertices.length) best = L;
   }
-  return loops;
+  return best;
+}
+
+/** True when a digit cell shares at least one line edge with the loop. */
+export function circuitDigitTouchesLoop(
+  marks: readonly EdgeMark[],
+  cols: number,
+  rows: number,
+  cx: number,
+  cy: number,
+  loopEdges: ReadonlySet<number>,
+): boolean {
+  for (const i of circuitCellEdgeIndices(cols, rows, cx, cy)) {
+    if (marks[i] === 1 && loopEdges.has(i)) return true;
+  }
+  return false;
 }
 
 /** True when line edges form exactly one cycle. */
@@ -234,10 +324,12 @@ export function circuitDigitEffectContribution(
 export type CircuitEffectBreakdown = {
   /** Final effect value (0 when no loop). */
   effect: number;
-  /** Sum of digit contributions ignoring the loop gate. */
+  /** Sum of digit contributions on the active loop (before no-loop gate). */
   rawSum: number;
   loopCount: number;
   hasLoop: boolean;
+  /** Edge count of the selected (smallest) closed loop; 0 when none. */
+  activeLoopEdgeCount: number;
   perfect: boolean;
   digits: CircuitDigitStats;
   /** Satisfied zeros that counted as 4 (only when perfect). */
@@ -260,16 +352,23 @@ export type ComputeCircuitEffectInput = {
 
 /**
  * Current circuit effect value.
- * No closed loop → 0. Satisfied 0-cells count as 4 only on perfect circuits.
+ * No closed loop → 0. Multi-loop → score only the smallest closed loop.
+ * Satisfied 0-cells count as 4 only on perfect (single-loop) circuits.
  */
 export function computeCircuitEffectValue(
   input: ComputeCircuitEffectInput,
 ): CircuitEffectBreakdown {
   const { clues, marks, cols, rows } = input;
   const digits = circuitDigitSatisfaction(clues, marks, cols, rows);
-  const loopCount = countCircuitClosedLoops(marks, cols, rows);
+  const loops = listCircuitClosedLoops(marks, cols, rows);
+  const loopCount = loops.length;
   const hasLoop = loopCount >= 1;
   const singleLoop = loopCount === 1;
+  const activeLoop = selectSmallestClosedLoop(loops);
+  const activeLoopEdgeCount = activeLoop?.edgeIndices.length ?? 0;
+  const activeEdges = activeLoop
+    ? new Set<number>(activeLoop.edgeIndices)
+    : null;
   const perfect =
     input.perfect === true ||
     input.locked === true ||
@@ -283,14 +382,27 @@ export function computeCircuitEffectValue(
 
   let rawSum = 0;
   let zeroBonusApplied = 0;
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const c = clues[y]?.[x];
-      if (c == null) continue;
-      if (countLineEdgesAroundCell(marks, cols, rows, x, y) !== c) continue;
-      const contrib = circuitDigitEffectContribution(c, perfect);
-      rawSum += contrib;
-      if (c === 0 && perfect) zeroBonusApplied += 4;
+  if (activeEdges) {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const c = clues[y]?.[x];
+        if (c == null) continue;
+        if (countLineEdgesAroundCell(marks, cols, rows, x, y) !== c) continue;
+
+        if (c === 0) {
+          // 0-cells never touch line edges; keep board-wide 0→4 on perfect
+          // single-loop circuits only (perfect implies singleLoop or flag).
+          if (!perfect) continue;
+          rawSum += 4;
+          zeroBonusApplied += 4;
+          continue;
+        }
+
+        if (!circuitDigitTouchesLoop(marks, cols, rows, x, y, activeEdges)) {
+          continue;
+        }
+        rawSum += circuitDigitEffectContribution(c, perfect);
+      }
     }
   }
 
@@ -300,6 +412,7 @@ export function computeCircuitEffectValue(
     rawSum,
     loopCount,
     hasLoop,
+    activeLoopEdgeCount,
     perfect,
     digits,
     zeroBonusApplied,
