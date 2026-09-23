@@ -12,6 +12,7 @@ import {
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
   armExploreForcedHistory,
+  clearInvadeForcedLockAfterResolve,
   markExploreForcedHandoffIntent,
   resolveExploreForcedBackWipe,
 } from "./game/forcedBackWipe";
@@ -662,6 +663,8 @@ function frame(now: number): void {
   if (world.phase !== phaseBefore) {
     if (world.phase === "result" && forcedEngageActive) {
       markExploreForcedHandoffIntent();
+      // Any terminal outcome clears invade forced lock so re-entry is playable.
+      clearInvadeForcedLockAfterResolve();
     }
     needsDom = true;
     renderDom();

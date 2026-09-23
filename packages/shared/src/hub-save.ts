@@ -75,7 +75,11 @@ export type InvadeFrontProgress = {
   flagged: FrontCellCoord[];
   /** Route focus; null = none / quick-battle skip. */
   focus: FrontCellCoord | null;
-  /** Soft hazard — player stepped a mine. */
+  /**
+   * Pending forced-combat lock (mine stepped, sortie not yet resolved).
+   * Cleared when forced combat reaches any terminal outcome (or back-wipe).
+   * Not re-derived from opened mine cells on restore.
+   */
   hitMine?: boolean;
   /** ISO timestamp of last write (optional). */
   updatedAt?: string;
@@ -643,6 +647,19 @@ export function setFrontProgressInHub(
 /** Clear invade front progress (e.g. after regenerate board). */
 export function clearFrontProgressInHub(hub: HubSnapshot): HubSnapshot {
   return normalizeHubSnapshot({ ...hub, frontProgress: null });
+}
+
+/**
+ * Clear pending forced-combat lock (`frontProgress.hitMine`) only.
+ * Keeps seed / opened / flagged / focus so Invade re-entry stays playable.
+ */
+export function clearFrontProgressHitMine(
+  hub: HubSnapshot,
+  at = new Date(),
+): HubSnapshot {
+  const fp = hub.frontProgress;
+  if (fp == null || fp.hitMine !== true) return hub;
+  return setFrontProgressInHub(hub, { ...fp, hitMine: false }, at);
 }
 
 /** Purchase / add a fresh owned mech if under cap. */

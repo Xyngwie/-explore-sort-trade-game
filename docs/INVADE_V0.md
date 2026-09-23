@@ -199,6 +199,7 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 - ロック中にブラウザの戻る（`popstate`）→ HubSave 全艦隊 `durability=0`（大破）+ trade URL に `intelFlags=allDestroyed` と `returnKind=fail` の wear を載せる。
 - 意図的な強制出撃 CTA は sessionStorage で handoff intent を立て、wipe しない。
 - explore 側も `engage=forced` の出撃中 `popstate` で同様に wipe → trade（結果画面到達後は intent で抑止）。
+- **強制戦闘が任意の終端（生還 / 失敗 / abort / back-wipe）に達したら** `HubSave.frontProgress.hitMine` をクリアする。再入場で stale ロックを復活させない（開いた地雷マスの見た目は残す）。pending 中（未ハンドオフ）は従来どおりロック。
 
 ## 9. パッケージ / 試し方（ひな型）
 
