@@ -96,6 +96,9 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   align-items: center;
   justify-content: center;
   color: inherit;
+  /* Override global button { touch-action: manipulation } so board swipes
+     are not delayed / dropped by the browser's double-tap-zoom heuristic. */
+  touch-action: none;
 }
 .cell.empty {
   background: #0d1014;
@@ -144,8 +147,20 @@ button.cell {
   .cell { min-height: 2.35rem; font-size: 0.8rem; }
 }
 
-.board.settling .cell:not(.empty):not(.pending) {
-  transition: transform 0.5s linear;
+/* One-row visual fall: logic still ticks every --settle-ms (~500ms);
+   each discrete step eases continuously so motion is not a teleport. */
+@keyframes panel-fall-in {
+  from {
+    transform: translateY(calc(-100% - 3px));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.cell.fall-in {
+  animation: panel-fall-in var(--settle-ms, 500ms) linear both;
+  will-change: transform;
+  z-index: 2;
 }
 .board.settling {
   box-shadow: inset 0 0 0 2px rgba(63, 185, 80, 0.35);

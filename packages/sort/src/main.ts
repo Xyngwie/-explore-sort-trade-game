@@ -17,6 +17,8 @@ import {
   createTestPlayRefine,
   demoQueryExample,
   finishRefine,
+  resolveSwipeNeighbor,
+  settleMotionIndices,
   startRefine,
   swapPanels,
   tapCell,
@@ -31,6 +33,10 @@ import {
 const root = document.querySelector<HTMLDivElement>("#app")!;
 let state: RefineLive = createRefineFromLocationSearch(window.location.search);
 let chainTimer: ReturnType<typeof setTimeout> | null = null;
+/** Cell indices to play fall-in animation on the next render (settle tick only). */
+let fallInIndices: Set<number> = new Set();
+/** Suppress the synthetic click that follows a successful touch/pen swipe. */
+let suppressCellClick = false;
 
 function tradeBaseUrl(): string {
   return resolveModuleBaseUrl("trade");
@@ -82,8 +88,11 @@ function schedulePlayTimers() {
   if (state.playMode === "settling") {
     const delay = Math.max(40, SORT_V0_RULES.settleStepMs);
     chainTimer = setTimeout(() => {
+      const before = state.board;
       state = tickSettleStep(state);
+      fallInIndices = new Set(settleMotionIndices(before, state.board));
       render();
+      fallInIndices = new Set();
       schedulePlayTimers();
     }, delay);
   }
@@ -92,6 +101,8 @@ function schedulePlayTimers() {
 function setState(next: RefineLive) {
   const prevMode = state.playMode;
   state = next;
+  // Non-timer updates (swaps / taps) should not reuse stale fall-in marks.
+  fallInIndices = new Set();
   if (
     state.playMode === "clearing" ||
     state.playMode === "settling" ||
@@ -105,11 +116,13 @@ function setState(next: RefineLive) {
 
 function boardHtml(s: RefineLive): string {
   const pending = new Set(s.pendingClear);
+  const settleMs = SORT_V0_RULES.settleStepMs;
   const cells = s.board
     .map((kind, i) => {
       const extras = [
         pending.has(i) ? "pending" : "",
         s.selected === i ? "selected" : "",
+        fallInIndices.has(i) && kind != null ? "fall-in" : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -124,7 +137,7 @@ function boardHtml(s: RefineLive): string {
     })
     .join("");
   const settling = s.playMode === "settling" ? " settling" : "";
-  return `<div class="board${settling}" style="--cols:${s.cols}" role="grid" aria-label="精製盤">${cells}</div>`;
+  return `<div class="board${settling}" style="--cols:${s.cols};--settle-ms:${settleMs}ms" role="grid" aria-label="精製盤">${cells}</div>`;
 }
 
 function controlsHtml(s: RefineLive): string {
@@ -281,6 +294,11 @@ function render() {
   root.querySelectorAll<HTMLButtonElement>("button.cell[data-idx]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
+      // Swipe already consumed this gesture — ignore the trailing click.
+      if (suppressCellClick) {
+        suppressCellClick = false;
+        return;
+      }
       const idx = Number(btn.dataset.idx);
       if (!Number.isFinite(idx)) return;
       setState(tapCell(state, idx));
@@ -310,64 +328,84 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// Touch swipe on board cells: adjacent swap (H + V) — works during blink + slow settle (active chain)
-let touchStartX = 0;
-let touchStartY = 0;
-let touchIdx: number | null = null;
-root.addEventListener(
-  "touchstart",
-  (e) => {
-    if (state.phase !== "play" || e.touches.length !== 1) return;
-    const t = e.touches[0]!;
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    const cell = el?.closest?.("button.cell[data-idx]") as HTMLElement | null;
-    if (!cell) {
-      touchIdx = null;
-      return;
-    }
-    touchIdx = Number(cell.dataset.idx);
-    touchStartX = t.clientX;
-    touchStartY = t.clientY;
-  },
-  { passive: true },
-);
-root.addEventListener(
-  "touchend",
-  (e) => {
-    if (state.phase !== "play" || touchIdx == null || e.changedTouches.length !== 1) {
-      touchIdx = null;
-      return;
-    }
-    const t = e.changedTouches[0]!;
-    const dx = t.clientX - touchStartX;
-    const dy = t.clientY - touchStartY;
-    const absX = Math.abs(dx);
-    const absY = Math.abs(dy);
-    const threshold = 24;
-    const cols = state.cols;
-    const sel = touchIdx;
-    touchIdx = null;
+// Pointer swipe on board cells: adjacent swap (H + V).
+// Uses Pointer Events + setPointerCapture so:
+// - settle-tick innerHTML rebuilds do not drop the gesture
+// - pointerup outside the board still resolves
+// - touch-action:none on .board/.cell avoids browser gesture hijack
+// Works during blink + slow settle (active chain). Tap-tap remains via click.
+let ptrId: number | null = null;
+let ptrStartX = 0;
+let ptrStartY = 0;
+let ptrIdx: number | null = null;
 
-    if (absX < threshold && absY < threshold) {
-      // Tap handled by click on button
-      return;
-    }
+function resetPointerGesture() {
+  ptrId = null;
+  ptrIdx = null;
+}
 
-    const r = Math.floor(sel / cols);
-    const c = sel % cols;
-    let target: number | null = null;
-    if (absX > absY) {
-      if (dx > 0 && c + 1 < cols) target = sel + 1;
-      if (dx < 0 && c > 0) target = sel - 1;
-    } else {
-      if (dy > 0 && r + 1 < state.rows) target = sel + cols;
-      if (dy < 0 && r > 0) target = sel - cols;
-    }
-    if (target == null) return;
-    e.preventDefault();
-    setState(swapPanels(state, sel, target));
-  },
-  { passive: false },
-);
+root.addEventListener("pointerdown", (e) => {
+  if (state.phase !== "play") return;
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  const cell = (e.target as Element | null)?.closest?.(
+    "button.cell[data-idx]",
+  ) as HTMLElement | null;
+  if (!cell) {
+    resetPointerGesture();
+    return;
+  }
+  const idx = Number(cell.dataset.idx);
+  if (!Number.isFinite(idx)) {
+    resetPointerGesture();
+    return;
+  }
+  ptrId = e.pointerId;
+  ptrIdx = idx;
+  ptrStartX = e.clientX;
+  ptrStartY = e.clientY;
+  try {
+    root.setPointerCapture(e.pointerId);
+  } catch {
+    /* capture optional — still track by pointerId */
+  }
+});
+
+function finishPointerSwipe(e: PointerEvent) {
+  if (ptrId !== e.pointerId || ptrIdx == null) {
+    resetPointerGesture();
+    return;
+  }
+  const sel = ptrIdx;
+  const dx = e.clientX - ptrStartX;
+  const dy = e.clientY - ptrStartY;
+  resetPointerGesture();
+
+  if (state.phase !== "play") return;
+
+  const target = resolveSwipeNeighbor(
+    state.cols,
+    state.rows,
+    sel,
+    dx,
+    dy,
+  );
+  if (target == null) {
+    // Tap / rejected diagonal: leave to click handler (tap-tap select/swap).
+    return;
+  }
+  // Consume trailing synthetic click so swipe does not also tap.
+  // Clear shortly after in case the browser never emits click.
+  suppressCellClick = true;
+  window.setTimeout(() => {
+    suppressCellClick = false;
+  }, 350);
+  e.preventDefault();
+  setState(swapPanels(state, sel, target));
+}
+
+root.addEventListener("pointerup", finishPointerSwipe);
+root.addEventListener("pointercancel", (e) => {
+  if (ptrId === e.pointerId) resetPointerGesture();
+});
 
 render();
