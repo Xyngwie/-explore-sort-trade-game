@@ -17,20 +17,27 @@ import {
   type EdgeMark,
 } from "@estg/shared";
 import {
+  classifyPlayResult,
+  clueDensity,
   cycleEdgeMark,
   deriveStubOutcome,
   digitSatisfaction,
   isCellDigitActivated,
   generateFlawedClues,
   generatePuzzle,
+  hasContradictionBlock,
   hEdgeIndex,
   isLoopClosed,
   vEdgeIndex,
   lineEdgeCount,
+  sampleGeneratorRatios,
+  FLAWED_HAZARD_WEIGHTS,
 } from "./puzzle";
 import {
   bootstrapFromSearch,
+  buildNextLocalBoardHref,
   buildReturnToTradeUrl,
+  readLocalSeedFromSearch,
   stripInboundSearchFromLocation,
 } from "./session";
 
@@ -55,8 +62,11 @@ assert.equal(puzzle.cols, 6);
 assert.equal(puzzle.rows, 6);
 assert.equal(puzzle.clues.length, 6);
 assert.equal(puzzle.clues[0]!.length, 6);
+assert.equal(puzzle.rarity, "flawed_majority");
+assert.ok(puzzle.hazard !== "none");
 // deterministic
 assert.deepEqual(generatePuzzle("selftest-seed", 6, 6).clues, puzzle.clues);
+assert.equal(generatePuzzle("selftest-seed", 6, 6).hazard, puzzle.hazard);
 
 // 2×2 unit square loop on a 3×3 cell board
 {
@@ -124,12 +134,95 @@ assert.deepEqual(generatePuzzle("selftest-seed", 6, 6).clues, puzzle.clues);
   assert.equal(isCellDigitActivated(clues, m, cols, rows, 0, 0), true);
 }
 
-
 assert.equal(deriveStubOutcome(true, 1, 4), "fully_awakened");
 assert.equal(deriveStubOutcome(true, 0.5, 4), "bypass");
 assert.equal(deriveStubOutcome(false, 0.8, 4), "bypass");
 assert.equal(deriveStubOutcome(false, 0.2, 2), "offline");
 assert.equal(deriveStubOutcome(false, 1, 0), "offline");
+// Partial progress with a few lines → Bypass (imperfect craft).
+assert.equal(deriveStubOutcome(false, 0.2, 4), "bypass");
+assert.equal(deriveStubOutcome(false, 0.5, 1), "bypass");
+
+// --- outcome classification ---
+{
+  const cols = 2;
+  const rows = 2;
+  const clues = VERIFY_TRUE_CLUES;
+  const empty = Array.from({ length: edgeCount(cols, rows) }, () => 0 as EdgeMark);
+  const offline = classifyPlayResult(clues, empty, cols, rows);
+  assert.equal(offline.outcome, "offline");
+  assert.equal(offline.perfectClearance, false);
+
+  const sol = buildVerifyTrueSolutionMarks();
+  const full = classifyPlayResult(clues, sol, cols, rows);
+  assert.equal(full.outcome, "fully_awakened");
+  assert.equal(full.perfectClearance, true);
+  assert.equal(full.digits.rate, 1);
+  assert.equal(full.loopClosed, true);
+
+  // Force Bypass override even on a full board (manual commit path).
+  const forced = classifyPlayResult(clues, sol, cols, rows, "bypass");
+  assert.equal(forced.outcome, "bypass");
+  assert.equal(forced.perfectClearance, false);
+}
+
+// --- flawed hazard generators ---
+{
+  const c = generateFlawedClues("haz-c", 6, 6, undefined, "contradiction");
+  assert.equal(c.hazard, "contradiction");
+  assert.equal(hasContradictionBlock(c.clues), true);
+
+  const o = generateFlawedClues("haz-o", 6, 6, undefined, "overdigit");
+  assert.equal(o.hazard, "overdigit");
+  assert.ok(clueDensity(o.clues) >= 0.55);
+
+  const d = generateFlawedClues("haz-d", 6, 6, undefined, "dense_noise");
+  assert.equal(d.hazard, "dense_noise");
+  assert.ok(clueDensity(d.clues) > 0);
+  assert.ok(clueDensity(d.clues) < 1);
+
+  const forced = generatePuzzle("force-c", 6, 6, { forceHazard: "contradiction" });
+  assert.equal(forced.rarity, "flawed_majority");
+  assert.equal(forced.hazard, "contradiction");
+  assert.equal(hasContradictionBlock(forced.clues), true);
+}
+
+assert.ok(
+  Math.abs(
+    FLAWED_HAZARD_WEIGHTS.contradiction +
+      FLAWED_HAZARD_WEIGHTS.overdigit +
+      FLAWED_HAZARD_WEIGHTS.dense_noise -
+      1,
+  ) < 1e-9,
+);
+
+// --- generator ratios: majority flawed, rare perfect ---
+{
+  const none = sampleGeneratorRatios(80, { injectRate: 0, seedPrefix: "r0" });
+  assert.equal(none.perfect, 0);
+  assert.equal(none.flawed, 80);
+  assert.equal(
+    none.hazards.contradiction + none.hazards.overdigit + none.hazards.dense_noise,
+    80,
+  );
+  // Hazard mix should hit each bucket at least once across 80 draws.
+  assert.ok(none.hazards.contradiction > 0);
+  assert.ok(none.hazards.overdigit > 0);
+  assert.ok(none.hazards.dense_noise > 0);
+
+  const always = sampleGeneratorRatios(40, { injectRate: 1, seedPrefix: "r1" });
+  assert.equal(always.perfect, 40);
+  assert.equal(always.flawed, 0);
+  assert.equal(always.perfectRate, 1);
+
+  // ~1% inject: most trials flawed; allow statistical slack.
+  const rare = sampleGeneratorRatios(200, {
+    injectRate: PERFECT_CIRCUIT_PROD_RATE,
+    seedPrefix: "prod",
+  });
+  assert.ok(rare.flawed >= 190, `expected flawed majority, got ${rare.flawed}`);
+  assert.ok(rare.perfect <= 10, `expected rare perfect, got ${rare.perfect}`);
+}
 
 // --- M4/M5 handoff wire (restore session) ---
 {
@@ -137,7 +230,22 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.equal(demo.source, "demo");
   assert.equal(demo.puzzle.cols, 6);
   assert.equal(demo.puzzle.puzzleId, "restore-stub-6");
+  assert.equal(demo.rarity, "flawed_majority");
   assert.ok(!demo.circuitId);
+}
+
+{
+  assert.equal(readLocalSeedFromSearch("?seed=alpha-board"), "alpha-board");
+  const seeded = bootstrapFromSearch("?seed=alpha-board", { injectRate: 0 });
+  assert.equal(seeded.source, "demo");
+  assert.equal(seeded.puzzle.puzzleId, "alpha-board");
+  assert.equal(seeded.rarity, "flawed_majority");
+  const href = buildNextLocalBoardHref(
+    "next-1",
+    "https://example.test/restore/?perfectRate=0.01",
+  );
+  assert.ok(href.includes("seed=next-1"));
+  assert.ok(href.includes("perfectRate=0.01"));
 }
 
 {
@@ -211,7 +319,6 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.ok(s.inboundOutcome == null);
 }
 
-
 {
   const board0 = createEmptyCircuitBoard(4, 4, "locked-board");
   const ttr = buildTradeToRestoreUrl({
@@ -248,13 +355,14 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.equal(parsed!.perfect, true);
 }
 
-
 // --- verify-true fixed puzzle is solvable → fully_awakened ---
 {
   const puzzle = generatePuzzle(VERIFY_TRUE_PUZZLE_ID, 8, 8);
   assert.equal(puzzle.cols, 2);
   assert.equal(puzzle.rows, 2);
   assert.equal(puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(puzzle.rarity, "perfect_rare");
+  assert.equal(puzzle.hazard, "none");
   assert.deepEqual(puzzle.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
 
   const solution = buildVerifyTrueSolutionMarks();
@@ -275,9 +383,9 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.equal(session.puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
   assert.equal(session.puzzle.cols, 2);
   assert.equal(session.locked, false);
+  assert.equal(session.rarity, "perfect_rare");
   assert.equal(session.marks.every((m) => m === 0), true);
 }
-
 
 // --- Perfect Circuit injection rates on generatePuzzle ---
 {
@@ -294,6 +402,8 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
 
   const trueBoard = generatePuzzle("roll-me", 6, 6, { forceKind: "true" });
   assert.equal(trueBoard.injectedTrue, true);
+  assert.equal(trueBoard.rarity, "perfect_rare");
+  assert.equal(trueBoard.hazard, "none");
   assert.equal(trueBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
   assert.equal(trueBoard.cols, 2);
   assert.deepEqual(trueBoard.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
@@ -303,22 +413,29 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
 
   const flawed = generatePuzzle("flaw-path", 6, 6, { forceKind: "flawed" });
   assert.equal(flawed.injectedTrue, false);
+  assert.equal(flawed.rarity, "flawed_majority");
   assert.equal(flawed.puzzleId, "flaw-path");
   assert.equal(flawed.cols, 6);
-  assert.deepEqual(flawed.clues, generateFlawedClues("flaw-path", 6, 6));
+  assert.deepEqual(
+    flawed.clues,
+    generateFlawedClues("flaw-path", 6, 6).clues,
+  );
 
   // rate 0 → always flawed; rate 1 → always true
   const never = generatePuzzle("r0", 6, 6, { injectRate: 0, rng: () => 0 });
   assert.equal(never.injectedTrue, false);
+  assert.equal(never.rarity, "flawed_majority");
   const always = generatePuzzle("r1", 6, 6, { injectRate: 1, rng: () => 0.99 });
   assert.equal(always.injectedTrue, true);
+  assert.equal(always.rarity, "perfect_rare");
   assert.equal(always.puzzleId, VERIFY_TRUE_PUZZLE_ID);
 
   // bootstrap with explicit DEV rate + rng-forced inject via injectRate 1
   const injectedSession = bootstrapFromSearch("", { injectRate: 1 });
   assert.equal(injectedSession.injectedTrue, true);
   assert.equal(injectedSession.puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
-  assert.ok(injectedSession.note.includes("真盤"));
+  assert.equal(injectedSession.rarity, "perfect_rare");
+  assert.ok(injectedSession.note.includes("Perfect rare") || injectedSession.note.includes("真盤"));
 
   const hiddenSession = bootstrapFromSearch("", {
     injectRate: 1,
@@ -332,6 +449,7 @@ assert.equal(deriveStubOutcome(false, 1, 0), "offline");
   assert.equal(flawedSession.injectedTrue, false);
   assert.equal(flawedSession.puzzle.puzzleId, "restore-stub-6");
   assert.equal(flawedSession.puzzle.cols, 6);
+  assert.equal(flawedSession.rarity, "flawed_majority");
 }
 
 console.log("restore circuit.selftest ok");

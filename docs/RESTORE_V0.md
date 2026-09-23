@@ -1,7 +1,7 @@
 # Restore v0（Module 5 ドラフト仕様 — 精密回路修復）
 
-**ステータス:** ドラフト仕様 / 薄いスタブ（`packages/restore`）· ハンドオフ **キー契約のみ**（UI 未配線）· 2026-09-19  
-**性質:** [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5 と `CircuitBoardState` を落とした **V0 ドラフト**。パズル本編の本判定は薄いスタブ止まり。  
+**ステータス:** ドラフト仕様 / プレイアブル厚みスタブ（`packages/restore`）· ハンドオフ **キー契約**（trade UI ナビは Hub 側）· 2026-09-23  
+**性質:** [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5 と `CircuitBoardState` を落とした **V0 ドラフト**。不完全基板＋稀な可解コア、成果語彙、刻印ロックまでローカルで触れる。フルソルバ／宇宙レイヤは非スコープ。  
 **系譜:** Slitherlink 風の回路復元（高価値ワンオフ）
 
 関連: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.5、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
@@ -22,11 +22,11 @@ Slitherlink 系の **精密回路修復**。日常の薄利多売（sort）と�
 
 | 含む（仕様として書く） | 含まない（非ゴール） |
 |---|---|
-| 成果状態: Fully Awakened / Bypass / Offline | 本編 Slitherlink ソルバ・生成器 |
-| `CircuitBoardState` インタフェース草案 | HubSave v3 版上げ（v2 加算は trade 側で実施） |
-| `edgeState` のサイズ感と encode/decode スタブ | タイマー／タイムアタック |
-| 薄いスタブページ「精密回路修復」 | explore/sort/trade/invade への **UI ナビ配線** |
-| 後続スタブ受け入れ条件 | 報酬経済の本バランス |
+| 成果状態: Fully Awakened / Bypass / Offline | 本編フル Slitherlink ソルバ |
+| 不完全基板生成（矛盾／過剰数字／ノイズ）+ 稀な Perfect 注入 | HubSave v3 版上げ（v2 加算は trade 側で実施） |
+| `CircuitBoardState` / edgeState encode/decode | タイマー／タイムアタック |
+| プレイアブル「精密回路修復」+ 刻印ロックスタブ | explore/sort/trade/invade パッケージ改変 |
+| digit 充足スコアと outcome 分類 selftest | Multiverse / 兵種解放 / 報酬本バランス |
 
 ---
 
@@ -40,11 +40,15 @@ Slitherlink 系の **精密回路修復**。日常の薄利多売（sort）と�
 
 プレイヤーを時間で追い詰める失敗条件は置かない（間違えた線を直せる／中断して Offline を選べる、など）。
 
-### 3.1 設計哲学メモ（願望 / 未実装）
+### 3.1 設計哲学メモ（願望 → ローカル厚み）
 
-完全に解ける盤は稀な最上位の「true」コアとし、大半は意図的に矛盾や誤りを含むハズレ（**flawed substrate**）を想定する。部分解決でもプレイヤーの手間を **Bypass** として性能向上に反映し、職人の腕前を感じられる余地を残す、という願望である。これは **Fully Awakened / Bypass / Offline** の成果語彙に沿うが、実装受入条件・生成規則・本判定を追加するものではない。
+完全に解ける盤は稀な最上位の「true」コアとし、大半は意図的に矛盾や誤りを含むハズレ（**flawed substrate**）とする。部分解決でもプレイヤーの手間を **Bypass** として性能向上に反映し、職人の腕前を感じられる余地を残す。
 
-**願望メモ（未実装）:** Fully Awakened / Bypass を、将来の機体・部隊の兵種（scout / armor / raid など）の解放／役割切替に結びつける案もあるが、未決定。
+**ローカル実装（`packages/restore` · 2026-09-23）:**
+- 生成器は多数派を **flawed_majority**（hazard: `contradiction` / `overdigit` / `dense_noise`）にし、Perfect は seeded injection（`PERFECT_CIRCUIT_*_RATE`）のみ。
+- スコアは digit satisfaction。成果は **Fully Awakened**（単一ループ＋数字 100%）/ **Bypass**（部分進捗）/ **Offline**（未着手・放棄）。
+- Perfect クリア時は `locked` + 刻印名スタブ（`lastEditorName`）。タイマー圧なし。
+- 兵種解放（scout / armor / raid）・Multiverse・HubSave v3 は **まだ未実装**（非スコープ）。
 
 ---
 
@@ -114,6 +118,19 @@ export interface CircuitBoardState {
 ---
 
 
+## 5.0. プレイアブル厚み（packages/restore · 2026-09-23）
+
+| 項目 | 内容 |
+|---|---|
+| 多数派基板 | `rarity=flawed_majority`。hazard 比率おおよそ contradiction 45% / overdigit 30% / dense_noise 25% |
+| 稀少基板 | `rarity=perfect_rare`。seeded true injection（本番 ~1%、DEV ~33%、`?perfectRate=`）または `verify-true-2` |
+| スコア | 満たした digit 数 / 手がかり数（UI メーター） |
+| 成果 | Fully Awakened（閉ループ＋ digit 100%）→ 刻印ロック可 / Bypass（部分進捗）/ Offline（放棄・未着手） |
+| ローカル操作 | Commit Bypass · Abandon→Offline · 次の基板（`?seed=`）· 刻印名入力スタブ |
+| 非スコープ | Multiverse、scout/armor 解放、HubSave v3、タイマー |
+
+---
+
 ## 5.4. Hub 永続（Module 3）
 
 restore→trade 取込後、回路は **`HubSave.hub.circuits`**（`HubCircuitRecord`: `circuitId` + `circuitBoard` + `outcome` + `lastEditorName?` + `locked?`）に upsert される。  
@@ -156,14 +173,15 @@ trade ハンガーの一覧から選択して trade→restore URL を開ける�
 
 shared: `buildTradeToRestoreUrl` / `buildRestoreToTradeUrl`。
 
-## 6. 後続スタブ受け入れ条件（まだ実装しない）
+## 6. スタブ受け入れ条件（ローカル厚み）
 
-1. 小さな固定盤で辺をトグル（empty → line → mark → empty）できる  
+1. 小さな盤で辺をトグル（empty → line → mark → empty）できる  
 2. `encodeEdgeState` / `decodeEdgeState` 往復で盤が復元できる  
-3. 完了操作で `fully_awakened` | `bypass` | `offline` のいずれかを選べる（本判定ロジックは仮でよい）  
+3. digit 充足とループから `fully_awakened` | `bypass` | `offline` を分類できる（手動 Commit / Abandon 可）  
 4. UI にタイマーを出さない  
-5. 他モジュールへ遷移するリンクを持たない（未配線のまま）  
-6. `npm run typecheck` と `packages/restore` の typecheck が通る  
+5. 大半の生成盤は flawed（hazard 付き）；Perfect は注入または `verify-true-2` のみ  
+6. Perfect クリア相当では刻印名スタブと lock を restore→trade ペイロードに載せる  
+7. `npm run test -w @estg/restore` が通る（生成比率・outcome 分類を含む）  
 
 ---
 
@@ -182,5 +200,5 @@ npm run dev:restore
 
 ## 8. 採否メモ
 
-- **位置づけ:** V0 ドラフト仕様 + 空の Vite ひな型。ビジョンの Module 5 欄の受け皿。
-- **次:** UI ナビ配線（HANDOFF_M45 builder を完了ボタンに接続）。親（参謀）承認後にチケット化。
+- **位置づけ:** V0 ドラフト仕様 + プレイアブル厚みスタブ。ビジョンの Module 5（不完全多数／Perfect 稀少）をローカルで体験できる受け皿。
+- **次:** Hub 側ナビの磨き、本ソルバは別チケット。兵種解放・cosmos は非スコープのまま。
