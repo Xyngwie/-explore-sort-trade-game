@@ -30,7 +30,9 @@ import {
   TEST_PLAY_CONTAINERS,
   tickSettleStep,
   toCraftingResult,
+  validSupplyGaugeState,
   type RefineLive,
+  type PieceKind,
 } from "./refine";
 import { PIECES_PER_CONTAINER } from "@estg/shared";
 import { yieldBagFromClearedCounts } from "@estg/shared";
@@ -40,6 +42,7 @@ import {
   resolveRestartState,
   toStagePhase,
 } from "./resultOverlay";
+import { buildPlayHudHtml, buildValidSupplyGaugeHtml } from "./playHud";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -1094,6 +1097,59 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     fromTest.note.includes("テストプレイ"),
     "test-play restart note",
   );
+}
+
+
+// Valid-supply gauge state (bag leftover vs budget) — visualization, not a banner
+{
+  const full = validSupplyGaugeState({
+    bag: ["food", "material", "energy"],
+    validPieceBudget: 10,
+  });
+  assert(full.remaining === 3, "gauge remaining from bag");
+  assert(full.budget === 10, "gauge budget");
+  assert(Math.abs(full.ratio - 0.3) < 1e-9, "gauge ratio 3/10");
+  assert(!full.depleted, "gauge not depleted with bag");
+
+  const empty = validSupplyGaugeState({ bag: [], validPieceBudget: 50 });
+  assert(empty.remaining === 0 && empty.depleted, "empty bag → depleted");
+  assert(empty.ratio === 0, "depleted ratio 0");
+
+  const zeroBudget = validSupplyGaugeState({ bag: [], validPieceBudget: 0 });
+  assert(zeroBudget.ratio === 0 && zeroBudget.depleted, "zero budget safe");
+
+  // junk never counts as supply in the bag filter
+  const mixed: PieceKind[] = ["junk", "food", "junk"];
+  const junky = validSupplyGaugeState({
+    bag: mixed,
+    validPieceBudget: 2,
+  });
+  assert(junky.remaining === 1, "junk filtered from remaining");
+}
+
+// Play HUD includes remaining-valid gauge (no junk-transition banner copy)
+{
+  const briefing = createRefineFromLocationSearch(
+    "?salvagedContainers=2&totalStockPieces=50&isExtracted=1",
+  );
+  const playing = startRefine(briefing, 7);
+  const hud = buildPlayHudHtml(playing);
+  assert(hud.includes('aria-label="プレイ HUD"'), "hud rail");
+  assert(hud.includes("hud-gauge"), "valid supply gauge class");
+  assert(hud.includes('aria-label="残り有効パネル"'), "gauge aria");
+  assert(hud.includes('role="meter"'), "gauge meter role");
+  const g = validSupplyGaugeState(playing);
+  assert(hud.includes(`aria-valuenow="${g.remaining}"`), "gauge valuenow");
+  assert(hud.includes(`aria-valuemax="${g.budget}"`), "gauge valuemax");
+  assert(!hud.includes("ジャンク移行"), "no junk-transition banner phrasing");
+  assert(!hud.includes("junk-transition"), "no junk-transition banner class");
+
+  const depletedHud = buildValidSupplyGaugeHtml({
+    bag: [],
+    validPieceBudget: 40,
+  });
+  assert(depletedHud.includes("depleted"), "depleted class when bag empty");
+  assert(depletedHud.includes('aria-valuenow="0"'), "depleted valuenow 0");
 }
 
 console.log("sort refine.selftest: ok");

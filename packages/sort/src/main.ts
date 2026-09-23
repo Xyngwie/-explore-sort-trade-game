@@ -36,6 +36,7 @@ import {
   toStagePhase,
   type SessionSource,
 } from "./resultOverlay";
+import { buildPlayHudHtml } from "./playHud";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 let state: RefineLive = createRefineFromLocationSearch(window.location.search);
@@ -159,29 +160,6 @@ function boardPlaceholderHtml(cols: number, rows: number): string {
     return `<div class="cell empty" aria-hidden="true"></div>`;
   }).join("");
   return `<div class="board board-placeholder" style="--cols:${cols}" role="presentation" aria-hidden="true">${cells}</div>`;
-}
-
-function playHudHtml(s: RefineLive): string {
-  const chain =
-    s.playMode === "clearing" || s.playMode === "settling"
-      ? `×${s.chainCount}${s.playMode === "settling" ? " 落下" : " 点滅"}`
-      : s.lastChain > 0
-        ? `前回×${s.lastChain}`
-        : "—";
-  return `
-    <div class="hud-rail" aria-label="プレイ HUD">
-      <div class="hud-stat"><span class="hud-k">手数</span><span class="hud-v">${s.movesLeft}</span></div>
-      <div class="hud-stat"><span class="hud-k">袋</span><span class="hud-v">${s.bag.length}</span></div>
-      <div class="hud-stat"><span class="hud-k">消</span><span class="hud-v">${s.cleared.food}/${s.cleared.material}/${s.cleared.energy}</span></div>
-      <div class="hud-stat"><span class="hud-k">連鎖</span><span class="hud-v">${escapeHtml(chain)}</span></div>
-      <div class="legend hud-legend" aria-hidden="true">
-        <span class="swatch food">食</span>
-        <span class="swatch material">部</span>
-        <span class="swatch energy">電</span>
-        <span class="swatch junk">ジャ</span>
-      </div>
-    </div>
-  `;
 }
 
 function playHintHtml(s: RefineLive): string {
@@ -310,7 +288,7 @@ function render() {
       </header>
 
       <div class="play-field" data-phase="${escapeHtml(stage)}" aria-label="プレイフィールド">
-        ${state.phase === "play" ? playHudHtml(state) : ""}
+        ${state.phase === "play" ? buildPlayHudHtml(state) : ""}
         <div class="stage">
           ${stageBoard}
           ${overlay}

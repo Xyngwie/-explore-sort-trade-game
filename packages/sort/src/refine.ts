@@ -1263,3 +1263,31 @@ export type ControlAction =
 export function applyControl(s: RefineLive, _action: ControlAction): RefineLive {
   return s;
 }
+
+/** Snapshot for the play-HUD remaining-valid supply gauge (bag vs budget). */
+export type ValidSupplyGauge = {
+  remaining: number;
+  budget: number;
+  /** 0..1 fraction of budget still in the supply bag. */
+  ratio: number;
+  depleted: boolean;
+};
+
+/**
+ * Remaining valid panels still in the supply bag (not yet dropped).
+ * Junk never sits in the bag — when this hits 0, subsequent refill is junk-only.
+ * Prefer this over a junk-transition banner for supply visualization.
+ */
+export function validSupplyGaugeState(
+  s: Pick<RefineLive, "bag" | "validPieceBudget">,
+): ValidSupplyGauge {
+  const remaining = remainingValidInBag(s.bag);
+  const budget = Math.max(0, s.validPieceBudget);
+  const ratio = budget <= 0 ? 0 : Math.min(1, remaining / budget);
+  return {
+    remaining,
+    budget,
+    ratio,
+    depleted: remaining <= 0,
+  };
+}
