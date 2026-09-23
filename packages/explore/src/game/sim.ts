@@ -4,6 +4,7 @@ import {
   cargoSpeedMul,
   onSalvageCompleted,
   pushLog,
+  spawnContainersAt,
 } from "./orders";
 import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
 import type { Bullet, Unit, World } from "./types";
@@ -120,6 +121,10 @@ function updateBullets(world: World, dt: number): void {
             ? "敵"
             : friendlyUnits(world).find((u) => u.id === b.ownerId)?.name ?? "分隊";
           reportBattle(world, `${killer} が ${t.name} を撃破`, t.pos);
+          // Enemy wrecks may spill 0–2 salvage containers at the death site.
+          if (t.kind === "enemy") {
+            spawnEnemyDeathDrops(world, t.pos);
+          }
         } else if (!inCamera(world, t.pos) || !inCamera(world, b.pos)) {
           reportBattle(
             world,
@@ -233,6 +238,122 @@ export function boardingCargoEta(world: World): number | null {
 export function boardingLiftOffEta(world: World): number | null {
   if (!world.boarding) return null;
   return Math.max(0, world.balance.boardingLiftOffDelaySec - boardingElapsed(world));
+}
+
+
+/**
+ * Roll and spawn 0..enemyDeathDropMax containers at an enemy death site.
+ * `forcedCount` overrides the roll (tests).
+ */
+export function spawnEnemyDeathDrops(
+  world: World,
+  at: Vec2,
+  forcedCount?: number,
+): number {
+  const max = world.balance.enemyDeathDropMax;
+  const count =
+    forcedCount != null
+      ? Math.max(0, Math.min(max, Math.floor(forcedCount)))
+      : Math.floor(Math.random() * (max + 1));
+  if (count <= 0) return 0;
+  const spawned = spawnContainersAt(world, at, count, {
+    discovered: true,
+    idPrefix: "drop",
+  });
+  pushLog(
+    world,
+    `敵残骸からコンテナ ${spawned.length} を発見。`,
+    "battle",
+  );
+  return spawned.length;
+}
+
+export type BoardingRequirementsHud = {
+  active: boolean;
+  /** Seconds until lift-off; null when idle. */
+  liftOffEta: number | null;
+  /** Seconds until cargo; null when idle or cargo already arrived. */
+  cargoEta: number | null;
+  cargoArrived: boolean;
+  /** Product rule: captain must be inside for success. */
+  mustBeIn: string;
+  captainInside: boolean;
+  aliveCount: number;
+  insideCount: number;
+  outsideCount: number;
+  outsideNames: string[];
+  insideNames: string[];
+  /** Large-HUD lines (JP). */
+  lines: string[];
+};
+
+/**
+ * Always-clear extract / return requirements for the center HUD.
+ * Failures must not feel like unclear rules.
+ */
+export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
+  const mustBeIn = "隊長が搭乗円内";
+  if (!world.boarding) {
+    return {
+      active: false,
+      liftOffEta: null,
+      cargoEta: null,
+      cargoArrived: false,
+      mustBeIn,
+      captainInside: false,
+      aliveCount: friendlyUnits(world).filter((u) => u.alive).length,
+      insideCount: 0,
+      outsideCount: 0,
+      outsideNames: [],
+      insideNames: [],
+      lines: [
+        "EXTRACT / 帰還要件",
+        "未要請 — X で搭乗円を展開",
+        `必須: ${mustBeIn}（離昇時）`,
+        `貨物 ${world.balance.boardingCargoDelaySec}s → 離昇 ${world.balance.boardingLiftOffDelaySec}s`,
+      ],
+    };
+  }
+
+  const alive = friendlyUnits(world).filter((u) => u.alive);
+  const inside = alive.filter((u) => isInsideBoarding(world, u));
+  const outside = alive.filter((u) => !isInsideBoarding(world, u));
+  const captainInside =
+    world.leader.alive && isInsideBoarding(world, world.leader);
+  const liftOffEta = boardingLiftOffEta(world);
+  const cargoEta = boardingCargoEta(world);
+  const cargoArrived = world.boarding.cargoArrived;
+  const lines: string[] = [
+    "EXTRACT / 帰還要件",
+    liftOffEta != null
+      ? `離昇まで ${liftOffEta.toFixed(1)}s`
+      : "離昇直前",
+    `必須: ${mustBeIn} → ${captainInside ? "円内 OK" : "円外！戻れ"}`,
+    `円内 ${inside.length} / 生存 ${alive.length}` +
+      (outside.length > 0
+        ? `（円外: ${outside.map((u) => u.name).join("・")}）`
+        : "（全員円内）"),
+  ];
+  if (!cargoArrived && cargoEta != null) {
+    lines.splice(2, 0, `貨物到着まで ${cargoEta.toFixed(1)}s`);
+  } else if (cargoArrived) {
+    lines.splice(2, 0, "貨物到着済 — 円内で離昇待機");
+  }
+
+  return {
+    active: true,
+    liftOffEta,
+    cargoEta,
+    cargoArrived,
+    mustBeIn,
+    captainInside,
+    aliveCount: alive.length,
+    insideCount: inside.length,
+    outsideCount: outside.length,
+    outsideNames: outside.map((u) => u.name),
+    insideNames: inside.map((u) => u.name),
+    lines,
+  };
 }
 
 /**

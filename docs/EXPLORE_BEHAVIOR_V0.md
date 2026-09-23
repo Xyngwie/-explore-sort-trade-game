@@ -91,6 +91,8 @@
 
 HUD は貨物 ETA／離昇 ETA とマップ上の搭乗円を表示する。
 
+**中央 EXTRACT／帰還要件 HUD（常時）:** マップ中央付近に大きく表示。離昇までの秒数、誰が円内必須か（隊長）、円内／生存人数（円外の名前）を明示し、失敗が「ルール不明」に感じられないようにする。未要請時も要件の要約を薄く表示。
+
 定数は `packages/explore/src/game/balance.ts` の `boardingRadius` / `boardingCargoDelaySec` / `boardingLiftOffDelaySec`。
 
 ---
@@ -143,7 +145,24 @@ invade マインスイーパから探索へ渡す戦闘モード。キー契約�
 | 会計 | `world.salvaged` は回収時点で加算済みのまま（預けても没収しない）。置場は速度管理用の一時ステージング |
 | HUD | 隊長の速度％（積載遅延）とキャンプ状態（未設置／置場 N）。ボタン／キー: C 設置・U 荷下ろし・G 積込 |
 
-定数: `packages/explore/src/game/balance.ts` の `cargoSpeedMulMin`。API: `cargoSpeedMul` / `setCampOrDeposit` / `unloadAtCamp` / `pickUpFromCamp`（`orders.ts`）。
+定数: `packages/explore/src/game/balance.ts` の `cargoSpeedMulMin`。API: `cargoSpeedMul` / `setCampOrDeposit` / `unloadAtCamp` / `pickUpFromCamp` / `purgeCargo`（`orders.ts`）。
+
+### 5.4.1 パージ（キャンプへ降ろす／戦場投下）
+
+| 項目 | 挙動 |
+|---|---|
+| 操作 | ボタン「パージ／キャンプへ降ろす」または `P` |
+| キャンプ付近 | 生存友軍の積載を置場へ預ける（`world.salvaged` は維持） |
+| それ以外 | 積載をその場のフィールドコンテナとして投下（発見済・再回収可）。`world.salvaged` と個人積載を減らし軽装化して戦闘しやすくする |
+
+### 5.5 フィールドコンテナと敵撃破ドロップ
+
+| 項目 | 挙動 |
+|---|---|
+| 初期配置 | `BALANCE.fieldContainerCount`（既定 **20**）。旧 ~6 個キャップを廃止し、残骸フィールドに多数配置 |
+| 敵撃破 | 敵破壊時に死亡地点へ **0–2** コンテナをスポーン（`enemyDeathDropMax`、発見済） |
+
+API: `spawnContainersAt` / `spawnEnemyDeathDrops`。
 
 ---
 

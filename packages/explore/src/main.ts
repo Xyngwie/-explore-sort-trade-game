@@ -14,6 +14,7 @@ import {
   applyOrder,
   cargoSpeedMul,
   pickUpFromCamp,
+  purgeCargo,
   rallyWingman,
   scatterSearch,
   setCampOrDeposit,
@@ -22,6 +23,7 @@ import {
 import {
   boardingCargoEta,
   boardingLiftOffEta,
+  boardingRequirementsHud,
   isWingmanOffscreen,
   requestExtract,
   tickWorld,
@@ -87,6 +89,11 @@ window.addEventListener("keydown", (e) => {
     pickUpFromCamp(world);
     needsDom = true;
   }
+  if (k === "p" && world.phase === "sortie") {
+    e.preventDefault();
+    purgeCargo(world);
+    needsDom = true;
+  }
 });
 window.addEventListener("keyup", (e) => {
   keys.delete(e.key.toLowerCase());
@@ -110,6 +117,45 @@ function escapeHtml(s: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+
+function extractReqHudHtml(): string {
+  const hud = boardingRequirementsHud(world);
+  if (!hud.active) {
+    return `<div class="extract-req-hud idle" id="extract-req-hud" aria-live="polite">
+      <div class="erq-title">EXTRACT / 帰還要件</div>
+      <div class="erq-seconds">未要請</div>
+      <div class="erq-must">必須: ${hud.mustBeIn}（離昇時）</div>
+      <div class="erq-sub">X で搭乗円 · 貨物 ${world.balance.boardingCargoDelaySec}s → 離昇 ${world.balance.boardingLiftOffDelaySec}s</div>
+    </div>`;
+  }
+  const danger = !hud.captainInside;
+  const cls = danger ? "extract-req-hud active danger" : "extract-req-hud active";
+  const seconds =
+    hud.liftOffEta != null
+      ? `離昇まで ${hud.liftOffEta.toFixed(1)}s`
+      : "離昇直前";
+  const must = hud.captainInside
+    ? `必須: ${hud.mustBeIn} → 円内 OK`
+    : `必須: ${hud.mustBeIn} → 円外！戻れ`;
+  const count =
+    `円内 ${hud.insideCount} / 生存 ${hud.aliveCount}` +
+    (hud.outsideCount > 0
+      ? `（円外: ${hud.outsideNames.join("・")}）`
+      : "（全員円内）");
+  const sub = hud.cargoArrived
+    ? "貨物到着済 — 円内で離昇待機"
+    : hud.cargoEta != null
+      ? `貨物到着まで ${hud.cargoEta.toFixed(1)}s`
+      : "";
+  return `<div class="${cls}" id="extract-req-hud" aria-live="polite">
+    <div class="erq-title">EXTRACT / 帰還要件</div>
+    <div class="erq-seconds" id="erq-seconds">${seconds}</div>
+    <div class="erq-must" id="erq-must">${must}</div>
+    <div class="erq-count" id="erq-count">${count}</div>
+    ${sub ? `<div class="erq-sub" id="erq-sub">${sub}</div>` : `<div class="erq-sub" id="erq-sub"></div>`}
+  </div>`;
 }
 
 function order(wingId: string, stance: Stance): void {
@@ -349,16 +395,18 @@ function renderDom(): void {
       <div>
         <div class="canvas-wrap">
           <canvas id="map" width="720" height="420"></canvas>
+          ${extractReqHudHtml()}
         </div>
         <div class="row">
           <button type="button" id="btn-extract" ${boardingActive ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。">${boardingActive ? "抽出シーケンス中…" : "抽出要請（搭乗円）"}</button>
           <button type="button" class="secondary" id="btn-camp" title="隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。">キャンプ設置</button>
           <button type="button" class="secondary" id="btn-camp-unload" title="キャンプ付近で積載を置場へ荷下ろし（U）。">荷下ろし</button>
+          <button type="button" class="secondary" id="btn-purge" title="パージ：キャンプ付近は置場へ降ろす／それ以外は戦場へ投下して軽装化（P）。">パージ／キャンプへ降ろす</button>
           <button type="button" class="secondary" id="btn-camp-pickup" title="キャンプ付近で置場から積込（G）。">キャンプから積込</button>
           <button type="button" class="stance-raid" id="btn-scatter" title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。積載が多いほど移動が遅くなる（BALANCE.cargoSpeedMulMin）。C で仮設キャンプ設置・U で荷下ろし・G で取り上げ。遊撃は地点指定なし。抽出はどこからでも要請→搭乗円・僚機自動哨戒・貨物10s／離昇15s。</p>
+        <p class="help">未発見コンテナは非表示。発見後に黄四角。フィールドに多数配置＋敵撃破で 0–2 ドロップ。積載が多いほど移動が遅くなる。C キャンプ・U 荷下ろし・P パージ（キャンプへ／戦場投下）・G 取り上げ。中央 HUD が抽出の秒数・必須（隊長円内）・円内人数を常時表示。抽出はどこからでも要請→搭乗円・僚機自動哨戒・貨物10s／離昇15s。</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -383,6 +431,10 @@ function renderDom(): void {
   });
   document.getElementById("btn-camp-unload")?.addEventListener("click", () => {
     unloadAtCamp(world);
+    needsDom = true;
+  });
+  document.getElementById("btn-purge")?.addEventListener("click", () => {
+    purgeCargo(world);
     needsDom = true;
   });
   document.getElementById("btn-camp-pickup")?.addEventListener("click", () => {
@@ -438,6 +490,18 @@ function paintHudOnly(): void {
         cargoEta != null
           ? `貨物 ${cargoEta.toFixed(1)}s / 離昇 ${(liftEta ?? 0).toFixed(1)}s`
           : `貨物到着 · 離昇 ${(liftEta ?? 0).toFixed(1)}s`;
+    }
+  }
+
+  const erq = document.getElementById("extract-req-hud");
+  if (erq) {
+    const wrap = erq.parentElement;
+    // Replace overlay in place so canvas listeners stay bound
+    const tmp = document.createElement("div");
+    tmp.innerHTML = extractReqHudHtml();
+    const next = tmp.firstElementChild;
+    if (next && wrap) {
+      wrap.replaceChild(next, erq);
     }
   }
   const extractBtn = document.getElementById("btn-extract") as HTMLButtonElement | null;

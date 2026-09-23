@@ -10,15 +10,19 @@ import {
   scatterSearch,
   cargoSpeedMul,
   pickUpFromCamp,
+  purgeCargo,
   setCampOrDeposit,
+  spawnContainersAt,
   unloadAtCamp,
 } from "./game/orders";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import {
   boardingCargoEta,
   boardingLiftOffEta,
+  boardingRequirementsHud,
   isInsideBoarding,
   requestExtract,
+  spawnEnemyDeathDrops,
   tickWorld,
 } from "./game/sim";
 import { BALANCE, threatFromDensity,
@@ -734,6 +738,113 @@ function advancePinned(
 
   // Unload with no cargo denied
   assert.equal(unloadAtCamp(world), "denied");
+}
+
+
+// --- field containers: many more than the old ~6 cap ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  assert.ok(
+    world.containers.length >= BALANCE.fieldContainerCount,
+    `expected >= ${BALANCE.fieldContainerCount} field crates, got ${world.containers.length}`,
+  );
+  assert.equal(world.containers.length, BALANCE.fieldContainerCount);
+  assert.ok(BALANCE.fieldContainerCount > 6);
+  const ids = new Set(world.containers.map((c) => c.id));
+  assert.equal(ids.size, world.containers.length);
+}
+
+// --- enemy death drops 0–2 at death site ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  const before = world.containers.length;
+  const at = { x: 900, y: 400 };
+  assert.equal(spawnEnemyDeathDrops(world, at, 0), 0);
+  assert.equal(world.containers.length, before);
+  assert.equal(spawnEnemyDeathDrops(world, at, 2), 2);
+  assert.equal(world.containers.length, before + 2);
+  const drops = world.containers.slice(-2);
+  for (const c of drops) {
+    assert.equal(c.taken, false);
+    assert.equal(c.discovered, true);
+    assert.ok(Math.hypot(c.pos.x - at.x, c.pos.y - at.y) < 40);
+  }
+  // Forced count clamps to enemyDeathDropMax
+  assert.equal(spawnEnemyDeathDrops(world, at, 99), BALANCE.enemyDeathDropMax);
+}
+
+// --- purge: camp deposit + field drop ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  world.leader.pos = { x: 500, y: 500 };
+  assert.equal(setCampOrDeposit(world), "camp_set");
+  const campPos = { ...world.camp!.pos };
+
+  // Wingman at camp deposits via purge
+  const w0 = world.wingmen[0]!;
+  w0.pos = { ...campPos };
+  w0.salvagedCount = 2;
+  world.salvaged = 2;
+  // Wingman far from camp drops to field
+  const w1 = world.wingmen[1]!;
+  w1.pos = { x: 200, y: 200 };
+  w1.salvagedCount = 1;
+  world.salvaged = 3;
+  const cratesBefore = world.containers.length;
+
+  assert.equal(purgeCargo(world), "purged");
+  assert.equal(w0.salvagedCount, 0);
+  assert.equal(world.camp!.stashedCount, 2);
+  assert.equal(w1.salvagedCount, 0);
+  assert.equal(world.salvaged, 2); // field drop removed 1 from salvaged; camp deposit kept theirs
+  assert.equal(world.containers.length, cratesBefore + 1);
+  assert.ok(world.logs.some((l) => l.text.includes("パージ")));
+
+  // No cargo → denied
+  assert.equal(purgeCargo(world), "denied");
+}
+
+// --- boarding requirements HUD clarity ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  const idle = boardingRequirementsHud(world);
+  assert.equal(idle.active, false);
+  assert.ok(idle.lines.some((l) => l.includes("必須")));
+  assert.ok(idle.mustBeIn.includes("隊長"));
+
+  world.leader.pos = { x: 500, y: 500 };
+  const w0 = world.wingmen[0]!;
+  const w1 = world.wingmen[1]!;
+  w0.pos = { x: 505, y: 505 };
+  w1.pos = { x: 900, y: 900 };
+  assert.ok(requestExtract(world));
+  // Pin after request
+  world.leader.pos = { x: 500, y: 500 };
+  w0.pos = { x: 505, y: 505 };
+  w1.pos = { x: 900, y: 900 };
+
+  const hud = boardingRequirementsHud(world);
+  assert.equal(hud.active, true);
+  assert.ok(hud.liftOffEta != null && hud.liftOffEta > 14);
+  assert.equal(hud.captainInside, true);
+  assert.equal(hud.insideCount, 2);
+  assert.equal(hud.outsideCount, 1);
+  assert.deepEqual(hud.outsideNames, [w1.name]);
+  assert.ok(hud.lines[0]!.includes("EXTRACT"));
+  assert.ok(hud.lines.some((l) => l.includes("離昇まで")));
+  assert.ok(hud.lines.some((l) => l.includes("必須") && l.includes("隊長")));
+  assert.ok(hud.lines.some((l) => l.includes("円内") && l.includes("生存")));
 }
 
 
