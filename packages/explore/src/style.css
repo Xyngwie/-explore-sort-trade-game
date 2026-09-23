@@ -299,3 +299,24 @@ button.extract-not-ready {
   padding: 0.32rem 0.45rem;
   font-size: 0.72rem;
 }
+
+.timeout-lock-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.75rem;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  background: #3a1a1eee;
+  border: 1px solid #ff6b6baa;
+  color: #ffd0d0;
+  font-size: 0.82rem;
+}
+.timeout-lock-banner strong {
+  color: #ff9b9b;
+  letter-spacing: 0.04em;
+}
+.hud strong.timed-out {
+  color: #ff9b9b;
+}

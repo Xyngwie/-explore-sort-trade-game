@@ -20,6 +20,12 @@ export function pushLog(
   void max;
 }
 
+
+/** Sortie clock exhausted: move/cargo locked; combat + existing boarding continue. */
+export function isOperationTimedOut(world: World): boolean {
+  return world.operationTimedOut || world.timeLeft <= 0;
+}
+
 export function abortSalvage(wing: Unit): void {
   wing.salvageId = null;
   wing.salvageT = 0;
@@ -99,6 +105,10 @@ export function applyOrder(
  */
 export function scatterSearch(world: World): "applied" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";
+  if (isOperationTimedOut(world)) {
+    pushLog(world, "時間切れのため散開不可（移動ロック）。");
+    return "denied";
+  }
 
   const living: Unit[] = [
     world.leader,
@@ -224,6 +234,10 @@ export function setCampOrDeposit(
   world: World,
 ): "camp_set" | "moved" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";
+  if (isOperationTimedOut(world)) {
+    pushLog(world, "時間切れのためキャンプ操作不可。");
+    return "denied";
+  }
   const leader = world.leader;
   const r = world.balance.interactRadius * 1.5;
 
@@ -278,6 +292,10 @@ export function setCampOrDeposit(
  * per craft). Does not set or relocate camp — use setCampOrDeposit for that.
  */
 export function unloadAtCamp(world: World): "unloaded" | "denied" {
+  if (isOperationTimedOut(world)) {
+    pushLog(world, "時間切れのため荷下ろし不可。");
+    return "denied";
+  }
   if (world.phase !== "sortie" || !world.leader.alive || !world.camp) {
     if (world.phase === "sortie" && world.leader.alive && !world.camp) {
       pushLog(world, "キャンプ未設置。先に C で設置せよ。");
@@ -312,6 +330,10 @@ export function unloadAtCamp(world: World): "unloaded" | "denied" {
  * Captain (and nearby friendlies) pick up stashed cargo into free capacity.
  */
 export function pickUpFromCamp(world: World): "picked" | "denied" {
+  if (isOperationTimedOut(world)) {
+    pushLog(world, "時間切れのため積込不可。");
+    return "denied";
+  }
   if (world.phase !== "sortie" || !world.leader.alive || !world.camp) {
     return "denied";
   }
@@ -425,6 +447,10 @@ export function purgeCargo(
   world: World,
 ): "purged" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";
+  if (isOperationTimedOut(world)) {
+    pushLog(world, "時間切れのためパージ不可。");
+    return "denied";
+  }
 
   const r = world.balance.interactRadius * 1.5;
   const camp = world.camp;
