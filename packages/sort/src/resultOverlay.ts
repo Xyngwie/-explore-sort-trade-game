@@ -1,6 +1,8 @@
+import { buildSortToTradeUrlFromResult } from "@estg/shared";
 import {
   createRefineFromLocationSearch,
   createTestPlayRefine,
+  resolveCraftMultiplier,
   TEST_PLAY_CONTAINERS,
   type RefineLive,
 } from "./refine";
@@ -79,4 +81,45 @@ export function buildResultYieldCompactHtml(opts: {
       <span class="muted">craft ${escapeHtml(m)}</span>
     </div>
   `;
+}
+
+/**
+ * Empty cargo / zero-budget entry from explore→sort.
+ * Extracted run with nothing to refine — do not force the board; offer skip-to-hub.
+ * Non-extracted failures stay blocked without this skip path.
+ */
+export function isEmptyCargoEntry(
+  s: Pick<RefineLive, "inbound" | "validPieceBudget">,
+): boolean {
+  return s.inbound.isExtracted === true && s.validPieceBudget <= 0;
+}
+
+/**
+ * Same sort→trade URL contract as a normal post-sort handoff with zero yield
+ * (`importMaterials=0`, `craftMultiplier`, no `yieldBag`). Preserves HubSave
+ * apply path on trade (no-op materials / bag).
+ */
+export function buildEmptySkipToHubUrl(
+  s: Pick<RefineLive, "inbound">,
+  baseUrl: string,
+): string {
+  return buildSortToTradeUrlFromResult(
+    {
+      yieldFood: 0,
+      yieldMaterial: 0,
+      yieldEnergy: 0,
+      craftMultiplier: resolveCraftMultiplier(s.inbound),
+      yieldBag: {},
+    },
+    baseUrl,
+  );
+}
+
+/**
+ * Primary CTA for empty-cargo blocked overlay — matches result-ribbon hangar
+ * navigation (`target="_top"`).
+ */
+export function buildEmptySkipHubCtaHtml(handoffUrl: string): string {
+  const href = escapeHtml(handoffUrl);
+  return `<a class="btn" id="btn-skip-hub" href="${href}" target="_top" rel="noopener">格納庫へ戻る</a>`;
 }

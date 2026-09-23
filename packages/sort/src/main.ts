@@ -31,8 +31,11 @@ import {
   type RefineLive,
 } from "./refine";
 import {
+  buildEmptySkipHubCtaHtml,
+  buildEmptySkipToHubUrl,
   buildResultRibbonHtml,
   buildResultYieldCompactHtml,
+  isEmptyCargoEntry,
   resolveRestartState,
   toStagePhase,
   type SessionSource,
@@ -224,7 +227,25 @@ function briefingOverlayHtml(s: RefineLive): string {
   `;
 }
 
-function blockedOverlayHtml(s: RefineLive): string {
+function blockedOverlayHtml(s: RefineLive, skipHubUrl?: string): string {
+  const emptyCargo = isEmptyCargoEntry(s) && Boolean(skipHubUrl);
+  if (emptyCargo && skipHubUrl) {
+    return `
+    <div class="stage-overlay" role="region" aria-label="仕分けなし">
+      <div class="stage-panel">
+        <p class="stage-kicker">EMPTY CARGO</p>
+        <h2 class="stage-title">仕分けるものがありません</h2>
+        <p class="stage-copy">コンテナ 0 · 有効予算 0。精製盤には進みません。</p>
+        <p class="stage-copy muted">仕分けせずに格納庫（HUB）へ戻れます。</p>
+        <div class="row stage-actions">
+          ${buildEmptySkipHubCtaHtml(skipHubUrl)}
+          <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
+        </div>
+        <p class="mono muted stage-meta">${escapeHtml(s.note)}</p>
+      </div>
+    </div>
+  `;
+  }
   return `
     <div class="stage-overlay" role="region" aria-label="開始不可">
       <div class="stage-panel">
@@ -289,6 +310,10 @@ function render() {
     result != null
       ? buildSortToTradeUrlFromResult(result, tradeBaseUrl())
       : "";
+  const emptySkipHubUrl =
+    state.phase === "blocked" && isEmptyCargoEntry(state)
+      ? buildEmptySkipToHubUrl(state, tradeBaseUrl())
+      : "";
 
   const showLiveBoard = state.phase === "play";
   const showResultBoard = state.phase === "result";
@@ -310,7 +335,7 @@ function render() {
     state.phase === "briefing"
       ? briefingOverlayHtml(state)
       : state.phase === "blocked"
-        ? blockedOverlayHtml(state)
+        ? blockedOverlayHtml(state, emptySkipHubUrl || undefined)
         : state.phase === "result" && result
           ? resultOverlayHtml(handoffUrl, result, state.lastChain)
           : "";
