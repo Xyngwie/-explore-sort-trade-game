@@ -109,7 +109,9 @@ P(mine | d) ≈ 0.05 + density * 0.20   // 近傍薄 → 前線 ~25%
 2. HQ は開始時から開放され、地雷にならない  
 3. `d >= 12` は壁（選択・開放不可）と分かる  
 4. 盤進行が `intelFlags`（と軽微な density）に載る  
-5. 地雷踏みで `engage=forced` + 隣接敵の「この漁場で強制出撃」が出る  
+5. 地雷踏みで `engage=forced` + 隣接敵の「この漁場で強制出撃」が出る
+5b. 強制戦闘中は盤・旗・スキップ等を禁止（強制出撃のみ）。ブラウザ戻るで全機大破を Hub/Trade へ渡す
+5c. 開く／旗後、グリッド直下から「この漁場で出撃」できる（セル出撃バー）  
 6. 旗セル選択で `engage=raid` + 当該のみの「この漁場で任意出撃」が出る  
 6b. ルート焦点で「この漁場で出撃」（sector/density/intel → explore）と「格納庫へ渡す」が出る  
 7. 「スキップ（quick-battle）」相当の UI 文言があり、スキップ自体はナビしない  
@@ -170,7 +172,7 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 - 旗（右クリック / 旗モード）: トグル
 - 開いたセーフセルをクリック: ハンドオフ用ルート焦点
 - **勝利:** 全セーフマス開放、または地雷を正しくすべて旗立て → `sectorCleared`
-- **地雷踏み:** `scoutHazard` を立てるが **前線マップ全体はハードロックしない**（続行・旗・ハンドオフ可）
+- **地雷踏み:** `scoutHazard` + **強制戦闘ロック**（他操作禁止・強制出撃のみ）。ブラウザの戻る＝全機大破（`intelFlags=allDestroyed` + HubSave wear）
 - 部分進行: `minesRemaining` / `sectorFlagged` / 十分なセーフ開放で `scoutClear`
 
 ### ハンドオフ
@@ -187,6 +189,16 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 実装: `packages/invade/src/board.ts`（`forcedEngageTargets` / `raidEngageTarget`）+ `@estg/shared` handoff。
 
 ---
+
+
+
+## 8.8. 強制戦闘ロックとブラウザ戻る（V0 加算）
+
+- 地雷踏み（`board.hitMine`）後、invade は **強制戦闘ロック**: 開く／旗／再生成／スキップ／通常出撃／格納庫渡しを禁止。
+- 許可: グリッド直下（および該当時ハンドオフ）の **「この漁場で強制出撃」** のみ。
+- ロック中にブラウザの戻る（`popstate`）→ HubSave 全艦隊 `durability=0`（大破）+ trade URL に `intelFlags=allDestroyed` と `returnKind=fail` の wear を載せる。
+- 意図的な強制出撃 CTA は sessionStorage で handoff intent を立て、wipe しない。
+- explore 側も `engage=forced` の出撃中 `popstate` で同様に wipe → trade（結果画面到達後は intent で抑止）。
 
 ## 9. パッケージ / 試し方（ひな型）
 

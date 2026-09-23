@@ -114,6 +114,7 @@ type InvadeToExplorePayload = {
 - 結合ヘルパ: `mergeInvadeSectorOntoExploreUrl(exploreUrl, sector)`（engage / enemyCells も上書き）。
 - encode/parse: `encodeEnemyCells` / `parseEnemyCells` / `isEngageMode`。
 - explore 側は density / engage / enemyCells を脅威と漁場バナーに消費（全面戦闘リライトはしない）。
+- **加算トークン `intelFlags=allDestroyed`:** 強制戦闘中のブラウザ戻る等で全機大破を Trade に明示。wear（`returnKind=fail` · durabilityAfter=0）と併記可。
 
 ### 3.4 trade → restore
 

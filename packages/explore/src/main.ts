@@ -11,6 +11,11 @@ import {
 } from "./game/world";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
+  armExploreForcedHistory,
+  markExploreForcedHandoffIntent,
+  resolveExploreForcedBackWipe,
+} from "./game/forcedBackWipe";
+import {
   applyOrder,
   cargoSpeedMul,
   pickUpFromCamp,
@@ -50,6 +55,29 @@ if (boot.invadeSector != null) {
   }
 }
 let world: World = createWorld(boot);
+
+const forcedEngageActive = world.invadeSector?.engage === "forced";
+if (forcedEngageActive) {
+  armExploreForcedHistory();
+}
+
+window.addEventListener("popstate", () => {
+  if (world.invadeSector?.engage !== "forced") return;
+  if (world.phase === "result") return;
+  const sector =
+    world.invadeSector != null
+      ? {
+          sectorX: world.invadeSector.sectorX,
+          sectorY: world.invadeSector.sectorY,
+          density: world.invadeSector.density,
+          intelFlags: [...world.invadeSector.intelFlags],
+        }
+      : null;
+  const url = resolveExploreForcedBackWipe({ sector });
+  if (url == null) return;
+  window.location.replace(url);
+});
+
 
 const keys = new Set<string>();
 const input: PlayerInput = {
@@ -505,6 +533,9 @@ function frame(now: number): void {
   }
 
   if (world.phase !== phaseBefore) {
+    if (world.phase === "result" && forcedEngageActive) {
+      markExploreForcedHandoffIntent();
+    }
     needsDom = true;
     renderDom();
   }

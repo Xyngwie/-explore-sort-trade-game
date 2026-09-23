@@ -9,7 +9,9 @@ Module 4（invade / front）薄いプレイアブル。**前線セクター格�
 - **盤:** AOI `25×25`（半辺 12 · 座標 −12…+12）。HQ `(0,0)` 強制開放 · 空白＝探索済 · 数字＝周囲敵感知 · 地雷＝敵（→ Module 1）· 壁 `d≥12`
 - **密度:** `P(mine)` は Chebyshev d で上昇（近傍 ~5% → 前線 ~25%）
 - ハンドオフ: `intelFlags` + density 微調整 + **`engage` / `enemyCells`**（invade→explore）
-- 地雷踏み: `scoutHazard` + `engage=forced`（当該＋隣接敵）→「この漁場で強制出撃」（前線はハードロックしない）
+- 地雷踏み: `scoutHazard` + `engage=forced`（当該＋隣接敵）→「この漁場で強制出撃」+ **強制戦闘ロック**（他操作禁止）
+- グリッド直下のセル出撃バーから「この漁場で出撃」可能
+- 強制戦闘中のブラウザ戻る＝全機大破（`allDestroyed` → Hub/Trade）
 - 任意レイド: 旗セルを通常クリック → `engage=raid`（当該のみ）→「この漁場で任意出撃」
 - 出発: ルート焦点で **「この漁場で出撃」**（invade→explore · Pages 対応 base URL）と「格納庫へ渡す」。戦闘は engage 付き explore リンク
 - **UI ナビ配線済**（HANDOFF_M45 §3.3）

@@ -108,15 +108,25 @@ function memStorage(initial: Record<string, string> = {}): Storage {
   assert.ok(parsed?.hub.frontProgress);
   assert.equal(parsed!.hub.frontProgress!.seed, session.board.seed);
 
-  toggleFlag(session.board, 4, 4);
   openCell(session.board, 2, 1);
+  // Flag after open so flood-fill cannot clear the flag (seed-dependent flake).
+  let flaggedAt: { sx: number; sy: number } | null = null;
+  for (let sy = -AOI_HALF; sy <= AOI_HALF && !flaggedAt; sy++) {
+    for (let sx = -AOI_HALF; sx <= AOI_HALF && !flaggedAt; sx++) {
+      const c = getCell(session.board, sx, sy);
+      if (!c || c.blocked || c.open || c.isHq) continue;
+      const r = toggleFlag(session.board, sx, sy);
+      if (r.ok && r.flagged) flaggedAt = { sx, sy };
+    }
+  }
+  assert.ok(flaggedAt, "expected a closed cell to flag");
   persistFrontSession(session.board, { sx: 2, sy: 1 }, store);
 
   const again = loadOrCreateFrontSession(store);
   assert.equal(again.restored, true);
   assert.equal(again.board.seed, session.board.seed);
   assert.equal(again.focus?.sx, 2);
-  assert.equal(getCell(again.board, 4, 4)?.flagged, true);
+  assert.equal(getCell(again.board, flaggedAt!.sx, flaggedAt!.sy)?.flagged, true);
 
   const regen = regenerateFrontSession(store);
   assert.notEqual(regen.board.seed, session.board.seed);

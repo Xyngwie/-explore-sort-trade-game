@@ -1305,6 +1305,7 @@ export function formatIntelFlagJa(flag: string): string {
     sectorFlagged: "セクター旗",
     sectorCleared: "セクター掃討",
     minesRemaining: "残機雷",
+    allDestroyed: "全機大破（ブラウザ戻る）",
   };
   return map[flag] ?? flag;
 }
