@@ -26,6 +26,7 @@ import { BALANCE, threatFromDensity,
   threatFromInvadeSector
 } from "./game/balance";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
+import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import type { Unit } from "./game/types";
 
 function wing(world: ReturnType<typeof createWorld>): Unit {
@@ -600,6 +601,41 @@ function advancePinned(
 }
 
 
+
+
+
+// --- invade intel banner helper (HUD / briefing note) ---
+{
+  assert.equal(invadeIntelBannerText(null), null);
+  const banner = invadeIntelBannerText({
+    sectorX: 3,
+    sectorY: -2,
+    density: 0.5,
+    intelFlags: ["routeHint", "scoutHazard"],
+    engage: "forced",
+    enemyCells: [
+      { sx: 3, sy: -2 },
+      { sx: 4, sy: -2 },
+    ],
+  });
+  assert.ok(banner);
+  assert.ok(banner!.includes("漁場 (3,-2)"));
+  assert.ok(banner!.includes("dens 0.500"));
+  assert.ok(banner!.includes(ENGAGE_BRIEFING_LABEL.forced));
+  assert.ok(banner!.includes("敵セル 2"));
+  assert.ok(banner!.includes("routeHint"));
+
+  const raidBan = invadeIntelBannerText({
+    sectorX: 5,
+    sectorY: 1,
+    density: 0.2,
+    intelFlags: [],
+    engage: "raid",
+    enemyCells: [{ sx: 5, sy: 1 }],
+  });
+  assert.ok(raidBan!.includes(ENGAGE_BRIEFING_LABEL.raid));
+  assert.ok(raidBan!.includes("敵セル 1"));
+}
 
 // --- cargo slowdown scales with salvagedCount / capacity ---
 {

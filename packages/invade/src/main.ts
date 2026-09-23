@@ -141,7 +141,7 @@ function inboundSummaryHtml(): string {
 
 function handoffActionsHtml(sel: SectorSel | null): string {
   if (sel == null) {
-    return `<p class="muted">セルを開く／旗／選択すると Hub / 探索へのハンドオフリンクが表示されます。</p>`;
+    return `<p class="muted">セルを開く／旗／選択すると「この漁場で出撃」（invade→explore）と格納庫リンクが表示されます。</p>`;
   }
   const info = sectorDensityAt(sel.sx, sel.sy);
   if (info.blocked) {
@@ -188,7 +188,7 @@ function handoffActionsHtml(sel: SectorSel | null): string {
           <p class="warn"><strong>強制出撃</strong>（地雷踏み · engage=forced）</p>
           <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}（当該＋隣接敵）</p>
           <div class="actions">
-            <a class="btn danger" href="${escapeHtml(toForced)}" target="_top" rel="noopener">強制出撃へ（invade→explore）</a>
+            <a class="btn danger" href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で強制出撃</a>
           </div>
         </div>`;
     }
@@ -198,7 +198,7 @@ function handoffActionsHtml(sel: SectorSel | null): string {
           <p class="ok"><strong>任意レイド</strong>（旗セル選択 · engage=raid）</p>
           <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(raidTargets))}（当該のみ）</p>
           <div class="actions">
-            <a class="btn" href="${escapeHtml(toRaid)}" target="_top" rel="noopener">任意出撃へ（invade→explore · raid）</a>
+            <a class="btn" href="${escapeHtml(toRaid)}" target="_top" rel="noopener">この漁場で任意出撃</a>
           </div>
         </div>`;
     }
@@ -208,8 +208,8 @@ function handoffActionsHtml(sel: SectorSel | null): string {
   return `
     <p class="muted mono">route (${sel.sx},${sel.sy}) · density: ${base.density.toFixed(3)} · intelFlags: ${escapeHtml(flags)}</p>
     <div class="actions">
-      <a class="btn" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">格納庫へ渡す（invade→trade）</a>
-      <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">探索へ渡す（invade→explore）</a>
+      <a class="btn" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
+      <a class="btn secondary" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">格納庫へ渡す（invade→trade）</a>
     </div>
     ${engageBlock}
     <p class="muted" style="margin-top:0.5rem">地雷マス＝敵位置。engage / enemyCells は explore が戦闘に使う（本 salvage なし）。</p>
