@@ -162,6 +162,22 @@ trade ハンガーの一覧から選択して trade→restore URL を開ける�
 
 **Perfect Circuit 注入率（実装メモ）:** デモ／シード生成では、自然な乱数手がかりではなく **seeded true-board injection** で稀に真盤を混ぜる。本番既定 **1%**（`PERFECT_CIRCUIT_PROD_RATE`）、DEV/localhost または `?perfectRate=` で一時 **33%**（`PERFECT_CIRCUIT_DEV_RATE`）。ドキュメント上の代替 **0.1%** は `PERFECT_CIRCUIT_PROD_RATE_ALT` / env `VITE_PERFECT_CIRCUIT_RATE=0.001`。なお、正式版のプレイヤー向け UI では「真盤気配」等の注入表示を抑止し、真盤注入だったことをプレイヤーに知らせない。詳細は [`PERFECT_CIRCUIT_PROBABILITY.md`](./PERFECT_CIRCUIT_PROBABILITY.md) §8。
 
+
+
+## 5.6. 回路効果値（effect value）
+
+共有純関数: `computeCircuitEffectValue` / `computeCircuitEffectForBoard`（`packages/shared` · `circuit-effect.ts`）。
+
+| 規則 | 内容 |
+|---|---|
+| ループなし | **効果 = 0**（効果が非活性） |
+| ループあり | 充足した数字マスの寄与を合計 |
+| 数字 d≥1 | 充足時に **d** を加算 |
+| 数字 0 | 不完全 / wounded 以下では **0**。**Perfect** 回路では充足した 0 を各 **4** として加算 |
+| Perfect 判定 | 数字 100% + 単一閉ループ、または `perfect` / `locked` フラグ |
+
+表示: restore 盤面横の充足メーター＋効果値、trade「次の出撃」の回路サマリー。
+
 ## 5.5. ハンドオフ契約（キーのみ）
 
 正本: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。

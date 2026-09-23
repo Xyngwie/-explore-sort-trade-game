@@ -218,3 +218,63 @@ button.fleet-act, .fleet-act {
   .row { gap: 0.4rem; }
   button, .btn { padding: 0.6rem 0.75rem; }
 }
+
+/* Hero: 次の出撃 */
+.sortie-hero {
+  border-width: 2px;
+  border-color: #3d8bfd;
+  box-shadow: 0 0 0 1px #3d8bfd33, 0 8px 24px #00000055;
+  margin-top: 0.75rem;
+}
+.sortie-kicker {
+  margin: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: #79b8ff;
+  font-weight: 700;
+}
+.sortie-hero .sortie-head h2 {
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+}
+.sortie-ready-deploy {
+  border-color: #3fb950;
+  background: linear-gradient(180deg, #15261a 0%, #161b22 55%);
+}
+.sortie-returns {
+  margin: 0.65rem 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: #0d1014aa;
+  border: 1px solid #2a313c;
+}
+.effect-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #79b8ff;
+}
+.effect-line .effect-k {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: #9aa0a6;
+  font-weight: 700;
+}
+.sortie-actions-hero {
+  margin-top: 0.85rem;
+}
+a.btn.deploy-cta {
+  flex: 1 1 100%;
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 0.95rem 1.1rem;
+  border-radius: 10px;
+  border-color: #3fb950;
+  background: linear-gradient(180deg, #2ea043, #238636);
+  letter-spacing: 0.04em;
+  box-shadow: 0 4px 14px #23863655;
+}
+a.btn.deploy-cta:hover {
+  filter: brightness(1.08);
+}

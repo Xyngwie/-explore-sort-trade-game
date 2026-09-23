@@ -10,6 +10,7 @@ import {
   boardFromMarks,
   classifyPlayResult,
   cycleEdgeMark,
+  formatCircuitEffectJa,
   freshMarks,
   hazardLabel,
   isCellDigitActivated,
@@ -189,18 +190,37 @@ function outcomeBanner(status: CircuitOutcome, blurb: string): string {
   </div>`;
 }
 
-function digitBar(satisfied: number, clueCount: number, rate: number): string {
+function digitBar(
+  satisfied: number,
+  clueCount: number,
+  rate: number,
+  effectLabel: string,
+): string {
   const pct = Math.round(rate * 100);
-  return `<div class="digit-meter" aria-label="digit satisfaction ${satisfied}/${clueCount}">
-    <div class="digit-meter-fill" style="width:${pct}%"></div>
-    <span class="digit-meter-label">${satisfied}/${clueCount} digits · ${pct}%</span>
+  return `<div class="board-meters">
+    <div class="digit-meter" aria-label="digit satisfaction ${satisfied}/${clueCount}">
+      <div class="digit-meter-fill" style="width:${pct}%"></div>
+      <span class="digit-meter-label">充足 ${satisfied}/${clueCount} · ${pct}%</span>
+    </div>
+    <div class="effect-readout" aria-label="${effectLabel}">
+      <span class="effect-k">効果値</span>
+      <strong class="effect-v">${effectLabel}</strong>
+    </div>
   </div>`;
 }
 
 function render(): void {
   const classified = play();
-  const { outcome: status, perfectClearance: perfect, digits, loopClosed, lineCount, blurb } =
-    classified;
+  const {
+    outcome: status,
+    perfectClearance: perfect,
+    digits,
+    loopClosed,
+    lineCount,
+    blurb,
+    effect,
+  } = classified;
+  const effectLabel = formatCircuitEffectJa(effect);
   const lockNext = locked || perfect;
   const enc = encodeEdgeState(marks);
   const board = boardFromMarks(
@@ -236,6 +256,27 @@ function render(): void {
 
     ${outcomeBanner(status, blurb)}
 
+    ${
+      !locked && session.rarity === "flawed_majority" && status !== "fully_awakened"
+        ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
+      <p class="bypass-hero-title">不完全基板 — Bypass で確定</p>
+      <p class="bypass-hero-body">全解は期待しない盤です。部分充足のまま <strong>Bypass</strong> で拠点へ戻して効果を残せます。</p>
+      <button type="button" class="btn bypass-confirm" id="btn-bypass-hero" ${canBypass ? "" : "disabled"}>
+        Bypass を確定する
+      </button>
+    </div>`
+        : !locked && status === "bypass"
+          ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
+      <p class="bypass-hero-title">Bypass 準備完了</p>
+      <p class="bypass-hero-body">部分修復として確定できます。迷わず Bypass へ。</p>
+      <button type="button" class="btn bypass-confirm" id="btn-bypass-hero">
+        Bypass を確定する
+      </button>
+    </div>`
+          : ""
+    }
+
+
     <div class="card">
       <div class="meta-row">
         <span class="rarity-badge ${rarityClass}">${escapeHtml(rarityLabel(session.rarity))}</span>
@@ -264,13 +305,14 @@ function render(): void {
             : ""
       }
       ${boardHtml()}
-      ${digitBar(digits.satisfied, digits.clueCount, digits.rate)}
+      ${digitBar(digits.satisfied, digits.clueCount, digits.rate, effectLabel)}
     </div>
 
     <div class="card">
       <table>
         <tr><td>loop-closed?</td><td class="${loopClosed ? "ok" : ""}">${loopClosed ? "yes" : "no"}</td></tr>
         <tr><td>digit satisfaction</td><td>${digits.satisfied}/${digits.clueCount} (${(digits.rate * 100).toFixed(0)}%)</td></tr>
+        <tr><td>効果値</td><td class="ok"><strong>${escapeHtml(effectLabel)}</strong> <span class="muted">(ループ ${effect.loopCount})</span></td></tr>
         <tr><td>status</td><td><strong class="status-${status}">${escapeHtml(outcomeLabel(status))}</strong></td></tr>
         <tr><td>perfect / locked</td><td>${perfect ? "perfect" : "—"} / ${lockNext ? "locked" : "editable"}</td></tr>
         <tr><td>line edges</td><td>${lineCount}</td></tr>
@@ -288,7 +330,7 @@ function render(): void {
 
       <div class="actions">
         <button type="button" class="btn" id="btn-commit-awaken" ${canAwaken ? "" : "disabled"} title="完全ループ＋数字充足で有効">Commit Fully Awakened</button>
-        <button type="button" class="btn" id="btn-commit-bypass" ${canBypass ? "" : "disabled"}>Commit Bypass</button>
+        <button type="button" class="btn ${session.rarity === "flawed_majority" || status === "bypass" ? "bypass-confirm" : ""}" id="btn-commit-bypass" ${canBypass ? "" : "disabled"}>Commit Bypass</button>
         <button type="button" class="btn ghost" id="btn-abandon" ${locked ? "disabled" : ""}>Abandon → Offline</button>
         <button type="button" class="btn ghost" id="btn-clear" ${locked ? "disabled" : ""}>Clear edges</button>
         ${
@@ -341,6 +383,13 @@ function render(): void {
       render();
     });
     root.querySelector("#btn-commit-bypass")?.addEventListener("click", () => {
+      outcomeOverride = "bypass";
+      abandoned = false;
+      persistIfNeeded();
+      render();
+    });
+    root.querySelector("#btn-bypass-hero")?.addEventListener("click", () => {
+      if (locked) return;
       outcomeOverride = "bypass";
       abandoned = false;
       persistIfNeeded();

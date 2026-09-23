@@ -61,8 +61,11 @@ import {
   applyDurabilityBufferToWear,
   buildWearReportsForSortie,
   formatCircuitBonusesJa,
+  computeCircuitEffectForBoard,
+  formatCircuitEffectJa,
   type AggregatedCircuitBonuses,
   type CircuitBoardState,
+  type CircuitEffectBreakdown,
   type CircuitOutcome,
   type HubCircuitRecord,
   type HubSnapshot,
@@ -169,6 +172,12 @@ export function isCraftSignatureLocked(
 export const SEED_CIRCUIT_ID = "board_demo";
 export const SEED_CIRCUIT_PUZZLE_ID = "stub-8";
 
+export type ExploreReturnDigest = {
+  returnKind: SortieReturnKind;
+  /** One-line JA for 「次の出撃」 panel. */
+  summaryJa: string;
+};
+
 export type HangarState = {
   hub: HubSnapshot;
   /** Last deploy set (for simulated return). */
@@ -180,6 +189,8 @@ export type HangarState = {
   lastInvadeSector: InvadeToTradePayload | null;
   /** Active / most recent circuit (mirrors hub.circuits[0]; HubSave is source of truth). */
   lastCircuit: RestoreToTradePayload | null;
+  /** Last explore→hub wear ingest (UI digest only; not HubSave). */
+  lastExploreReturn: ExploreReturnDigest | null;
   /** Hangar craft signature (署名) for circuit 刻印. */
   craftSignature: string;
 };
@@ -357,6 +368,7 @@ export function createInitialHangar(
     notice: "",
     lastInvadeSector: stash.lastInvadeSector,
     lastCircuit,
+    lastExploreReturn: null,
     craftSignature,
   };
   if (migratedCircuit) {
@@ -384,6 +396,7 @@ export function ingestLocationSearch(
   let consumed = false;
   let lastInvadeSector = state.lastInvadeSector;
   let lastCircuit = state.lastCircuit;
+  let lastExploreReturn = state.lastExploreReturn;
   const notices: string[] = [];
 
   const sort = parseSortToTradeSearch(search);
@@ -423,6 +436,19 @@ export function ingestLocationSearch(
       log,
       `帰還ウェア ${wear.returnKind} ×${wear.mechWear.length}${detail ? ` · ${detail}` : ""}`,
     );
+    const kindJa =
+      wear.returnKind === "extract"
+        ? "EXTRACT"
+        : wear.returnKind === "abort"
+          ? "中断"
+          : "失敗";
+    lastExploreReturn = {
+      returnKind: wear.returnKind,
+      summaryJa: `探索帰還 ${kindJa} · 摩耗報告 ${wear.mechWear.length}機${
+        detail ? ` · ${detail}` : ""
+      }`,
+    };
+    notices.push(lastExploreReturn.summaryJa);
     consumed = true;
   }
 
@@ -493,6 +519,7 @@ export function ingestLocationSearch(
     log,
     lastInvadeSector,
     lastCircuit,
+    lastExploreReturn,
     craftSignature: state.craftSignature || loadCraftSignature(),
     selectedDeployIds: filterToDeployableIds(
       hub.fleet,
@@ -778,6 +805,7 @@ export function resetHangar(
     notice: "セーブを消去し初期ハブへ",
     lastInvadeSector: null,
     lastCircuit: null,
+    lastExploreReturn: null,
     craftSignature: loadCraftSignature(storage ?? undefined),
   };
   return persistHangar(next, storage ?? undefined);
@@ -1165,11 +1193,15 @@ export function simulateReturn(
   const fleet = applyWearReportsToFleet(state.hub.fleet, reports);
   const hub = normalizeHubSnapshot({ ...state.hub, fleet });
   const bufNote = buffer > 0 ? ` · 回路緩衝 ${buffer}` : "";
+  const kindJa =
+    kind === "extract" ? "EXTRACT" : kind === "abort" ? "中断" : "失敗";
+  const summaryJa = `探索帰還 ${kindJa} · シミュ摩耗 ${ids.length}機${bufNote}`;
   const next: HangarState = {
     ...state,
     hub,
     lastDeployedIds: [],
     selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    lastExploreReturn: { returnKind: kind, summaryJa },
     log: pushLog(state.log, `シミュ帰還 ${kind} ×${ids.length}${bufNote}`),
     notice: `シミュ帰還（${kind}）で摩耗適用${bufNote}`,
   };
@@ -1294,6 +1326,28 @@ export function buildNextSortieReadiness(state: HangarState): NextSortieReadines
   };
 }
 
+
+/** One-line return digests for the 「次の出撃」 hero panel. */
+export type NextSortieReturnDigest = {
+  exploreJa: string;
+  invadeJa: string;
+  restoreJa: string;
+};
+
+export function buildNextSortieReturnDigest(
+  state: HangarState,
+): NextSortieReturnDigest {
+  const exploreJa =
+    state.lastExploreReturn?.summaryJa ?? "探索帰還なし（出撃後に摩耗報告）";
+  const invadeJa = formatInvadeIntelBrief(state.lastInvadeSector);
+  const circuits = formatCircuitHubBrief(state.hub.circuits, state.lastCircuit);
+  const restoreJa =
+    state.lastCircuit != null
+      ? `回路帰還 · ${circuits.summaryJa}`
+      : circuits.summaryJa;
+  return { exploreJa, invadeJa, restoreJa };
+}
+
 /** Known invade intelFlags → short JA (unknown flags pass through). */
 export function formatIntelFlagJa(flag: string): string {
   const map: Record<string, string> = {
@@ -1333,10 +1387,12 @@ export type CircuitHubBriefLine = {
   locked: boolean;
   active: boolean;
   editor: string | null;
+  effect: number;
+  effectJa: string;
 };
 
 export type CircuitHubBrief = {
-  /** One-line JA, e.g. "回路 2枚 · 直近 バイパス (board_demo)". */
+  /** One-line JA, e.g. "回路 2枚 · 直近 バイパス (board_demo) · 効果 8". */
   summaryJa: string;
   lines: CircuitHubBriefLine[];
 };
@@ -1353,21 +1409,37 @@ export function formatCircuitHubBrief(
     lastCircuit?.circuitId ??
     (lastCircuit?.circuitBoard?.puzzleId as string | undefined) ??
     null;
-  const lines: CircuitHubBriefLine[] = list.map((c) => ({
-    circuitId: c.circuitId,
-    outcome: c.outcome,
-    outcomeJa: circuitOutcomeLabelJa(c.outcome),
-    locked: isCircuitLocked(c),
-    active: activeId != null && c.circuitId === activeId,
-    editor: c.lastEditorName ?? c.circuitBoard.lastEditorName ?? null,
-  }));
+  const lines: CircuitHubBriefLine[] = list.map((c) => {
+    let effect = 0;
+    let effectJa = "効果 0";
+    try {
+      const br: CircuitEffectBreakdown = computeCircuitEffectForBoard(
+        c.circuitBoard,
+        { perfect: c.circuitBoard.perfect ?? c.locked },
+      );
+      effect = br.effect;
+      effectJa = formatCircuitEffectJa(br);
+    } catch {
+      /* scoring best-effort */
+    }
+    return {
+      circuitId: c.circuitId,
+      outcome: c.outcome,
+      outcomeJa: circuitOutcomeLabelJa(c.outcome),
+      locked: isCircuitLocked(c),
+      active: activeId != null && c.circuitId === activeId,
+      editor: c.lastEditorName ?? c.circuitBoard.lastEditorName ?? null,
+      effect,
+      effectJa,
+    };
+  });
   if (lines.length === 0) {
     return { summaryJa: "回路なし（restore 取込待ち）", lines };
   }
   const active = lines.find((l) => l.active) ?? lines[0]!;
-  const lockNote = active.locked ? "·完璧" : "";
+  const lockNote = active.locked ? " · 完璧" : "";
   return {
-    summaryJa: `回路 ${lines.length}枚 · 直近 ${active.outcomeJa} (${active.circuitId})${lockNote}`,
+    summaryJa: `回路 ${lines.length}枚 · 直近 ${active.outcomeJa} (${active.circuitId})${lockNote} · ${active.effectJa}`,
     lines,
   };
 }

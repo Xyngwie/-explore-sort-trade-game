@@ -5,38 +5,33 @@
  */
 import {
   buildInjectedOrFlawedPuzzle,
+  circuitDigitSatisfaction,
+  computeCircuitEffectValue,
+  countLineEdgesAroundCell,
   createEmptyCircuitBoard,
+  circuitHEdgeIndex,
+  circuitVEdgeIndex,
   decodeEdgeState,
   encodeEdgeState,
   edgeCount,
+  formatCircuitEffectJa,
+  generateFlawedClues as sharedGenerateFlawedClues,
+  hashSeed,
+  isCircuitDigitSatisfied,
+  isCircuitSingleLoopClosed,
   isPerfectCircuitClearance,
+  mulberry32,
   resolveVerifyTrueClues,
+  FLAWED_HAZARD_WEIGHTS as SHARED_FLAWED_HAZARD_WEIGHTS,
   type CircuitBoardState,
+  type CircuitEffectBreakdown,
   type CircuitOutcome,
   type EdgeMark,
   type InjectedBoardKind,
 } from "@estg/shared";
 
-/** Simple seeded PRNG (mulberry32). */
-export function mulberry32(seed: number): () => number {
-  let t = seed >>> 0;
-  return () => {
-    t = (t + 0x6d2b79f5) >>> 0;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { mulberry32, hashSeed };
 
-/** Hash a short puzzleSeed string → uint32. */
-export function hashSeed(puzzleSeed: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < puzzleSeed.length; i++) {
-    h ^= puzzleSeed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
 
 export type ClueGrid = ReadonlyArray<ReadonlyArray<number | null>>;
 
@@ -53,14 +48,7 @@ export type HazardKind =
   | "overdigit"
   | "dense_noise";
 
-/** Default mix among flawed boards (sums to 1). */
-export const FLAWED_HAZARD_WEIGHTS: Readonly<
-  Record<Exclude<HazardKind, "none">, number>
-> = {
-  contradiction: 0.45,
-  overdigit: 0.3,
-  dense_noise: 0.25,
-};
+export const FLAWED_HAZARD_WEIGHTS = SHARED_FLAWED_HAZARD_WEIGHTS;
 
 export type RestorePuzzle = {
   cols: number;
@@ -94,140 +82,16 @@ export type GeneratePuzzleOptions = {
   forceHazard?: Exclude<HazardKind, "none">;
 };
 
-/** Horizontal edge index: row of dots `y` (0..rows), col `x` (0..cols-1). */
 export function hEdgeIndex(cols: number, rows: number, x: number, y: number): number {
-  void rows;
-  return y * cols + x;
+  return circuitHEdgeIndex(cols, rows, x, y);
 }
 
-/** Vertical edge index: col of dots `x` (0..cols), row `y` (0..rows-1). */
 export function vEdgeIndex(cols: number, rows: number, x: number, y: number): number {
-  return cols * (rows + 1) + y * (cols + 1) + x;
+  return circuitVEdgeIndex(cols, rows, x, y);
 }
 
-export function cellEdgeIndices(
-  cols: number,
-  rows: number,
-  cx: number,
-  cy: number,
-): [number, number, number, number] {
-  // top, right, bottom, left
-  return [
-    hEdgeIndex(cols, rows, cx, cy),
-    vEdgeIndex(cols, rows, cx + 1, cy),
-    hEdgeIndex(cols, rows, cx, cy + 1),
-    vEdgeIndex(cols, rows, cx, cy),
-  ];
-}
+export { countLineEdgesAroundCell };
 
-export function countLineEdgesAroundCell(
-  marks: readonly EdgeMark[],
-  cols: number,
-  rows: number,
-  cx: number,
-  cy: number,
-): number {
-  let n = 0;
-  for (const i of cellEdgeIndices(cols, rows, cx, cy)) {
-    if (marks[i] === 1) n++;
-  }
-  return n;
-}
-
-function blankClues(cols: number, rows: number): (number | null)[][] {
-  return Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => null as number | null),
-  );
-}
-
-function pickHazard(
-  rnd: () => number,
-  force?: Exclude<HazardKind, "none">,
-): Exclude<HazardKind, "none"> {
-  if (force) return force;
-  const r = rnd();
-  const w = FLAWED_HAZARD_WEIGHTS;
-  if (r < w.contradiction) return "contradiction";
-  if (r < w.contradiction + w.overdigit) return "overdigit";
-  return "dense_noise";
-}
-
-/**
- * Classic local paradox: four adjacent 3s in a 2×2 block cannot all be
- * satisfied by a simple loop (shared edges over-constrain the vertex).
- */
-function applyContradictionHazard(
-  clues: (number | null)[][],
-  cols: number,
-  rows: number,
-  rnd: () => number,
-): void {
-  if (cols < 2 || rows < 2) {
-    // Degenerate tiny board: 3 beside 0 forces a local conflict when possible.
-    if (cols >= 1 && rows >= 1) {
-      clues[0]![0] = 3;
-      if (cols > 1) clues[0]![1] = 0;
-      else if (rows > 1) clues[1]![0] = 0;
-    }
-    return;
-  }
-  const ox = Math.floor(rnd() * (cols - 1));
-  const oy = Math.floor(rnd() * (rows - 1));
-  clues[oy]![ox] = 3;
-  clues[oy]![ox + 1] = 3;
-  clues[oy + 1]![ox] = 3;
-  clues[oy + 1]![ox + 1] = 3;
-  // Sprinkle a few extra high digits so the rest still looks "repaired".
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      if (clues[y]![x] != null) continue;
-      if (rnd() < 0.2) clues[y]![x] = 1 + Math.floor(rnd() * 3); // 1..3
-    }
-  }
-}
-
-/** Extra / dense high digits — overconstrained substrate, rarely fully solvable. */
-function applyOverdigitHazard(
-  clues: (number | null)[][],
-  cols: number,
-  rows: number,
-  rnd: () => number,
-): void {
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const r = rnd();
-      if (r < 0.72) {
-        // Bias toward 2–3 (extra digits / heavy demand).
-        clues[y]![x] = 2 + Math.floor(rnd() * 2);
-      } else if (r < 0.88) {
-        clues[y]![x] = Math.floor(rnd() * 2); // 0..1
-      } else {
-        clues[y]![x] = null;
-      }
-    }
-  }
-}
-
-/** Noisy sparse fill — imperfect / hazardous without guaranteed paradox. */
-function applyDenseNoiseHazard(
-  clues: (number | null)[][],
-  cols: number,
-  rows: number,
-  rnd: () => number,
-): void {
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const r = rnd();
-      if (r < 0.35) clues[y]![x] = null;
-      else clues[y]![x] = Math.floor(rnd() * 4); // 0..3
-    }
-  }
-}
-
-/**
- * Intentionally imperfect / hazardous clue fill (majority path).
- * Applies contradiction, overdigit, or dense noise — not a Perfect source.
- */
 export function generateFlawedClues(
   puzzleSeed: string,
   cols: number,
@@ -235,20 +99,7 @@ export function generateFlawedClues(
   rng?: () => number,
   forceHazard?: Exclude<HazardKind, "none">,
 ): { clues: (number | null)[][]; hazard: Exclude<HazardKind, "none"> } {
-  const rnd = rng ?? mulberry32(hashSeed(`${puzzleSeed}:flawed`));
-  const hazard = pickHazard(
-    rng ?? mulberry32(hashSeed(`${puzzleSeed}:hazard`)),
-    forceHazard,
-  );
-  const clues = blankClues(cols, rows);
-  if (hazard === "contradiction") {
-    applyContradictionHazard(clues, cols, rows, rnd);
-  } else if (hazard === "overdigit") {
-    applyOverdigitHazard(clues, cols, rows, rnd);
-  } else {
-    applyDenseNoiseHazard(clues, cols, rows, rnd);
-  }
-  return { clues, hazard };
+  return sharedGenerateFlawedClues(puzzleSeed, cols, rows, rng, forceHazard);
 }
 
 /** Detect the 2×2 block of four 3s used by contradiction hazard (for tests/UI). */
@@ -393,9 +244,7 @@ export function isCellDigitActivated(
   cx: number,
   cy: number,
 ): boolean | null {
-  const c = clues[cy]?.[cx];
-  if (c == null) return null;
-  return countLineEdgesAroundCell(marks, cols, rows, cx, cy) === c;
+  return isCircuitDigitSatisfied(clues, marks, cols, rows, cx, cy);
 }
 
 export function digitSatisfaction(
@@ -404,23 +253,8 @@ export function digitSatisfaction(
   cols: number,
   rows: number,
 ): DigitStats {
-  let clueCount = 0;
-  let satisfied = 0;
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const c = clues[y]![x]!;
-      if (c == null) continue;
-      clueCount++;
-      if (countLineEdgesAroundCell(marks, cols, rows, x, y) === c) {
-        satisfied++;
-      }
-    }
-  }
-  return {
-    clueCount,
-    satisfied,
-    rate: clueCount === 0 ? 1 : satisfied / clueCount,
-  };
+  const s = circuitDigitSatisfaction(clues, marks, cols, rows);
+  return { clueCount: s.clueCount, satisfied: s.satisfied, rate: s.rate };
 }
 
 /**
@@ -432,62 +266,14 @@ export function isLoopClosed(
   cols: number,
   rows: number,
 ): boolean {
-  const vw = cols + 1;
-  const vh = rows + 1;
-  const vCount = vw * vh;
-  const adj: number[][] = Array.from({ length: vCount }, () => []);
-
-  const vid = (x: number, y: number) => y * vw + x;
-
-  // horizontal
-  for (let y = 0; y <= rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const i = hEdgeIndex(cols, rows, x, y);
-      if (marks[i] !== 1) continue;
-      const a = vid(x, y);
-      const b = vid(x + 1, y);
-      adj[a]!.push(b);
-      adj[b]!.push(a);
-    }
-  }
-  // vertical
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x <= cols; x++) {
-      const i = vEdgeIndex(cols, rows, x, y);
-      if (marks[i] !== 1) continue;
-      const a = vid(x, y);
-      const b = vid(x, y + 1);
-      adj[a]!.push(b);
-      adj[b]!.push(a);
-    }
-  }
-
-  let start = -1;
-  let edgeVerts = 0;
-  for (let i = 0; i < vCount; i++) {
-    const d = adj[i]!.length;
-    if (d === 0) continue;
-    if (d !== 2) return false;
-    edgeVerts++;
-    if (start < 0) start = i;
-  }
-  if (edgeVerts < 4) return false; // need at least a 2x2 loop
-
-  // Walk cycle; must cover all edge vertices and return.
-  const seen = new Set<number>();
-  let prev = -1;
-  let cur = start;
-  for (;;) {
-    seen.add(cur);
-    const nbrs = adj[cur]!;
-    const next = nbrs[0] === prev ? nbrs[1]! : nbrs[0]!;
-    prev = cur;
-    cur = next;
-    if (cur === start) break;
-    if (seen.has(cur)) return false;
-  }
-  return seen.size === edgeVerts;
+  return isCircuitSingleLoopClosed(marks, cols, rows);
 }
+
+export {
+  computeCircuitEffectValue,
+  formatCircuitEffectJa,
+  type CircuitEffectBreakdown,
+};
 
 /** Cycle EdgeMark: 0 → 1 → 2 → 0. */
 export function cycleEdgeMark(m: EdgeMark): EdgeMark {
@@ -519,6 +305,8 @@ export type PlayClassification = {
   digits: DigitStats;
   loopClosed: boolean;
   lineCount: number;
+  /** Shared circuit effect value (0 when no loop; 0→4 on perfect). */
+  effect: CircuitEffectBreakdown;
   /** Short JP/EN gloss for UI. */
   blurb: string;
 };
@@ -554,12 +342,21 @@ export function classifyPlayResult(
   } else {
     blurb = lineCount === 0 ? "未着手 / 放棄 → Offline" : "修復不足 → Offline";
   }
+  const effect = computeCircuitEffectValue({
+    clues,
+    marks,
+    cols,
+    rows,
+    perfect: perfectClearance,
+    outcome,
+  });
   return {
     outcome,
     perfectClearance,
     digits,
     loopClosed,
     lineCount,
+    effect,
     blurb,
   };
 }

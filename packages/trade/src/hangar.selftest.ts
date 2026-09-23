@@ -55,6 +55,7 @@ import {
   PERFECT_CIRCUIT_DEV_RATE,
   PERFECT_CIRCUIT_PROD_RATE,
   buildNextSortieReadiness,
+  buildNextSortieReturnDigest,
   formatIntelFlagJa,
   formatInvadeIntelBrief,
   formatCircuitHubBrief,
@@ -694,6 +695,12 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const active = brief.lines.find((l) => l.active) ?? brief.lines[0]!;
   assert.equal(typeof active.outcomeJa, "string");
   assert.ok(active.outcomeJa.length > 0);
+
+  const digest = buildNextSortieReturnDigest(invaded.state);
+  assert.ok(digest.invadeJa.includes("(3,-2)"));
+  assert.ok(digest.restoreJa.includes("回路"));
+  assert.ok(typeof brief.lines[0]!.effect === "number");
+  assert.ok(brief.summaryJa.includes("効果"));
 }
 
 console.log("trade hangar selftest: ok");

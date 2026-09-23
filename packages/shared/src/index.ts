@@ -10,3 +10,5 @@ export * from "./sector-density";
 export * from "./circuit-board";
 export * from "./circuit-bonuses";
 export * from "./perfect-circuit-seed";
+export * from "./circuit-effect";
+export * from "./circuit-clues";

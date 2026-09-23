@@ -159,6 +159,13 @@ assert.equal(deriveStubOutcome(false, 0.5, 1), "bypass");
   assert.equal(full.perfectClearance, true);
   assert.equal(full.digits.rate, 1);
   assert.equal(full.loopClosed, true);
+  assert.equal(full.effect.hasLoop, true);
+  assert.equal(full.effect.effect, 8); // four satisfied 2s
+  assert.equal(full.effect.perfect, true);
+
+  const offlineEffect = classifyPlayResult(clues, empty, cols, rows);
+  assert.equal(offlineEffect.effect.effect, 0);
+  assert.equal(offlineEffect.effect.hasLoop, false);
 
   // Force Bypass override even on a full board (manual commit path).
   const forced = classifyPlayResult(clues, sol, cols, rows, "bypass");
