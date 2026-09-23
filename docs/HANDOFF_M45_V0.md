@@ -113,7 +113,7 @@ type InvadeToExplorePayload = {
 - trade→explore の配備キー（`deployableMechs` / `deployedInstanceIds` / …）と **衝突しない**。
 - 結合ヘルパ: `mergeInvadeSectorOntoExploreUrl(exploreUrl, sector)`（engage / enemyCells も上書き）。
 - encode/parse: `encodeEnemyCells` / `parseEnemyCells` / `isEngageMode`。
-- explore 側の消費は後続 PR（本契約＋invade UI が先行）。
+- explore 側は density / engage / enemyCells を脅威と漁場バナーに消費（全面戦闘リライトはしない）。
 
 ### 3.4 trade → restore
 
@@ -194,6 +194,6 @@ type RestoreToTradePayload = {
 
 1. ~~trade ハンガーに「戦線へ（任意）」「回路修復へ」リンク（上記 builder）~~ → `packages/trade` で取込・リンク実装（結果は `hubM45Stash`、HubSave 未拡張）  
 2. ~~invade → explore セクターを explore が読んで脅威に反映~~ → `packages/explore`（density→敵数/距離/速度 · strip）。invade 側ナビは既存リンク  
-2b. explore が `engage` / `enemyCells` を読んで戦闘編成（forced 隣接巻込み / raid 単体）— 消費 PR  
+2b. ~~explore が `engage` / `enemyCells` を読んで戦闘編成（forced 隣接巻込み / raid 単体）~~ → 消費 + 漁場バナー（invade UI CTA「この漁場で出撃」）  
 3. restore 完了 → trade（`circuitOutcome` 取込）※ restore 側ナビは別チケット · Hub 在庫更新はスタッシュ表示まで  
 4. HubSave への `CircuitBoardState` 永続（版上げ要否は別判断）

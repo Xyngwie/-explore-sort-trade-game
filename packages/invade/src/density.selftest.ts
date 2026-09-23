@@ -62,4 +62,43 @@ assert.ok(exploreParsed);
 assert.equal(exploreParsed.sectorX, 3);
 assert.equal(exploreParsed.sectorY, -2);
 
+// --- invade→explore engage build/parse round-trip ---
+const forcedPayload = {
+  sectorX: 3,
+  sectorY: -2,
+  density: 0.5,
+  intelFlags: ["scoutHazard", "routeHint"],
+  engage: "forced" as const,
+  enemyCells: [
+    { sx: 3, sy: -2 },
+    { sx: 4, sy: -2 },
+    { sx: 3, sy: -1 },
+  ],
+};
+const forcedUrl = buildInvadeToExploreUrl(forcedPayload, "http://localhost:5173/");
+const forcedParsed = parseInvadeToExploreSearch(new URL(forcedUrl).search);
+assert.ok(forcedParsed);
+assert.equal(forcedParsed.engage, "forced");
+assert.equal(forcedParsed.enemyCells?.length, 3);
+assert.deepEqual(
+  new Set((forcedParsed.enemyCells ?? []).map((c) => `${c.sx},${c.sy}`)),
+  new Set(["3,-2", "4,-2", "3,-1"]),
+);
+assert.deepEqual(forcedParsed.intelFlags, ["scoutHazard", "routeHint"]);
+assert.ok(!forcedUrl.includes("yieldBag"));
+assert.ok(!forcedUrl.includes("salvagedContainers"));
+
+const raidPayload = {
+  sectorX: 5,
+  sectorY: 1,
+  density: 0.2,
+  engage: "raid" as const,
+  enemyCells: [{ sx: 5, sy: 1 }],
+};
+const raidUrl = buildInvadeToExploreUrl(raidPayload, "http://localhost:5173/");
+const raidParsed = parseInvadeToExploreSearch(new URL(raidUrl).search);
+assert.ok(raidParsed);
+assert.equal(raidParsed.engage, "raid");
+assert.deepEqual(raidParsed.enemyCells, [{ sx: 5, sy: 1 }]);
+
 console.log("invade density.selftest ok");

@@ -1,12 +1,12 @@
 # Invade / Front v0（Module 4 ドラフト仕様）
 
-**ステータス:** ドラフト仕様 / 薄いプレイアブル（`packages/invade`）· ハンドオフ配線済 · **前線＝マインスイーパ** · 2026-09-19  
+**ステータス:** ドラフト仕様 / 薄いプレイアブル（`packages/invade`）· **UI ナビ配線済**（invade→explore / invade→trade）· **前線＝マインスイーパ** · 2026-09-23  
 **性質:** プロダクト会話と [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) から落とした **V0 ドラフト**。戦線マップ格子そのものが 1 枚のマインスイーパ盤。  
 **系譜:** Invading Minesweeper 系の任意レイヤ（名称 TBD: invade / front）
 
 関連: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.4・§4（報酬分割）、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。
 
-> **URL ナビはまだ結ばない。** クエリ鍵・型・build/parse は [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md) / `@estg/shared` を正とする。
+> **UI ナビは配線済み。** ルート焦点後の CTA「**この漁場で出撃**」が `buildInvadeToExploreUrl`（Pages 対応 `resolveModuleBaseUrl`）で Module 1 へ遷移。クエリ鍵・型・build/parse は [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md) / `@estg/shared` を正とする。
 
 ---
 
@@ -22,7 +22,7 @@ HQ を中心とした前線マップで、**どこまで探索し・どのルー
 |---|---|
 | HQ 中心のセクター格子＝1 枚のマインスイーパ盤 | セクター選択→内側 8×8 のネスト UI（廃止） |
 | Chebyshev 距離に基づく密度 → 遠方ほど高い `P(mine)` | バランス確定・敵 AI 実装 |
-| 任意参加 vs quick-battle（短縮経路）の方針 | explore / trade への **UI ナビ配線**（キー契約は HANDOFF_M45） |
+| 任意参加 vs quick-battle（短縮経路）の方針 | 侵食シミュレーション本実装 |
 | 報酬分割（インテル／ルート ≠ 本 salvage） | コンテナ／YieldBag の二重払い |
 | 後続スタブ受け入れ条件 | Pages デプロイ必須化・経済ゲート |
 
@@ -91,7 +91,7 @@ P(mine | d) ≈ 0.05 + density * 0.20   // 近傍薄 → 前線 ~25%
 
 ## 7. 非ゴール（明示）
 
-- explore / sort / trade との **UI ナビ結線**（キー契約は別途 HANDOFF_M45）
+- sort / trade 以外への追加ナビ結線（invade→explore / invade→trade は配線済）
 - 侵食シミュレーションの本実装
 - 敵 AI・弾薬消費・勝敗スコアの実装
 - 市場／戦闘ゲート付きドロップ（ビジョン §5 — バランス後）
@@ -109,8 +109,9 @@ P(mine | d) ≈ 0.05 + density * 0.20   // 近傍薄 → 前線 ~25%
 2. HQ は開始時から開放され、地雷にならない  
 3. `d >= 12` は壁（選択・開放不可）と分かる  
 4. 盤進行が `intelFlags`（と軽微な density）に載る  
-5. 地雷踏みで `engage=forced` + 隣接敵の「強制出撃へ」が出る  
-6. 旗セル選択で `engage=raid` + 当該のみの「任意出撃へ」が出る  
+5. 地雷踏みで `engage=forced` + 隣接敵の「この漁場で強制出撃」が出る  
+6. 旗セル選択で `engage=raid` + 当該のみの「この漁場で任意出撃」が出る  
+6b. ルート焦点で「この漁場で出撃」（sector/density/intel → explore）と「格納庫へ渡す」が出る  
 7. 「スキップ（quick-battle）」相当の UI 文言があり、スキップ自体はナビしない  
 8. 報酬表示はインテル／ルート表現に留め、コンテナ数の本払いをしない  
 9. `npm run test -w @estg/invade` が通る  
@@ -176,12 +177,12 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 
 - ベース: `sectorX` / `sectorY` / `density` / `intelFlags`
 - **engage 加算（invade→explore）:**
-  - **強制（`engage=forced`）:** 地雷踏み → 当該セル＋隣接地雷セルを `enemyCells` に載せ、「強制出撃へ」リンク
-  - **任意（`engage=raid`）:** 旗を立てたセルを通常クリックで選択 → 当該セルのみを `enemyCells` に載せ、「任意出撃へ」リンク
+  - **強制（`engage=forced`）:** 地雷踏み → 当該セル＋隣接地雷セルを `enemyCells` に載せ、「この漁場で強制出撃」
+  - **任意（`engage=raid`）:** 旗を立てたセルを通常クリックで選択 → 当該セルのみを `enemyCells` に載せ、「この漁場で任意出撃」
 - `enemyCells` 圧縮形: `sx,sy;sx,sy;...`（`encodeEnemyCells`）
 - `intelFlags` 例: `minesRemaining`, `sectorCleared`, `scoutHazard`, `sectorFlagged`, `scoutClear`（＋ `routeHint` 等）
 - density は盤結果で微調整（掃討完了でクールダウン、hazard でヒート）。**地雷密度カーブ自体は据え置き**（今は濃くしない）
-- explore 側の `engage` / `enemyCells` 消費は後続 PR
+- explore 側は density / engage / enemyCells を脅威と漁場バナーに消費（戦闘全面書き換えはしない）
 
 実装: `packages/invade/src/board.ts`（`forcedEngageTargets` / `raidEngageTarget`）+ `@estg/shared` handoff。
 
@@ -201,8 +202,8 @@ npm run dev:invade
 
 1. 前線格子でセルを開く／旗を立てる（HQ は最初から開放・壁は不可）
 2. 開いたセルをクリックしてルート焦点
-3. **格納庫へ渡す** / **探索へ渡す**（`intelFlags` / `density`）
-4. 地雷踏み → **強制出撃へ**（`engage=forced` + 隣接敵）／旗セル選択 → **任意出撃へ**（`engage=raid`）
+3. **この漁場で出撃**（invade→explore · `intelFlags` / `density`）／**格納庫へ渡す**（invade→trade）
+4. 地雷踏み → **この漁場で強制出撃**（`engage=forced` + 隣接敵）／旗セル選択 → **この漁場で任意出撃**（`engage=raid`）
 
 - パッケージ: `packages/invade`（`@estg/invade`）
 - 共有ヘルパ: `@estg/shared` の sector density プレースホルダ
@@ -214,4 +215,4 @@ npm run dev:invade
 
 - **位置づけ:** V0 ドラフト仕様 + 前線＝マインスイーパのプレイアブル。ビジョンの Module 4 欄の受け皿。
 - **訂正:** PR #35 の「セクター内 8×8」は製品意図と不一致のため、本仕様で前線格子＝盤に置き換え。
-- **次:** explore 側の `engage` / `enemyCells` 消費・侵食シミュレーションは後続。回路ボーナスは track 1（本トラックでは触らない）。
+- **次:** 侵食シミュレーション・バランス調整は後続。回路ボーナスは track 1（本トラックでは触らない）。invade→explore UI ナビは配線済。

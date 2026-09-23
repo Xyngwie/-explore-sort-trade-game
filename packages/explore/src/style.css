@@ -147,3 +147,19 @@ button.extract-not-ready {
 }
 .hud #hud-extract.ok { color: var(--ok); }
 .hud #hud-extract.warn { color: var(--amber); }
+
+.invade-banner {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background: #1a2433;
+  border: 1px solid #3d8bfd55;
+  color: #9ecbff;
+}
+.invade-banner.thin {
+  margin-top: 0.35rem;
+  margin-bottom: 0.15rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+}

@@ -9,6 +9,7 @@ import {
   createWorld,
   startSortie,
 } from "./game/world";
+import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
   applyOrder,
   cargoSpeedMul,
@@ -185,6 +186,13 @@ function renderDom(): void {
   const result = world.phase === "result" ? toExploreResult(world) : null;
   const sortUrl = result ? sortHandoffUrl(world) : "";
   const wearUrl = world.phase === "result" ? hubWearHandoffUrl(world) : null;
+  const invadeBanner = invadeIntelBannerText(world.invadeSector);
+  const invadeBannerHtml = invadeBanner
+    ? `<div class="invade-banner" role="status">${escapeHtml(invadeBanner)}</div>`
+    : "";
+  const invadeBannerThinHtml = invadeBanner
+    ? `<div class="invade-banner thin" role="status">${escapeHtml(invadeBanner)}</div>`
+    : "";
 
   if (world.phase === "briefing") {
     root.innerHTML = `
@@ -193,6 +201,7 @@ function renderDom(): void {
       <p class="muted">モノレポ正本。旧 grok.me Module1 は練習用／退役 — URL 非依存。</p>
       <div class="card">
         <div class="muted">${escapeHtml(world.note)}</div>
+        ${invadeBannerHtml}
         <table>
           <tr><td>僚機</td><td>${world.wingmen.length}</td></tr>
           <tr><td>積載上限</td><td>${world.carrierCapacity}</td></tr>
@@ -326,6 +335,7 @@ function renderDom(): void {
   root.innerHTML = `
     <p class="pill">MODULE 1 · SORTIE</p>
     <h1>WRECKLINE</h1>
+    ${invadeBannerThinHtml}
     <div class="hud">
       <span>残時間 <strong id="hud-time">${world.timeLeft.toFixed(1)}s</strong></span>
       <span>回収 <strong id="hud-salvage">${world.salvaged}/${world.carrierCapacity}</strong></span>
