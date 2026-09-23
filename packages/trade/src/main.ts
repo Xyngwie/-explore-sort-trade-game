@@ -54,6 +54,7 @@ import {
   isCircuitLocked,
   isCraftSignatureLocked,
   buildNextSortieReadiness,
+  buildNextSortieReturnDigest,
   formatInvadeIntelBrief,
   formatCircuitHubBrief,
   type HangarState,
@@ -268,12 +269,14 @@ function circuitRows(s: HangarState): string {
 
 function nextSortiePanel(s: HangarState): string {
   const ready = buildNextSortieReadiness(s);
+  const digest = buildNextSortieReturnDigest(s);
   const deployUrl = buildDeployUrl(s);
   const invadeUrl = buildInvadeUrl(s);
   const restoreUrl = buildRestoreUrl(s);
-  const intel = formatInvadeIntelBrief(s.lastInvadeSector);
   const circuits = formatCircuitHubBrief(s.hub.circuits, s.lastCircuit);
   const bonuses = formatCircuitBonusesJa(hubCircuitBonuses(s.hub));
+  const readyToDeploy = ready.canDeployExplore && ready.needsRepair === 0;
+  const emphasizeDeploy = readyToDeploy && !!deployUrl;
 
   const deployList =
     ready.selectedIds.length === 0
@@ -294,7 +297,7 @@ function nextSortiePanel(s: HangarState): string {
 
   const repairLine =
     ready.needsRepair === 0
-      ? `<p class="ok sortie-line">修理待ちなし</p>`
+      ? `<p class="ok sortie-line">修理待ちなし — 出撃可</p>`
       : `<p class="warn sortie-line">要修理 ${ready.needsRepair}機 — 下のハンガーで修理 / 解体</p>
          <ul class="sortie-deploy-list">
            ${ready.repairTargets
@@ -307,16 +310,32 @@ function nextSortiePanel(s: HangarState): string {
              .join("")}
          </ul>`;
 
+  const hasExplore = s.lastExploreReturn != null;
   const hasIntel = s.lastInvadeSector != null;
   const hasCircuit = (s.hub.circuits?.length ?? 0) > 0;
+  const activeEffect =
+    circuits.lines.find((l) => l.active)?.effectJa ??
+    circuits.lines[0]?.effectJa ??
+    "効果 —";
 
   return `
-    <div class="card sortie-card">
+    <div class="card sortie-card sortie-hero${emphasizeDeploy ? " sortie-ready-deploy" : ""}">
       <div class="sortie-head">
-        <h2>次の出撃</h2>
+        <div>
+          <p class="sortie-kicker">HUB HERO</p>
+          <h2>次の出撃</h2>
+        </div>
         <span class="pill sortie-ready">${escapeHtml(ready.readinessLabelJa)}</span>
       </div>
-      <p class="muted sortie-sub">修理・解体で艦隊を整え、探索 / 戦線 / 回路へ送るハブです。</p>
+      <p class="muted sortie-sub">帰還サマリーを確認し、修理が終わったら配備へ。探索 / 戦線 / 回路の起点です。</p>
+      <div class="sortie-returns" aria-label="帰還ワンライナー">
+        <h3 class="sortie-h3">帰還サマリー</h3>
+        <p class="${hasExplore ? "ok" : "muted"} sortie-line">探索: ${escapeHtml(digest.exploreJa)}</p>
+        <p class="${hasIntel ? "ok" : "muted"} sortie-line">戦線: ${escapeHtml(digest.invadeJa)}</p>
+        <p class="${hasCircuit ? "ok" : "muted"} sortie-line">回路: ${escapeHtml(digest.restoreJa)}</p>
+        <p class="sortie-line effect-line"><span class="effect-k">回路効果値</span> <strong>${escapeHtml(activeEffect)}</strong></p>
+        <p class="muted sortie-line">回路ボーナス: ${escapeHtml(bonuses)}</p>
+      </div>
       <div class="sortie-grid">
         <div>
           <h3 class="sortie-h3">配備予定</h3>
@@ -327,16 +346,10 @@ function nextSortiePanel(s: HangarState): string {
           ${repairLine}
         </div>
       </div>
-      <div class="sortie-handoff">
-        <h3 class="sortie-h3">戻りインテル</h3>
-        <p class="${hasIntel ? "ok" : "muted"} sortie-line">${escapeHtml(intel)}</p>
-        <p class="${hasCircuit ? "ok" : "muted"} sortie-line">${escapeHtml(circuits.summaryJa)}</p>
-        <p class="muted sortie-line">回路ボーナス: ${escapeHtml(bonuses)}</p>
-      </div>
-      <div class="row sortie-actions">
+      <div class="row sortie-actions${emphasizeDeploy ? " sortie-actions-hero" : ""}">
         ${
           deployUrl
-            ? `<a class="btn" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener">探索へ配備</a>`
+            ? `<a class="btn${emphasizeDeploy ? " deploy-cta" : ""}" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener">${emphasizeDeploy ? "▶ 探索へ配備（準備完了）" : "探索へ配備"}</a>`
             : `<button type="button" disabled title="健在機が必要">探索へ配備</button>`
         }
         <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener">戦線へ</a>
@@ -381,6 +394,8 @@ function render() {
         : ""
     }
 
+    ${nextSortiePanel(state)}
+
     <div class="card wallet-card">
       <div class="stat-pills">
         <span class="stat-pill"><span class="stat-k">Cr</span> ${state.hub.credits}</span>
@@ -405,7 +420,6 @@ function render() {
       </details>
     </div>
 
-    ${nextSortiePanel(state)}
 
     <div class="card">
       <div class="sortie-head">

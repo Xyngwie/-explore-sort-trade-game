@@ -42,7 +42,7 @@
 起動
   → localStorage から HubSave v2 読込（無ければ INITIAL_HUB）
   → URL に sort / wear / invade / restore があれば取込 → クエリ削除 → 自動セーブ
-  → ハンガー UI（「次の出撃」パネル: 配備予定 / 要修理 / 戻りインテル + 探索・戦線・回路リンク）
+  → ハンガー UI（ヒーロー「次の出撃」: 帰還ワンライナー explore/invade/restore · 回路効果値 · 修理なし時は配備 CTA 強調）
 
 シード読込 → プレイテスト用 HubSave 一括適用（健在2 + 要修理1・クレジット/型付き資材/弾薬）
 機体を受領 → 艦隊に OwnedMech 追加（空/不足時の手動付与）
@@ -159,7 +159,7 @@ UI の「レア売却 仮価格表」と在庫の「売却 仮Nc」ボタン、�
 10. 「戦線へ」URL に `fromHub=1`（+ 任意 `deployableMechs` / `startingAmmo`）が付く  
 11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（HubSave.circuits 選択またはシード優先）  
 12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
-12b. 「次の出撃」パネルに配備予定・要修理・戦線インテル要約・回路 outcome 要約と探索/戦線/回路リンクが並ぶ（HubSave キー追加なし）
+12b. 「次の出撃」をヒーローに: 探索/戦線/回路の帰還ワンライナー・回路効果値・配備予定/要修理。修理待ち0かつ出撃可なら配備 CTA を強調（HubSave キー追加なし）
 13. レア仮価格表が UI に見え、レア在庫の売却が表の単価でクレジット加算・HubSave に残る（非レアは売却不可）
 
 ---

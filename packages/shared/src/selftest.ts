@@ -560,6 +560,8 @@ import {
   VERIFY_TRUE_CIRCUIT_ID,
   VERIFY_PERFECT_CIRCUIT_ID,
   VERIFY_TRUE_CLUES,
+  VERIFY_TRUE_COLS,
+  VERIFY_TRUE_ROWS,
   buildVerifyTrueSolutionMarks,
   buildVerifyTrueUnsolvedBoard,
   buildVerifyPerfectLockedBoard,
@@ -574,6 +576,22 @@ import {
   buildTruePuzzleFromSolution,
   buildInjectedOrFlawedPuzzle,
 } from "./perfect-circuit-seed";
+import {
+  boardHasClosedLoop,
+  circuitDigitEffectContribution,
+  circuitHEdgeIndex,
+  circuitVEdgeIndex,
+  computeCircuitEffectValue,
+  formatCircuitEffectJa,
+  isCircuitSingleLoopClosed,
+} from "./circuit-effect";
+import {
+  FLAWED_HAZARD_WEIGHTS,
+  computeCircuitEffectForBoard,
+  generateFlawedClues,
+  resolveCluesForCircuitBoard,
+} from "./circuit-clues";
+
 
 // --- Perfect Circuit verify-true seed (2×2 outer loop) ---
 {
@@ -1273,3 +1291,111 @@ assert.equal(
 }
 
 console.log("shared handoff-m45 selftest: ok");
+
+// --- circuit effect value (効果値) ---
+{
+  assert.equal(circuitDigitEffectContribution(0, false), 0);
+  assert.equal(circuitDigitEffectContribution(0, true), 4);
+  assert.equal(circuitDigitEffectContribution(2, false), 2);
+  assert.equal(circuitDigitEffectContribution(3, true), 3);
+
+  const cols = VERIFY_TRUE_COLS;
+  const rows = VERIFY_TRUE_ROWS;
+  const empty: EdgeMark[] = Array.from(
+    { length: edgeCount(cols, rows) },
+    () => 0 as EdgeMark,
+  );
+  const noLoop = computeCircuitEffectValue({
+    clues: VERIFY_TRUE_CLUES,
+    marks: empty,
+    cols,
+    rows,
+  });
+  assert.equal(noLoop.hasLoop, false);
+  assert.equal(noLoop.effect, 0);
+  assert.ok(formatCircuitEffectJa(noLoop).includes("ループなし"));
+
+  const sol = buildVerifyTrueSolutionMarks();
+  assert.equal(isCircuitSingleLoopClosed(sol, cols, rows), true);
+  assert.equal(boardHasClosedLoop(sol, cols, rows), true);
+  const perfect = computeCircuitEffectValue({
+    clues: VERIFY_TRUE_CLUES,
+    marks: sol,
+    cols,
+    rows,
+    perfect: true,
+  });
+  // Four satisfied 2s → 2+2+2+2 = 8; no zeros on verify-true.
+  assert.equal(perfect.hasLoop, true);
+  assert.equal(perfect.perfect, true);
+  assert.equal(perfect.effect, 8);
+  assert.equal(perfect.zeroBonusApplied, 0);
+
+
+  // 3×3 board: unit square around cell (1,1) = 4 edges; 0 at (0,0) with 0 lines.
+  {
+    const c = 3;
+    const r = 3;
+    const clues = [
+      [0, null, null],
+      [null, 4, null],
+      [null, null, null],
+    ];
+    const m: EdgeMark[] = Array.from(
+      { length: edgeCount(c, r) },
+      () => 0 as EdgeMark,
+    );
+    m[circuitHEdgeIndex(c, r, 1, 1)] = 1;
+    m[circuitVEdgeIndex(c, r, 2, 1)] = 1;
+    m[circuitHEdgeIndex(c, r, 1, 2)] = 1;
+    m[circuitVEdgeIndex(c, r, 1, 1)] = 1;
+    assert.equal(isCircuitSingleLoopClosed(m, c, r), true);
+
+    const flawed = computeCircuitEffectValue({
+      clues,
+      marks: m,
+      cols: c,
+      rows: r,
+      perfect: false,
+    });
+    // 0 satisfied but not perfect → 0; digit 4 → +4; has loop → effect 4
+    assert.equal(flawed.digits.satisfiedZeros, 1);
+    assert.equal(flawed.effect, 4);
+    assert.equal(flawed.zeroBonusApplied, 0);
+
+    const asPerfect = computeCircuitEffectValue({
+      clues,
+      marks: m,
+      cols: c,
+      rows: r,
+      perfect: true,
+    });
+    // 0 → 4, plus 4 → effect 8
+    assert.equal(asPerfect.effect, 8);
+    assert.equal(asPerfect.zeroBonusApplied, 4);
+  }
+
+  const locked = buildVerifyPerfectLockedBoard("tester");
+  const fromBoard = computeCircuitEffectForBoard(locked);
+  assert.equal(fromBoard.effect, 8);
+  assert.equal(fromBoard.perfect, true);
+
+  const flawedGen = generateFlawedClues("effect-selftest", 6, 6, undefined, "contradiction");
+  assert.equal(flawedGen.hazard, "contradiction");
+  assert.ok(
+    Math.abs(
+      FLAWED_HAZARD_WEIGHTS.contradiction +
+        FLAWED_HAZARD_WEIGHTS.overdigit +
+        FLAWED_HAZARD_WEIGHTS.dense_noise -
+        1,
+    ) < 1e-9,
+  );
+  const cluesResolved = resolveCluesForCircuitBoard({
+    cols: 2,
+    rows: 2,
+    puzzleId: VERIFY_TRUE_PUZZLE_ID,
+  });
+  assert.deepEqual(cluesResolved, VERIFY_TRUE_CLUES.map((row) => [...row]));
+}
+
+console.log("shared circuit-effect selftest: ok");
