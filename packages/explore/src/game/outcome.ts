@@ -17,6 +17,8 @@ import type { World } from "./types";
 
 export function returnKindFromWorld(world: World): SortieReturnKind {
   if (world.extracted) return "extract";
+  // Note: clock expiry no longer sets failReason=timeout (overtime lock).
+  // "timeout" remains only for legacy/manual fail wear paths.
   if (
     world.failReason === "timeout" ||
     world.failReason === "leader_down" ||

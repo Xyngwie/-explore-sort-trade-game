@@ -2,6 +2,7 @@ import { decideWingman } from "./brain";
 import {
   applyOrder,
   campDamageTakenMul,
+  isOperationTimedOut,
   onSalvageCompleted,
   pushLog,
   spawnContainersAt,
@@ -9,6 +10,8 @@ import {
 } from "./orders";
 import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
 import type { Bullet, Unit, World } from "./types";
+
+export { isOperationTimedOut } from "./orders";
 
 function friendlyUnits(world: World): Unit[] {
   return [world.leader, ...world.wingmen];
@@ -367,6 +370,13 @@ export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
  */
 export function requestExtract(world: World): boolean {
   if (world.phase !== "sortie" || !world.leader.alive) return false;
+  if (isOperationTimedOut(world)) {
+    pushLog(
+      world,
+      "時間切れのため新規抽出不可。進行中の搭乗円のみ継続／撤退または戦闘決着。",
+    );
+    return false;
+  }
   if (world.boarding) {
     pushLog(world, "抽出シーケンス進行中。キャンセル不可。");
     return false;
@@ -469,21 +479,30 @@ function updateBoarding(world: World): void {
   }
 }
 
+
+/** Abort in-progress salvage channels when the operation clock expires. */
+function leaderAbortSalvageOnTimeout(world: World): void {
+  for (const u of friendlyUnits(world)) {
+    u.salvageId = null;
+    u.salvageT = 0;
+  }
+}
+
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   if (world.phase !== "sortie") return;
 
   world.elapsed += dt;
   world.timeLeft = Math.max(0, world.timeLeft - dt);
-  if (world.timeLeft <= 0) {
-    world.phase = "result";
-    world.extracted = false;
-    world.failReason = "timeout";
-    world.salvaged = 0;
-    world.boarding = null;
-  world.camp = null;
-    pushLog(world, "時間切れ。未脱出のため失敗。");
-    return;
+  // Clock expiry locks move/cargo; does NOT auto-fail. Combat + boarding continue.
+  if (world.timeLeft <= 0 && !world.operationTimedOut) {
+    world.operationTimedOut = true;
+    leaderAbortSalvageOnTimeout(world);
+    pushLog(
+      world,
+      "時間切れ。移動・積み下ろし不可。戦闘は継続（撤退／撃破／進行中搭乗で決着）。",
+    );
   }
+  const timedOut = isOperationTimedOut(world);
 
   const leader = world.leader;
   if (!leader.alive) {
@@ -492,26 +511,32 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     world.failReason = "leader_down";
     world.salvaged = 0;
     world.boarding = null;
-  world.camp = null;
+    world.camp = null;
     pushLog(world, "隊長撃破。作戦失敗。");
     return;
   }
 
   leader.cooldown = Math.max(0, leader.cooldown - dt);
 
-  // Leader movement: WASD vector wins; else click target.
-  if (input.move.x !== 0 || input.move.y !== 0) {
-    const n = norm(input.move);
-    leader.moveTarget = {
-      x: leader.pos.x + n.x * 40,
-      y: leader.pos.y + n.y * 40,
-    };
-  } else if (input.clickMove) {
-    leader.moveTarget = { ...input.clickMove };
+  // Leader movement: locked after timeout (player cannot reposition).
+  if (timedOut) {
+    leader.moveTarget = null;
+    leader.vel = { x: 0, y: 0 };
+  } else {
+    // Leader movement: WASD vector wins; else click target.
+    if (input.move.x !== 0 || input.move.y !== 0) {
+      const n = norm(input.move);
+      leader.moveTarget = {
+        x: leader.pos.x + n.x * 40,
+        y: leader.pos.y + n.y * 40,
+      };
+    } else if (input.clickMove) {
+      leader.moveTarget = { ...input.clickMove };
+    }
+    const leadSpeed =
+      world.balance.moveSpeed * unitMoveSpeedMul(leader, world);
+    moveToward(leader, leader.moveTarget, leadSpeed, dt, world);
   }
-  const leadSpeed =
-    world.balance.moveSpeed * unitMoveSpeedMul(leader, world);
-  moveToward(leader, leader.moveTarget, leadSpeed, dt, world);
 
   // Leader fire: movement stays player-led; auto-engage nearest threat in weapon
   // range (escort-style reaction fire). Space/F also requests the same shot.
@@ -532,28 +557,34 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     tryFire(world, leader, leadTarget, false);
   }
 
-  // Captain auto-starts/continues salvage on a discovered untaken crate in
-  // interactRadius. E (input.interact) remains an optional explicit hold.
-  const leaderWantSalvage =
-    input.interact ||
-    world.containers.some(
-      (c) =>
-        c.discovered &&
-        !c.taken &&
-        dist(leader.pos, c.pos) < world.balance.interactRadius,
-    );
-  updateSalvage(world, leader, leaderWantSalvage, dt);
+  // Cargo salvage locked after timeout (積み下ろし不可 includes crate pickup).
+  if (!timedOut) {
+    // Captain auto-starts/continues salvage on a discovered untaken crate in
+    // interactRadius. E (input.interact) remains an optional explicit hold.
+    const leaderWantSalvage =
+      input.interact ||
+      world.containers.some(
+        (c) =>
+          c.discovered &&
+          !c.taken &&
+          dist(leader.pos, c.pos) < world.balance.interactRadius,
+      );
+    updateSalvage(world, leader, leaderWantSalvage, dt);
+  }
 
   for (const w of world.wingmen) {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);
     const intent = decideWingman(world, w, dt);
+    // Wingmen may still reposition for combat after timeout; salvage blocked.
     w.moveTarget = intent.moveTarget;
     const wingSpeed =
       world.balance.wingmanSpeed * unitMoveSpeedMul(w, world);
     moveToward(w, intent.moveTarget, wingSpeed, dt, world);
     if (intent.fireAt) tryFire(world, w, intent.fireAt, false);
-    updateSalvage(world, w, intent.trySalvage, dt);
+    if (!timedOut) {
+      updateSalvage(world, w, intent.trySalvage, dt);
+    }
   }
 
   updateEnemies(world, dt);

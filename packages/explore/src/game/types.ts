@@ -30,7 +30,8 @@ export type InvadeSectorContext = {
 };
 
 export type Phase = "briefing" | "sortie" | "result";
-/** extract_missed = captain outside boarding circle at lift-off. */
+/** extract_missed = captain outside boarding circle at lift-off.
+ *  timeout remains for legacy/manual fail wear tests only — clock expiry no longer auto-fails. */
 export type FailReason = "timeout" | "leader_down" | "extract_missed" | null;
 
 export type UnitKind = "leader" | "wingman" | "enemy";
@@ -117,6 +118,8 @@ export type World = {
   balance: Balance;
   phase: Phase;
   timeLeft: number;
+  /** True once sortie clock hits 0; locks move/cargo but does not auto-fail. */
+  operationTimedOut: boolean;
   elapsed: number;
   maxOperationTimeSec: number;
   leader: Unit;

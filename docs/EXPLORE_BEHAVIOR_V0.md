@@ -95,6 +95,20 @@ HUD は貨物 ETA／離昇 ETA とマップ上の搭乗円を表示する。
 
 定数は `packages/explore/src/game/balance.ts` の `boardingRadius` / `boardingCargoDelaySec` / `boardingLiftOffDelaySec`。
 
+## 5.1b 作戦時間切れ（overtime lock）
+
+残時間が 0 になっても **即失敗しない**。代わりに:
+
+| 項目 | 挙動 |
+|---|---|
+| 移動 | 隊長の移動ロック（WASD／クリック不可） |
+| 積み下ろし | キャンプ荷下ろし・積込・パージ・コンテナ回収チャネル不可 |
+| 戦闘 | 継続（射撃・敵 AI・被弾）。僚機は戦闘機動可 |
+| 抽出 | **既に進行中の搭乗円のみ継続**（隊長が円内なら離昇成功可）。時間切れ後の**新規**抽出要請は拒否。円外で時間切れ → 移動不可のため円へ入れず、撃破／撤退／既存 abort で決着 |
+| 失敗理由 | 時計単体では `returnKind=fail` にしない（`leader_down` / `extract_missed` / 撤退 abort など既存経路） |
+
+HUD に「時間切れ・移動／積み下ろしロック・戦闘継続」バナーを出す。
+
 ---
 
 ## 5.2 invade → explore セクター密度（脅威）

@@ -20,6 +20,7 @@ import {
   applyOrder,
   applyOrderToAllWingmen,
   inCampAura,
+  isOperationTimedOut,
   pickUpFromCamp,
   purgeCargo,
   rallyWingman,
@@ -214,6 +215,18 @@ function extractReqHudHtml(): string {
     <div class="erq-seconds" id="erq-seconds">${seconds}${sub ? " · " + sub : ""}</div>
     <div class="erq-must" id="erq-must">${must}</div>
     <div class="erq-count" id="erq-count">${count}</div>
+  </div>`;
+}
+
+
+function timeoutLockBannerHtml(): string {
+  if (!isOperationTimedOut(world) || world.phase !== "sortie") return "";
+  const boardingNote = world.boarding
+    ? "進行中の搭乗円は継続（円内なら離昇可）。"
+    : "円外なら移動不可のため新規脱出は不可 — 戦闘か撤退で決着。";
+  return `<div class="timeout-lock-banner" id="timeout-lock-banner" role="status" aria-live="polite">
+    <strong>時間切れ</strong>
+    <span>移動・積み下ろしロック · 戦闘継続 · ${boardingNote}</span>
   </div>`;
 }
 
@@ -465,8 +478,9 @@ function renderDom(): void {
     <p class="pill">MODULE 1 · SORTIE</p>
     <h1>WRECKLINE</h1>
     ${invadeBannerThinHtml}
+    ${timeoutLockBannerHtml()}
     <div class="hud">
-      <span>残時間 <strong id="hud-time">${world.timeLeft.toFixed(1)}s</strong></span>
+      <span>残時間 <strong id="hud-time" class="${isOperationTimedOut(world) ? "timed-out" : ""}">${isOperationTimedOut(world) ? "0.0s · 時間切れ" : world.timeLeft.toFixed(1) + "s"}</strong></span>
       <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
       <span>実弾 <strong id="hud-ammo">${world.ammo}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
@@ -482,12 +496,12 @@ function renderDom(): void {
           ${extractReqHudHtml()}
         </div>
         <div class="row">
-          <button type="button" id="btn-extract" ${boardingActive ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。">${boardingActive ? "抽出シーケンス中…" : "抽出要請（搭乗円）"}</button>
-          <button type="button" class="secondary" id="btn-camp" title="隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。">キャンプ設置</button>
-          <button type="button" class="secondary" id="btn-camp-unload" title="隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。">小隊荷下ろし</button>
-          <button type="button" class="secondary" id="btn-purge" title="パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。">パージ／キャンプへ降ろす</button>
-          <button type="button" class="secondary" id="btn-camp-pickup" title="キャンプ付近で置場から積込（G）。">キャンプから積込</button>
-          <button type="button" class="stance-raid" id="btn-scatter" title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
+          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。">${boardingActive ? "抽出シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・抽出ロック" : "抽出要請（搭乗円）"}</button>
+          <button type="button" class="secondary" id="btn-camp" ${isOperationTimedOut(world) ? "disabled" : ""} title="隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。">キャンプ設置</button>
+          <button type="button" class="secondary" id="btn-camp-unload" ${isOperationTimedOut(world) ? "disabled" : ""} title="隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。">小隊荷下ろし</button>
+          <button type="button" class="secondary" id="btn-purge" ${isOperationTimedOut(world) ? "disabled" : ""} title="パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。">パージ／キャンプへ降ろす</button>
+          <button type="button" class="secondary" id="btn-camp-pickup" ${isOperationTimedOut(world) ? "disabled" : ""} title="キャンプ付近で置場から積込（G）。">キャンプから積込</button>
+          <button type="button" class="stance-raid" id="btn-scatter" ${isOperationTimedOut(world) ? "disabled" : ""} title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
         ${squadOrderBarHtml()}
@@ -570,8 +584,26 @@ function bindWingControls(scope: ParentNode): void {
 }
 
 function paintHudOnly(): void {
+  const timedOut = isOperationTimedOut(world);
   const t = document.getElementById("hud-time");
-  if (t) t.textContent = `${world.timeLeft.toFixed(1)}s`;
+  if (t) {
+    t.textContent = timedOut ? "0.0s · 時間切れ" : `${world.timeLeft.toFixed(1)}s`;
+    t.classList.toggle("timed-out", timedOut);
+  }
+  let banner = document.getElementById("timeout-lock-banner");
+  if (timedOut && world.phase === "sortie") {
+    if (!banner) {
+      const hud = document.querySelector(".hud");
+      if (hud?.parentElement) {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = timeoutLockBannerHtml();
+        const node = tmp.firstElementChild;
+        if (node) hud.parentElement.insertBefore(node, hud);
+      }
+    }
+  } else if (banner) {
+    banner.remove();
+  }
   const s = document.getElementById("hud-salvage");
   if (s) s.textContent = String(world.salvaged);
   const a = document.getElementById("hud-ammo");
@@ -607,8 +639,22 @@ function paintHudOnly(): void {
   const extractBtn = document.getElementById("btn-extract") as HTMLButtonElement | null;
   if (extractBtn) {
     const active = world.boarding != null;
-    extractBtn.disabled = active;
-    extractBtn.textContent = active ? "抽出シーケンス中…" : "抽出要請（搭乗円）";
+    extractBtn.disabled = active || timedOut;
+    extractBtn.textContent = active
+      ? "抽出シーケンス中…"
+      : timedOut
+        ? "時間切れ・抽出ロック"
+        : "抽出要請（搭乗円）";
+  }
+  for (const id of [
+    "btn-camp",
+    "btn-camp-unload",
+    "btn-purge",
+    "btn-camp-pickup",
+    "btn-scatter",
+  ]) {
+    const btn = document.getElementById(id) as HTMLButtonElement | null;
+    if (btn) btn.disabled = timedOut;
   }
 
   const speedEl = document.getElementById("hud-speed");

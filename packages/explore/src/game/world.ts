@@ -331,6 +331,7 @@ export function createWorld(boot: SortieBootstrap): World {
     balance,
     phase: "briefing",
     timeLeft: boot.maxOperationTimeSec,
+    operationTimedOut: false,
     elapsed: 0,
     maxOperationTimeSec: boot.maxOperationTimeSec,
     leader,
@@ -389,6 +390,7 @@ export function createWorld(boot: SortieBootstrap): World {
 export function startSortie(world: World): void {
   world.phase = "sortie";
   world.timeLeft = world.maxOperationTimeSec;
+  world.operationTimedOut = false;
   world.elapsed = 0;
   world.salvaged = 0;
   world.extracted = false;

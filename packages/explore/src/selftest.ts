@@ -9,6 +9,7 @@ import {
   campDamageTakenMul,
   cargoSpeedMul,
   inCampAura,
+  isOperationTimedOut,
   onSalvageCompleted,
   pickUpFromCamp,
   purgeCargo,
@@ -976,6 +977,121 @@ function advancePinned(
   world.leader.pos = { ...world.camp!.pos };
   assert.ok(inCampAura(world, world.leader));
   assert.ok(unitMoveSpeedMul(world.leader, world) > 1);
+}
+
+
+// --- operation timeout: lock move/cargo, no auto-fail, combat continues ---
+{
+  const world = createWorld(bootstrapFromSearch("?startingAmmo=40"));
+  startSortie(world);
+  // Keep one enemy alive near captain for combat; park others far.
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  const foe = world.enemies[0]!;
+  foe.alive = true;
+  foe.hp = foe.maxHp;
+  world.leader.pos = { x: 400, y: 400 };
+  foe.pos = { x: 410, y: 400 }; // in weapon range
+  world.ammo = 40;
+  world.leader.cooldown = 0;
+
+  // Near-exhaust the clock then step over zero.
+  world.timeLeft = 0.04;
+  const posBefore = { ...world.leader.pos };
+  tickWorld(world, 0.05, {
+    move: { x: 1, y: 0 },
+    clickMove: null,
+    fire: true,
+    interact: false,
+  });
+  assert.equal(world.phase, "sortie", "timer→0 must not end sortie");
+  assert.equal(world.operationTimedOut, true);
+  assert.equal(isOperationTimedOut(world), true);
+  assert.equal(world.failReason, null);
+  assert.equal(world.extracted, false);
+  assert.ok(world.logs.some((l) => l.text.includes("時間切れ") && l.text.includes("戦闘は継続")));
+
+  // Movement blocked after timeout
+  const pinned = { ...world.leader.pos };
+  for (let i = 0; i < 20; i++) {
+    tickWorld(world, 0.05, {
+      move: { x: 1, y: 0 },
+      clickMove: { x: pinned.x + 200, y: pinned.y },
+      fire: false,
+      interact: false,
+    });
+  }
+  assert.ok(
+    Math.abs(world.leader.pos.x - pinned.x) < 0.5 &&
+      Math.abs(world.leader.pos.y - pinned.y) < 0.5,
+    "captain must not move after timeout",
+  );
+  assert.equal(world.phase, "sortie");
+
+  // Cargo unload / load / purge / camp set denied
+  world.camp = { pos: { ...world.leader.pos }, stashedCount: 2 };
+  world.leader.salvagedCount = 3;
+  world.salvaged = 5;
+  assert.equal(unloadAtCamp(world), "denied");
+  assert.equal(world.camp.stashedCount, 2);
+  assert.equal(world.leader.salvagedCount, 3);
+  assert.equal(pickUpFromCamp(world), "denied");
+  assert.equal(world.camp.stashedCount, 2);
+  assert.equal(purgeCargo(world), "denied");
+  assert.equal(setCampOrDeposit(world), "denied");
+  assert.equal(requestExtract(world), false);
+
+  // Combat tick still runs (enemy may fire / bullets update / cooldowns tick)
+  const ammoBefore = world.ammo;
+  const foeHpBefore = foe.hp;
+  world.leader.cooldown = 0;
+  foe.cooldown = 0;
+  for (let i = 0; i < 30; i++) {
+    tickWorld(world, 0.05, {
+      move: { x: 0, y: 0 },
+      clickMove: null,
+      fire: true,
+      interact: false,
+    });
+  }
+  assert.equal(world.phase, "sortie");
+  assert.ok(
+    world.ammo < ammoBefore || foe.hp < foeHpBefore || world.bullets.length > 0 ||
+      world.combatHitsTaken > 0 ||
+      !foe.alive,
+    "combat must still progress after timeout",
+  );
+  void posBefore;
+}
+
+// --- timeout while boarding already active: lift-off can still succeed ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  world.leader.pos = { x: 600, y: 400 };
+  for (const w of world.wingmen) w.pos = { x: 600, y: 400 };
+  for (const c of world.containers) {
+    c.pos = { x: 20, y: 20 };
+  }
+  world.salvaged = 1;
+  assert.ok(requestExtract(world));
+  // Expire clock mid-boarding; stay in circle.
+  world.timeLeft = 0.02;
+  const pin = () => {
+    world.leader.pos = { x: 600, y: 400 };
+    for (const w of world.wingmen) w.pos = { x: 600, y: 400 };
+  };
+  advancePinned(world, world.balance.boardingLiftOffDelaySec + 0.2, pin);
+  assert.equal(world.operationTimedOut, true);
+  assert.equal(world.phase, "result");
+  assert.equal(world.extracted, true);
+  assert.equal(world.failReason, null);
 }
 
 console.log("explore selftest: ok");
