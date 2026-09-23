@@ -17,13 +17,15 @@ import {
 } from "./game/forcedBackWipe";
 import {
   applyOrder,
-  cargoSpeedMul,
+  applyOrderToAllWingmen,
+  inCampAura,
   pickUpFromCamp,
   purgeCargo,
   rallyWingman,
   scatterSearch,
   setCampOrDeposit,
   unloadAtCamp,
+  unitMoveSpeedMul,
 } from "./game/orders";
 import {
   boardingCargoEta,
@@ -93,6 +95,18 @@ let canvas: HTMLCanvasElement | null = null;
 let last = performance.now();
 let needsDom = true;
 
+function flashCampToast(msg: string): void {
+  const el = document.getElementById("camp-toast");
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = msg;
+  el.classList.add("show");
+  window.setTimeout(() => {
+    el.classList.remove("show");
+    el.hidden = true;
+  }, 2800);
+}
+
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
@@ -109,7 +123,10 @@ window.addEventListener("keydown", (e) => {
   }
   if (k === "u" && world.phase === "sortie") {
     e.preventDefault();
-    unloadAtCamp(world);
+    const result = unloadAtCamp(world);
+    if (result === "unloaded" && world.camp) {
+      flashCampToast(`置場 ${world.camp.stashedCount} · キャンプ圏で被弾軽減`);
+    }
     needsDom = true;
   }
   if (k === "g" && world.phase === "sortie") {
@@ -121,6 +138,19 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     purgeCargo(world);
     needsDom = true;
+  }
+  if (world.phase === "sortie" && !e.repeat) {
+    const squadMap: Record<string, Stance> = {
+      "1": "escort",
+      "2": "patrol",
+      "3": "recover",
+      "4": "raid",
+    };
+    if (k in squadMap) {
+      e.preventDefault();
+      applyOrderToAllWingmen(world, squadMap[k]!);
+      needsDom = true;
+    }
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -150,39 +180,39 @@ function escapeHtml(s: string): string {
 
 function extractReqHudHtml(): string {
   const hud = boardingRequirementsHud(world);
+  // Top-edge HUD: compact when idle so the map center stays playable.
   if (!hud.active) {
-    return `<div class="extract-req-hud idle" id="extract-req-hud" aria-live="polite">
-      <div class="erq-title">EXTRACT / 帰還要件</div>
-      <div class="erq-seconds">未要請</div>
-      <div class="erq-must">必須: ${hud.mustBeIn}（離昇時）</div>
-      <div class="erq-sub">X で搭乗円 · 貨物 ${world.balance.boardingCargoDelaySec}s → 離昇 ${world.balance.boardingLiftOffDelaySec}s</div>
+    return `<div class="extract-req-hud idle top-edge" id="extract-req-hud" aria-live="polite">
+      <div class="erq-title">EXTRACT</div>
+      <div class="erq-seconds">未要請 · X で展開 · 必須:${hud.mustBeIn}</div>
     </div>`;
   }
   const danger = !hud.captainInside;
-  const cls = danger ? "extract-req-hud active danger" : "extract-req-hud active";
+  const cls = danger
+    ? "extract-req-hud active danger top-edge"
+    : "extract-req-hud active top-edge";
   const seconds =
     hud.liftOffEta != null
-      ? `離昇まで ${hud.liftOffEta.toFixed(1)}s`
+      ? `離昇 ${hud.liftOffEta.toFixed(1)}s`
       : "離昇直前";
   const must = hud.captainInside
-    ? `必須: ${hud.mustBeIn} → 円内 OK`
-    : `必須: ${hud.mustBeIn} → 円外！戻れ`;
+    ? `必須: 隊長円内 OK`
+    : `必須: 隊長円外！戻れ`;
   const count =
-    `円内 ${hud.insideCount} / 生存 ${hud.aliveCount}` +
+    `円内 ${hud.insideCount}/${hud.aliveCount}` +
     (hud.outsideCount > 0
-      ? `（円外: ${hud.outsideNames.join("・")}）`
-      : "（全員円内）");
+      ? ` 円外:${hud.outsideNames.join("・")}`
+      : " 全員円内");
   const sub = hud.cargoArrived
-    ? "貨物到着済 — 円内で離昇待機"
+    ? "貨物済·待機"
     : hud.cargoEta != null
-      ? `貨物到着まで ${hud.cargoEta.toFixed(1)}s`
+      ? `貨物 ${hud.cargoEta.toFixed(1)}s`
       : "";
   return `<div class="${cls}" id="extract-req-hud" aria-live="polite">
-    <div class="erq-title">EXTRACT / 帰還要件</div>
-    <div class="erq-seconds" id="erq-seconds">${seconds}</div>
+    <div class="erq-title">EXTRACT / 帰還</div>
+    <div class="erq-seconds" id="erq-seconds">${seconds}${sub ? " · " + sub : ""}</div>
     <div class="erq-must" id="erq-must">${must}</div>
     <div class="erq-count" id="erq-count">${count}</div>
-    ${sub ? `<div class="erq-sub" id="erq-sub">${sub}</div>` : `<div class="erq-sub" id="erq-sub"></div>`}
   </div>`;
 }
 
@@ -217,8 +247,27 @@ function bindCanvas(): void {
   });
 }
 
+function squadOrderBarHtml(): string {
+  const items: Array<{ stance: Stance; key: string }> = [
+    { stance: "escort", key: "1" },
+    { stance: "patrol", key: "2" },
+    { stance: "recover", key: "3" },
+    { stance: "raid", key: "4" },
+  ];
+  const btns = items
+    .map(
+      ({ stance, key }) =>
+        `<button type="button" class="stance-${stance} squad-order" data-squad-order="${stance}" title="全僚機へ${STANCE_LABEL[stance]}（${key}）"><span class="hotkey">${key}</span>${STANCE_LABEL[stance]}</button>`,
+    )
+    .join("");
+  return `<div class="squad-order-bar" role="group" aria-label="小隊方針">
+    <span class="squad-label">小隊方針</span>
+    ${btns}
+  </div>`;
+}
+
 function wingPanelHtml(): string {
-  return world.wingmen
+  const cards = world.wingmen
     .map((w) => {
       const off = world.phase === "sortie" && isWingmanOffscreen(world, w);
       const stances: Stance[] = ["escort", "patrol", "recover", "raid"];
@@ -233,14 +282,15 @@ function wingPanelHtml(): string {
           <span>${escapeHtml(w.name)} ${w.alive ? "" : "（撃破）"}</span>
           <span class="badge ${off ? "warn" : ""}">${off ? "画面外" : STANCE_LABEL[w.stance]}</span>
         </h3>
-        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}/${w.capacity}</div>
-        <div class="row">
+        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}</div>
+        <div class="row wing-order-row">
           <button type="button" class="secondary" data-rally="${w.id}">召還</button>
           ${btns}
         </div>
       </div>`;
     })
     .join("");
+  return `${squadOrderBarHtml()}${cards}`;
 }
 
 function logsHtml(): string {
@@ -278,7 +328,7 @@ function renderDom(): void {
         ${invadeBannerHtml}
         <table>
           <tr><td>僚機</td><td>${world.wingmen.length}</td></tr>
-          <tr><td>積載上限</td><td>${world.carrierCapacity}</td></tr>
+          <tr><td>積載上限</td><td>なし（速度で制約）</td></tr>
           <tr><td>実弾</td><td>${world.ammo}</td></tr>
           <tr><td>活動限界</td><td>${world.maxOperationTimeSec}s</td></tr>
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
@@ -398,13 +448,17 @@ function renderDom(): void {
       ? `貨物 ${cargoEta.toFixed(1)}s / 離昇 ${(liftEta ?? 0).toFixed(1)}s`
       : `貨物到着 · 離昇 ${(liftEta ?? 0).toFixed(1)}s`
     : "待機（どこでも要請可）";
-  const speedMul = cargoSpeedMul(world.leader, world.balance);
+  const speedMul = unitMoveSpeedMul(world.leader, world);
   const speedHud =
     speedMul >= 0.999
-      ? "速度 100%"
+      ? inCampAura(world, world.leader)
+        ? "速度 軽装キャンプ圏"
+        : "速度 100%"
       : `速度 ${Math.round(speedMul * 100)}%（積載遅延）`;
   const campHud = world.camp
-    ? `キャンプ 置場${world.camp.stashedCount}`
+    ? world.camp.stashedCount > 0
+      ? `キャンプ 置場${world.camp.stashedCount}·防衛`
+      : `キャンプ 置場${world.camp.stashedCount}`
     : "キャンプ 未設置";
   root.innerHTML = `
     <p class="pill">MODULE 1 · SORTIE</p>
@@ -412,13 +466,14 @@ function renderDom(): void {
     ${invadeBannerThinHtml}
     <div class="hud">
       <span>残時間 <strong id="hud-time">${world.timeLeft.toFixed(1)}s</strong></span>
-      <span>回収 <strong id="hud-salvage">${world.salvaged}/${world.carrierCapacity}</strong></span>
+      <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
       <span>実弾 <strong id="hud-ammo">${world.ammo}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
       <span>抽出 <strong id="hud-boarding">${extractHud}</strong></span>
       <span><strong id="hud-speed">${speedHud}</strong></span>
       <span><strong id="hud-camp">${campHud}</strong></span>
     </div>
+    <div class="toast" id="camp-toast" hidden></div>
     <div class="layout">
       <div>
         <div class="canvas-wrap">
@@ -428,13 +483,14 @@ function renderDom(): void {
         <div class="row">
           <button type="button" id="btn-extract" ${boardingActive ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。">${boardingActive ? "抽出シーケンス中…" : "抽出要請（搭乗円）"}</button>
           <button type="button" class="secondary" id="btn-camp" title="隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。">キャンプ設置</button>
-          <button type="button" class="secondary" id="btn-camp-unload" title="キャンプ付近で積載を置場へ荷下ろし（U）。">荷下ろし</button>
-          <button type="button" class="secondary" id="btn-purge" title="パージ：キャンプ付近は置場へ降ろす／それ以外は戦場へ投下して軽装化（P）。">パージ／キャンプへ降ろす</button>
+          <button type="button" class="secondary" id="btn-camp-unload" title="隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。">小隊荷下ろし</button>
+          <button type="button" class="secondary" id="btn-purge" title="パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。">パージ／キャンプへ降ろす</button>
           <button type="button" class="secondary" id="btn-camp-pickup" title="キャンプ付近で置場から積込（G）。">キャンプから積込</button>
           <button type="button" class="stance-raid" id="btn-scatter" title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。フィールドに多数配置＋敵撃破で 0–2 ドロップ。積載が多いほど移動が遅くなる。C キャンプ・U 荷下ろし・P パージ（キャンプへ／戦場投下）・G 取り上げ。中央 HUD が抽出の秒数・必須（隊長円内）・円内人数を常時表示。抽出はどこからでも要請→搭乗円・僚機自動哨戒・貨物10s／離昇15s。</p>
+        ${squadOrderBarHtml()}
+        <p class="help">未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。C キャンプ・U 小隊荷下ろし・P パージ・G 取り上げ。マップ上端の EXTRACT HUD（未要請はコンパクト）。抽出→搭乗円内コンテナは離昇時に全回収。僚機方針は 1–4 または小隊バー。</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -458,7 +514,10 @@ function renderDom(): void {
     needsDom = true;
   });
   document.getElementById("btn-camp-unload")?.addEventListener("click", () => {
-    unloadAtCamp(world);
+    const result = unloadAtCamp(world);
+    if (result === "unloaded" && world.camp) {
+      flashCampToast(`置場 ${world.camp.stashedCount} · キャンプ圏で被弾軽減`);
+    }
     needsDom = true;
   });
   document.getElementById("btn-purge")?.addEventListener("click", () => {
@@ -481,7 +540,11 @@ function renderDom(): void {
     world.camp = null;
     needsDom = true;
   });
-  root.querySelectorAll<HTMLButtonElement>("[data-order]").forEach((btn) => {
+  bindWingControls(root);
+}
+
+function bindWingControls(scope: ParentNode): void {
+  scope.querySelectorAll<HTMLButtonElement>("[data-order]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const raw = btn.dataset.order;
       if (!raw) return;
@@ -489,10 +552,18 @@ function renderDom(): void {
       order(id, stance);
     });
   });
-  root.querySelectorAll<HTMLButtonElement>("[data-rally]").forEach((btn) => {
+  scope.querySelectorAll<HTMLButtonElement>("[data-rally]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.rally;
       if (id) rally(id);
+    });
+  });
+  scope.querySelectorAll<HTMLButtonElement>("[data-squad-order]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const stance = btn.dataset.squadOrder as Stance | undefined;
+      if (!stance) return;
+      applyOrderToAllWingmen(world, stance);
+      needsDom = true;
     });
   });
 }
@@ -501,7 +572,7 @@ function paintHudOnly(): void {
   const t = document.getElementById("hud-time");
   if (t) t.textContent = `${world.timeLeft.toFixed(1)}s`;
   const s = document.getElementById("hud-salvage");
-  if (s) s.textContent = `${world.salvaged}/${world.carrierCapacity}`;
+  if (s) s.textContent = String(world.salvaged);
   const a = document.getElementById("hud-ammo");
   if (a) a.textContent = String(world.ammo);
   const h = document.getElementById("hud-hp");
@@ -541,36 +612,28 @@ function paintHudOnly(): void {
 
   const speedEl = document.getElementById("hud-speed");
   if (speedEl) {
-    const mul = cargoSpeedMul(world.leader, world.balance);
+    const mul = unitMoveSpeedMul(world.leader, world);
     speedEl.textContent =
       mul >= 0.999
-        ? "速度 100%"
+        ? inCampAura(world, world.leader)
+          ? "速度 軽装キャンプ圏"
+          : "速度 100%"
         : `速度 ${Math.round(mul * 100)}%（積載遅延）`;
   }
   const campEl = document.getElementById("hud-camp");
   if (campEl) {
     campEl.textContent = world.camp
-      ? `キャンプ 置場${world.camp.stashedCount}`
+      ? world.camp.stashedCount > 0
+        ? `キャンプ 置場${world.camp.stashedCount}·防衛`
+        : `キャンプ 置場${world.camp.stashedCount}`
       : "キャンプ 未設置";
   }
 
   const panel = document.getElementById("wing-panel");
-  if (panel) panel.innerHTML = wingPanelHtml();
-  // rebind wing buttons after innerHTML replace
-  panel?.querySelectorAll<HTMLButtonElement>("[data-order]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const raw = btn.dataset.order;
-      if (!raw) return;
-      const [id, stance] = raw.split(":") as [string, Stance];
-      order(id, stance);
-    });
-  });
-  panel?.querySelectorAll<HTMLButtonElement>("[data-rally]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.rally;
-      if (id) rally(id);
-    });
-  });
+  if (panel) {
+    panel.innerHTML = wingPanelHtml();
+    bindWingControls(panel);
+  }
 
   const log = document.getElementById("log-list");
   if (log) log.innerHTML = logsHtml();
