@@ -1,4 +1,7 @@
-import { buildSortToTradeUrlFromResult } from "@estg/shared";
+import {
+  buildSortToTradeUrl,
+  buildSortToTradeUrlFromResult,
+} from "@estg/shared";
 import {
   createRefineFromLocationSearch,
   createTestPlayRefine,
@@ -122,4 +125,46 @@ export function buildEmptySkipToHubUrl(
 export function buildEmptySkipHubCtaHtml(handoffUrl: string): string {
   const href = escapeHtml(handoffUrl);
   return `<a class="btn" id="btn-skip-hub" href="${href}" target="_top" rel="noopener">格納庫へ戻る</a>`;
+}
+
+/**
+ * Briefing-phase skip when inbound cargo / valid budget > 0.
+ * Deposits remaining inbound containers as Hub 未開封 stock (no refine).
+ */
+export function canSkipWithCargo(
+  s: Pick<RefineLive, "inbound" | "validPieceBudget"> & {
+    phase?: RefineLive["phase"];
+  },
+): boolean {
+  if (s.phase != null && s.phase !== "briefing") return false;
+  return (
+    s.inbound.isExtracted === true &&
+    s.validPieceBudget > 0 &&
+    Math.max(0, Math.floor(s.inbound.salvagedContainers)) > 0
+  );
+}
+
+/**
+ * Zero-yield sort→trade URL that deposits inbound container count into Hub
+ * `unopenedContainers` via `depositUnopenedContainers` (no material import).
+ */
+export function buildCargoSkipToHubUrl(
+  s: Pick<RefineLive, "inbound">,
+  baseUrl: string,
+): string {
+  const deposit = Math.max(0, Math.floor(s.inbound.salvagedContainers));
+  return buildSortToTradeUrl(
+    {
+      importMaterials: 0,
+      craftMultiplier: resolveCraftMultiplier(s.inbound),
+      ...(deposit > 0 ? { depositUnopenedContainers: deposit } : {}),
+    },
+    baseUrl,
+  );
+}
+
+/** Secondary CTA on briefing — deposit cans as 未開封, skip refine. */
+export function buildCargoSkipHubCtaHtml(handoffUrl: string): string {
+  const href = escapeHtml(handoffUrl);
+  return `<a class="btn secondary" id="btn-skip-cargo-hub" href="${href}" target="_top" rel="noopener">未開封のまま格納庫へ</a>`;
 }

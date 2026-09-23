@@ -65,7 +65,12 @@ import {
   circuitSellPriceCredits,
   CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
+  buyUnopenedContainers,
+  launchSortFromUnopened,
+  buildSortFromUnopenedUrl,
+  UNOPENED_CONTAINER_PRICE_CREDITS,
 } from "./hangar";
+import { PIECES_PER_CONTAINER } from "@estg/shared";
 
 /** Minimal in-memory Storage for HubSave. */
 function memoryStorage(): Storage {
@@ -774,6 +779,72 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   // Missing id
   const missing = sellCircuit(hs, "no_such_circuit");
   assert.equal(missing.notice, "回路なし");
+}
+
+// --- unopened containers: buy / launch / skip deposit ingest ---
+{
+  assert.equal(UNOPENED_CONTAINER_PRICE_CREDITS, 15);
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = resetHangar(store);
+  assert.equal(hs.hub.unopenedContainers ?? 0, 0);
+
+  // Buy qty×15
+  const credits0 = hs.hub.credits;
+  hs = buyUnopenedContainers(hs, 2);
+  assert.equal(hs.hub.unopenedContainers, 2);
+  assert.equal(hs.hub.credits, credits0 - 30);
+  assert.ok(hs.notice.includes("+2"));
+  const rawBuy = store.getItem(HUB_SAVE_STORAGE_KEY);
+  assert.ok(rawBuy);
+  assert.equal(deserializeHubSave(rawBuy!)!.hub.unopenedContainers, 2);
+
+  // Insufficient funds
+  hs = {
+    ...hs,
+    hub: { ...hs.hub, credits: 10 },
+  };
+  const blocked = buyUnopenedContainers(hs, 1);
+  assert.equal(blocked.hub.unopenedContainers, 2, "stock unchanged");
+  assert.equal(blocked.hub.credits, 10, "credits unchanged");
+  assert.ok(blocked.notice.includes("クレジット不足"));
+
+  // Restore credits for launch tests
+  hs = {
+    ...blocked,
+    hub: { ...blocked.hub, credits: 100 },
+  };
+  const url = buildSortFromUnopenedUrl(hs, 2);
+  assert.ok(url);
+  assert.ok(url!.includes("salvagedContainers=2"));
+  assert.ok(url!.includes(`totalStockPieces=${2 * PIECES_PER_CONTAINER}`));
+  assert.ok(url!.includes("isExtracted=1"));
+
+  const launched = launchSortFromUnopened(hs, 2);
+  assert.ok(launched.url);
+  assert.equal(launched.state.hub.unopenedContainers, 0, "launch consumes stock");
+  assert.ok(launched.state.log.some((l) => l.includes("未開封→仕分")));
+  const rawLaunch = store.getItem(HUB_SAVE_STORAGE_KEY);
+  assert.equal(deserializeHubSave(rawLaunch!)!.hub.unopenedContainers, 0);
+
+  // Over-spend launch
+  const over = launchSortFromUnopened(launched.state, 1);
+  assert.equal(over.url, null);
+  assert.ok(over.state.notice.includes("未開封不足"));
+
+  // Skip deposit ingest: depositUnopenedContainers → Hub stock, no materials
+  let depositHs = resetHangar(store);
+  const mats0 = depositHs.hub.materials;
+  const inv0 = { ...depositHs.hub.inventory };
+  const ingested = ingestLocationSearch(
+    depositHs,
+    "?importMaterials=0&craftMultiplier=1.000&depositUnopenedContainers=4",
+  );
+  assert.equal(ingested.consumed, true);
+  assert.equal(ingested.state.hub.unopenedContainers, 4);
+  assert.equal(ingested.state.hub.materials, mats0, "no false refine materials");
+  assert.deepEqual(ingested.state.hub.inventory, inv0);
+  assert.ok(ingested.state.log.some((l) => l.includes("未開封コンテナ預け +4")));
 }
 
 console.log("trade hangar selftest: ok");

@@ -19,3 +19,10 @@
 
 Module 4 / 5 のドラフト仕様: [`docs/INVADE_V0.md`](../../docs/INVADE_V0.md)、[`docs/RESTORE_V0.md`](../../docs/RESTORE_V0.md)。  
 ハンドオフ KEY CONTRACT: [`docs/HANDOFF_M45_V0.md`](../../docs/HANDOFF_M45_V0.md)（UI ナビは未配線。`MODULE_URLS` / `ModuleKey` に invade・restore あり）。
+
+## HubSave additive: unopenedContainers
+
+- Field: `hub.unopenedContainers` (non-neg int; missing → 0)
+- Helpers: `addUnopenedContainers` / `spendUnopenedContainers` / `clampUnopenedContainers`
+- Price: `UNOPENED_CONTAINER_PRICE_CREDITS` (15)
+- sort→trade key: `depositUnopenedContainers`

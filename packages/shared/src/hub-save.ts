@@ -108,6 +108,11 @@ export type HubSnapshot = {
    */
   frontProgress: InvadeFrontProgress | null;
   importedMaterials: number;
+  /**
+   * Unopened salvage containers stocked on HUB (Module 2 skip / purchase).
+   * Additive on HubSave v2 — missing / invalid → 0.
+   */
+  unopenedContainers: number;
   selectedMechId: MechId;
   selectedAmmoId: AmmoId;
 };
@@ -146,6 +151,7 @@ export const INITIAL_HUB: HubSnapshot = {
   circuits: [],
   frontProgress: null,
   importedMaterials: 0,
+  unopenedContainers: 0,
   selectedMechId: "mech_gen1",
   selectedAmmoId: "ammo_standard",
 };
@@ -425,6 +431,12 @@ export function normalizeHubSnapshot(
       (raw as HubSnapshot | undefined)?.importedMaterials,
       fallback.importedMaterials,
     ),
+    unopenedContainers: Math.floor(
+      finiteNonNeg(
+        (raw as HubSnapshot | undefined)?.unopenedContainers,
+        fallback.unopenedContainers ?? 0,
+      ),
+    ),
     selectedMechId,
     selectedAmmoId,
   };
@@ -542,6 +554,42 @@ export function importYieldBagIntoHub(
   return normalizeHubSnapshot({
     ...hub,
     inventory: next,
+  });
+}
+
+/** Clamp unopened container stock to a non-negative integer. */
+export function clampUnopenedContainers(n: unknown): number {
+  return Math.floor(finiteNonNeg(n, 0));
+}
+
+/** Add unopened containers into hub stock (no-op when n ≤ 0). */
+export function addUnopenedContainers(
+  hub: HubSnapshot,
+  n: number,
+): HubSnapshot {
+  const add = clampUnopenedContainers(n);
+  if (add <= 0) return hub;
+  return normalizeHubSnapshot({
+    ...hub,
+    unopenedContainers: clampUnopenedContainers(hub.unopenedContainers) + add,
+  });
+}
+
+/**
+ * Spend unopened containers from hub stock.
+ * Returns null when stock is insufficient (no partial spend).
+ */
+export function spendUnopenedContainers(
+  hub: HubSnapshot,
+  n: number,
+): HubSnapshot | null {
+  const need = clampUnopenedContainers(n);
+  if (need <= 0) return hub;
+  const have = clampUnopenedContainers(hub.unopenedContainers);
+  if (have < need) return null;
+  return normalizeHubSnapshot({
+    ...hub,
+    unopenedContainers: have - need,
   });
 }
 

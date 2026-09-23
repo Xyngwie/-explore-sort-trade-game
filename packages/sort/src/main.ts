@@ -31,10 +31,13 @@ import {
   type RefineLive,
 } from "./refine";
 import {
+  buildCargoSkipHubCtaHtml,
+  buildCargoSkipToHubUrl,
   buildEmptySkipHubCtaHtml,
   buildEmptySkipToHubUrl,
   buildResultRibbonHtml,
   buildResultYieldCompactHtml,
+  canSkipWithCargo,
   isEmptyCargoEntry,
   resolveRestartState,
   toStagePhase,
@@ -204,7 +207,15 @@ function playHintHtml(s: RefineLive): string {
   return `<p class="field-hint muted">スワイプ／隣タップでスワップ · <strong>idle でマッチなしは即終了</strong> · 落下・点滅中の仕込みは無料</p>`;
 }
 
-function briefingOverlayHtml(s: RefineLive): string {
+function briefingOverlayHtml(s: RefineLive, cargoSkipHubUrl?: string): string {
+  const cargoSkip =
+    canSkipWithCargo(s) && Boolean(cargoSkipHubUrl)
+      ? `
+        <p class="stage-copy muted">精製せず、受取コンテナを<strong>未開封</strong>のまま格納庫へ預けられます（資材産出なし）。</p>
+        <div class="row stage-actions">
+          ${buildCargoSkipHubCtaHtml(cargoSkipHubUrl!)}
+        </div>`
+      : "";
   return `
     <div class="stage-overlay" role="region" aria-label="精製ブリーフィング">
       <div class="stage-panel">
@@ -221,6 +232,7 @@ function briefingOverlayHtml(s: RefineLive): string {
           <button type="button" id="btn-start">精製開始</button>
           <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
         </div>
+        ${cargoSkip}
         <p class="mono muted stage-meta">${escapeHtml(s.note)}</p>
       </div>
     </div>
@@ -314,6 +326,10 @@ function render() {
     state.phase === "blocked" && isEmptyCargoEntry(state)
       ? buildEmptySkipToHubUrl(state, tradeBaseUrl())
       : "";
+  const cargoSkipHubUrl =
+    state.phase === "briefing" && canSkipWithCargo(state)
+      ? buildCargoSkipToHubUrl(state, tradeBaseUrl())
+      : "";
 
   const showLiveBoard = state.phase === "play";
   const showResultBoard = state.phase === "result";
@@ -333,7 +349,7 @@ function render() {
 
   const overlay =
     state.phase === "briefing"
-      ? briefingOverlayHtml(state)
+      ? briefingOverlayHtml(state, cargoSkipHubUrl || undefined)
       : state.phase === "blocked"
         ? blockedOverlayHtml(state, emptySkipHubUrl || undefined)
         : state.phase === "result" && result
