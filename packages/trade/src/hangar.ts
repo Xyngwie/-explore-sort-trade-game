@@ -55,6 +55,7 @@ import {
   spendYieldBag,
   stripHandoffParams,
   upsertCircuitIntoHub,
+  removeCircuitFromHub,
   yieldBagFromTypedRepairCost,
   aggregateCircuitBonuses,
   applyRepairDiscountToCost,
@@ -80,6 +81,12 @@ import {
   RARE_SELL_PRICE_CREDITS,
   isRareYieldItemId,
 } from "./rare-sell-prices";
+import {
+  CIRCUIT_SELL_BASE_CREDITS,
+  CIRCUIT_SELL_CREDITS_PER_EFFECT,
+  circuitSellPriceCredits,
+  formatCircuitSellPriceJa,
+} from "./circuit-sell-prices";
 
 export {
   RARE_SELL_PRICE_TABLE,
@@ -92,6 +99,13 @@ export {
   type RareYieldItemId,
   type RareSellBalanceMark,
 } from "./rare-sell-prices";
+
+export {
+  CIRCUIT_SELL_BASE_CREDITS,
+  CIRCUIT_SELL_CREDITS_PER_EFFECT,
+  circuitSellPriceCredits,
+  formatCircuitSellPriceJa,
+} from "./circuit-sell-prices";
 
 export type HangarLog = string[];
 
@@ -1240,6 +1254,60 @@ export function sellRareItem(
     hub,
     log: pushLog(state.log, `レア売却 ${itemId}×${n} → +${gained}c（仮）`),
     notice: `売却 +${gained}c（仮 ${unit}c/${itemId}）`,
+  };
+  return persistHangar(next);
+}
+
+/**
+ * Sell one HubSave circuit: price = {@link CIRCUIT_SELL_BASE_CREDITS} +
+ * floor(effect) × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT} (仮 · 最低+出来栄え).
+ * Removes from inventory, credits wallet, clears active selection if needed.
+ * Effect 0 → +30c (最低額 only; still allowed).
+ */
+export function sellCircuit(
+  state: HangarState,
+  circuitId: string,
+): HangarState {
+  const rec = findHubCircuit(state.hub, circuitId);
+  if (!rec) return { ...state, notice: "回路なし" };
+
+  let effect = 0;
+  try {
+    const br: CircuitEffectBreakdown = computeCircuitEffectForBoard(
+      rec.circuitBoard,
+      { perfect: rec.circuitBoard.perfect ?? rec.locked },
+    );
+    effect = br.effect;
+  } catch {
+    effect = 0;
+  }
+  const gained = circuitSellPriceCredits(effect);
+  const without = removeCircuitFromHub(state.hub, rec.circuitId);
+  const hub = normalizeHubSnapshot({
+    ...without,
+    credits: without.credits + gained,
+  });
+
+  const soldWasActive = state.lastCircuit?.circuitId === rec.circuitId;
+  const lastCircuit = soldWasActive
+    ? resolveActiveCircuit(hub, null)
+    : state.lastCircuit != null &&
+        findHubCircuit(hub, state.lastCircuit.circuitId) == null
+      ? resolveActiveCircuit(hub, null)
+      : state.lastCircuit;
+
+  const next: HangarState = {
+    ...state,
+    hub,
+    lastCircuit,
+    log: pushLog(
+      state.log,
+      `回路売却 ${rec.circuitId} · 効果 ${effect} → +${gained}c（仮 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え ${effect}*${CIRCUIT_SELL_CREDITS_PER_EFFECT}c）`,
+    ),
+    notice: (() => {
+      const brk = formatCircuitSellPriceJa(effect);
+      return `回路売却 +${gained}c（最低 ${brk.base}c + 出来栄え ${brk.craft}c）`;
+    })(),
   };
   return persistHangar(next);
 }
