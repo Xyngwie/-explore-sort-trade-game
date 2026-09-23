@@ -346,6 +346,16 @@ export type CircuitEffectBreakdown = {
   hasLoop: boolean;
   /** Edge count of the selected (smallest) closed loop; 0 when none. */
   activeLoopEdgeCount: number;
+  /**
+   * Line-edge indices of the active (smallest) closed loop.
+   * Empty when no loop — restore UI uses this for glow/outline highlight.
+   */
+  activeLoopEdgeIndices: readonly number[];
+  /**
+   * Cell coords (cx, cy) whose satisfied digit contributed to effect
+   * (touches active loop, or perfect 0→4 zeros).
+   */
+  scoringCells: readonly { x: number; y: number }[];
   perfect: boolean;
   digits: CircuitDigitStats;
   /** Satisfied zeros that counted as 4 (only when perfect). */
@@ -405,6 +415,10 @@ export function computeCircuitEffectValue(
   let rawSum = 0;
   let zeroBonusApplied = 0;
   const contributions: CircuitEffectDigitContribution[] = [];
+  const scoringCells: { x: number; y: number }[] = [];
+  const activeLoopEdgeIndices = activeLoop
+    ? [...activeLoop.edgeIndices]
+    : [];
   if (activeEdges) {
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
@@ -422,6 +436,7 @@ export function computeCircuitEffectValue(
           rawSum += 4;
           zeroBonusApplied += 4;
           contributions.push({ x, y, digit: 0, contribution: 4 });
+          scoringCells.push({ x, y });
           continue;
         }
 
@@ -432,6 +447,7 @@ export function computeCircuitEffectValue(
         const add = circuitDigitEffectContribution(c, perfect);
         rawSum += add;
         contributions.push({ x, y, digit: c, contribution: add });
+        scoringCells.push({ x, y });
       }
     }
   }
@@ -443,11 +459,25 @@ export function computeCircuitEffectValue(
     loopCount,
     hasLoop,
     activeLoopEdgeCount,
+    activeLoopEdgeIndices,
+    scoringCells,
     perfect,
     digits,
     zeroBonusApplied,
     contributions,
   };
+}
+
+/**
+ * Side-by-side effect preview: Bypass (non-perfect) vs Fully Awakened (perfect).
+ * Same marks/clues; only the perfect flag differs so players see 0→4 impact.
+ */
+export function previewBypassVsAwakenedEffect(
+  input: Omit<ComputeCircuitEffectInput, "perfect" | "outcome" | "locked">,
+): { bypass: CircuitEffectBreakdown; awakened: CircuitEffectBreakdown } {
+  const bypass = computeCircuitEffectValue({ ...input, perfect: false });
+  const awakened = computeCircuitEffectValue({ ...input, perfect: true });
+  return { bypass, awakened };
 }
 
 /** Short JA readout for hub / play UI. */

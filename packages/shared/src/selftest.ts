@@ -594,6 +594,7 @@ import {
   isCircuitSingleLoopClosed,
   listCircuitClosedLoops,
   selectSmallestClosedLoop,
+  previewBypassVsAwakenedEffect,
 } from "./circuit-effect";
 import {
   FLAWED_HAZARD_WEIGHTS,
@@ -1531,6 +1532,10 @@ console.log("shared handoff-m45 selftest: ok");
     assert.equal(multi.loopCount, 2);
     assert.equal(multi.hasLoop, true);
     assert.equal(multi.activeLoopEdgeCount, 4);
+    assert.equal(multi.activeLoopEdgeIndices.length, 4);
+    assert.equal(multi.scoringCells.length, 1);
+    assert.equal(multi.scoringCells[0]!.x, 0);
+    assert.equal(multi.scoringCells[0]!.y, 0);
     assert.equal(multi.effect, 4);
     // multi active contributions: only digit on smallest loop
     const multiPos = multi.contributions.filter((c) => c.contribution > 0);
@@ -1592,6 +1597,39 @@ console.log("shared handoff-m45 selftest: ok");
     assert.equal(shot.effect, 3);
     assert.equal(shot.digits.satisfied, 2);
     assert.equal(shot.digits.clueCount, 2);
+    assert.equal(shot.activeLoopEdgeIndices.length, 6);
+  }
+
+  // Bypass vs Fully Awakened preview: satisfied 0 contributes only when perfect.
+  {
+    const c = 2;
+    const r = 2;
+    const clues: (number | null)[][] = [
+      [4, null],
+      [null, 0],
+    ];
+    const m: EdgeMark[] = Array.from(
+      { length: edgeCount(c, r) },
+      () => 0 as EdgeMark,
+    );
+    m[circuitHEdgeIndex(c, r, 0, 0)] = 1;
+    m[circuitVEdgeIndex(c, r, 1, 0)] = 1;
+    m[circuitHEdgeIndex(c, r, 0, 1)] = 1;
+    m[circuitVEdgeIndex(c, r, 0, 0)] = 1;
+
+    const { bypass, awakened } = previewBypassVsAwakenedEffect({
+      clues,
+      marks: m,
+      cols: c,
+      rows: r,
+    });
+    assert.equal(bypass.hasLoop, true);
+    assert.equal(bypass.effect, 4);
+    assert.equal(bypass.zeroBonusApplied, 0);
+    assert.equal(awakened.effect, 8);
+    assert.equal(awakened.zeroBonusApplied, 4);
+    assert.equal(awakened.activeLoopEdgeIndices.length, 4);
+    assert.ok(awakened.scoringCells.some((cell) => cell.x === 1 && cell.y === 1));
   }
 }
 

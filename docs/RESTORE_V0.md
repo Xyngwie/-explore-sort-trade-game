@@ -180,6 +180,18 @@ trade ハンガーの一覧から選択して trade→restore URL を開ける�
 
 表示: restore 盤面横の充足メーター＋効果値、trade「次の出撃」の回路サマリー。
 
+### 5.6.1 Restore UI フィードバック（Module 5 · 2026-09-24）
+
+`packages/restore` のプレイ UI のみ（経済・価格・ボーナス式は変更しない）。
+
+| UI | 内容 |
+|---|---|
+| **有効ループ強調** | 効果値を採点する最小閉ループの辺に細い青白グロー／アウトライン。寄与中の数字セルも `on-active-loop` で示す |
+| **Bypass vs Fully Awakened プレビュー** | 同一盤で Bypass（非 Perfect）と Fully Awakened（Perfect・0→4）の効果値を並べて表示。差が一目で分かる |
+| **ノイズ辺フィードバック** | hazard 隣接辺（矛盾ブロック／過剰・ノイズ数字まわり）操作時に強い干渉・破断トースト＋フラッシュ |
+
+共有: `activeLoopEdgeIndices` / `scoringCells` を `CircuitEffectBreakdown` に載せ、`previewBypassVsAwakenedEffect` でプレビュー。restore は `hazardNoiseEdgeIndices` でノイズ辺を特定。
+
 ## 5.5. ハンドオフ契約（キーのみ）
 
 正本: [`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)。

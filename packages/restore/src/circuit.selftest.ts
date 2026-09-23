@@ -22,12 +22,15 @@ import {
   cycleEdgeMark,
   deriveStubOutcome,
   digitSatisfaction,
+  findContradictionBlockOrigin,
+  hazardNoiseEdgeIndices,
   isCellDigitActivated,
   generateFlawedClues,
   generatePuzzle,
   hasContradictionBlock,
   hEdgeIndex,
   isLoopClosed,
+  previewOutcomeEffects,
   vEdgeIndex,
   lineEdgeCount,
   sampleGeneratorRatios,
@@ -458,5 +461,64 @@ assert.ok(
   assert.equal(flawedSession.puzzle.cols, 6);
   assert.equal(flawedSession.rarity, "flawed_majority");
 }
+
+
+// --- Module 5 Restore UI: active loop / outcome preview / noise edges ---
+{
+  const cols = 2;
+  const rows = 2;
+  const clues: (number | null)[][] = [
+    [4, null],
+    [null, 0],
+  ];
+  const m: EdgeMark[] = Array.from(
+    { length: edgeCount(cols, rows) },
+    () => 0 as EdgeMark,
+  );
+  m[hEdgeIndex(cols, rows, 0, 0)] = 1;
+  m[vEdgeIndex(cols, rows, 1, 0)] = 1;
+  m[hEdgeIndex(cols, rows, 0, 1)] = 1;
+  m[vEdgeIndex(cols, rows, 0, 0)] = 1;
+
+  const play = classifyPlayResult(clues, m, cols, rows);
+  assert.equal(play.effect.hasLoop, true);
+  assert.equal(play.effect.activeLoopEdgeCount, 4);
+  assert.equal(play.effect.activeLoopEdgeIndices.length, 4);
+  for (const ei of play.effect.activeLoopEdgeIndices) {
+    assert.equal(m[ei], 1);
+  }
+  assert.ok(play.effect.scoringCells.some((cell) => cell.x === 0 && cell.y === 0));
+
+  const preview = previewOutcomeEffects(clues, m, cols, rows);
+  assert.equal(preview.bypass.effect, 4);
+  assert.equal(preview.awakened.effect, 8);
+  assert.equal(preview.awakenedBetter, true);
+}
+
+{
+  const c = generateFlawedClues("ui-noise-c", 6, 6, undefined, "contradiction");
+  assert.equal(c.hazard, "contradiction");
+  assert.ok(hasContradictionBlock(c.clues));
+  const origin = findContradictionBlockOrigin(c.clues);
+  assert.ok(origin);
+  const noise = hazardNoiseEdgeIndices(c.clues, 6, 6, "contradiction");
+  assert.ok(noise.size >= 8);
+  for (const dy of [0, 1]) {
+    for (const dx of [0, 1]) {
+      const cx = origin!.x + dx;
+      const cy = origin!.y + dy;
+      assert.ok(noise.has(hEdgeIndex(6, 6, cx, cy)));
+      assert.ok(noise.has(hEdgeIndex(6, 6, cx, cy + 1)));
+      assert.ok(noise.has(vEdgeIndex(6, 6, cx, cy)));
+      assert.ok(noise.has(vEdgeIndex(6, 6, cx + 1, cy)));
+    }
+  }
+
+  const d = generateFlawedClues("ui-noise-d", 6, 6, undefined, "dense_noise");
+  const noiseD = hazardNoiseEdgeIndices(d.clues, 6, 6, "dense_noise");
+  assert.ok(noiseD.size > 0);
+  assert.equal(hazardNoiseEdgeIndices(d.clues, 6, 6, "none").size, 0);
+}
+
 
 console.log("restore circuit.selftest ok");

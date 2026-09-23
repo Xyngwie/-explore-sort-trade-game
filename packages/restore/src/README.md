@@ -9,6 +9,7 @@ Module 5（restore）プレイアブル厚みスタブ。Slitherlink 風の精�
 - **return:** 現在の盤 + `circuitOutcome`（fully_awakened|bypass|offline）で Hub（trade）へ戻るリンク
 - **基板:** 大半は意図的な不完全／危険基板（矛盾ブロック・過剰数字・ノイズ）。稀に Perfect 注入（可解コア）
 - **成果:** digit 充足＋**効果値**（ループなし→0、複数ループ時は**最小閉ループのみ**採点、Perfect 時 0→4）。Fully Awakened / Bypass / Offline。不完全盤は大きな Bypass 確定 CTA
+- **UI フィードバック:** 有効（最小）閉ループの辺グロー、Bypass / Fully Awakened 効果値プレビュー、hazard ノイズ辺の干渉・破断フィードバック（JA）
 - **ローカルループ:** `?seed=` で次の基板、Commit Bypass / Abandon→Offline、刻印名スタブ
 - `edgeState` を UI 状態 + 任意 localStorage（当該 puzzleId）に保存
 - **タイマーなし**（制限時間で失敗させない）

@@ -13,8 +13,10 @@ import {
   formatCircuitEffectJa,
   freshMarks,
   hazardLabel,
+  hazardNoiseEdgeIndices,
   isCellDigitActivated,
   outcomeLabel,
+  previewOutcomeEffects,
   rarityLabel,
   saveMarksToStorage,
   hEdgeIndex,
@@ -56,6 +58,11 @@ let persist = session.source === "demo" || session.source === "handoff-id";
 let editorName = session.editorName ?? session.engravedName ?? "";
 /** After Abandon, keep Offline until edges change. */
 let abandoned = false;
+/** Edge index that just received noise/hazard interfere feedback (UI flash). */
+let noiseFlashEdge: number | null = null;
+let noiseFlashTimer: ReturnType<typeof setTimeout> | null = null;
+/** Short JA toast after breaking/interfering with a noise edge. */
+let noiseToast: string | null = null;
 
 // Consume trade→restore keys so a refresh uses local session / storage.
 if (session.source === "handoff-board" || session.source === "handoff-id") {
@@ -80,10 +87,18 @@ function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function markClass(m: EdgeMark): string {
-  if (m === 1) return "edge line";
-  if (m === 2) return "edge xmark";
-  return "edge empty";
+function markClass(
+  m: EdgeMark,
+  opts?: { activeLoop?: boolean; noiseAdj?: boolean; noiseFlash?: boolean },
+): string {
+  let c = "edge";
+  if (m === 1) c += " line";
+  else if (m === 2) c += " xmark";
+  else c += " empty";
+  if (opts?.activeLoop && m === 1) c += " active-loop";
+  if (opts?.noiseAdj) c += " noise-adj";
+  if (opts?.noiseFlash) c += " noise-flash";
+  return c;
 }
 
 function markGlyph(m: EdgeMark): string {
@@ -125,17 +140,53 @@ function returnUrl(
   });
 }
 
-function toggleEdge(index: number): void {
+function clearNoiseFlash(): void {
+  if (noiseFlashTimer != null) {
+    clearTimeout(noiseFlashTimer);
+    noiseFlashTimer = null;
+  }
+  noiseFlashEdge = null;
+  noiseToast = null;
+}
+
+function toggleEdge(index: number, noiseAdj: boolean): void {
   if (locked) return;
   const cur = marks[index] ?? 0;
-  marks[index] = cycleEdgeMark(cur);
+  const next = cycleEdgeMark(cur);
+  marks[index] = next;
   outcomeOverride = null;
   abandoned = false;
+
+  if (noiseAdj && session.hazard !== "none") {
+    // Stronger break / interfere feel on hazard-adjacent edges.
+    clearNoiseFlash();
+    noiseFlashEdge = index;
+    if (next === 1) {
+      noiseToast = "ノイズ干渉 — 危険辺に導通";
+    } else if (next === 2) {
+      noiseToast = "破断マーク — ノイズ辺を遮断";
+    } else {
+      noiseToast = "ノイズ辺を解放";
+    }
+    noiseFlashTimer = setTimeout(() => {
+      noiseFlashEdge = null;
+      noiseToast = null;
+      noiseFlashTimer = null;
+      render();
+    }, 520);
+  } else {
+    clearNoiseFlash();
+  }
+
   persistIfNeeded();
   render();
 }
 
-function boardHtml(): string {
+function boardHtml(
+  activeLoopEdges: ReadonlySet<number>,
+  scoringCells: ReadonlySet<string>,
+  noiseEdges: ReadonlySet<number>,
+): string {
   const { cols, rows, clues } = puzzle;
   const parts: string[] = [];
   for (let y = 0; y <= rows; y++) {
@@ -145,8 +196,13 @@ function boardHtml(): string {
       const i = hEdgeIndex(cols, rows, x, y);
       const m = marks[i]!;
       const disabled = locked ? " disabled" : "";
+      const noiseAdj = noiseEdges.has(i);
       parts.push(
-        `<button type="button" class="${markClass(m)} h" data-edge="${i}" title="h(${x},${y})"${disabled}>${markGlyph(m)}</button>`,
+        `<button type="button" class="${markClass(m, {
+          activeLoop: activeLoopEdges.has(i),
+          noiseAdj,
+          noiseFlash: noiseFlashEdge === i,
+        })} h" data-edge="${i}" data-noise="${noiseAdj ? "1" : "0"}" title="h(${x},${y})"${disabled}>${markGlyph(m)}</button>`,
       );
     }
     parts.push(`<span class="dot" aria-hidden="true"></span>`);
@@ -159,8 +215,13 @@ function boardHtml(): string {
       const i = vEdgeIndex(cols, rows, x, y);
       const m = marks[i]!;
       const disabled = locked ? " disabled" : "";
+      const noiseAdj = noiseEdges.has(i);
       parts.push(
-        `<button type="button" class="${markClass(m)} v" data-edge="${i}" title="v(${x},${y})"${disabled}>${markGlyph(m)}</button>`,
+        `<button type="button" class="${markClass(m, {
+          activeLoop: activeLoopEdges.has(i),
+          noiseAdj,
+          noiseFlash: noiseFlashEdge === i,
+        })} v" data-edge="${i}" data-noise="${noiseAdj ? "1" : "0"}" title="v(${x},${y})"${disabled}>${markGlyph(m)}</button>`,
       );
       if (x < cols) {
         const clue = clues[y]![x];
@@ -169,10 +230,12 @@ function boardHtml(): string {
           clue == null
             ? null
             : isCellDigitActivated(clues, marks, cols, rows, x, y);
+        const onActive = scoringCells.has(`${x},${y}`);
         let clueClass = "clue";
         if (clue == null) clueClass += " blank";
         else if (activated) clueClass += " activated";
         else clueClass += " unsatisfied";
+        if (onActive) clueClass += " on-active-loop";
         parts.push(
           `<div class="${clueClass}">${escapeHtml(label)}</div>`,
         );
@@ -180,7 +243,11 @@ function boardHtml(): string {
     }
     parts.push(`</div>`);
   }
-  return `<div class="slither${locked ? " locked" : ""}" style="--cols:${cols}">${parts.join("")}</div>`;
+  const toast =
+    noiseToast != null
+      ? `<div class="noise-toast" role="status">${escapeHtml(noiseToast)}</div>`
+      : "";
+  return `<div class="slither-wrap">${toast}<div class="slither${locked ? " locked" : ""}${session.hazard !== "none" ? " hazard-board" : ""}" style="--cols:${cols}">${parts.join("")}</div></div>`;
 }
 
 function outcomeBanner(status: CircuitOutcome, blurb: string): string {
@@ -195,8 +262,15 @@ function digitBar(
   clueCount: number,
   rate: number,
   effectLabel: string,
+  activeLoopEdgeCount: number,
+  loopCount: number,
 ): string {
   const pct = Math.round(rate * 100);
+  const loopNote =
+    activeLoopEdgeCount > 0
+      ? `有効ループ ${activeLoopEdgeCount}辺` +
+        (loopCount > 1 ? `（${loopCount}ループ中の最小）` : "")
+      : "ループなし → 効果 0";
   return `<div class="board-meters">
     <div class="digit-meter" aria-label="digit satisfaction ${satisfied}/${clueCount}">
       <div class="digit-meter-fill" style="width:${pct}%"></div>
@@ -204,8 +278,44 @@ function digitBar(
     </div>
     <div class="effect-readout" aria-label="${effectLabel}">
       <span class="effect-k">効果値</span>
-      <strong class="effect-v">${effectLabel}</strong>
+      <strong class="effect-v">${escapeHtml(effectLabel)}</strong>
     </div>
+    <p class="loop-hint muted">${escapeHtml(loopNote)} · 青白グロー＝採点中の最小閉ループ</p>
+  </div>`;
+}
+
+function outcomeEffectPreviewHtml(
+  bypassEffect: number,
+  awakenedEffect: number,
+  hasLoop: boolean,
+  awakenedBetter: boolean,
+): string {
+  if (!hasLoop) {
+    return `<div class="effect-preview" role="region" aria-label="成果プレビュー">
+      <p class="effect-preview-title">成果プレビュー（効果値）</p>
+      <p class="muted">閉ループが無いため効果は 0。線を閉じてから Bypass / Fully Awakened の差が出ます。</p>
+    </div>`;
+  }
+  return `<div class="effect-preview" role="region" aria-label="成果プレビュー">
+    <p class="effect-preview-title">成果プレビュー（効果値）</p>
+    <div class="effect-preview-grid">
+      <div class="effect-preview-card preview-bypass">
+        <span class="preview-label">Bypass</span>
+        <strong class="preview-num">${bypassEffect}</strong>
+        <span class="preview-note">部分修復 · 0セル無効</span>
+      </div>
+      <div class="effect-preview-vs" aria-hidden="true">対</div>
+      <div class="effect-preview-card preview-awakened${awakenedBetter ? " better" : ""}">
+        <span class="preview-label">Fully Awakened</span>
+        <strong class="preview-num">${awakenedEffect}</strong>
+        <span class="preview-note">完全復元 · 0→4${awakenedBetter ? " あり" : ""}</span>
+      </div>
+    </div>
+    <p class="muted preview-foot">${
+      awakenedBetter
+        ? `差 +${awakenedEffect - bypassEffect}（Perfect 時の 0→4 ボーナス）`
+        : "現状、両者の効果値は同じ（0セル寄与なし）"
+    }</p>
   </div>`;
 }
 
@@ -221,6 +331,22 @@ function render(): void {
     effect,
   } = classified;
   const effectLabel = formatCircuitEffectJa(effect);
+  const preview = previewOutcomeEffects(
+    puzzle.clues,
+    marks,
+    puzzle.cols,
+    puzzle.rows,
+  );
+  const activeLoopEdges = new Set(effect.activeLoopEdgeIndices);
+  const scoringCells = new Set(
+    effect.scoringCells.map((c) => `${c.x},${c.y}`),
+  );
+  const noiseEdges = hazardNoiseEdgeIndices(
+    puzzle.clues,
+    puzzle.cols,
+    puzzle.rows,
+    session.hazard,
+  );
   const lockNext = locked || perfect;
   const enc = encodeEdgeState(marks);
   const board = boardFromMarks(
@@ -304,8 +430,21 @@ function render(): void {
             ? `<p class="muted">Perfect inject rate ${(session.perfectInjectRate * 100).toFixed(1)}%（未注入）</p>`
             : ""
       }
-      ${boardHtml()}
-      ${digitBar(digits.satisfied, digits.clueCount, digits.rate, effectLabel)}
+      ${boardHtml(activeLoopEdges, scoringCells, noiseEdges)}
+      ${digitBar(
+        digits.satisfied,
+        digits.clueCount,
+        digits.rate,
+        effectLabel,
+        effect.activeLoopEdgeCount,
+        effect.loopCount,
+      )}
+      ${outcomeEffectPreviewHtml(
+        preview.bypass.effect,
+        preview.awakened.effect,
+        preview.bypass.hasLoop,
+        preview.awakenedBetter,
+      )}
     </div>
 
     <div class="card">
@@ -364,7 +503,8 @@ function render(): void {
       btn.addEventListener("click", () => {
         const i = Number(btn.dataset.edge);
         if (!Number.isFinite(i)) return;
-        toggleEdge(i);
+        const noiseAdj = btn.dataset.noise === "1";
+        toggleEdge(i, noiseAdj);
       });
     });
 
