@@ -42,7 +42,7 @@
 起動
   → localStorage から HubSave v2 読込（無ければ INITIAL_HUB）
   → URL に sort / wear / invade / restore があれば取込 → クエリ削除 → 自動セーブ
-  → ハンガー UI（戦線・回路リンク含む）
+  → ハンガー UI（「次の出撃」パネル: 配備予定 / 要修理 / 戻りインテル + 探索・戦線・回路リンク）
 
 シード読込 → プレイテスト用 HubSave 一括適用（健在2 + 要修理1・クレジット/型付き資材/弾薬）
 機体を受領 → 艦隊に OwnedMech 追加（空/不足時の手動付与）
@@ -159,6 +159,7 @@ UI の「レア売却 仮価格表」と在庫の「売却 仮Nc」ボタン、�
 10. 「戦線へ」URL に `fromHub=1`（+ 任意 `deployableMechs` / `startingAmmo`）が付く  
 11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（HubSave.circuits 選択またはシード優先）  
 12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
+12b. 「次の出撃」パネルに配備予定・要修理・戦線インテル要約・回路 outcome 要約と探索/戦線/回路リンクが並ぶ（HubSave キー追加なし）
 13. レア仮価格表が UI に見え、レア在庫の売却が表の単価でクレジット加算・HubSave に残る（非レアは売却不可）
 
 ---
@@ -192,6 +193,6 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 
 | パス | 役割 |
 |---|---|
-| `packages/trade/src/main.ts` | ハンガー UI（シード読込ボタン含む） |
-| `packages/trade/src/hangar.ts` | 状態遷移・永続化・ハンドオフ取込・`loadPlaytestSeed` |
+| `packages/trade/src/main.ts` | ハンガー UI（「次の出撃」パネル · シード読込含む） |
+| `packages/trade/src/hangar.ts` | 状態遷移・永続化・ハンドオフ取込・`loadPlaytestSeed` · `buildNextSortieReadiness` |
 | `packages/shared/src/hub-save.ts` | `inventory` / `circuits` / `importYieldBagIntoHub` / `upsertCircuitIntoHub` |

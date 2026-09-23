@@ -54,6 +54,10 @@ import {
   resolveHangarPerfectInjectRate,
   PERFECT_CIRCUIT_DEV_RATE,
   PERFECT_CIRCUIT_PROD_RATE,
+  buildNextSortieReadiness,
+  formatIntelFlagJa,
+  formatInvadeIntelBrief,
+  formatCircuitHubBrief,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -635,6 +639,61 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 
   hs = loadPlaytestSeed(hs, { storage: store, injectRate: 0, rng: () => 0 });
   assert.equal(hs.lastCircuit?.circuitBoard.puzzleId, "stub-8");
+}
+
+
+// Next-sortie readiness helpers (pure)
+{
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = resetHangar(store);
+  const empty = buildNextSortieReadiness(hs);
+  assert.equal(empty.total, 0);
+  assert.equal(empty.canDeployExplore, false);
+  assert.equal(empty.readinessLabelJa, "艦隊なし");
+  assert.equal(formatInvadeIntelBrief(null), "戦線インテル未取込");
+  assert.equal(formatIntelFlagJa("routeHint"), "ルート示唆");
+  assert.equal(formatIntelFlagJa("customFlag"), "customFlag");
+  assert.equal(
+    formatCircuitHubBrief([]).summaryJa,
+    "回路なし（restore 取込待ち）",
+  );
+
+  hs = loadPlaytestSeed(hs, { storage: store, injectRate: 0, rng: () => 0 });
+  const ready = buildNextSortieReadiness(hs);
+  assert.equal(ready.operational, 2);
+  assert.equal(ready.needsRepair, 1);
+  assert.equal(ready.destroyed, 0);
+  assert.equal(ready.total, 3);
+  assert.equal(ready.deployableIds.length, 2);
+  assert.equal(ready.selectedIds.length, 2);
+  assert.equal(ready.canDeployExplore, true);
+  assert.ok(ready.readinessLabelJa.includes("出撃可 2"));
+  assert.ok(ready.readinessLabelJa.includes("要修理 1"));
+  assert.equal(ready.repairTargets.length, 1);
+  assert.equal(ready.repairTargets[0]!.instanceId, "seed_repair_gen1");
+
+  const invaded = ingestLocationSearch(
+    hs,
+    "?sectorX=3&sectorY=-2&density=0.3&intelFlags=routeHint,rareSignal",
+  );
+  assert.equal(invaded.consumed, true);
+  const intel = formatInvadeIntelBrief(invaded.state.lastInvadeSector);
+  assert.ok(intel.includes("(3,-2)"));
+  assert.ok(intel.includes("0.30"));
+  assert.ok(intel.includes("ルート示唆"));
+  assert.ok(intel.includes("希少信号"));
+
+  const brief = formatCircuitHubBrief(
+    invaded.state.hub.circuits,
+    invaded.state.lastCircuit,
+  );
+  assert.ok(brief.lines.length >= 1);
+  assert.ok(brief.summaryJa.includes("回路"));
+  assert.ok(brief.summaryJa.includes("オフライン") || brief.summaryJa.includes("バイパス") || brief.summaryJa.includes("完全覚醒"));
+  const active = brief.lines.find((l) => l.active) ?? brief.lines[0]!;
+  assert.equal(typeof active.outcomeJa, "string");
+  assert.ok(active.outcomeJa.length > 0);
 }
 
 console.log("trade hangar selftest: ok");

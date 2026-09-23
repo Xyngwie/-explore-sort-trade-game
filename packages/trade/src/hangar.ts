@@ -1228,6 +1228,150 @@ export function durabilityBarClass(
   return "bar dead";
 }
 
+
+/** Fleet / handoff snapshot for the 「次の出撃」 hub panel (pure). */
+export type NextSortieReadiness = {
+  operational: number;
+  needsRepair: number;
+  destroyed: number;
+  total: number;
+  deployableIds: string[];
+  selectedIds: string[];
+  repairTargets: Array<{
+    instanceId: string;
+    catalogId: string;
+    durability: number;
+    durabilityMax: number;
+  }>;
+  canDeployExplore: boolean;
+  /** One-line JA readiness, e.g. "出撃可 2 · 要修理 1 · 大破 0". */
+  readinessLabelJa: string;
+};
+
+/**
+ * Summarize hangar fleet for next-sortie readiness UI.
+ * Does not invent HubSave keys — reads fleet + selection only.
+ */
+export function buildNextSortieReadiness(state: HangarState): NextSortieReadiness {
+  const fleet = state.hub.fleet;
+  let operational = 0;
+  let needsRepair = 0;
+  let destroyed = 0;
+  const repairTargets: NextSortieReadiness["repairTargets"] = [];
+  for (const m of fleet) {
+    if (m.status === "operational") operational += 1;
+    else if (m.status === "needs_repair") {
+      needsRepair += 1;
+      repairTargets.push({
+        instanceId: m.instanceId,
+        catalogId: m.catalogId,
+        durability: m.durability,
+        durabilityMax: m.durabilityMax,
+      });
+    } else destroyed += 1;
+  }
+  const deployableIds = selectDeployableInstanceIds(fleet);
+  const selectedIds = filterToDeployableIds(
+    fleet,
+    state.selectedDeployIds.length > 0
+      ? state.selectedDeployIds
+      : deployableIds,
+  );
+  const parts: string[] = [`出撃可 ${operational}`];
+  if (needsRepair > 0) parts.push(`要修理 ${needsRepair}`);
+  if (destroyed > 0) parts.push(`大破 ${destroyed}`);
+  if (fleet.length === 0) parts[0] = "艦隊なし";
+  return {
+    operational,
+    needsRepair,
+    destroyed,
+    total: fleet.length,
+    deployableIds,
+    selectedIds,
+    repairTargets,
+    canDeployExplore: selectedIds.length > 0,
+    readinessLabelJa: parts.join(" · "),
+  };
+}
+
+/** Known invade intelFlags → short JA (unknown flags pass through). */
+export function formatIntelFlagJa(flag: string): string {
+  const map: Record<string, string> = {
+    routeHint: "ルート示唆",
+    rareSignal: "希少信号",
+    frontline: "前線",
+    scoutHazard: "偵察ハザード",
+    scoutClear: "偵察クリア",
+    sectorFlagged: "セクター旗",
+    sectorCleared: "セクター掃討",
+    minesRemaining: "残機雷",
+  };
+  return map[flag] ?? flag;
+}
+
+/**
+ * Readable invade→trade intel line for the hub panel.
+ * Uses existing lastInvadeSector stash (not a new HubSave key).
+ */
+export function formatInvadeIntelBrief(
+  sector: InvadeToTradePayload | null | undefined,
+): string {
+  if (!sector) return "戦線インテル未取込";
+  const dens = Number.isFinite(sector.density)
+    ? sector.density.toFixed(2)
+    : String(sector.density);
+  const flags = sector.intelFlags?.length
+    ? sector.intelFlags.map(formatIntelFlagJa).join("、")
+    : "なし";
+  return `セクター (${sector.sectorX},${sector.sectorY}) · 密度 ${dens} · インテル: ${flags}`;
+}
+
+export type CircuitHubBriefLine = {
+  circuitId: string;
+  outcome: CircuitOutcome;
+  outcomeJa: string;
+  locked: boolean;
+  active: boolean;
+  editor: string | null;
+};
+
+export type CircuitHubBrief = {
+  /** One-line JA, e.g. "回路 2枚 · 直近 バイパス (board_demo)". */
+  summaryJa: string;
+  lines: CircuitHubBriefLine[];
+};
+
+/**
+ * Readable HubSave.circuits (+ optional lastCircuit highlight) for hub UI.
+ */
+export function formatCircuitHubBrief(
+  circuits: HubCircuitRecord[] | null | undefined,
+  lastCircuit?: RestoreToTradePayload | null,
+): CircuitHubBrief {
+  const list = circuits ?? [];
+  const activeId =
+    lastCircuit?.circuitId ??
+    (lastCircuit?.circuitBoard?.puzzleId as string | undefined) ??
+    null;
+  const lines: CircuitHubBriefLine[] = list.map((c) => ({
+    circuitId: c.circuitId,
+    outcome: c.outcome,
+    outcomeJa: circuitOutcomeLabelJa(c.outcome),
+    locked: isCircuitLocked(c),
+    active: activeId != null && c.circuitId === activeId,
+    editor: c.lastEditorName ?? c.circuitBoard.lastEditorName ?? null,
+  }));
+  if (lines.length === 0) {
+    return { summaryJa: "回路なし（restore 取込待ち）", lines };
+  }
+  const active = lines.find((l) => l.active) ?? lines[0]!;
+  const lockNote = active.locked ? "·完璧" : "";
+  return {
+    summaryJa: `回路 ${lines.length}枚 · 直近 ${active.outcomeJa} (${active.circuitId})${lockNote}`,
+    lines,
+  };
+}
+
 export {
   MECH_STATUS_LABEL_JA,
   MECH_FLEET_RULES,
