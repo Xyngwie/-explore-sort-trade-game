@@ -107,18 +107,68 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .hud-rail {
   flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.65rem;
-  padding: 0.4rem 0.55rem;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0.55rem 0.45rem;
   border-bottom: 1px solid var(--line);
   background: #12161c;
   font-size: 0.75rem;
+}
+.hud-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
 }
 .hud-stat { display: inline-flex; gap: 0.25rem; align-items: baseline; }
 .hud-k { color: #9aa0a6; }
 .hud-v { font-variant-numeric: tabular-nums; font-weight: 700; }
 .hud-legend { margin: 0 0 0 auto; gap: 0.25rem; }
+
+/* Remaining valid-panel supply gauge (可視化) — not a junk-transition banner */
+.hud-gauge {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.hud-gauge-meta {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.hud-gauge-den {
+  color: #9aa0a6;
+  font-weight: 600;
+  font-size: 0.68rem;
+}
+.hud-gauge-track {
+  position: relative;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #0d1014;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.hud-gauge-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3d8bfd 0%, #3fb950 100%);
+  transition: width 160ms ease-out;
+}
+.hud-gauge.low .hud-gauge-fill {
+  background: linear-gradient(90deg, #d4a72c 0%, #f0883e 100%);
+}
+.hud-gauge.depleted .hud-gauge-fill {
+  width: 0% !important;
+  background: #6e7681;
+}
+.hud-gauge.depleted .hud-v {
+  color: #9aa0a6;
+}
 .hud-footer {
   flex: 0 0 auto;
   padding: 0.4rem 0.55rem 0.55rem;
