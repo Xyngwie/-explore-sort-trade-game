@@ -41,8 +41,11 @@ import {
 import { PIECES_PER_CONTAINER } from "@estg/shared";
 import { yieldBagFromClearedCounts } from "@estg/shared";
 import {
+  buildEmptySkipHubCtaHtml,
+  buildEmptySkipToHubUrl,
   buildResultRibbonHtml,
   buildResultYieldCompactHtml,
+  isEmptyCargoEntry,
   resolveRestartState,
   toStagePhase,
 } from "./resultOverlay";
@@ -1293,6 +1296,68 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
 
   const hudQuiet = buildPlayHudHtml(playing, { showBagIntro: false });
   assert(!hudQuiet.includes("hud-flash-bag"), "no bag intro when not armed");
+}
+
+
+// Empty cargo entry → skip-to-hub (no refine board)
+{
+  const empty = createRefineFromLocationSearch(
+    "?salvagedContainers=0&totalStockPieces=0&isExtracted=1",
+  );
+  assert(empty.phase === "blocked", "empty cargo → blocked (not briefing/play)");
+  assert(empty.validPieceBudget === 0, "empty budget 0");
+  assert(isEmptyCargoEntry(empty), "detect empty cargo entry");
+  assert(
+    empty.inbound.salvagedContainers === 0,
+    "inbound cans 0",
+  );
+
+  const skipUrl = buildEmptySkipToHubUrl(empty, "http://localhost:5175/");
+  const skipParsed = new URL(skipUrl);
+  assert(
+    skipParsed.searchParams.get("importMaterials") === "0",
+    "empty skip handoff importMaterials=0",
+  );
+  assert(
+    skipParsed.searchParams.get("craftMultiplier") != null,
+    "empty skip keeps craftMultiplier key",
+  );
+  assert(
+    !skipParsed.searchParams.has("yieldBag"),
+    "empty skip omits empty yieldBag",
+  );
+
+  const cta = buildEmptySkipHubCtaHtml(skipUrl);
+  assert(cta.includes("格納庫へ戻る"), "empty skip CTA label");
+  assert(cta.includes('id="btn-skip-hub"'), "empty skip button id");
+  assert(cta.includes("importMaterials=0"), "CTA href carries handoff keys");
+
+  const withCraft = createRefineFromLocationSearch(
+    "?salvagedContainers=0&totalStockPieces=0&isExtracted=1&craftMultiplier=1.100",
+  );
+  assert(isEmptyCargoEntry(withCraft), "empty+craft still empty cargo");
+  const craftUrl = new URL(
+    buildEmptySkipToHubUrl(withCraft, "http://localhost:5175/"),
+  );
+  assert(
+    craftUrl.searchParams.get("craftMultiplier") === "1.100",
+    "empty skip preserves inbound craft",
+  );
+
+  const notExtracted = createRefineFromLocationSearch(
+    "?salvagedContainers=0&totalStockPieces=0&isExtracted=0",
+  );
+  assert(notExtracted.phase === "blocked", "not extracted blocked");
+  assert(
+    !isEmptyCargoEntry(notExtracted),
+    "not-extracted is not empty-cargo skip path",
+  );
+
+  const hasCargo = createRefineFromLocationSearch(
+    "?salvagedContainers=2&totalStockPieces=50&isExtracted=1",
+  );
+  assert(hasCargo.phase === "briefing", "cargo > 0 → briefing");
+  assert(!isEmptyCargoEntry(hasCargo), "cargo > 0 hides skip path");
 }
 
 console.log("sort refine.selftest: ok");
