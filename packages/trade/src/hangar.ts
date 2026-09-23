@@ -55,6 +55,7 @@ import {
   spendYieldBag,
   stripHandoffParams,
   upsertCircuitIntoHub,
+  removeCircuitFromHub,
   yieldBagFromTypedRepairCost,
   aggregateCircuitBonuses,
   applyRepairDiscountToCost,
@@ -80,6 +81,10 @@ import {
   RARE_SELL_PRICE_CREDITS,
   isRareYieldItemId,
 } from "./rare-sell-prices";
+import {
+  CIRCUIT_SELL_CREDITS_PER_EFFECT,
+  circuitSellPriceCredits,
+} from "./circuit-sell-prices";
 
 export {
   RARE_SELL_PRICE_TABLE,
@@ -92,6 +97,11 @@ export {
   type RareYieldItemId,
   type RareSellBalanceMark,
 } from "./rare-sell-prices";
+
+export {
+  CIRCUIT_SELL_CREDITS_PER_EFFECT,
+  circuitSellPriceCredits,
+} from "./circuit-sell-prices";
 
 export type HangarLog = string[];
 
@@ -1240,6 +1250,59 @@ export function sellRareItem(
     hub,
     log: pushLog(state.log, `レア売却 ${itemId}×${n} → +${gained}c（仮）`),
     notice: `売却 +${gained}c（仮 ${unit}c/${itemId}）`,
+  };
+  return persistHangar(next);
+}
+
+/**
+ * Sell one HubSave circuit: price = shared effect × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT}
+ * (仮). Removes from inventory, credits wallet, clears active selection if needed.
+ * Effect 0 → +0c (still allowed).
+ */
+export function sellCircuit(
+  state: HangarState,
+  circuitId: string,
+): HangarState {
+  const rec = findHubCircuit(state.hub, circuitId);
+  if (!rec) return { ...state, notice: "回路なし" };
+
+  let effect = 0;
+  try {
+    const br: CircuitEffectBreakdown = computeCircuitEffectForBoard(
+      rec.circuitBoard,
+      { perfect: rec.circuitBoard.perfect ?? rec.locked },
+    );
+    effect = br.effect;
+  } catch {
+    effect = 0;
+  }
+  const gained = circuitSellPriceCredits(effect);
+  const without = removeCircuitFromHub(state.hub, rec.circuitId);
+  const hub = normalizeHubSnapshot({
+    ...without,
+    credits: without.credits + gained,
+  });
+
+  const soldWasActive = state.lastCircuit?.circuitId === rec.circuitId;
+  const lastCircuit = soldWasActive
+    ? resolveActiveCircuit(hub, null)
+    : state.lastCircuit != null &&
+        findHubCircuit(hub, state.lastCircuit.circuitId) == null
+      ? resolveActiveCircuit(hub, null)
+      : state.lastCircuit;
+
+  const next: HangarState = {
+    ...state,
+    hub,
+    lastCircuit,
+    log: pushLog(
+      state.log,
+      `回路売却 ${rec.circuitId} · 効果 ${effect} → +${gained}c（仮 ${CIRCUIT_SELL_CREDITS_PER_EFFECT}c/効果）`,
+    ),
+    notice:
+      gained > 0
+        ? `回路売却 +${gained}c（効果 ${effect} × ${CIRCUIT_SELL_CREDITS_PER_EFFECT}）`
+        : `回路売却 +0c（効果 0 · 在庫から除去）`,
   };
   return persistHangar(next);
 }

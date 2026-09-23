@@ -51,6 +51,8 @@ import {
   rareSellPriceCredits,
   RARE_SELL_PRICE_TABLE,
   sellRareItem,
+  sellCircuit,
+  circuitSellPriceCredits,
   isCircuitLocked,
   isCraftSignatureLocked,
   buildNextSortieReadiness,
@@ -224,8 +226,10 @@ function circuitRows(s: HangarState): string {
   if (list.length === 0) {
     return `<p class="muted" style="margin:0.5rem 0 0">回路なし（restore 取込またはシード読込で HubSave に残ります）</p>`;
   }
+  const brief = formatCircuitHubBrief(list, s.lastCircuit);
+  const effectById = new Map(brief.lines.map((l) => [l.circuitId, l]));
   return `<table style="margin-top:0.5rem">
-    <thead><tr><th>circuitId</th><th>outcome / 刻印</th><th></th></tr></thead>
+    <thead><tr><th>circuitId</th><th>outcome / 刻印</th><th>効果値</th><th></th></tr></thead>
     <tbody>
       ${list
         .map((c) => {
@@ -238,6 +242,10 @@ function circuitRows(s: HangarState): string {
           const lockTag = locked
             ? ` <span class="pill lock-tag">完璧·編集不可</span>`
             : "";
+          const line = effectById.get(c.circuitId);
+          const effect = line?.effect ?? 0;
+          const effectJa = line?.effectJa ?? `効果 ${effect}`;
+          const price = circuitSellPriceCredits(effect);
           return `<tr>
             <td>
               <span class="mono">${escapeHtml(c.circuitId)}</span>${lockTag}
@@ -254,9 +262,14 @@ function circuitRows(s: HangarState): string {
               <div class="engraved" style="font-size:0.8rem">刻印 ${escapeHtml(editor)}</div>
             </td>
             <td>
-              <div class="row" style="margin:0">
+              <strong>${escapeHtml(effectJa)}</strong>
+              <div class="mono muted">売却 仮 ${price}c</div>
+            </td>
+            <td>
+              <div class="row" style="margin:0;justify-content:flex-end">
                 <button type="button" class="secondary" data-act="select-circuit" data-id="${escapeHtml(c.circuitId)}">選択</button>
                 <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">${locked ? "閲覧へ" : "修復へ"}</a>
+                <button type="button" class="secondary sell-circuit" data-act="sell-circuit" data-id="${escapeHtml(c.circuitId)}" data-price="${price}" title="有効値×3 credits（仮）で売却">売却 仮${price}c</button>
               </div>
             </td>
           </tr>`;
@@ -265,8 +278,6 @@ function circuitRows(s: HangarState): string {
     </tbody>
   </table>`;
 }
-
-
 function nextSortiePanel(s: HangarState): string {
   const ready = buildNextSortieReadiness(s);
   const digest = buildNextSortieReturnDigest(s);
@@ -465,6 +476,7 @@ function render() {
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">保有回路</h2>
+      <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">効果値は Restore/Trade 共通スコア（最小閉ループ）。売却 仮 = 有効値×3c。効果0も +0c で売却可。</p>
       <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">検証ヒント: ${escapeHtml(VERIFY_TRUE_SOLUTION_HINT)}</p>
       ${circuitRows(state)}
     </div>
@@ -545,6 +557,11 @@ function render() {
       else if (act === "repair-typed") state = repairTyped(state, id);
       else if (act === "select-circuit") state = selectCircuit(state, id);
       else if (act === "sell-rare") state = sellRareItem(state, id, 1);
+      else if (act === "sell-circuit") {
+        const price = el.dataset.price ?? "?";
+        if (!window.confirm(`回路を売却しますか？\n${id}\n仮 +${price}c`)) return;
+        state = sellCircuit(state, id);
+      }
       else if (act === "scrap") {
         if (!window.confirm(`解体しますか？\n${id}`)) return;
         state = scrapMech(state, id);

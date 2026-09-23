@@ -7,7 +7,9 @@ import {
   buildRestoreToTradeUrl,
   createEmptyCircuitBoard,
   parseHubSave,
+  deserializeHubSave,
   toExploreToHubWearPayload,
+  computeCircuitEffectForBoard,
 } from "@estg/shared";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
@@ -59,6 +61,9 @@ import {
   formatIntelFlagJa,
   formatInvadeIntelBrief,
   formatCircuitHubBrief,
+  sellCircuit,
+  circuitSellPriceCredits,
+  CIRCUIT_SELL_CREDITS_PER_EFFECT,
 } from "./hangar";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -701,6 +706,70 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.ok(digest.restoreJa.includes("回路"));
   assert.ok(typeof brief.lines[0]!.effect === "number");
   assert.ok(brief.summaryJa.includes("効果"));
+}
+
+
+// Circuit sell: price = effect × 3; inventory removal + credit
+{
+  assert.equal(CIRCUIT_SELL_CREDITS_PER_EFFECT, 3);
+  assert.equal(circuitSellPriceCredits(0), 0);
+  assert.equal(circuitSellPriceCredits(1), 3);
+  assert.equal(circuitSellPriceCredits(8), 24);
+  assert.equal(circuitSellPriceCredits(8.9), 24);
+  assert.equal(circuitSellPriceCredits(-2), 0);
+
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = resetHangar(store);
+  hs = grantVerifyPerfectLockedCircuit(hs, store);
+  const perf = hs.hub.circuits.find((c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID);
+  assert.ok(perf);
+  const br = computeCircuitEffectForBoard(perf!.circuitBoard, {
+    perfect: perf!.circuitBoard.perfect ?? perf!.locked,
+  });
+  assert.equal(br.effect, 8);
+  const price = circuitSellPriceCredits(br.effect);
+  assert.equal(price, 24);
+
+  const creditsBefore = hs.hub.credits;
+  const countBefore = hs.hub.circuits.length;
+  hs = sellCircuit(hs, VERIFY_PERFECT_CIRCUIT_ID);
+  assert.equal(
+    hs.hub.circuits.some((c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID),
+    false,
+  );
+  assert.equal(hs.hub.circuits.length, countBefore - 1);
+  assert.equal(hs.hub.credits, creditsBefore + price);
+  assert.ok(hs.notice.includes("+24c") || hs.notice.includes("24"));
+  assert.ok(hs.log.some((l) => l.includes("回路売却") && l.includes("+24c")));
+
+  // Persist: HubSave no longer lists the sold circuit
+  const raw = store.getItem(HUB_SAVE_STORAGE_KEY);
+  assert.ok(raw);
+  const saved = deserializeHubSave(raw!);
+  assert.ok(saved);
+  assert.equal(
+    saved!.hub.circuits.some((c) => c.circuitId === VERIFY_PERFECT_CIRCUIT_ID),
+    false,
+  );
+  assert.equal(saved!.hub.credits, creditsBefore + price);
+
+  // Effect 0: allow sell at +0c (clears inventory)
+  hs = loadPlaytestSeed(hs, { storage: store, injectRate: 0, rng: () => 0 });
+  const seedRec = hs.hub.circuits.find((c) => c.circuitId === SEED_CIRCUIT_ID);
+  assert.ok(seedRec);
+  const seedEffect = computeCircuitEffectForBoard(seedRec!.circuitBoard).effect;
+  assert.equal(seedEffect, 0);
+  assert.equal(circuitSellPriceCredits(seedEffect), 0);
+  const c0 = hs.hub.credits;
+  hs = sellCircuit(hs, SEED_CIRCUIT_ID);
+  assert.equal(hs.hub.circuits.some((c) => c.circuitId === SEED_CIRCUIT_ID), false);
+  assert.equal(hs.hub.credits, c0);
+  assert.ok(hs.notice.includes("+0c") || hs.notice.includes("効果 0"));
+
+  // Missing id
+  const missing = sellCircuit(hs, "no_such_circuit");
+  assert.equal(missing.notice, "回路なし");
 }
 
 console.log("trade hangar selftest: ok");

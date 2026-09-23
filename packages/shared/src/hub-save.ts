@@ -621,6 +621,21 @@ export function upsertCircuitIntoHub(
 }
 
 
+/** Remove a restore circuit from hub.circuits by circuitId (no-op if missing). */
+export function removeCircuitFromHub(
+  hub: HubSnapshot,
+  circuitId: string | null | undefined,
+): HubSnapshot {
+  if (!circuitId) return hub;
+  const id = circuitId.trim();
+  if (!id) return hub;
+  const prev = hub.circuits ?? [];
+  const circuits = prev.filter((c) => c.circuitId !== id);
+  if (circuits.length === prev.length) return hub;
+  return normalizeHubSnapshot({ ...hub, circuits });
+}
+
+
 /** Set or replace invade front minesweeper progress (additive HubSave field). */
 export function setFrontProgressInHub(
   hub: HubSnapshot,

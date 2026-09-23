@@ -17,6 +17,7 @@
 | 集計修理（`applyRepair`）と型付き修理（`EXAMPLE_TYPED_REPAIR_COST`） | 部位別修理・バランス本調整 |
 | 解体（`applyScrap`） | 見た目のアート |
 | レア YieldBag 売却（明示仮価格表 · TBD） | 本格ショップ / 経済バランス |
+| 保有回路の効果値表示 + 売却（有効値×3c 仮） | 回路マーケット / 相場 |
 | HubSave v2 永続化 + `inventory: YieldBag` + `circuits` | HubSave v3 版上げ |
 | sort→trade 取込（`importMaterials` + `yieldBag`） | |
 
@@ -117,6 +118,10 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 </details>
 
 
+## 3.4b. 回路売却（仮）
+
+保有回路一覧に **効果値**（Restore/Trade 共通 `computeCircuitEffect*` · 最小閉ループ）を表示し、**売却 仮 = 有効値 × 3 credits**（`$` 相当・既存 `c` 表記）。効果 0 も +0c で売却可（在庫クリア）。確認ダイアログは解体と同系統。
+
 ## 3.5. レア売却 仮価格表（TBD）
 
 レア mats / parts の売却単価は **明示テーブル** `RARE_SELL_PRICE_TABLE`（`packages/trade/src/rare-sell-prices.ts`）に置く。  
@@ -161,6 +166,7 @@ UI の「レア売却 仮価格表」と在庫の「売却 仮Nc」ボタン、�
 12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
 12b. 「次の出撃」をヒーローに: 探索/戦線/回路の帰還ワンライナー・回路効果値・配備予定/要修理。修理待ち0かつ出撃可なら配備 CTA を強調（HubSave キー追加なし）
 13. レア仮価格表が UI に見え、レア在庫の売却が表の単価でクレジット加算・HubSave に残る（非レアは売却不可）
+13b. 保有回路に効果値と「売却 仮Nc」があり、売却で HubSave.circuits から除去・credits += 有効値×3（効果0は +0c 可）
 
 ---
 
