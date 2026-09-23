@@ -36,7 +36,9 @@ import { PIECES_PER_CONTAINER } from "@estg/shared";
 import { yieldBagFromClearedCounts } from "@estg/shared";
 import {
   buildResultRibbonHtml,
+  buildResultYieldCompactHtml,
   resolveRestartState,
+  toStagePhase,
 } from "./resultOverlay";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -1041,7 +1043,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(!moved.includes(idx(cols, 0, 0)), "vacated cell not marked (empty)");
 }
 
-// Result ribbon overlay markup + restart session source
+// Result ribbon overlay markup + restart session source + stage phase map
 {
   const html = buildResultRibbonHtml(
     "http://localhost:5175/?importMaterials=1&yieldFood=2",
@@ -1056,6 +1058,25 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     html.includes("http://localhost:5175/?importMaterials=1&amp;yieldFood=2"),
     "handoff URL escaped in href",
   );
+
+  const compact = buildResultYieldCompactHtml({
+    yieldFood: 2,
+    yieldMaterial: 4,
+    yieldEnergy: 1,
+    scrapLossCount: 3,
+    craftMultiplier: 1.1,
+    lastChain: 5,
+  });
+  assert(compact.includes("result-yield-compact"), "compact yield class");
+  assert(compact.includes("食 2"), "compact food");
+  assert(compact.includes("部 4"), "compact material");
+  assert(compact.includes("電 1"), "compact energy");
+  assert(compact.includes("craft 1.100"), "compact craft");
+
+  assert(toStagePhase("briefing") === "briefing", "stage briefing");
+  assert(toStagePhase("play") === "playing", "stage play → playing");
+  assert(toStagePhase("result") === "result", "stage result");
+  assert(toStagePhase("blocked") === "blocked", "stage blocked");
 
   const demoSearch =
     "?salvagedContainers=2&totalStockPieces=50&isExtracted=1";

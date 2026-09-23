@@ -31,7 +31,9 @@ import {
 } from "./refine";
 import {
   buildResultRibbonHtml,
+  buildResultYieldCompactHtml,
   resolveRestartState,
+  toStagePhase,
   type SessionSource,
 } from "./resultOverlay";
 
@@ -121,15 +123,16 @@ function setState(next: RefineLive) {
   render();
 }
 
-function boardHtml(s: RefineLive): string {
+function boardHtml(s: RefineLive, opts?: { inert?: boolean }): string {
   const pending = new Set(s.pendingClear);
   const settleMs = SORT_V0_RULES.settleStepMs;
+  const inert = opts?.inert === true;
   const cells = s.board
     .map((kind, i) => {
       const extras = [
         pending.has(i) ? "pending" : "",
-        s.selected === i ? "selected" : "",
-        fallInIndices.has(i) && kind != null ? "fall-in" : "",
+        !inert && s.selected === i ? "selected" : "",
+        !inert && fallInIndices.has(i) && kind != null ? "fall-in" : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -140,145 +143,190 @@ function boardHtml(s: RefineLive): string {
           : kind === "junk"
             ? "ジャンク（消去不可）"
             : PIECE_LABEL_JA[kind];
-      return `<button type="button" class="${pieceClass(kind)}${extras ? ` ${extras}` : ""}" data-idx="${i}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title || "空")}">${escapeHtml(label)}</button>`;
+      const tag = inert ? "div" : "button";
+      const typeAttr = inert ? "" : ' type="button"';
+      return `<${tag}${typeAttr} class="${pieceClass(kind)}${extras ? ` ${extras}` : ""}" data-idx="${i}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title || "空")}"${inert ? ' aria-hidden="true"' : ""}>${escapeHtml(label)}</${tag}>`;
     })
     .join("");
-  const settling = s.playMode === "settling" ? " settling" : "";
-  return `<div class="board${settling}" style="--cols:${s.cols};--settle-ms:${settleMs}ms" role="grid" aria-label="精製盤">${cells}</div>`;
+  const settling = !inert && s.playMode === "settling" ? " settling" : "";
+  const inertCls = inert ? " board-inert" : "";
+  return `<div class="board${settling}${inertCls}" style="--cols:${s.cols};--settle-ms:${settleMs}ms" role="grid" aria-label="精製盤">${cells}</div>`;
 }
 
-function controlsHtml(s: RefineLive): string {
-  const chainHint =
-    s.playMode === "settling"
-      ? `<p class="hint ok">落下補充中！ 着地済みの下段もスワップ可 — マッチすれば連鎖に加算（アクティブ連鎖 · ×${s.chainCount}）</p>`
-      : s.playMode === "clearing"
-        ? `<p class="hint ok">マッチ点滅中… 消えたあとゆっくり落下（約0.5秒/行）。落下中もスワップ可（×${s.chainCount}）</p>`
-        : `<p class="hint muted">タップで選択→上下左右の隣をタップ、またはスワイプでスワップ。<strong>idle でマッチしないスワップは即終了</strong>。消えたあと上からゆっくり補充（約0.5秒/行）。落下・点滅中の仕込みスワップは無料。せり上げ／トップアウトなし。</p>`;
+/** Empty silhouette board so briefing/blocked still sit on the same field. */
+function boardPlaceholderHtml(cols: number, rows: number): string {
+  const cells = Array.from({ length: cols * rows }, () => {
+    return `<div class="cell empty" aria-hidden="true"></div>`;
+  }).join("");
+  return `<div class="board board-placeholder" style="--cols:${cols}" role="presentation" aria-hidden="true">${cells}</div>`;
+}
+
+function playHudHtml(s: RefineLive): string {
+  const chain =
+    s.playMode === "clearing" || s.playMode === "settling"
+      ? `×${s.chainCount}${s.playMode === "settling" ? " 落下" : " 点滅"}`
+      : s.lastChain > 0
+        ? `前回×${s.lastChain}`
+        : "—";
   return `
-    <div class="controls" aria-label="操作">
-      <p class="hint muted" style="margin:0">スマホ: スワイプで隣と入れ替え · <strong>落下補充中</strong>もスワップ可（アクティブ連鎖）</p>
+    <div class="hud-rail" aria-label="プレイ HUD">
+      <div class="hud-stat"><span class="hud-k">手数</span><span class="hud-v">${s.movesLeft}</span></div>
+      <div class="hud-stat"><span class="hud-k">袋</span><span class="hud-v">${s.bag.length}</span></div>
+      <div class="hud-stat"><span class="hud-k">消</span><span class="hud-v">${s.cleared.food}/${s.cleared.material}/${s.cleared.energy}</span></div>
+      <div class="hud-stat"><span class="hud-k">連鎖</span><span class="hud-v">${escapeHtml(chain)}</span></div>
+      <div class="legend hud-legend" aria-hidden="true">
+        <span class="swatch food">食</span>
+        <span class="swatch material">部</span>
+        <span class="swatch energy">電</span>
+        <span class="swatch junk">ジャ</span>
+      </div>
     </div>
-    ${chainHint}
   `;
 }
 
-function yieldBagRows(bag: Record<string, number | undefined>): string {
-  const entries = Object.entries(bag).filter(([, n]) => (n ?? 0) > 0) as Array<
-    [YieldItemId, number]
-  >;
-  if (entries.length === 0) {
-    return `<tr><td colspan="2" class="muted">（空）</td></tr>`;
+function playHintHtml(s: RefineLive): string {
+  if (s.playMode === "settling") {
+    return `<p class="field-hint ok">落下補充中！ 着地済みもスワップ可 — マッチすれば連鎖（×${s.chainCount}）</p>`;
   }
-  return entries
-    .map(
-      ([id, n]) =>
-        `<tr><td>${escapeHtml(labelYield(id))}<div class="mono muted">${escapeHtml(id)}</div></td><td>${n}</td></tr>`,
-    )
-    .join("");
+  if (s.playMode === "clearing") {
+    return `<p class="field-hint ok">点滅中… 消えたあとゆっくり落下。落下中もスワップ可（×${s.chainCount}）</p>`;
+  }
+  return `<p class="field-hint muted">スワイプ／隣タップでスワップ · <strong>idle でマッチなしは即終了</strong> · 落下・点滅中の仕込みは無料</p>`;
+}
+
+function briefingOverlayHtml(s: RefineLive): string {
+  return `
+    <div class="stage-overlay" role="region" aria-label="精製ブリーフィング">
+      <div class="stage-panel">
+        <p class="stage-kicker">BRIEFING</p>
+        <h2 class="stage-title">精製準備</h2>
+        <ul class="brief-stats">
+          <li><span>コンテナ</span><strong>${s.inbound.salvagedContainers}</strong></li>
+          <li><span>有効予算</span><strong>${s.validPieceBudget}</strong></li>
+          <li><span>craft</span><strong>${(s.inbound.craftMultiplier ?? 1).toFixed(3)}</strong></li>
+        </ul>
+        <p class="stage-copy">盤は開始時に埋まります。上下左右にスワップして 3 つ以上そろえると消去→ゆっくり落下補充。落下中もスワップして<strong>アクティブ連鎖</strong>。idle でマッチしないスワップは即終了。有効が尽きたらオジャマのみ。</p>
+        <div class="row stage-actions">
+          <button type="button" id="btn-start">精製開始</button>
+          <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
+        </div>
+        <p class="mono muted stage-meta">${escapeHtml(s.note)}</p>
+      </div>
+    </div>
+  `;
+}
+
+function blockedOverlayHtml(s: RefineLive): string {
+  return `
+    <div class="stage-overlay" role="region" aria-label="開始不可">
+      <div class="stage-panel">
+        <p class="stage-kicker warn">BLOCKED</p>
+        <h2 class="stage-title">開始できません</h2>
+        <p class="warn">${escapeHtml(s.blockReason ?? "開始不可")}</p>
+        <p class="stage-copy muted">クエリ例を付けてリロードするか、下のテストプレイを使ってください。</p>
+        <div class="row stage-actions">
+          <a class="btn secondary" href="${escapeHtml(demoQueryExample())}">デモクエリで開く</a>
+          <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
+        </div>
+        <p class="mono muted stage-meta">長時間: ${escapeHtml(testPlayQueryExample())}</p>
+      </div>
+    </div>
+  `;
+}
+
+function resultOverlayHtml(
+  handoffUrl: string,
+  result: ReturnType<typeof toCraftingResult>,
+  lastChain: number,
+): string {
+  const importMats = importedMaterialsFromResult(result);
+  const bagEntries = Object.entries(result.yieldBag ?? {}).filter(
+    ([, n]) => (n ?? 0) > 0,
+  ) as Array<[YieldItemId, number]>;
+  const bagLine =
+    bagEntries.length === 0
+      ? `<span class="muted">YieldBag（空）</span>`
+      : bagEntries
+          .slice(0, 6)
+          .map(
+            ([id, n]) =>
+              `<span>${escapeHtml(labelYield(id))} ${n}</span>`,
+          )
+          .join("") +
+        (bagEntries.length > 6
+          ? `<span class="muted">+${bagEntries.length - 6}</span>`
+          : "");
+
+  return `
+    <div class="stage-overlay result-overlay" role="region" aria-label="仕分結果">
+      ${buildResultRibbonHtml(handoffUrl)}
+      ${buildResultYieldCompactHtml({
+        yieldFood: result.yieldFood,
+        yieldMaterial: result.yieldMaterial,
+        yieldEnergy: result.yieldEnergy,
+        scrapLossCount: result.scrapLossCount,
+        craftMultiplier: result.craftMultiplier,
+        lastChain,
+      })}
+      <div class="result-bag-line" aria-label="YieldBag">${bagLine}</div>
+      <p class="mono muted result-import">importMaterials ${importMats}</p>
+    </div>
+  `;
 }
 
 function render() {
+  const stage = toStagePhase(state.phase);
   const result = state.phase === "result" ? toCraftingResult(state) : null;
   const handoffUrl =
     result != null
       ? buildSortToTradeUrlFromResult(result, tradeBaseUrl())
       : "";
-  const importMats =
-    result != null ? importedMaterialsFromResult(result) : 0;
+
+  const showLiveBoard = state.phase === "play";
+  const showResultBoard = state.phase === "result";
+  const showPlaceholder =
+    state.phase === "briefing" || state.phase === "blocked";
+
+  const stageBoard = showLiveBoard
+    ? boardHtml(state)
+    : showResultBoard
+      ? boardHtml(state, { inert: true })
+      : boardPlaceholderHtml(state.cols, state.rows);
+
+  const overlay =
+    state.phase === "briefing"
+      ? briefingOverlayHtml(state)
+      : state.phase === "blocked"
+        ? blockedOverlayHtml(state)
+        : state.phase === "result" && result
+          ? resultOverlayHtml(handoffUrl, result, state.lastChain)
+          : "";
 
   root.innerHTML = `
-    <p class="pill">MODULE 2 · SORT · ZOO KEEPER + ACTIVE CHAIN</p>
-    <h1>Athanor 精製（Zoo Keeper）</h1>
-    <p class="muted">コンテナ予算→有効ピースのみで開始。盤は<strong>最初から埋まっている</strong>。パネルを<strong>上下左右</strong>の隣とスワップして 3 つ以上そろえると消去→上から<strong>ゆっくり</strong>落下補充。落下中もスワップして<strong>アクティブ連鎖</strong>を伸ばせる。<strong>idle（連鎖外）でマッチしないスワップは即終了</strong>（残りを無限に並べ替えない）。せり上げ／トップアウトなし。<strong>有効がなくなったらオジャマ（ジャンク）だけが落ちて盤を埋める</strong>（マッチ不可）。</p>
+    <div class="shell">
+      <header class="chrome">
+        <p class="pill">MODULE 2 · SORT · ONE FIELD</p>
+        <h1>Athanor 精製</h1>
+      </header>
 
-    <div class="card">
-      <div class="muted">${escapeHtml(state.note)}</div>
-      <table>
-        <tr><td>salvagedContainers</td><td>${state.inbound.salvagedContainers}</td></tr>
-        <tr><td>validPieceBudget</td><td>${state.validPieceBudget}</td></tr>
-        <tr><td>junk供給</td><td>有効袋が空になってから（固定比率なし）</td></tr>
-        <tr><td>isExtracted</td><td>${String(state.inbound.isExtracted)}</td></tr>
-        <tr><td>craftMultiplier</td><td>${(state.inbound.craftMultiplier ?? 1).toFixed(3)}</td></tr>
-      </table>
-      <p class="mono muted" style="margin-top:0.5rem">サンプル: ${escapeHtml(demoQueryExample())} · 長時間: ${escapeHtml(testPlayQueryExample())}</p>
+      <div class="play-field" data-phase="${escapeHtml(stage)}" aria-label="プレイフィールド">
+        ${state.phase === "play" ? playHudHtml(state) : ""}
+        <div class="stage">
+          ${stageBoard}
+          ${overlay}
+        </div>
+        ${
+          state.phase === "play"
+            ? `
+          ${state.statusMsg ? `<p class="ok status-msg field-status">${escapeHtml(state.statusMsg)}</p>` : ""}
+          ${playHintHtml(state)}
+          <div class="hud-footer">
+            <button type="button" class="secondary" id="btn-finish">精製を終える</button>
+          </div>`
+            : ""
+        }
+      </div>
     </div>
-
-    ${
-      state.phase === "blocked"
-        ? `<div class="card">
-            <p class="warn">${escapeHtml(state.blockReason ?? "開始不可")}</p>
-            <p class="muted">クエリ例を付けてリロードしてください。</p>
-            <div class="row">
-              <a class="btn secondary" href="${escapeHtml(demoQueryExample())}">デモクエリで開く</a>
-              <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
-            </div>
-          </div>`
-        : ""
-    }
-
-    ${
-      state.phase === "briefing"
-        ? `<div class="card">
-            <p>配合フェーズなし。<strong>盤面は開始時に埋まっています</strong>（Zoo Keeper）。パネルを<strong>上下左右の隣とスワップ</strong>して同色を縦・横に 3 つ以上そろえると消去→上から<strong>ゆっくり落下補充</strong>。<strong>穴が埋まりきるまえ</strong>もスワップでき、それが<strong>アクティブ連鎖</strong>です。<strong>idle でマッチしないスワップは即終了</strong>（残り並べ替えの無限ループ防止）。せり上げ圧・トップアウトはありません。最初は有効ピースのみ。<strong>有効がなくなったらオジャマだけが落ちて埋めます</strong>（マッチしません）。短いデモ予算なら下の「コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ」を使うと長時間遊べます。</p>
-            <div class="row">
-              <button type="button" id="btn-start">精製開始</button>
-              <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
-            </div>
-          </div>`
-        : ""
-    }
-
-    ${
-      state.phase === "play"
-        ? `<div class="card play-card">
-            <table>
-              <tr><td>残り手数</td><td>${state.movesLeft}</td></tr>
-              <tr><td>袋の残り</td><td>${state.bag.length}</td></tr>
-              <tr><td>消去 食料/部品/電力</td><td>${state.cleared.food} / ${state.cleared.material} / ${state.cleared.energy}</td></tr>
-              <tr><td>連鎖</td><td>${state.playMode === "clearing" || state.playMode === "settling" ? `進行中 ×${state.chainCount}${state.playMode === "settling" ? " · 落下中" : " · 点滅"}` : state.lastChain > 0 ? `前回 ×${state.lastChain}` : "—"}</td></tr>
-            </table>
-            <div class="legend">
-              <span class="swatch food">食</span>
-              <span class="swatch material">部</span>
-              <span class="swatch energy">電</span>
-              <span class="swatch junk">ジャ</span>
-            </div>
-            ${boardHtml(state)}
-            ${
-              state.statusMsg
-                ? `<p class="ok status-msg">${escapeHtml(state.statusMsg)}</p>`
-                : ""
-            }
-            ${controlsHtml(state)}
-            <div class="row">
-              <button type="button" class="secondary" id="btn-finish">精製を終える</button>
-            </div>
-          </div>`
-        : ""
-    }
-
-    ${
-      state.phase === "result" && result
-        ? `<div class="result-stage">
-            ${buildResultRibbonHtml(handoffUrl)}
-            <div class="card result-summary">
-              <p class="ok">精製結果</p>
-              <table>
-                <tr><td>yieldFood</td><td>${result.yieldFood}</td></tr>
-                <tr><td>yieldMaterial</td><td>${result.yieldMaterial}</td></tr>
-                <tr><td>yieldEnergy</td><td>${result.yieldEnergy}</td></tr>
-                <tr><td>scrapLossCount</td><td>${result.scrapLossCount}</td></tr>
-                <tr><td>craftMultiplier</td><td>${result.craftMultiplier.toFixed(3)}</td></tr>
-                <tr><td>importMaterials</td><td>${importMats}</td></tr>
-                <tr><td>lastChain</td><td>×${state.lastChain}</td></tr>
-              </table>
-              <h2 class="sub">YieldBag</h2>
-              <table>${yieldBagRows(result.yieldBag ?? {})}</table>
-              <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(handoffUrl)}</p>
-            </div>
-          </div>`
-        : ""
-    }
   `;
 
   document.getElementById("btn-start")?.addEventListener("click", () => {

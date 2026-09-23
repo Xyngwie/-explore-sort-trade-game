@@ -142,8 +142,8 @@ importMaterials = floor((yieldFood + yieldMaterial + yieldEnergy) * craftMultipl
 ## 7. UI フロー（v2）
 
 1. 受取表示（缶数・有効ピース予算・ジャンクは有効尽きたら供給）  
-2. すぐパズル開始（配合画面なし）  
-3. 結果: 種類別クリア数 → yield、搬入数プレビュー、`格納庫へ渡す`
+2. すぐパズル開始（配合画面なし）— UI は単一プレイフィールド上で briefing → playing → result  
+3. 結果（同フィールド）: 種類別クリア数 → yield、搬入数プレビュー、`格納庫へ` / `もう一度`
 
 ---
 
