@@ -320,3 +320,31 @@ button.extract-not-ready {
 .hud strong.timed-out {
   color: #ff9b9b;
 }
+
+.timeout-lock-banner.camp-defense {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  background: linear-gradient(135deg, #3a1a1eee 0%, #2a2210ee 100%);
+  border-color: #e8c547aa;
+}
+.timeout-lock-banner.camp-defense strong {
+  color: #ffe08a;
+  font-size: 0.95rem;
+}
+.timeout-lock-banner .defense-focus {
+  color: #ffe8b0;
+  font-weight: 600;
+}
+.timeout-lock-banner .defense-note {
+  color: #ffd0d0cc;
+  font-size: 0.76rem;
+}
+.hud strong.cover-on {
+  color: #8fd3ff;
+}
+button.cover-active {
+  border-color: #8fd3ff;
+  background: #1a2e3a;
+  color: #cfefff;
+}

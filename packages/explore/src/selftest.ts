@@ -7,6 +7,9 @@ import {
   applyOrder,
   applyOrderToAllWingmen,
   campDamageTakenMul,
+  campDefenseHudModel,
+  campDrHudFragment,
+  campDrPercent,
   cargoSpeedMul,
   containerNearWaypoint,
   inCampAura,
@@ -17,7 +20,9 @@ import {
   rallyWingman,
   scatterSearch,
   setCampOrDeposit,
+  shotHitChance,
   spawnContainersAt,
+  toggleSquadCover,
   unloadAtCamp,
   unitMoveSpeedMul,
 } from "./game/orders";
@@ -37,7 +42,11 @@ import { BALANCE, threatFromDensity,
 } from "./game/balance";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
-import type { Unit } from "./game/types";
+import {
+  QUIRK_LABEL,
+  quirkForWingmanIndex,
+  type Unit,
+} from "./game/types";
 
 function wing(world: ReturnType<typeof createWorld>): Unit {
   const w = world.wingmen[0];
@@ -1220,6 +1229,135 @@ function advancePinned(
   assert.equal(world.phase, "result");
   assert.equal(world.extracted, true);
   assert.equal(world.failReason, null);
+}
+
+
+// --- cover: hit chance modifiers + toggle stack rules ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  const shooter = world.leader;
+  const target = world.enemies[0]!;
+  target.alive = true;
+  // Baseline uncovered → always-hit feel
+  assert.equal(shotHitChance(shooter, target, world), 1);
+  // Target cover only
+  target.inCover = true;
+  assert.ok(
+    Math.abs(shotHitChance(shooter, target, world) - world.balance.coverIncomingHitMul) < 1e-9,
+  );
+  // Both cover: incoming × accuracy, clamped ≤ 1
+  shooter.inCover = true;
+  const both =
+    world.balance.coverIncomingHitMul * world.balance.coverAccuracyMul;
+  assert.ok(Math.abs(shotHitChance(shooter, target, world) - Math.min(1, both)) < 1e-9);
+  // Shooter cover vs uncovered target: still 1 (accuracy clamped)
+  target.inCover = false;
+  assert.equal(shotHitChance(shooter, target, world), 1);
+  shooter.inCover = false;
+
+  // Squad toggle syncs living friendlies; works after timeout
+  assert.equal(toggleSquadCover(world), "entered");
+  assert.equal(world.leader.inCover, true);
+  for (const w of world.wingmen) {
+    if (w.alive) assert.equal(w.inCover, true);
+  }
+  assert.equal(toggleSquadCover(world), "exited");
+  assert.equal(world.leader.inCover, false);
+
+  world.operationTimedOut = true;
+  world.timeLeft = 0;
+  assert.equal(toggleSquadCover(world), "entered");
+  assert.equal(world.leader.inCover, true);
+  assert.ok(world.logs.some((l) => l.text.includes("カバー")));
+}
+
+// --- stocked camp DR always visible (HUD fragment + percent) ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  assert.equal(campDrHudFragment(world), "");
+  world.camp = { pos: { ...world.leader.pos }, stashedCount: 0 };
+  assert.equal(campDrHudFragment(world), "");
+  world.camp.stashedCount = 3;
+  const pct = campDrPercent(world);
+  assert.equal(pct, Math.round((1 - world.balance.campDamageTakenMul) * 100));
+  assert.equal(campDrHudFragment(world), `被弾−${pct}%`);
+  assert.ok(pct > 0);
+}
+
+// --- timeout camp-defense HUD model ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  let model = campDefenseHudModel(world);
+  assert.equal(model.active, false);
+
+  world.timeLeft = 0;
+  world.operationTimedOut = true;
+  world.camp = { pos: { ...world.leader.pos }, stashedCount: 4 };
+  model = campDefenseHudModel(world);
+  assert.equal(model.active, true);
+  assert.equal(model.title, "キャンプ防衛モード");
+  assert.equal(model.drVisible, true);
+  assert.equal(model.drPercent, campDrPercent(world));
+  assert.ok(model.stockLine.includes(`被弾−${model.drPercent}%`));
+  assert.ok(model.stockLine.includes("置場 4"));
+  assert.ok(model.coverHint.includes("カバー"));
+
+  world.leader.inCover = true;
+  model = campDefenseHudModel(world);
+  assert.ok(model.coverHint.includes("カバー中"));
+}
+
+// --- light wingman quirk assignment + raid bias ---
+{
+  const world = createWorld(bootstrapFromSearch("?deployableMechs=4"));
+  assert.equal(quirkForWingmanIndex(0), "cling");
+  assert.equal(quirkForWingmanIndex(1), "decoy");
+  assert.equal(quirkForWingmanIndex(2), "sniper");
+  assert.ok(world.wingmen.length >= 2);
+  assert.equal(world.wingmen[0]!.quirk, "cling");
+  assert.equal(world.wingmen[1]!.quirk, "decoy");
+  assert.equal(QUIRK_LABEL.cling, "密着");
+
+  startSortie(world);
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  // Place a live foe so raid stand-off differs by quirk
+  const foe = world.enemies[0]!;
+  foe.alive = true;
+  foe.hp = foe.maxHp;
+  foe.pos = { x: 500, y: 500 };
+  const cling = world.wingmen[0]!;
+  const decoy = world.wingmen[1]!;
+  cling.stance = "raid";
+  cling.waypoint = null;
+  cling.pos = { x: 400, y: 500 };
+  decoy.stance = "raid";
+  decoy.waypoint = null;
+  decoy.pos = { x: 400, y: 500 };
+  world.leader.pos = { x: 300, y: 500 };
+
+  const clingIntent = decideWingman(world, cling, 0.05);
+  const decoyIntent = decideWingman(world, decoy, 0.05);
+  assert.ok(clingIntent.moveTarget);
+  assert.ok(decoyIntent.moveTarget);
+  // Decoy rushes closer to foe (smaller stand-off) than cling's leader-biased post.
+  const clingDist = Math.hypot(
+    clingIntent.moveTarget!.x - foe.pos.x,
+    clingIntent.moveTarget!.y - foe.pos.y,
+  );
+  const decoyDist = Math.hypot(
+    decoyIntent.moveTarget!.x - foe.pos.x,
+    decoyIntent.moveTarget!.y - foe.pos.y,
+  );
+  assert.ok(
+    decoyDist < clingDist,
+    `decoy should stand closer to foe than cling (${decoyDist} vs ${clingDist})`,
+  );
 }
 
 console.log("explore selftest: ok");

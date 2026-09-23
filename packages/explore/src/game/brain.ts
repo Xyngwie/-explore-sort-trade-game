@@ -39,13 +39,19 @@ function nearestDiscoveredContainer(
   return best;
 }
 
-function escortOffset(leader: Unit, side: number): Vec2 {
+function escortOffset(
+  leader: Unit,
+  side: number,
+  opts?: { followMul?: number; sideMul?: number },
+): Vec2 {
   const b = BALANCE;
+  const follow = b.escortFollowDist * (opts?.followMul ?? 1);
+  const sideOff = side * (opts?.sideMul ?? 1);
   const hx = Math.cos(leader.heading);
   const hy = Math.sin(leader.heading);
   return {
-    x: leader.pos.x - hx * b.escortFollowDist + -hy * side,
-    y: leader.pos.y - hy * b.escortFollowDist + hx * side,
+    x: leader.pos.x - hx * follow + -hy * sideOff,
+    y: leader.pos.y - hy * follow + hx * sideOff,
   };
 }
 
@@ -77,9 +83,18 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
   switch (self.stance) {
     case "escort": {
       const side = self.id.endsWith("a") ? -b.escortSide : b.escortSide;
+      const cling = self.quirk === "cling";
+      const followMul = cling ? b.quirkClingFollowMul : 1;
+      const sideMul = cling ? b.quirkClingSideMul : 1;
+      const engageR =
+        self.quirk === "decoy"
+          ? b.engageRange * b.quirkDecoyEngageMul
+          : self.quirk === "sniper"
+            ? b.engageRange * b.quirkSniperEngageMul
+            : b.engageRange;
       return {
-        moveTarget: escortOffset(leader, side),
-        fireAt: enemy && enemyDist < b.engageRange ? enemy : null,
+        moveTarget: escortOffset(leader, side, { followMul, sideMul }),
+        fireAt: enemy && enemyDist < engageR ? enemy : null,
         trySalvage: false,
       };
     }
@@ -141,22 +156,53 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       // Optional waypoint = scatter-search fan-out (散開捜索); cleared on arrive.
       // Prefer fan-out until arrived so wingmen do not stack on one hunt vector;
       // only break for a local engage-range threat.
-      const local = nearestAliveEnemy(self.pos, world.enemies, b.engageRange);
-      if (local) {
-        const d = dist(self.pos, local.pos);
-        const rush = b.weaponRange * 0.4;
-        const dx = local.pos.x - self.pos.x;
-        const dy = local.pos.y - self.pos.y;
+      // Light quirk bias: cling stays closer to leader, decoy rushes in,
+      // sniper holds weaponRange stand-off.
+      const engageR =
+        self.quirk === "decoy"
+          ? b.engageRange * b.quirkDecoyEngageMul
+          : self.quirk === "sniper"
+            ? b.engageRange * b.quirkSniperEngageMul
+            : b.engageRange;
+      const rushFrac =
+        self.quirk === "decoy"
+          ? b.quirkDecoyRushFrac
+          : self.quirk === "sniper"
+            ? b.quirkSniperStandFrac
+            : 0.4;
+      const raidStandOff = (foe: Unit) => {
+        const d = dist(self.pos, foe.pos);
+        const rush = b.weaponRange * rushFrac;
+        const dx = foe.pos.x - self.pos.x;
+        const dy = foe.pos.y - self.pos.y;
         const len = Math.hypot(dx, dy) || 1;
+        // Cling: bias stand-off toward leader so bait stays near captain.
+        if (self.quirk === "cling") {
+          const toLead = {
+            x: leader.pos.x - foe.pos.x,
+            y: leader.pos.y - foe.pos.y,
+          };
+          const ll = Math.hypot(toLead.x, toLead.y) || 1;
+          return {
+            moveTarget: {
+              x: foe.pos.x + (toLead.x / ll) * (rush * 0.85),
+              y: foe.pos.y + (toLead.y / ll) * (rush * 0.85),
+            },
+            fireAt: d < engageR * 1.35 ? foe : null,
+            trySalvage: false as const,
+          };
+        }
         return {
           moveTarget: {
-            x: local.pos.x - (dx / len) * rush,
-            y: local.pos.y - (dy / len) * rush,
+            x: foe.pos.x - (dx / len) * rush,
+            y: foe.pos.y - (dy / len) * rush,
           },
-          fireAt: d < b.engageRange * 1.35 ? local : null,
-          trySalvage: false,
+          fireAt: d < engageR * 1.35 ? foe : null,
+          trySalvage: false as const,
         };
-      }
+      };
+      const local = nearestAliveEnemy(self.pos, world.enemies, engageR);
+      if (local) return raidStandOff(local);
       if (self.waypoint) {
         if (dist(self.pos, self.waypoint) > 24) {
           return {
@@ -170,27 +216,16 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       const hunt =
         nearestAliveEnemy(self.pos, world.enemies, b.visionRange * 1.5) ??
         nearestAliveEnemy(self.pos, world.enemies);
-      if (hunt) {
-        const d = dist(self.pos, hunt.pos);
-        const rush = b.weaponRange * 0.4;
-        const dx = hunt.pos.x - self.pos.x;
-        const dy = hunt.pos.y - self.pos.y;
-        const len = Math.hypot(dx, dy) || 1;
-        return {
-          moveTarget: {
-            x: hunt.pos.x - (dx / len) * rush,
-            y: hunt.pos.y - (dy / len) * rush,
-          },
-          fireAt: d < b.engageRange * 1.35 ? hunt : null,
-          trySalvage: false,
-        };
-      }
+      if (hunt) return raidStandOff(hunt);
       // No enemies: loiter near leader without consuming a click target.
+      // Cling loiters tighter; decoy wider.
+      const loiterR =
+        self.quirk === "cling" ? 42 : self.quirk === "decoy" ? 95 : 70;
       self.patrolAngle += b.patrolAngularSpeed * 0.6 * dt;
       return {
         moveTarget: {
-          x: leader.pos.x + Math.cos(self.patrolAngle) * 70,
-          y: leader.pos.y + Math.sin(self.patrolAngle) * 70,
+          x: leader.pos.x + Math.cos(self.patrolAngle) * loiterR,
+          y: leader.pos.y + Math.sin(self.patrolAngle) * loiterR,
         },
         fireAt: null,
         trySalvage: false,

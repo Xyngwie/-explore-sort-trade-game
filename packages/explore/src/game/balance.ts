@@ -98,6 +98,27 @@ export const BALANCE = {
   fieldContainerCount: 20,
   /** Max containers an enemy may drop on death (roll 0..max inclusive). */
   enemyDeathDropMax: 2,
+  /**
+   * Cover（カバー）combat modifiers — provisional.
+   * Base hit chance stays 1.0 so uncovered fights keep prior always-hit feel;
+   * cover is the only v0 source of miss chance. Accuracy mul mainly offsets
+   * opponent cover (and future miss sources), clamped to ≤1.
+   */
+  /** Incoming hit-chance mul when the *target* is in cover. */
+  coverIncomingHitMul: 0.70,
+  /** Outgoing hit-chance mul when the *shooter* is in cover (accuracy tip). */
+  coverAccuracyMul: 1.10,
+  /**
+   * Cling quirk: escort side / follow distances scale (tighter = cling harder).
+   */
+  quirkClingFollowMul: 0.62,
+  quirkClingSideMul: 0.55,
+  /** Decoy quirk: engage range bias (wider bait bubble) + rush-in fraction. */
+  quirkDecoyEngageMul: 1.35,
+  quirkDecoyRushFrac: 0.22,
+  /** Sniper quirk: preferred stand-off as fraction of weaponRange. */
+  quirkSniperStandFrac: 0.88,
+  quirkSniperEngageMul: 1.15,
 } as const;
 
 export type Balance = typeof BALANCE;

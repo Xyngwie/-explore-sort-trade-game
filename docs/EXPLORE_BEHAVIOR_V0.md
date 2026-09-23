@@ -95,19 +95,19 @@ HUD は貨物 ETA／離昇 ETA とマップ上の搭乗円を表示する。
 
 定数は `packages/explore/src/game/balance.ts` の `boardingRadius` / `boardingCargoDelaySec` / `boardingLiftOffDelaySec`。
 
-## 5.1b 作戦時間切れ（overtime lock）
+## 5.1b 作戦時間切れ（overtime lock）／キャンプ防衛モード
 
-残時間が 0 になっても **即失敗しない**。代わりに:
+残時間が 0 になっても **即失敗しない**。代わりに **キャンプ防衛モード** へ移行する（移動・積み下ろしロック、戦闘継続）:
 
 | 項目 | 挙動 |
 |---|---|
 | 移動 | 隊長の移動ロック（WASD／クリック不可） |
 | 積み下ろし | キャンプ荷下ろし・積込・パージ・コンテナ回収チャネル不可 |
-| 戦闘 | 継続（射撃・敵 AI・被弾）。僚機は戦闘機動可 |
-| 抽出 | **既に進行中の搭乗円のみ継続**（隊長が円内なら離昇成功可）。時間切れ後の**新規**抽出要請は拒否。円外で時間切れ → 移動不可のため円へ入れず、撃破／撤退／既存 abort で決着 |
+| 戦闘 | 継続（射撃・敵 AI・被弾）。僚機は戦闘機動可。**カバー**可 |
+| 抽出 | **既に進行中の搭乗円のみ継続**（隊長が円内なら離昇成功可）。時間切れ後の**新規**抽出要請は拒否。円外で時間切れ → 移動不可のため円へ入れず、キャンプ防衛／カバー／撃破／撤退で決着 |
 | 失敗理由 | 時計単体では `returnKind=fail` にしない（`leader_down` / `extract_missed` / 撤退 abort など既存経路） |
 
-HUD に「時間切れ・移動／積み下ろしロック・戦闘継続」バナーを出す。
+HUD バナーは **「キャンプ防衛モード」** を見出しにし、置場があるときは **被弾 DR% を常時表示**、カバー案内を出す。
 
 ---
 
@@ -158,9 +158,9 @@ invade マインスイーパから探索へ渡す戦闘モード。キー契約�
 | キャンプ防衛圏 | 置場 > 0 のとき半径 `campAuraRadius`：圏内友軍は被弾 ×`campDamageTakenMul`。空荷なら移動 ×`campLightSpeedMul` |
 | 取り上げ | ボタンまたは `G`。キャンプ付近で置場から隊長→僚機の順に積込（硬上限なし） |
 | 会計 | `world.salvaged` は回収時点で加算済みのまま（預けても没収しない）。置場は速度／防衛管理用の一時ステージング |
-| HUD | 隊長の速度％とキャンプ状態（未設置／置場 N·防衛）。ボタン／キー: C 設置・U 小隊荷下ろし・G 積込 |
+| HUD | 隊長の速度％とキャンプ状態。**置場 > 0 のとき DR 量を常時表示**（例: `被弾−28%`）。マップ CAMP ラベルにも同値。ボタン／キー: C 設置・U 小隊荷下ろし・G 積込 |
 
-定数: `cargoSpeedMulMin` / `cargoSpeedRefSlots` / `campAuraRadius` / `campDamageTakenMul` / `campLightSpeedMul`。API: `cargoSpeedMul` / `unitMoveSpeedMul` / `setCampOrDeposit` / `unloadAtCamp` / `pickUpFromCamp` / `purgeCargo`（`orders.ts`）。
+定数: `cargoSpeedMulMin` / `cargoSpeedRefSlots` / `campAuraRadius` / `campDamageTakenMul` / `campLightSpeedMul`。API: `cargoSpeedMul` / `unitMoveSpeedMul` / `setCampOrDeposit` / `unloadAtCamp` / `pickUpFromCamp` / `purgeCargo` / `campDrPercent` / `campDrHudFragment`（`orders.ts`）。
 
 ### 5.4.1 パージ（キャンプへ降ろす／戦場投下）
 
@@ -169,6 +169,39 @@ invade マインスイーパから探索へ渡す戦闘モード。キー契約�
 | 操作 | ボタン「パージ／キャンプへ降ろす」または `P`（**小隊全機**） |
 | キャンプ付近 | 当該機の積載を置場へ預ける（`world.salvaged` は維持） |
 | それ以外 | 積載をその場のフィールドコンテナとして投下（発見済・発光・再回収可）。`world.salvaged` と個人積載を減らし軽装化 |
+
+### 5.4.2 カバー（Cover）
+
+**ステータス:** 薄実装済（仮数値）
+
+小隊全機のカバー切替。ラベル **「カバー」**（キー `V`／ボタン）。時間切れのキャンプ防衛ファンタジーとも併用可。
+
+| 項目 | 挙動 |
+|---|---|
+| 切替 | 隊長の現状態の逆へ、生存友軍を同期（入／出のトグル）。自己スタックなし |
+| 被弾命中率 | カバー中の**ターゲット**へ命中 ×`coverIncomingHitMul`（仮 **0.70**＝命中率−30%） |
+| 命中 | カバー中の**射手**は命中 ×`coverAccuracyMul`（仮 **1.10**）、上限 1.0 |
+| ベース | カバー無し時の命中は従来どおり 1.0（常時命中感を維持） |
+| キャンプDR | **独立**。カバーは命中率、キャンプは着弾後ダメージ倍率。両方有効なら乗算 |
+| タイムアウト | ロック対象外（戦闘継続の一部）。移動不可中でもカバー可 |
+
+API: `toggleSquadCover` / `shotHitChance`（`orders.ts`）。定数: `coverIncomingHitMul` / `coverAccuracyMul`。
+
+### 5.4.3 僚機の軽い癖（quirk params）
+
+**ステータス:** 最小プレイ可能スタブ（学習システムではない）
+
+出撃生成時に僚機へ決定的に割当（index 循環: 密着 → 囮 → 遠射）。脳の距離／交戦半径をわずかにバイアスするだけ。
+
+| ID | 表示 | バイアス |
+|---|---|---|
+| `cling` | 密着 | 帯同距離を縮める。遊撃時も隊長寄りに立つ |
+| `decoy` | 囮 | 交戦半径を広げ、ラッシュ距離を短く（前へ出る） |
+| `sniper` | 遠射 | `weaponRange` 寄りのスタンドオフを維持 |
+
+フル学習・メトリック箱は [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.1.1 の願望メモのまま（本節は受入の薄いスタブ）。
+
+定数: `quirkCling*` / `quirkDecoy*` / `quirkSniper*`。API: `quirkForWingmanIndex` / `Unit.quirk`。
 
 ### 5.5 フィールドコンテナと敵撃破ドロップ
 
@@ -197,7 +230,7 @@ API: `spawnContainersAt` / `spawnEnemyDeathDrops`。
 
 ### 6.1 願望メモ（未実装・未スケジュール）
 
-Wingman の学習や癖についての未成熟なビジョンは [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.1.1 に記録する。デザイナー定義のメトリック箱を集計し、まず性能を見てから役割が立ち上がる、という方向だけをメモしたもので、v0 の受入条件や実装予定ではない。
+Wingman の**本格学習**や癖についての未成熟なビジョンは [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §3.1.1 に記録する。§5.4.3 の軽い癖パラメータは学習ではない最小スタブであり、メトリック箱／役割解放は未着手のまま。
 
 ---
 
