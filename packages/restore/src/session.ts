@@ -21,7 +21,11 @@ import {
   boardFromMarks,
   freshMarks,
   generatePuzzle,
+  hazardLabel,
   loadMarksFromStorage,
+  rarityLabel,
+  type BoardRarity,
+  type HazardKind,
   type RestorePuzzle,
 } from "./puzzle";
 
@@ -49,6 +53,8 @@ export type RestoreSession = {
   perfectInjectRate?: number;
   /** True when generatePuzzle injected a seeded true board. */
   injectedTrue?: boolean;
+  rarity: BoardRarity;
+  hazard: HazardKind;
 };
 
 export type BootstrapRateOptions = {
@@ -100,6 +106,30 @@ function resolveInjectRateForBootstrap(
   });
 }
 
+/** Local demo seed from `?seed=` (restore-only play loop; not a handoff key). */
+export function readLocalSeedFromSearch(search: string): string | null {
+  try {
+    const q = search.startsWith("?") ? search.slice(1) : search;
+    const seed = new URLSearchParams(q).get("seed");
+    if (seed == null) return null;
+    const t = seed.trim();
+    return t === "" ? null : t.slice(0, 64);
+  } catch {
+    return null;
+  }
+}
+
+function rarityNote(
+  puzzle: RestorePuzzle,
+  showInjectionDetails: boolean,
+): string {
+  const base = rarityLabel(puzzle.rarity);
+  if (puzzle.rarity === "perfect_rare") {
+    return showInjectionDetails ? `${base} · 真盤` : base;
+  }
+  return `${base} · ${hazardLabel(puzzle.hazard)}`;
+}
+
 /**
  * Parse trade→restore query. Hydrate marks from circuitBoard when present;
  * otherwise seed a demo puzzle (circuitId as seed when only id is given).
@@ -147,9 +177,11 @@ export function bootstrapFromSearch(
       source: "handoff-board",
       note: `HUB 受取 · 盤 hydrate ${cols}×${rows}${
         inbound.circuitId ? ` · id ${inbound.circuitId}` : ""
-      }${showInjectionDetails && injectedTrue ? " · 真盤" : ""}`,
+      } · ${rarityNote(puzzle, showInjectionDetails)}`,
       locked,
       injectedTrue,
+      rarity: puzzle.rarity,
+      hazard: puzzle.hazard,
     };
     if (inbound.circuitId) session.circuitId = inbound.circuitId;
     if (board.outcome != null) session.inboundOutcome = board.outcome;
@@ -182,16 +214,19 @@ export function bootstrapFromSearch(
       puzzle,
       marks,
       source: "handoff-id",
-      note: `HUB 受取 · circuitId=${inbound.circuitId}（盤なし → シード生成${
+      note: `HUB 受取 · circuitId=${inbound.circuitId}（盤なし → シード生成） · ${rarityNote(
+        puzzle,
+        showInjectionDetails,
+      )}${
         showInjectionDetails
-          ? ` · inject ${(injectRate * 100).toFixed(1)}%${
-              injectedTrue ? " · 真盤注入" : ""
-            }`
+          ? ` · inject ${(injectRate * 100).toFixed(1)}%`
           : ""
-      }）`,
+      }`,
       locked,
       perfectInjectRate: injectRate,
       injectedTrue,
+      rarity: puzzle.rarity,
+      hazard: puzzle.hazard,
     };
     if (passedEditor) session.editorName = passedEditor;
     if (locked) {
@@ -211,7 +246,8 @@ export function bootstrapFromSearch(
     return session;
   }
 
-  const puzzle = generatePuzzle(DEFAULT_SEED, DEFAULT_COLS, DEFAULT_ROWS, {
+  const localSeed = readLocalSeedFromSearch(search) ?? DEFAULT_SEED;
+  const puzzle = generatePuzzle(localSeed, DEFAULT_COLS, DEFAULT_ROWS, {
     injectRate,
   });
   const n = edgeCount(puzzle.cols, puzzle.rows);
@@ -234,17 +270,20 @@ export function bootstrapFromSearch(
     puzzle,
     marks,
     source: "demo",
-    note: `デモ盤 · クエリなし${
+    note: `ローカル盤 · seed ${localSeed} · ${rarityNote(
+      puzzle,
+      showInjectionDetails,
+    )}${
       showInjectionDetails
-        ? `（inject ${(injectRate * 100).toFixed(1)}%${
-            injectedTrue ? " · 真盤注入" : ""
-          }）`
+        ? ` · inject ${(injectRate * 100).toFixed(1)}%`
         : ""
     }`,
     locked: false,
     editorName: passedEditor,
     perfectInjectRate: injectRate,
     injectedTrue,
+    rarity: puzzle.rarity,
+    hazard: puzzle.hazard,
   };
 }
 
@@ -326,4 +365,19 @@ export function buildReturnToTradeUrl(args: {
   if (args.perfect) payload.perfect = true;
   if (args.locked) payload.locked = true;
   return buildRestoreToTradeUrl(payload, args.baseUrl ?? tradeBaseUrl());
+}
+
+/** Build a local demo URL that draws another substrate (`?seed=`). */
+export function buildNextLocalBoardHref(
+  seed: string,
+  href: string = typeof window !== "undefined" ? window.location.href : "/",
+): string {
+  try {
+    const u = new URL(href, "https://restore.local/");
+    u.searchParams.set("seed", seed);
+    // Keep perfectRate if present for playtest continuity.
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return `?seed=${encodeURIComponent(seed)}`;
+  }
 }

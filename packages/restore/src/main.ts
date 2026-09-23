@@ -2,27 +2,26 @@ import "./style.css";
 import {
   encodeEdgeState,
   isPerfectCircuitDebugContext,
-  isPerfectCircuitClearance,
   sanitizeEditorName,
   type CircuitOutcome,
   type EdgeMark,
 } from "@estg/shared";
 import {
   boardFromMarks,
+  classifyPlayResult,
   cycleEdgeMark,
-  deriveStubOutcome,
-  digitSatisfaction,
-  isCellDigitActivated,
   freshMarks,
-  hEdgeIndex,
-  isLoopClosed,
-  lineEdgeCount,
+  hazardLabel,
+  isCellDigitActivated,
   outcomeLabel,
+  rarityLabel,
   saveMarksToStorage,
+  hEdgeIndex,
   vEdgeIndex,
 } from "./puzzle";
 import {
   bootstrapFromSearch,
+  buildNextLocalBoardHref,
   buildReturnToTradeUrl,
   stripInboundSearchFromLocation,
   type RestoreSession,
@@ -53,7 +52,9 @@ let marks: EdgeMark[] = [...session.marks];
 /** Manual override; null = derive from play (or inbound outcome once). */
 let outcomeOverride: CircuitOutcome | null = session.inboundOutcome ?? null;
 let persist = session.source === "demo" || session.source === "handoff-id";
-let editorName = session.editorName ?? session.engravedName;
+let editorName = session.editorName ?? session.engravedName ?? "";
+/** After Abandon, keep Offline until edges change. */
+let abandoned = false;
 
 // Consume trade→restore keys so a refresh uses local session / storage.
 if (session.source === "handoff-board" || session.source === "handoff-id") {
@@ -94,12 +95,15 @@ function persistIfNeeded(): void {
   if (persist && !locked) saveMarksToStorage(puzzle.puzzleId, marks);
 }
 
-function currentOutcome(
-  loop: boolean,
-  digitRate: number,
-  lines: number,
-): CircuitOutcome {
-  return outcomeOverride ?? deriveStubOutcome(loop, digitRate, lines);
+function play() {
+  const override = abandoned ? ("offline" as const) : outcomeOverride;
+  return classifyPlayResult(
+    puzzle.clues,
+    marks,
+    puzzle.cols,
+    puzzle.rows,
+    override,
+  );
 }
 
 function returnUrl(
@@ -125,6 +129,7 @@ function toggleEdge(index: number): void {
   const cur = marks[index] ?? 0;
   marks[index] = cycleEdgeMark(cur);
   outcomeOverride = null;
+  abandoned = false;
   persistIfNeeded();
   render();
 }
@@ -177,16 +182,25 @@ function boardHtml(): string {
   return `<div class="slither${locked ? " locked" : ""}" style="--cols:${cols}">${parts.join("")}</div>`;
 }
 
+function outcomeBanner(status: CircuitOutcome, blurb: string): string {
+  return `<div class="outcome-banner outcome-${status}" role="status">
+    <div class="outcome-name">${escapeHtml(outcomeLabel(status))}</div>
+    <div class="outcome-blurb">${escapeHtml(blurb)}</div>
+  </div>`;
+}
+
+function digitBar(satisfied: number, clueCount: number, rate: number): string {
+  const pct = Math.round(rate * 100);
+  return `<div class="digit-meter" aria-label="digit satisfaction ${satisfied}/${clueCount}">
+    <div class="digit-meter-fill" style="width:${pct}%"></div>
+    <span class="digit-meter-label">${satisfied}/${clueCount} digits · ${pct}%</span>
+  </div>`;
+}
+
 function render(): void {
-  const digits = digitSatisfaction(puzzle.clues, marks, puzzle.cols, puzzle.rows);
-  const loop = isLoopClosed(marks, puzzle.cols, puzzle.rows);
-  const lines = lineEdgeCount(marks);
-  const status = currentOutcome(loop, digits.rate, lines);
-  const perfect = isPerfectCircuitClearance({
-    outcome: status,
-    digitRate: digits.rate,
-    loopClosed: loop,
-  });
+  const classified = play();
+  const { outcome: status, perfectClearance: perfect, digits, loopClosed, lineCount, blurb } =
+    classified;
   const lockNext = locked || perfect;
   const enc = encodeEdgeState(marks);
   const board = boardFromMarks(
@@ -199,24 +213,40 @@ function render(): void {
   const hubUrl = returnUrl(status, perfect, lockNext);
   const displayName =
     session.engravedName ?? sanitizeEditorName(editorName) ?? "—";
+  const nextSeed = `board-${Date.now().toString(36)}`;
+  const nextHref = buildNextLocalBoardHref(nextSeed, window.location.href);
+  const canAwaken = !locked && status === "fully_awakened";
+  const canBypass = !locked && (status === "bypass" || digits.satisfied > 0 || loopClosed);
+  const rarityClass =
+    session.rarity === "perfect_rare" ? "rarity-perfect" : "rarity-flawed";
 
   root.innerHTML = `
-    <p class="pill">MODULE 5 · RESTORE · THIN STUB</p>
+    <p class="pill">MODULE 5 · RESTORE · PLAYABLE THICKEN</p>
     <h1>精密回路修復</h1>
-    <p class="muted">Slitherlink 風の辺トグル。タイマーなし。完了時は Hub（trade）へ circuitBoard + circuitOutcome を返す。</p>
+    <p class="muted">大半は不完全基板。稀に可解コア。部分修復→Bypass、完全ループ→Fully Awakened（刻印ロック）、放棄→Offline。タイマー圧なし。</p>
 
     ${
       locked
         ? `<div class="card lock-banner">
       <p class="lock-title">完璧な回路・編集不可</p>
-      <p class="muted">刻印 <strong class="engraved">${escapeHtml(displayName)}</strong></p>
+      <p class="muted">最終編集者（刻印） <strong class="engraved">${escapeHtml(displayName)}</strong></p>
     </div>`
         : ""
     }
 
+    ${outcomeBanner(status, blurb)}
+
     <div class="card">
+      <div class="meta-row">
+        <span class="rarity-badge ${rarityClass}">${escapeHtml(rarityLabel(session.rarity))}</span>
+        ${
+          session.hazard !== "none"
+            ? `<span class="hazard-badge">${escapeHtml(hazardLabel(session.hazard))}</span>`
+            : ""
+        }
+      </div>
       <p class="muted">${escapeHtml(session.note)}</p>
-      <p class="muted">puzzleSeed <span class="mono">${escapeHtml(puzzle.puzzleId)}</span> · ${puzzle.cols}×${puzzle.rows} · 辺クリック: 空 → 線 → × → 空${
+      <p class="muted">puzzleSeed <span class="mono">${escapeHtml(puzzle.puzzleId)}</span> · ${puzzle.cols}×${puzzle.rows} · 辺: 空 → 線 → × → 空${
         circuitId
           ? ` · circuitId <span class="mono">${escapeHtml(circuitId)}</span>`
           : ""
@@ -233,36 +263,45 @@ function render(): void {
             ? `<p class="muted">Perfect inject rate ${(session.perfectInjectRate * 100).toFixed(1)}%（未注入）</p>`
             : ""
       }
-      ${
-        !locked
-          ? `<p class="muted">署名（刻印）: <span class="engraved">${escapeHtml(sanitizeEditorName(editorName) ?? "（未設定）")}</span></p>`
-          : ""
-      }
       ${boardHtml()}
+      ${digitBar(digits.satisfied, digits.clueCount, digits.rate)}
     </div>
 
     <div class="card">
       <table>
-        <tr><td>loop-closed?</td><td class="${loop ? "ok" : ""}">${loop ? "yes" : "no"}</td></tr>
+        <tr><td>loop-closed?</td><td class="${loopClosed ? "ok" : ""}">${loopClosed ? "yes" : "no"}</td></tr>
         <tr><td>digit satisfaction</td><td>${digits.satisfied}/${digits.clueCount} (${(digits.rate * 100).toFixed(0)}%)</td></tr>
         <tr><td>status</td><td><strong class="status-${status}">${escapeHtml(outcomeLabel(status))}</strong></td></tr>
         <tr><td>perfect / locked</td><td>${perfect ? "perfect" : "—"} / ${lockNext ? "locked" : "editable"}</td></tr>
-        <tr><td>line edges</td><td>${lines}</td></tr>
+        <tr><td>line edges</td><td>${lineCount}</td></tr>
         <tr><td>edgeState</td><td class="mono">${escapeHtml(enc || "(empty)")}</td></tr>
         <tr><td>board.outcome</td><td>${escapeHtml(board.outcome ?? "—")}</td></tr>
       </table>
+
+      ${
+        !locked
+          ? `<label class="editor-field">最終編集者名（刻印スタブ）
+        <input type="text" id="inp-editor" maxlength="32" value="${escapeHtml(editorName)}" placeholder="例: 整備班・葵" />
+      </label>`
+          : `<p class="muted">刻印 <span class="engraved">${escapeHtml(displayName)}</span></p>`
+      }
+
       <div class="actions">
-        <button type="button" class="btn" data-outcome="fully_awakened" ${locked ? "disabled" : ""}>Set Fully Awakened</button>
-        <button type="button" class="btn" data-outcome="bypass" ${locked ? "disabled" : ""}>Set Bypass</button>
-        <button type="button" class="btn ghost" data-outcome="offline" ${locked ? "disabled" : ""}>Set Offline</button>
+        <button type="button" class="btn" id="btn-commit-awaken" ${canAwaken ? "" : "disabled"} title="完全ループ＋数字充足で有効">Commit Fully Awakened</button>
+        <button type="button" class="btn" id="btn-commit-bypass" ${canBypass ? "" : "disabled"}>Commit Bypass</button>
+        <button type="button" class="btn ghost" id="btn-abandon" ${locked ? "disabled" : ""}>Abandon → Offline</button>
         <button type="button" class="btn ghost" id="btn-clear" ${locked ? "disabled" : ""}>Clear edges</button>
+        ${
+          session.source === "demo"
+            ? `<a class="btn ghost" id="link-next-board" href="${escapeHtml(nextHref)}">次の基板を引く</a>`
+            : ""
+        }
       </div>
       <label class="persist">
         <input type="checkbox" id="chk-persist" ${persist ? "checked" : ""} ${locked ? "disabled" : ""} />
         localStorage に edgeState を保存（この puzzleId）
       </label>
-      <p class="ok" style="margin-top:0.75rem">成果語彙: Fully Awakened / Bypass / Offline（仮判定 + 手動上書き可）。Perfect は単一ループ＋数字100%でロック。</p>
-      <p class="muted" style="margin-top:0.5rem">制限タイマーなし。</p>
+      <p class="muted" style="margin-top:0.75rem">判定は digit 充足＋単一ループ。Perfect は Fully Awakened かつ完全充足でロック。制限タイマーなし。</p>
     </div>
 
     <div class="card">
@@ -287,18 +326,37 @@ function render(): void {
       });
     });
 
-    root.querySelectorAll<HTMLButtonElement>("button[data-outcome]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const o = btn.dataset.outcome as CircuitOutcome;
-        outcomeOverride = o;
-        persistIfNeeded();
-        render();
-      });
+    root.querySelector("#inp-editor")?.addEventListener("input", (ev) => {
+      editorName = (ev.target as HTMLInputElement).value;
+    });
+    root.querySelector("#inp-editor")?.addEventListener("change", () => {
+      render();
+    });
+
+    root.querySelector("#btn-commit-awaken")?.addEventListener("click", () => {
+      if (!canAwaken) return;
+      outcomeOverride = "fully_awakened";
+      abandoned = false;
+      persistIfNeeded();
+      render();
+    });
+    root.querySelector("#btn-commit-bypass")?.addEventListener("click", () => {
+      outcomeOverride = "bypass";
+      abandoned = false;
+      persistIfNeeded();
+      render();
+    });
+    root.querySelector("#btn-abandon")?.addEventListener("click", () => {
+      abandoned = true;
+      outcomeOverride = "offline";
+      persistIfNeeded();
+      render();
     });
 
     root.querySelector("#btn-clear")?.addEventListener("click", () => {
       marks = freshMarks(puzzle.cols, puzzle.rows);
       outcomeOverride = null;
+      abandoned = false;
       persistIfNeeded();
       render();
     });

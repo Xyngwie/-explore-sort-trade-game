@@ -1,6 +1,7 @@
 /**
- * Thin Slitherlink-ish helpers for Module 5 stub.
- * Uses @estg/shared CircuitBoardState encode/decode; rules are provisional.
+ * Module 5 restore — playable thicken.
+ * Slitherlink-ish board gen + scoring. Uses @estg/shared CircuitBoardState;
+ * rules stay provisional (no full solver).
  */
 import {
   buildInjectedOrFlawedPuzzle,
@@ -8,6 +9,7 @@ import {
   decodeEdgeState,
   encodeEdgeState,
   edgeCount,
+  isPerfectCircuitClearance,
   resolveVerifyTrueClues,
   type CircuitBoardState,
   type CircuitOutcome,
@@ -38,6 +40,28 @@ export function hashSeed(puzzleSeed: string): number {
 
 export type ClueGrid = ReadonlyArray<ReadonlyArray<number | null>>;
 
+/** Majority boards are flawed; Perfect Circuit injection is rare. */
+export type BoardRarity = "perfect_rare" | "flawed_majority";
+
+/**
+ * How a flawed board was intentionally spoiled.
+ * `none` only on perfect / verify-true boards.
+ */
+export type HazardKind =
+  | "none"
+  | "contradiction"
+  | "overdigit"
+  | "dense_noise";
+
+/** Default mix among flawed boards (sums to 1). */
+export const FLAWED_HAZARD_WEIGHTS: Readonly<
+  Record<Exclude<HazardKind, "none">, number>
+> = {
+  contradiction: 0.45,
+  overdigit: 0.3,
+  dense_noise: 0.25,
+};
+
 export type RestorePuzzle = {
   cols: number;
   rows: number;
@@ -49,6 +73,10 @@ export type RestorePuzzle = {
    * not a flawed random fill.
    */
   injectedTrue?: boolean;
+  /** Rarity tag for UI / tests. */
+  rarity: BoardRarity;
+  /** Flaw hazard; `none` on perfect boards. */
+  hazard: HazardKind;
 };
 
 export type GeneratePuzzleOptions = {
@@ -62,6 +90,8 @@ export type GeneratePuzzleOptions = {
   rng?: () => number;
   /** Test hook: force true or flawed path. */
   forceKind?: InjectedBoardKind;
+  /** Test hook: force a specific flawed hazard (ignored on true boards). */
+  forceHazard?: Exclude<HazardKind, "none">;
 };
 
 /** Horizontal edge index: row of dots `y` (0..rows), col `x` (0..cols-1). */
@@ -104,31 +134,160 @@ export function countLineEdgesAroundCell(
   return n;
 }
 
-/** Flawed / random digit fill (majority path; not Perfect). */
+function blankClues(cols: number, rows: number): (number | null)[][] {
+  return Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => null as number | null),
+  );
+}
+
+function pickHazard(
+  rnd: () => number,
+  force?: Exclude<HazardKind, "none">,
+): Exclude<HazardKind, "none"> {
+  if (force) return force;
+  const r = rnd();
+  const w = FLAWED_HAZARD_WEIGHTS;
+  if (r < w.contradiction) return "contradiction";
+  if (r < w.contradiction + w.overdigit) return "overdigit";
+  return "dense_noise";
+}
+
+/**
+ * Classic local paradox: four adjacent 3s in a 2×2 block cannot all be
+ * satisfied by a simple loop (shared edges over-constrain the vertex).
+ */
+function applyContradictionHazard(
+  clues: (number | null)[][],
+  cols: number,
+  rows: number,
+  rnd: () => number,
+): void {
+  if (cols < 2 || rows < 2) {
+    // Degenerate tiny board: 3 beside 0 forces a local conflict when possible.
+    if (cols >= 1 && rows >= 1) {
+      clues[0]![0] = 3;
+      if (cols > 1) clues[0]![1] = 0;
+      else if (rows > 1) clues[1]![0] = 0;
+    }
+    return;
+  }
+  const ox = Math.floor(rnd() * (cols - 1));
+  const oy = Math.floor(rnd() * (rows - 1));
+  clues[oy]![ox] = 3;
+  clues[oy]![ox + 1] = 3;
+  clues[oy + 1]![ox] = 3;
+  clues[oy + 1]![ox + 1] = 3;
+  // Sprinkle a few extra high digits so the rest still looks "repaired".
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (clues[y]![x] != null) continue;
+      if (rnd() < 0.2) clues[y]![x] = 1 + Math.floor(rnd() * 3); // 1..3
+    }
+  }
+}
+
+/** Extra / dense high digits — overconstrained substrate, rarely fully solvable. */
+function applyOverdigitHazard(
+  clues: (number | null)[][],
+  cols: number,
+  rows: number,
+  rnd: () => number,
+): void {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const r = rnd();
+      if (r < 0.72) {
+        // Bias toward 2–3 (extra digits / heavy demand).
+        clues[y]![x] = 2 + Math.floor(rnd() * 2);
+      } else if (r < 0.88) {
+        clues[y]![x] = Math.floor(rnd() * 2); // 0..1
+      } else {
+        clues[y]![x] = null;
+      }
+    }
+  }
+}
+
+/** Noisy sparse fill — imperfect / hazardous without guaranteed paradox. */
+function applyDenseNoiseHazard(
+  clues: (number | null)[][],
+  cols: number,
+  rows: number,
+  rnd: () => number,
+): void {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const r = rnd();
+      if (r < 0.35) clues[y]![x] = null;
+      else clues[y]![x] = Math.floor(rnd() * 4); // 0..3
+    }
+  }
+}
+
+/**
+ * Intentionally imperfect / hazardous clue fill (majority path).
+ * Applies contradiction, overdigit, or dense noise — not a Perfect source.
+ */
 export function generateFlawedClues(
   puzzleSeed: string,
   cols: number,
   rows: number,
   rng?: () => number,
-): (number | null)[][] {
-  const rnd = rng ?? mulberry32(hashSeed(puzzleSeed));
-  const clues: (number | null)[][] = [];
-  for (let y = 0; y < rows; y++) {
-    const row: (number | null)[] = [];
-    for (let x = 0; x < cols; x++) {
-      const r = rnd();
-      if (r < 0.45) row.push(null);
-      else row.push(Math.floor(rnd() * 4)); // 0..3
-    }
-    clues.push(row);
+  forceHazard?: Exclude<HazardKind, "none">,
+): { clues: (number | null)[][]; hazard: Exclude<HazardKind, "none"> } {
+  const rnd = rng ?? mulberry32(hashSeed(`${puzzleSeed}:flawed`));
+  const hazard = pickHazard(
+    rng ?? mulberry32(hashSeed(`${puzzleSeed}:hazard`)),
+    forceHazard,
+  );
+  const clues = blankClues(cols, rows);
+  if (hazard === "contradiction") {
+    applyContradictionHazard(clues, cols, rows, rnd);
+  } else if (hazard === "overdigit") {
+    applyOverdigitHazard(clues, cols, rows, rnd);
+  } else {
+    applyDenseNoiseHazard(clues, cols, rows, rnd);
   }
-  return clues;
+  return { clues, hazard };
+}
+
+/** Detect the 2×2 block of four 3s used by contradiction hazard (for tests/UI). */
+export function hasContradictionBlock(clues: ClueGrid): boolean {
+  const rows = clues.length;
+  const cols = clues[0]?.length ?? 0;
+  for (let y = 0; y < rows - 1; y++) {
+    for (let x = 0; x < cols - 1; x++) {
+      if (
+        clues[y]![x] === 3 &&
+        clues[y]![x + 1] === 3 &&
+        clues[y + 1]![x] === 3 &&
+        clues[y + 1]![x + 1] === 3
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Clue density in [0,1] (digits / cells). */
+export function clueDensity(clues: ClueGrid): number {
+  const rows = clues.length;
+  const cols = clues[0]?.length ?? 0;
+  if (rows === 0 || cols === 0) return 0;
+  let n = 0;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (clues[y]![x] != null) n++;
+    }
+  }
+  return n / (rows * cols);
 }
 
 /**
  * Generate a small clue grid from puzzleSeed.
  * With `injectRate`, may inject a seeded true board (generate-from-solution);
- * otherwise flawed/random as before. Never relies on natural random digits for Perfect.
+ * otherwise flawed/hazardous as majority. Never relies on natural random digits for Perfect.
  */
 export function generatePuzzle(
   puzzleSeed: string,
@@ -144,6 +303,8 @@ export function generatePuzzle(
       puzzleId: fixed.puzzleId,
       clues: fixed.clues.map((row) => [...row]),
       injectedTrue: true,
+      rarity: "perfect_rare",
+      hazard: "none",
     };
   }
 
@@ -151,19 +312,29 @@ export function generatePuzzle(
     opts?.injectRate != null || opts?.forceKind != null || opts?.rng != null;
 
   if (!useInject) {
-    // Legacy: flawed only (deterministic from seed).
+    // Legacy: flawed only (deterministic from seed), with intentional hazard.
+    const built = generateFlawedClues(
+      puzzleSeed,
+      cols,
+      rows,
+      undefined,
+      opts?.forceHazard,
+    );
     return {
       cols,
       rows,
       puzzleId: puzzleSeed,
-      clues: generateFlawedClues(puzzleSeed, cols, rows),
+      clues: built.clues,
       injectedTrue: false,
+      rarity: "flawed_majority",
+      hazard: built.hazard,
     };
   }
 
   // Separate streams: roll vs clue digits so flawed layouts stay seed-stable.
   const rollRng =
     opts?.rng ?? mulberry32(hashSeed(`${puzzleSeed}:perfect-roll`));
+  let capturedHazard: HazardKind = "dense_noise";
   const built = buildInjectedOrFlawedPuzzle({
     seed: puzzleSeed,
     cols,
@@ -171,16 +342,35 @@ export function generatePuzzle(
     rate: opts?.injectRate ?? 0,
     rng: rollRng,
     forceKind: opts?.forceKind,
-    generateFlawed: (seed, c, r) =>
-      generateFlawedClues(seed, c, r, mulberry32(hashSeed(seed))),
+    // Flawed layouts stay seed-stable: do not consume the inject-roll RNG.
+    generateFlawed: (seed, c, r, _flawedRng) => {
+      void _flawedRng;
+      const f = generateFlawedClues(seed, c, r, undefined, opts?.forceHazard);
+      capturedHazard = f.hazard;
+      return f.clues;
+    },
   });
+
+  if (built.injectedTrue) {
+    return {
+      cols: built.cols,
+      rows: built.rows,
+      puzzleId: built.puzzleId,
+      clues: built.clues.map((row) => [...row]),
+      injectedTrue: true,
+      rarity: "perfect_rare",
+      hazard: "none",
+    };
+  }
 
   return {
     cols: built.cols,
     rows: built.rows,
     puzzleId: built.puzzleId,
     clues: built.clues.map((row) => [...row]),
-    injectedTrue: built.injectedTrue,
+    injectedTrue: false,
+    rarity: "flawed_majority",
+    hazard: capturedHazard,
   };
 }
 
@@ -190,7 +380,6 @@ export type DigitStats = {
   /** 0..1; 1 when no clues. */
   rate: number;
 };
-
 
 /**
  * Whether a digit cell is 「activated」(satisfied by current line edges).
@@ -308,8 +497,8 @@ export function cycleEdgeMark(m: EdgeMark): EdgeMark {
 /**
  * Provisional outcome from play metrics (no timer).
  * - fully_awakened: closed loop + all digits ok
- * - bypass: meaningful partial (loop or ≥75% digits)
- * - offline: otherwise
+ * - bypass: meaningful partial (loop or ≥50% digits with some lines)
+ * - offline: empty / abandoned / weak progress
  */
 export function deriveStubOutcome(
   loopClosed: boolean,
@@ -318,8 +507,61 @@ export function deriveStubOutcome(
 ): CircuitOutcome {
   if (lineCount === 0) return "offline";
   if (loopClosed && digitRate >= 1) return "fully_awakened";
-  if (loopClosed || digitRate >= 0.75) return "bypass";
+  // Partial progress → Bypass (vision: imperfect boards still reward craft).
+  if (loopClosed || digitRate >= 0.5 || lineCount >= 4) return "bypass";
   return "offline";
+}
+
+export type PlayClassification = {
+  outcome: CircuitOutcome;
+  /** Digit satisfaction 100% + single closed loop (+ outcome fully_awakened). */
+  perfectClearance: boolean;
+  digits: DigitStats;
+  loopClosed: boolean;
+  lineCount: number;
+  /** Short JP/EN gloss for UI. */
+  blurb: string;
+};
+
+/**
+ * Classify current play into Fully Awakened / Bypass / Offline.
+ * Perfect clearance additionally gates engraver lock.
+ */
+export function classifyPlayResult(
+  clues: ClueGrid,
+  marks: readonly EdgeMark[],
+  cols: number,
+  rows: number,
+  outcomeOverride?: CircuitOutcome | null,
+): PlayClassification {
+  const digits = digitSatisfaction(clues, marks, cols, rows);
+  const loopClosed = isLoopClosed(marks, cols, rows);
+  const lineCount = lineEdgeCount(marks);
+  const derived = deriveStubOutcome(loopClosed, digits.rate, lineCount);
+  const outcome = outcomeOverride ?? derived;
+  const perfectClearance = isPerfectCircuitClearance({
+    outcome,
+    digitRate: digits.rate,
+    loopClosed,
+  });
+  let blurb: string;
+  if (outcome === "fully_awakened") {
+    blurb = perfectClearance
+      ? "完全復元 · 刻印ロック対象"
+      : "完全復元（判定）";
+  } else if (outcome === "bypass") {
+    blurb = "部分修復 · 迂回稼働（Bypass）";
+  } else {
+    blurb = lineCount === 0 ? "未着手 / 放棄 → Offline" : "修復不足 → Offline";
+  }
+  return {
+    outcome,
+    perfectClearance,
+    digits,
+    loopClosed,
+    lineCount,
+    blurb,
+  };
 }
 
 export function lineEdgeCount(marks: readonly EdgeMark[]): number {
@@ -380,4 +622,67 @@ export function outcomeLabel(o: CircuitOutcome): string {
   if (o === "fully_awakened") return "Fully Awakened";
   if (o === "bypass") return "Bypass";
   return "Offline";
+}
+
+export function rarityLabel(r: BoardRarity): string {
+  return r === "perfect_rare" ? "Perfect rare（可解コア）" : "Flawed majority（不完全基板）";
+}
+
+export function hazardLabel(h: HazardKind): string {
+  if (h === "contradiction") return "矛盾ブロック";
+  if (h === "overdigit") return "過剰数字";
+  if (h === "dense_noise") return "ノイズ充填";
+  return "—";
+}
+
+/**
+ * Monte-Carlo helper for selftests: sample generatePuzzle with a fixed rate
+ * and report perfect vs flawed (+ hazard histogram).
+ */
+export function sampleGeneratorRatios(
+  trials: number,
+  opts: {
+    injectRate: number;
+    cols?: number;
+    rows?: number;
+    seedPrefix?: string;
+  },
+): {
+  trials: number;
+  perfect: number;
+  flawed: number;
+  perfectRate: number;
+  hazards: Record<Exclude<HazardKind, "none">, number>;
+} {
+  const cols = opts.cols ?? 6;
+  const rows = opts.rows ?? 6;
+  const prefix = opts.seedPrefix ?? "ratio";
+  let perfect = 0;
+  let flawed = 0;
+  const hazards: Record<Exclude<HazardKind, "none">, number> = {
+    contradiction: 0,
+    overdigit: 0,
+    dense_noise: 0,
+  };
+  for (let i = 0; i < trials; i++) {
+    // Deterministic per-index RNG so the roll is independent of seed string quirks.
+    const rng = mulberry32(hashSeed(`${prefix}:${i}:roll`));
+    const p = generatePuzzle(`${prefix}-${i}`, cols, rows, {
+      injectRate: opts.injectRate,
+      rng,
+    });
+    if (p.injectedTrue || p.rarity === "perfect_rare") {
+      perfect++;
+    } else {
+      flawed++;
+      if (p.hazard !== "none") hazards[p.hazard]++;
+    }
+  }
+  return {
+    trials,
+    perfect,
+    flawed,
+    perfectRate: trials === 0 ? 0 : perfect / trials,
+    hazards,
+  };
 }
