@@ -163,3 +163,66 @@ button.extract-not-ready {
   padding: 0.3rem 0.55rem;
   font-size: 0.75rem;
 }
+
+/* Large center EXTRACT / return-requirements HUD (always visible on sortie). */
+.extract-req-hud {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  text-align: center;
+  min-width: min(92%, 420px);
+  padding: 0.65rem 1rem 0.75rem;
+  border-radius: 12px;
+  background: #0b0f14cc;
+  border: 2px solid #3d8bfd99;
+  box-shadow: 0 0 24px #3d8bfd33;
+  color: #e8eaed;
+}
+.extract-req-hud.active {
+  border-color: #3dd68ccc;
+  box-shadow: 0 0 28px #3dd68c44;
+  background: #0b1210dd;
+}
+.extract-req-hud.danger {
+  border-color: #f85149cc;
+  box-shadow: 0 0 28px #f8514944;
+  background: #140b0bdd;
+}
+.extract-req-hud .erq-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: #9ecbff;
+  margin-bottom: 0.2rem;
+}
+.extract-req-hud.active .erq-title { color: #3dd68c; }
+.extract-req-hud.danger .erq-title { color: #ff9b9b; }
+.extract-req-hud .erq-seconds {
+  font-size: 1.85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  margin: 0.1rem 0;
+}
+.extract-req-hud .erq-must {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.15rem 0;
+}
+.extract-req-hud .erq-count {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 0.1rem;
+}
+.extract-req-hud .erq-sub {
+  font-size: 0.78rem;
+  color: #9aa0a6;
+  margin-top: 0.2rem;
+}
+.extract-req-hud.idle {
+  opacity: 0.82;
+  padding: 0.45rem 0.75rem;
+}
+.extract-req-hud.idle .erq-seconds { font-size: 1.05rem; font-weight: 700; }

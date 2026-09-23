@@ -1,6 +1,6 @@
 import { clamp, dist } from "./math";
 import type { Balance } from "./balance";
-import type { Stance, Unit, World } from "./types";
+import type { Container, Stance, Unit, World } from "./types";
 import { STANCE_LABEL } from "./types";
 
 export function pushLog(
@@ -319,4 +319,113 @@ export function pickUpFromCamp(world: World): "picked" | "denied" {
     `キャンプから積込：${taken}（残置場 ${camp.stashedCount}）。`,
   );
   return "picked";
+}
+
+
+/** Allocate a unique container id within this sortie. */
+export function nextContainerId(world: World, prefix = "crate"): string {
+  let n = world.containers.length;
+  let id = `${prefix}-${n}`;
+  const used = new Set(world.containers.map((c) => c.id));
+  while (used.has(id)) {
+    n += 1;
+    id = `${prefix}-${n}`;
+  }
+  return id;
+}
+
+/**
+ * Spawn salvage containers at a world position (field loot / purge drop / death drop).
+ * Slight radial offsets so stacked drops remain pickable.
+ */
+export function spawnContainersAt(
+  world: World,
+  at: { x: number; y: number },
+  count: number,
+  opts?: { discovered?: boolean; idPrefix?: string },
+): Container[] {
+  const n = Math.max(0, Math.floor(count));
+  if (n <= 0) return [];
+  const discovered = opts?.discovered ?? true;
+  const prefix = opts?.idPrefix ?? "crate";
+  const spawned: Container[] = [];
+  const pad = 20;
+  for (let i = 0; i < n; i++) {
+    const angle = (Math.PI * 2 * i) / Math.max(1, n) + i * 0.35;
+    const radius = n === 1 ? 0 : 14 + i * 6;
+    const pos = {
+      x: clamp(at.x + Math.cos(angle) * radius, pad, world.balance.worldW - pad),
+      y: clamp(at.y + Math.sin(angle) * radius, pad, world.balance.worldH - pad),
+    };
+    const c: Container = {
+      id: nextContainerId(world, prefix),
+      pos,
+      taken: false,
+      discovered,
+    };
+    world.containers.push(c);
+    spawned.push(c);
+  }
+  return spawned;
+}
+
+function dropUnitCargoToField(world: World, unit: Unit): number {
+  const n = unit.salvagedCount;
+  if (n <= 0) return 0;
+  abortSalvage(unit);
+  unit.salvagedCount = 0;
+  world.salvaged = Math.max(0, world.salvaged - n);
+  spawnContainersAt(world, unit.pos, n, {
+    discovered: true,
+    idPrefix: "purge",
+  });
+  return n;
+}
+
+/**
+ * パージ / キャンプへ降ろす:
+ * - Near camp → deposit carried cargo into camp stash (keeps world.salvaged).
+ * - Otherwise → drop carried cargo onto the field as pickable crates (frees speed for combat).
+ * Affects living friendlies with cargo (wingmen + captain).
+ */
+export function purgeCargo(
+  world: World,
+): "purged" | "denied" {
+  if (world.phase !== "sortie" || !world.leader.alive) return "denied";
+
+  const r = world.balance.interactRadius * 1.5;
+  const camp = world.camp;
+  let deposited = 0;
+  let dropped = 0;
+  const carriers = [world.leader, ...world.wingmen].filter(
+    (u) => u.alive && u.salvagedCount > 0,
+  );
+  if (carriers.length === 0) {
+    pushLog(world, "パージ：積載貨物なし。");
+    return "denied";
+  }
+
+  for (const u of carriers) {
+    if (camp && dist(u.pos, camp.pos) <= r) {
+      deposited += depositUnitIntoCamp(world, u);
+      abortSalvage(u);
+    } else {
+      dropped += dropUnitCargoToField(world, u);
+    }
+  }
+
+  if (deposited <= 0 && dropped <= 0) {
+    pushLog(world, "パージ：降ろす貨物なし。");
+    return "denied";
+  }
+
+  const parts: string[] = [];
+  if (deposited > 0) {
+    parts.push(`キャンプへ ${deposited}（置場 ${camp!.stashedCount}）`);
+  }
+  if (dropped > 0) {
+    parts.push(`戦場へ投下 ${dropped}（軽装化）`);
+  }
+  pushLog(world, `パージ：${parts.join(" · ")}。`);
+  return "purged";
 }

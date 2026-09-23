@@ -75,6 +75,10 @@ export const BALANCE = {
    * Empty → 1.0; full personal capacity → cargoSpeedMulMin.
    */
   cargoSpeedMulMin: 0.45,
+  /** Initial salvage crates placed on the wreck field (not counting death drops). */
+  fieldContainerCount: 20,
+  /** Max containers an enemy may drop on death (roll 0..max inclusive). */
+  enemyDeathDropMax: 2,
 } as const;
 
 export type Balance = typeof BALANCE;

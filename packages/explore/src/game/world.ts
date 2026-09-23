@@ -42,28 +42,86 @@ function makeUnit(
   };
 }
 
+function clampToWorld(x: number, y: number, margin: number): { x: number; y: number } {
+  return {
+    x: Math.min(BALANCE.worldW - margin, Math.max(margin, x)),
+    y: Math.min(BALANCE.worldH - margin, Math.max(margin, y)),
+  };
+}
+
+/**
+ * Scatter many salvage crates across the wreck field.
+ * Deterministic positions (no RNG) so selftests stay stable.
+ * Count from BALANCE.fieldContainerCount — no longer capped near 6.
+ */
 function placeContainers(): Container[] {
-  const spots = [
+  const count = BALANCE.fieldContainerCount;
+  const margin = 90;
+  const spawnAvoid = vec(180, 500);
+  const avoidR = 140;
+  const spots: { x: number; y: number }[] = [];
+
+  // Landmark seeds (readable early-game targets)
+  const landmarks = [
     vec(420, 280),
     vec(780, 360),
     vec(980, 620),
     vec(560, 720),
     vec(1100, 240),
     vec(300, 520),
+    vec(640, 180),
+    vec(200, 780),
+    vec(1250, 480),
+    vec(880, 820),
   ];
-  return spots.map((pos, i) => ({
+  for (const p of landmarks) {
+    if (spots.length >= count) break;
+    spots.push(p);
+  }
+
+  // Fill remaining with a jittered grid covering the map
+  const cols = 5;
+  const rows = 4;
+  const usableW = BALANCE.worldW - margin * 2;
+  const usableH = BALANCE.worldH - margin * 2;
+  let gi = 0;
+  for (let row = 0; row < rows && spots.length < count; row++) {
+    for (let col = 0; col < cols && spots.length < count; col++) {
+      const jx = ((gi * 37) % 17) - 8;
+      const jy = ((gi * 53) % 17) - 8;
+      gi += 1;
+      const x = margin + ((col + 0.5) / cols) * usableW + jx * 6;
+      const y = margin + ((row + 0.5) / rows) * usableH + jy * 6;
+      const pos = clampToWorld(x, y, margin);
+      if (Math.hypot(pos.x - spawnAvoid.x, pos.y - spawnAvoid.y) < avoidR) continue;
+      // Skip near-duplicates of already placed landmarks
+      if (spots.some((s) => Math.hypot(s.x - pos.x, s.y - pos.y) < 55)) continue;
+      spots.push(pos);
+    }
+  }
+
+  // Safety fill if grid skipped too many near spawn
+  let fill = 0;
+  while (spots.length < count && fill < 40) {
+    const i = spots.length + fill;
+    const angle = i * 2.399; // golden-angle-ish
+    const radius = 220 + (i % 7) * 70;
+    const pos = clampToWorld(
+      spawnAvoid.x + Math.cos(angle) * radius,
+      spawnAvoid.y + Math.sin(angle) * radius,
+      margin,
+    );
+    fill += 1;
+    if (spots.some((s) => Math.hypot(s.x - pos.x, s.y - pos.y) < 50)) continue;
+    spots.push(pos);
+  }
+
+  return spots.slice(0, count).map((pos, i) => ({
     id: `crate-${i}`,
-    pos,
+    pos: { ...pos },
     taken: false,
     discovered: false,
   }));
-}
-
-function clampToWorld(x: number, y: number, margin: number): { x: number; y: number } {
-  return {
-    x: Math.min(BALANCE.worldW - margin, Math.max(margin, x)),
-    y: Math.min(BALANCE.worldH - margin, Math.max(margin, y)),
-  };
 }
 
 /**
