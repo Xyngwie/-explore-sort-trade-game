@@ -8,6 +8,7 @@ import {
   applyOrderToAllWingmen,
   campDamageTakenMul,
   cargoSpeedMul,
+  containerNearWaypoint,
   inCampAura,
   isOperationTimedOut,
   onSalvageCompleted,
@@ -136,6 +137,133 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
     intent.moveTarget!.y - w0.waypoint!.y,
   );
   assert.ok(dWp < 1, "raid with scatter waypoint should move toward it");
+}
+
+// --- scatter fan-out: 2+ wingmen get non-identical goals even with enemies ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  world.leader.heading = 0;
+  world.leader.pos = { x: 700, y: 500 };
+  assert.ok(world.wingmen.length >= 2, "need 2+ wingmen");
+  for (const w of world.wingmen) {
+    w.alive = true;
+    w.pos = { ...world.leader.pos };
+    w.stance = "escort";
+    w.waypoint = null;
+  }
+  // Distant enemies that previously made all raid craft stack on one hunt vector.
+  for (const e of world.enemies) {
+    e.alive = true;
+    e.pos = { x: 200, y: 200 };
+  }
+  assert.equal(scatterSearch(world), "applied");
+  const living = world.wingmen.filter((w) => w.alive);
+  const goals = living.map((w) => {
+    assert.ok(w.waypoint, "scatter waypoint required");
+    return `${Math.round(w.waypoint!.x)},${Math.round(w.waypoint!.y)}`;
+  });
+  assert.equal(new Set(goals).size, goals.length, "wingmen scatter goals must differ");
+  const intents = living.map((w) => decideWingman(world, w, 0.016));
+  const intentKeys = intents.map((intent, i) => {
+    assert.ok(intent.moveTarget, "intent moveTarget");
+    const wp = living[i]!.waypoint!;
+    const d = Math.hypot(
+      intent.moveTarget!.x - wp.x,
+      intent.moveTarget!.y - wp.y,
+    );
+    assert.ok(d < 1, "scatter waypoint beats distant hunt so craft fan out");
+    return `${Math.round(intent.moveTarget!.x)},${Math.round(intent.moveTarget!.y)}`;
+  });
+  assert.equal(
+    new Set(intentKeys).size,
+    intentKeys.length,
+    "scatter intents must be non-identical headings/goals",
+  );
+  // Captain remains player-led (no AI waypoint); moveTarget seed only.
+  assert.equal(world.leader.waypoint, null);
+  assert.ok(world.leader.moveTarget != null);
+}
+
+// --- recover fan-out: 2+ crates → distinct assigned crate ids ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  assert.ok(world.wingmen.length >= 2);
+  const living = world.wingmen.filter((w) => w.alive);
+  assert.ok(living.length >= 2);
+  // Stack wingmen so naive nearest-picker would assign the same crate.
+  const base = { x: 500, y: 500 };
+  world.leader.pos = { ...base };
+  for (const w of living) {
+    w.pos = { ...base };
+    w.stance = "escort";
+    w.waypoint = null;
+  }
+  world.containers.forEach((c) => {
+    c.discovered = false;
+    c.taken = true;
+  });
+  const crates = [
+    { id: "fan-a", pos: { x: 560, y: 500 } },
+    { id: "fan-b", pos: { x: 500, y: 560 } },
+    { id: "fan-c", pos: { x: 440, y: 500 } },
+  ];
+  for (const c of crates) {
+    world.containers.push({
+      id: c.id,
+      pos: { ...c.pos },
+      taken: false,
+      discovered: true,
+      glowT: 0,
+    });
+  }
+  const n = applyOrderToAllWingmen(world, "recover");
+  assert.equal(n, living.length);
+  const assignedIds = living.map((w) => {
+    assert.equal(w.stance, "recover");
+    const c = containerNearWaypoint(world, w.waypoint);
+    assert.ok(c, "each recover wingman should get a crate waypoint");
+    return c!.id;
+  });
+  assert.equal(
+    new Set(assignedIds).size,
+    assignedIds.length,
+    "recover must assign different crate ids",
+  );
+}
+
+// --- recover with fewer crates than wingmen → distinct approach goals ---
+{
+  const world = createWorld(bootstrapFromSearch(""));
+  startSortie(world);
+  const living = world.wingmen.filter((w) => w.alive);
+  assert.ok(living.length >= 2);
+  const base = { x: 600, y: 400 };
+  for (const w of living) {
+    w.pos = { ...base };
+    w.stance = "escort";
+    w.waypoint = null;
+  }
+  world.containers.forEach((c) => {
+    c.discovered = false;
+    c.taken = true;
+  });
+  world.containers.push({
+    id: "solo-crate",
+    pos: { x: 650, y: 400 },
+    taken: false,
+    discovered: true,
+    glowT: 0,
+  });
+  assert.equal(applyOrderToAllWingmen(world, "recover"), living.length);
+  const goals = living.map((w) => {
+    assert.ok(w.waypoint);
+    return `${Math.round(w.waypoint!.x)},${Math.round(w.waypoint!.y)}`;
+  });
+  assert.equal(new Set(goals).size, goals.length, "approach goals must differ");
+  const crateHolders = living.filter((w) => containerNearWaypoint(world, w.waypoint));
+  assert.equal(crateHolders.length, 1, "only one unit claims the sole crate");
 }
 
 // --- salvage complete → auto escort ---

@@ -1,5 +1,9 @@
 import { BALANCE } from "./balance";
 import { dist, dist2, type Vec2 } from "./math";
+import {
+  containerNearWaypoint,
+  recoverClaimedContainerIds,
+} from "./orders";
 import type { Container, Unit, WingmanIntent, World } from "./types";
 
 function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number): Unit | null {
@@ -19,11 +23,13 @@ function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number): Unit 
 function nearestDiscoveredContainer(
   pos: Vec2,
   containers: Container[],
+  excludeIds?: Set<string>,
 ): Container | null {
   let best: Container | null = null;
   let bestD = Infinity;
   for (const c of containers) {
     if (c.taken || !c.discovered) continue;
+    if (excludeIds?.has(c.id)) continue;
     const d = dist2(pos, c.pos);
     if (d < bestD) {
       bestD = d;
@@ -103,21 +109,25 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
           trySalvage: true,
         };
       }
+      const claimed = recoverClaimedContainerIds(world, self.id);
+      const assigned = containerNearWaypoint(world, self.waypoint);
       const c =
-        (self.waypoint
-          ? world.containers.find(
-              (x) =>
-                x.discovered &&
-                !x.taken &&
-                dist(x.pos, self.waypoint!) < 40,
-            )
-          : null) ?? nearestDiscoveredContainer(self.pos, world.containers);
+        assigned ??
+        nearestDiscoveredContainer(self.pos, world.containers, claimed);
       if (c) {
         const near = dist(self.pos, c.pos) < b.interactRadius;
         return {
           moveTarget: near ? null : { ...c.pos },
           fireAt: enemy && enemyDist < b.weaponRange * 0.65 ? enemy : null,
           trySalvage: near,
+        };
+      }
+      // Secondary approach goal (no free crate): honor distinct waypoint.
+      if (self.waypoint && dist(self.pos, self.waypoint) > 24) {
+        return {
+          moveTarget: { ...self.waypoint },
+          fireAt: enemy && enemyDist < b.weaponRange * 0.65 ? enemy : null,
+          trySalvage: false,
         };
       }
       return {
@@ -129,6 +139,34 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
     case "raid": {
       // Autonomous aggression — no player click target required.
       // Optional waypoint = scatter-search fan-out (散開捜索); cleared on arrive.
+      // Prefer fan-out until arrived so wingmen do not stack on one hunt vector;
+      // only break for a local engage-range threat.
+      const local = nearestAliveEnemy(self.pos, world.enemies, b.engageRange);
+      if (local) {
+        const d = dist(self.pos, local.pos);
+        const rush = b.weaponRange * 0.4;
+        const dx = local.pos.x - self.pos.x;
+        const dy = local.pos.y - self.pos.y;
+        const len = Math.hypot(dx, dy) || 1;
+        return {
+          moveTarget: {
+            x: local.pos.x - (dx / len) * rush,
+            y: local.pos.y - (dy / len) * rush,
+          },
+          fireAt: d < b.engageRange * 1.35 ? local : null,
+          trySalvage: false,
+        };
+      }
+      if (self.waypoint) {
+        if (dist(self.pos, self.waypoint) > 24) {
+          return {
+            moveTarget: { ...self.waypoint },
+            fireAt: null,
+            trySalvage: false,
+          };
+        }
+        self.waypoint = null;
+      }
       const hunt =
         nearestAliveEnemy(self.pos, world.enemies, b.visionRange * 1.5) ??
         nearestAliveEnemy(self.pos, world.enemies);
@@ -146,16 +184,6 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
           fireAt: d < b.engageRange * 1.35 ? hunt : null,
           trySalvage: false,
         };
-      }
-      if (self.waypoint) {
-        if (dist(self.pos, self.waypoint) > 24) {
-          return {
-            moveTarget: { ...self.waypoint },
-            fireAt: null,
-            trySalvage: false,
-          };
-        }
-        self.waypoint = null;
       }
       // No enemies: loiter near leader without consuming a click target.
       self.patrolAngle += b.patrolAngularSpeed * 0.6 * dt;

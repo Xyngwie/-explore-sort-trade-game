@@ -31,6 +31,61 @@ export function abortSalvage(wing: Unit): void {
   wing.salvageT = 0;
 }
 
+/** Match a recover waypoint to a discovered untaken crate (same threshold as brain). */
+export function containerNearWaypoint(
+  world: World,
+  waypoint: { x: number; y: number } | null | undefined,
+  maxDist = 40,
+): Container | null {
+  if (!waypoint) return null;
+  let best: Container | null = null;
+  let bestD = maxDist;
+  for (const c of world.containers) {
+    if (!c.discovered || c.taken) continue;
+    const d = dist(c.pos, waypoint);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
+}
+
+/** Crate ids already assigned to other living recover wingmen. */
+export function recoverClaimedContainerIds(
+  world: World,
+  exceptWingId?: string,
+): Set<string> {
+  const claimed = new Set<string>();
+  for (const w of world.wingmen) {
+    if (!w.alive || w.stance !== "recover") continue;
+    if (exceptWingId && w.id === exceptWingId) continue;
+    const c = containerNearWaypoint(world, w.waypoint);
+    if (c) claimed.add(c.id);
+  }
+  return claimed;
+}
+
+/**
+ * Distinct stand-off approach when no free crate remains.
+ * slotIndex fans units around focus so paths do not stack.
+ */
+export function recoverApproachWaypoint(
+  world: World,
+  focus: { x: number; y: number },
+  slotIndex: number,
+  slotCount: number,
+): { x: number; y: number } {
+  const n = Math.max(1, slotCount);
+  const angle = (Math.PI * 2 * slotIndex) / n + Math.PI / n;
+  const radius = Math.max(48, world.balance.interactRadius * 2.5);
+  const pad = 20;
+  return {
+    x: clamp(focus.x + Math.cos(angle) * radius, pad, world.balance.worldW - pad),
+    y: clamp(focus.y + Math.sin(angle) * radius, pad, world.balance.worldH - pad),
+  };
+}
+
 /**
  * Apply a wingman order. Raid never requires a map click.
  * Patrol waypoint is optional (defaults to leader-centered orbit).
@@ -80,18 +135,45 @@ export function applyOrder(
       pushLog(world, `${wing.name}：発見済みコンテナなし。`);
       return "denied";
     }
-    let target = discovered[0]!;
-    let best = Infinity;
-    for (const c of discovered) {
-      const d = dist(wing.pos, c.pos);
-      if (d < best) {
-        best = d;
-        target = c;
-      }
-    }
+    const claimed = recoverClaimedContainerIds(world, wing.id);
+    const free = discovered.filter((c) => !claimed.has(c.id));
     wing.stance = "recover";
-    wing.waypoint = { ...target.pos };
-    pushLog(world, `${wing.name}：回収。コンテナへ向かう。`);
+    if (free.length > 0) {
+      let target = free[0]!;
+      let best = Infinity;
+      for (const c of free) {
+        const d = dist(wing.pos, c.pos);
+        if (d < best) {
+          best = d;
+          target = c;
+        }
+      }
+      wing.waypoint = { ...target.pos };
+      pushLog(world, `${wing.name}：回収。コンテナへ向かう。`);
+      return "applied";
+    }
+    // Fewer crates than recover units: distinct approach angles, not identical paths.
+    const focus =
+      discovered.reduce(
+        (best, c) =>
+          dist(wing.pos, c.pos) < dist(wing.pos, best.pos) ? c : best,
+        discovered[0]!,
+      ).pos;
+    const extrasAlready = world.wingmen.filter(
+      (w) =>
+        w.alive &&
+        w.stance === "recover" &&
+        w.id !== wing.id &&
+        !containerNearWaypoint(world, w.waypoint),
+    ).length;
+    const approachSlots = Math.max(3, extrasAlready + 1);
+    wing.waypoint = recoverApproachWaypoint(
+      world,
+      focus,
+      extrasAlready,
+      approachSlots,
+    );
+    pushLog(world, `${wing.name}：回収。別角度から接近。`);
     return "applied";
   }
 
@@ -101,7 +183,8 @@ export function applyOrder(
 
 /**
  * 散開捜索: captain + living wingmen all switch to raid and fan out
- * ~120° apart relative to captain heading (easy clear when 1v1-strong).
+ * on evenly spaced bearings relative to captain heading (captain remains
+ * player-led; wingmen keep fan-out waypoints until arrived).
  */
 export function scatterSearch(world: World): "applied" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";
@@ -119,13 +202,13 @@ export function scatterSearch(world: World): "applied" | "denied" {
   const base = world.leader.heading;
   const origin = world.leader.pos;
   const distOut = world.balance.scatterSearchDist;
-  // Three bearings: forward / +120° / -120° (assign in order to living units).
-  const bearings = [0, (2 * Math.PI) / 3, -(2 * Math.PI) / 3];
+  const n = living.length;
   const pad = 20;
 
-  for (let i = 0; i < living.length; i++) {
+  for (let i = 0; i < n; i++) {
     const unit = living[i]!;
-    const angle = base + bearings[i % bearings.length]!;
+    // Even spacing around the circle so 2+ craft never share one vector.
+    const angle = base + (Math.PI * 2 * i) / n;
     const target = {
       x: clamp(origin.x + Math.cos(angle) * distOut, pad, world.balance.worldW - pad),
       y: clamp(origin.y + Math.sin(angle) * distOut, pad, world.balance.worldH - pad),
@@ -137,12 +220,12 @@ export function scatterSearch(world: World): "applied" | "denied" {
       // Captain stays player-led; seed click-style moveTarget only.
       unit.waypoint = null;
     } else {
-      // Wingmen: raid brain uses waypoint as preferred fan-out search point.
+      // Wingmen: raid brain prefers this fan-out point until arrived.
       unit.waypoint = { ...target };
     }
   }
 
-  pushLog(world, "散開捜索：隊長＋僚機を遊撃で三方向に展開。");
+  pushLog(world, "散開捜索：隊長＋僚機を遊撃で各方角に展開。");
   return "applied";
 }
 
