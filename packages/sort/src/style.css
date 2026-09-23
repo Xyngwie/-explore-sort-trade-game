@@ -162,9 +162,26 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .hud-gauge.low .hud-gauge-fill {
   background: linear-gradient(90deg, #d4a72c 0%, #f0883e 100%);
 }
+/* Imminent junk — stronger color + pulse on the gauge (no banner spam). */
+.hud-gauge.tension .hud-gauge-fill {
+  background: linear-gradient(90deg, #f0883e 0%, #f85149 100%);
+  animation: gauge-tension-pulse 900ms ease-in-out infinite alternate;
+}
+.hud-gauge.tension .hud-v {
+  color: #f85149;
+}
+.hud-gauge.tension .hud-gauge-track {
+  border-color: rgba(248, 81, 73, 0.55);
+  box-shadow: 0 0 8px rgba(248, 81, 73, 0.25);
+}
+@keyframes gauge-tension-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.28); }
+}
 .hud-gauge.depleted .hud-gauge-fill {
   width: 0% !important;
   background: #6e7681;
+  animation: none;
 }
 .hud-gauge.depleted .hud-v {
   color: #9aa0a6;
@@ -211,6 +228,13 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   border-color: rgba(88, 166, 255, 0.4);
   background: linear-gradient(90deg, rgba(26, 75, 140, 0.35), #0d1014 70%);
 }
+.hud-flash-tension {
+  border-color: rgba(248, 81, 73, 0.55);
+  background: linear-gradient(90deg, rgba(120, 40, 30, 0.5), #0d1014 70%);
+}
+.hud-flash-tension .hud-flash-v {
+  color: #f85149;
+}
 .hud-flash-status {
   color: #3fb950;
   font-weight: 600;
@@ -251,6 +275,30 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   font-size: 0.65rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+.hud-yield-toggle {
+  appearance: none;
+  margin: 0;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 167, 44, 0.65);
+  background: #3a3018;
+  color: #ffe8a3;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  touch-action: manipulation;
+  line-height: 1.4;
+  min-height: 0;
+}
+.hud-yield-toggle:hover {
+  filter: brightness(1.1);
+}
+.hud-yield-toggle[data-mode="session"] {
+  border-color: rgba(88, 166, 255, 0.65);
+  background: #1a3348;
+  color: #c8e1ff;
 }
 
 .hud-footer {

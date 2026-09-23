@@ -68,7 +68,9 @@ UI は**1 つのプレイフィールド（盤ステージ）**上でフェー�
 - マッチ: **縦・横**の一直線に同種有効ピースが 3 以上。斜めは対象外。ジャンクは消えない（落下はする）
 - **アクティブ連鎖:** 消去コミット後の **settling**（ゆっくり落下・上補充）中にスワップできる（手数無料）。**すでに着地した下段パネルもロックしない** — そこで作ったマッチは settle を中断して点滅消去し、連鎖数を +1。点滅中のスワップも無料（追加マッチは pending に合流）。settle 完了後の自然再マッチも連鎖カウント増加
 - タイミング定数: `clearBlinkMs`（点滅 ≈ 280ms）、`settleStepMs`（1 行落下／頂上スポーン ≈ **500ms**）。UI は各 settle ティックで 1 行分の fall-in CSS アニメ（`var(--settle-ms)`）を掛け、見た目を滑らかにする
-- スワイプ判定: 移動 ≥ `swipeMinPx`（18px）。軸優位比 `swipeAxisDominanceRatio`（**1.15**）— `max(|dx|,|dy|) >= min * 1.15` なら強い軸で隣とスワップ。ほぼ斜めでも優勢軸を採用し、真の斜め（軸がほぼ等しい）のみ却下
+- スワイプ判定: 移動 ≥ `swipeMinPx`（**16px**）。軸優位比 `swipeAxisDominanceRatio`（**1.12**）— `max(|dx|,|dy|) >= min * 1.12` なら強い軸で隣とスワップ。短フリック／斜め親指のデバイス差向けに微調整。ほぼ斜めでも優勢軸を採用し、真の斜め（軸がほぼ等しい）のみ却下
+- 有効供給ゲージ: `junkGaugeLowRatio` 0.2 → warn、`junkGaugeTensionRatio` 0.08 または残り ≤ `junkGaugeTensionAbsolute`（= boardCols）→ tension（色＋短いテレグラフ）。ジャンク移行バナーは出さない
+- 産出チップ: 今回クリア（wave）／セッション累積（session）を HUD トグルで切替
 - 手数: 通常スワップ＝1。点滅・落下補充中のスワップは無料。せり上げ操作は無い
 - **終了（マッチなし）:** idle（`clearing` / `settling` のアクティブ連鎖外）でスワップしてもマッチができない場合、即 `finishRefine`（残りパネルの無限並べ替えを禁止）。落下・点滅中の非マッチ・仕込みスワップは終了しない
 - `craftMultiplier` 既定 1.0。explore→sort の `?craftMultiplier=` または `circuitBonuses` compact の craft があればそれを使う

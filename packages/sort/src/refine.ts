@@ -59,17 +59,34 @@ export const SORT_V0_RULES = {
   settleStepMs: 500,
   /**
    * Min pointer travel (px) before a gesture is treated as a swipe.
-   * Kept modest so short mobile flicks still register.
+   * Micro-tuned 18→16 for device variance: short mobile / high-DPI flicks
+   * still register while taps stay below threshold.
    */
-  swipeMinPx: 18,
+  swipeMinPx: 16,
   /**
    * Axis-dominance ratio for swipe direction (player-favorable).
    * Accept when max(|dx|,|dy|) >= min(|dx|,|dy|) * swipeAxisDominanceRatio.
-   * 1.15 ≈ require the strong axis to be ≥15% larger → accept gestures within
-   * ~41° of a cardinal axis; reject only near-equal true diagonals (ratio < 1.15).
-   * More forgiving than a tight axial cone; still NG for fully diagonal.
+   * 1.12 ≈ strong axis ≥12% larger → accept within ~42° of a cardinal;
+   * reject near-equal true diagonals (ratio < 1.12). Slightly more forgiving
+   * than 1.15 for fat-finger / angled-thumb variance across devices.
    */
-  swipeAxisDominanceRatio: 1.15,
+  swipeAxisDominanceRatio: 1.12,
+  /**
+   * Valid-supply gauge "low" band (warn color). Ratio of bag leftover / budget.
+   * Not a junk-transition banner — color shift only.
+   */
+  junkGaugeLowRatio: 0.2,
+  /**
+   * Valid-supply gauge "tension" band (imminent junk). Ratio ≤ this, OR
+   * remaining ≤ junkGaugeTensionAbsolute, triggers stronger color + telegraph.
+   */
+  junkGaugeTensionRatio: 0.08,
+  /**
+   * Absolute remaining-valid count that also enters tension
+   * (one board row = boardCols). Complements the ratio threshold for
+   * small-budget sessions where 8% is too coarse.
+   */
+  junkGaugeTensionAbsolute: 6,
   /** Swaps scale with budget so small demos stay short. */
   movesPerValidPiece: 0.35,
   minMoves: 12,
@@ -1356,6 +1373,9 @@ export function resolveNearStuckHint(
   return findHintSwap(s.board, s.cols, s.rows);
 }
 
+/** Visual severity for the remaining-valid supply gauge (no junk banner). */
+export type JunkGaugeLevel = "ok" | "low" | "tension" | "depleted";
+
 /** Snapshot for the play-HUD remaining-valid supply gauge (bag vs budget). */
 export type ValidSupplyGauge = {
   remaining: number;
@@ -1363,12 +1383,15 @@ export type ValidSupplyGauge = {
   /** 0..1 fraction of budget still in the supply bag. */
   ratio: number;
   depleted: boolean;
+  /** ok → low → tension → depleted; drives gauge color / telegraph. */
+  level: JunkGaugeLevel;
 };
 
 /**
  * Remaining valid panels still in the supply bag (not yet dropped).
  * Junk never sits in the bag — when this hits 0, subsequent refill is junk-only.
  * Prefer this over a junk-transition banner for supply visualization.
+ * Tension = imminent junk (ratio / absolute thresholds in SORT_V0_RULES).
  */
 export function validSupplyGaugeState(
   s: Pick<RefineLive, "bag" | "validPieceBudget">,
@@ -1376,10 +1399,25 @@ export function validSupplyGaugeState(
   const remaining = remainingValidInBag(s.bag);
   const budget = Math.max(0, s.validPieceBudget);
   const ratio = budget <= 0 ? 0 : Math.min(1, remaining / budget);
+  const depleted = remaining <= 0;
+  let level: JunkGaugeLevel;
+  if (depleted) {
+    level = "depleted";
+  } else if (
+    ratio <= SORT_V0_RULES.junkGaugeTensionRatio ||
+    remaining <= SORT_V0_RULES.junkGaugeTensionAbsolute
+  ) {
+    level = "tension";
+  } else if (ratio <= SORT_V0_RULES.junkGaugeLowRatio) {
+    level = "low";
+  } else {
+    level = "ok";
+  }
   return {
     remaining,
     budget,
     ratio,
-    depleted: remaining <= 0,
+    depleted,
+    level,
   };
 }
