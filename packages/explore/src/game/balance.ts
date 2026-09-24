@@ -1,4 +1,18 @@
-/** Single tuning table for the explore behavior slice. */
+/**
+ * Single tuning table for the explore behavior slice.
+ *
+ * Primary playtest knobs (ISSUE-02 / run-20260924-002):
+ * - moveSpeed / wingmanSpeed — captain & wingman base move
+ * - cargoSpeedMulMin (+ cargoSpeedRefSlots) — payload slowdown floor
+ *   (~45% speed at soft ref slots; aka payloadPenalty)
+ * - visionRange / weaponRange / engageRange — detection & combat range
+ * - defaultTimeSec — sortie clock (starting ammo lives in
+ *   `@estg/shared` DEFAULT_EXPEDITION_LOADOUT.ammoStock; keep explore-local
+ *   combat/move knobs here, not in trade/economy files)
+ *
+ * Prefer editing this file (or the re-export index `./constants.ts`) over
+ * sprinkling literals in brain/sim/orders.
+ */
 export const BALANCE = {
   worldW: 1400,
   worldH: 1000,
@@ -81,9 +95,10 @@ export const BALANCE = {
   /** World units to fan out on 散開捜索 (raid search). */
   scatterSearchDist: 280,
   /**
-   * Carried-cargo move slowdown (friendly units).
+   * Carried-cargo move slowdown (friendly units) — playtest "payloadPenalty".
    * speedMul = lerp(1, cargoSpeedMulMin, min(1, salvagedCount / cargoSpeedRefSlots)).
-   * Empty → 1.0; at soft ref slots → cargoSpeedMulMin. No hard carry MAX.
+   * Empty → 1.0; at soft ref slots → cargoSpeedMulMin (~0.45 / 45% speed).
+   * No hard carry MAX.
    */
   cargoSpeedMulMin: 0.45,
   /** Camp aura radius (world units) for combat DR + light-load speed tip. */
@@ -123,6 +138,47 @@ export const BALANCE = {
   wingHitWarnSec: 1.6,
   /** Wing panel: seconds to keep 「交戦中」 after firing / engage intent. */
   wingEngageWarnSec: 1.2,
+
+  // --- brain / sim fractions formerly inline (refactor-only; values unchanged) ---
+  /** Escort/patrol nearest-enemy scan = visionRange * this. */
+  visionHuntMul: 1.25,
+  /** Raid long-range hunt = visionRange * this. */
+  visionRaidHuntMul: 1.5,
+  /** Enemy chase trigger = visionRange * this. */
+  enemyChaseVisionMul: 1.2,
+  /** Soft patrol leash: abandon chase when farther than patrolRadius * this. */
+  patrolLeashMul: 1.8,
+  /** Recover: fire range while channeling salvage = weaponRange * this. */
+  recoverChannelFireMul: 0.7,
+  /** Recover: fire range while seeking crate / waypoint = weaponRange * this. */
+  recoverSeekFireMul: 0.65,
+  /** Distance at which a wingman considers a waypoint arrived. */
+  waypointArriveDist: 24,
+  /** Non-quirk raid stand-off as fraction of weaponRange. */
+  raidDefaultRushFrac: 0.4,
+  /** Cling raid: stand-off scale toward leader (of rush distance). */
+  quirkClingRushBias: 0.85,
+  /** Raid: open fire when foe within engageR * this. */
+  raidEngageFireMul: 1.35,
+  /** Raid idle loiter radii (cling / default / decoy). */
+  raidLoiterCling: 42,
+  raidLoiterDefault: 70,
+  raidLoiterDecoy: 95,
+  /** Raid loiter angular speed = patrolAngularSpeed * this. */
+  raidLoiterAngularMul: 0.6,
+  /** Patrol orbit wobble amplitude (world units) and frequency factor. */
+  patrolWobbleAmp: 10,
+  patrolWobbleFreq: 2.1,
+  /** Leader WASD synthetic move-target lookahead (world units). */
+  wasdMoveLookahead: 40,
+  /** Bullet vs unit hit radius padding. */
+  bulletHitPadding: 4,
+  /** Friendly/enemy bullet time-to-live (seconds). */
+  bulletTtlSec: 1.2,
+  /** Camera follow: leader sits at this fraction of view width from left. */
+  cameraLeadXFrac: 0.4,
+  /** Camera follow: leader vertical centering fraction. */
+  cameraLeadYFrac: 0.5,
 } as const;
 
 export type Balance = typeof BALANCE;
