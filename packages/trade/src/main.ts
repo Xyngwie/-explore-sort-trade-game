@@ -1,5 +1,6 @@
 import "./style.css";
 import {
+  CTA_COPY,
   BASIC_MATERIAL_LABEL_JA,
   PART_LABEL_JA,
   isBasicMaterialId,
@@ -276,7 +277,7 @@ function circuitRows(s: HangarState): string {
             <td>
               <div class="row" style="margin:0;justify-content:flex-end">
                 <button type="button" class="secondary" data-act="select-circuit" data-id="${escapeHtml(c.circuitId)}">選択</button>
-                <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">${locked ? "閲覧へ" : "修復へ"}</a>
+                <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">${locked ? CTA_COPY.view : CTA_COPY.toRestore}</a>
                 <button type="button" class="secondary sell-circuit" data-act="sell-circuit" data-id="${escapeHtml(c.circuitId)}" data-price="${price}" data-price-detail="${escapeHtml(priceBrk.detailJa)}" title="最低${priceBrk.base}c + 出来栄え（有効値×3c）で売却">${escapeHtml(priceBrk.buttonJa)}</button>
               </div>
             </td>
@@ -311,7 +312,7 @@ function unopenedPanel(s: HangarState): string {
       <div class="row" style="align-items:center;flex-wrap:wrap;gap:0.5rem">
         <label class="muted" for="input-sort-unopened">仕分数</label>
         <input type="number" id="input-sort-unopened" min="1" max="${Math.max(1, stock)}" step="1" value="${stock > 0 ? stock : 1}" ${sortDisabled ? "disabled" : ""} style="width:4.5rem" />
-        <button type="button" id="btn-sort-unopened" ${sortDisabled ? "disabled" : ""} title="在庫から仕分へ出庫（Explore なし）">仕分へ送る</button>
+        <button type="button" id="btn-sort-unopened" ${sortDisabled ? "disabled" : ""} title="在庫から仕分へ出庫（Explore なし）">${CTA_COPY.toSort}</button>
       </div>
       ${
         buyDisabled
@@ -417,17 +418,17 @@ function nextSortiePanel(s: HangarState): string {
         </div>
       </div>
       <div class="row sortie-actions sortie-actions-tight${emphasizeDeploy ? " sortie-actions-hero" : ""}" aria-label="次の出撃ショートカット">
-        <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener" title="Invade">戦線</a>
+        <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener" title="Invade">${CTA_COPY.toFront}</a>
         ${
           deployUrl
-            ? `<a class="btn${emphasizeDeploy ? " deploy-cta" : ""}" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener" title="Explore">${emphasizeDeploy ? "▶ 探索" : "探索"}</a>`
-            : `<button type="button" disabled title="健在機が必要（Explore）">探索</button>`
+            ? `<a class="btn${emphasizeDeploy ? " deploy-cta" : ""}" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener" title="Explore">${emphasizeDeploy ? "▶ " + CTA_COPY.toExplore : CTA_COPY.toExplore}</a>`
+            : `<button type="button" disabled title="健在機が必要（Explore）">${CTA_COPY.toExplore}</button>`
         }
-        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener" title="Restore">修復</a>
+        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener" title="Restore">${CTA_COPY.toRestore}</a>
         ${
           sortReady
-            ? `<button type="button" class="secondary" id="btn-sortie-sort" title="Sort · 未開封 ${unopenedStock} → 仕分">仕分</button>`
-            : `<button type="button" class="secondary" id="btn-sortie-sort" disabled title="未開封在庫が必要（Sort）">仕分</button>`
+            ? `<button type="button" class="secondary" id="btn-sortie-sort" title="Sort · 未開封 ${unopenedStock} → 仕分">${CTA_COPY.toSort}</button>`
+            : `<button type="button" class="secondary" id="btn-sortie-sort" disabled title="未開封在庫が必要（Sort）">${CTA_COPY.toSort}</button>`
         }
       </div>
       <details class="sortie-details">

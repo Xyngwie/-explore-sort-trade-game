@@ -185,3 +185,22 @@ Pages 未設定でも **build は緑**のままにできる。
 3. Actions で **Deploy Modules Preview** を Run（`ENABLE_GITHUB_PAGES=true` なら deploy まで進む）
 
 **または:** `GH_TOKEN` を `repo` + `workflow` 付きで再発行し、同じ内容を `.github/workflows/` に置いて push。
+
+---
+
+## CTA 用語（横断）
+
+モジュール間の主ボタン表記は `@estg/shared` の `CTA_COPY` / `CTA_CHIP` に統一する。
+
+| 行き先 | Primary |
+|---|---|
+| Sort | 仕分へ |
+| Hub (trade) | 格納庫へ |
+| Explore | 探索へ |
+| Invade | 戦線へ |
+| Restore | 修復へ |
+
+- Secondary retry: `もう一度`（出撃リトライのみ `再出撃`）
+- 結果ステータスはボタン文に埋め込まず chip / note へ
+- すべての `<a>` に `target="_top"`（fullscreen shell リーク防止）
+- ハンドオフ URL キー契約は変更しない（copy / 階層 / `_top` のみ）
