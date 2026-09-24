@@ -388,3 +388,114 @@ button.cover-active {
   background: #1a2e3a;
   color: #cfefff;
 }
+
+/* Subtle corner keyboard shortcut overlay (sortie) */
+.kb-overlay {
+  position: absolute;
+  right: 0.45rem;
+  bottom: 0.45rem;
+  z-index: 3;
+  max-width: 11.5rem;
+  padding: 0.35rem 0.4rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid #2a313caa;
+  background: #0d1014cc;
+  backdrop-filter: blur(2px);
+  box-shadow: 0 4px 14px #00000055;
+  pointer-events: auto;
+  font-size: 0.65rem;
+  line-height: 1.25;
+  color: #c9d1d9;
+}
+.kb-overlay.collapsed {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.kb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+.kb-title {
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: #9aa0a6;
+  text-transform: uppercase;
+}
+.kb-hide,
+.kb-show {
+  appearance: none;
+  margin: 0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid #3d444d;
+  background: #161b22;
+  color: #9aa0a6;
+  font-size: 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.kb-show {
+  padding: 0.25rem 0.45rem;
+  border-color: #2a313c;
+  background: #161b22cc;
+  color: #c9d1d9;
+  box-shadow: 0 2px 8px #00000066;
+}
+.kb-hide:hover,
+.kb-show:hover {
+  border-color: var(--accent);
+  color: #e8eaed;
+}
+.kb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+.kb-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+.kb-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.12rem;
+  flex-shrink: 0;
+}
+.kb-keys kbd {
+  display: inline-block;
+  min-width: 1.1rem;
+  padding: 0.05rem 0.28rem;
+  border-radius: 4px;
+  border: 1px solid #3d444d;
+  background: #21262d;
+  color: #e8eaed;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: inset 0 -1px 0 #0d1014;
+}
+.kb-label {
+  color: #9aa0a6;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 560px) {
+  .kb-overlay:not(.collapsed) {
+    max-width: 9.5rem;
+    font-size: 0.6rem;
+  }
+  .kb-label { max-width: 4.2rem; }
+}

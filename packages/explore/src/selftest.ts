@@ -41,6 +41,13 @@ import { BALANCE, threatFromDensity,
   threatFromInvadeSector
 } from "./game/balance";
 import { EXPLORE_TUNABLES } from "./game/constants";
+import {
+  EXPLORE_SHORTCUTS,
+  SHORTCUTS_HIDDEN_KEY,
+  buildKeyboardShortcutsOverlayHtml,
+  isShortcutsOverlayHidden,
+  setShortcutsOverlayHidden,
+} from "./game/keyboardOverlay";
 import { DEFAULT_EXPEDITION_LOADOUT } from "@estg/shared";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
@@ -1378,6 +1385,44 @@ function advancePinned(
   assert.equal(BALANCE.bulletTtlSec, 1.2);
   assert.equal(BALANCE.wasdMoveLookahead, 40);
   console.log("explore tunables constants ok");
+}
+
+// --- keyboard shortcuts overlay (EXPLORE-01 / run-20260924-all-modules-001) ---
+{
+  const keysFlat = EXPLORE_SHORTCUTS.flatMap((r) => [...r.keys]).join(" ");
+  assert.ok(keysFlat.includes("WASD"), "lists WASD");
+  assert.ok(keysFlat.includes("Space"), "lists Space");
+  assert.ok(keysFlat.includes("X"), "lists extract X");
+  assert.ok(keysFlat.includes("C"), "lists camp C");
+  assert.ok(keysFlat.includes("V"), "lists cover V");
+  assert.ok(!keysFlat.includes("Q"), "no unused Q");
+  assert.ok(!keysFlat.includes("Z"), "no unused Z");
+
+  const html = buildKeyboardShortcutsOverlayHtml({ hidden: false });
+  assert.ok(html.includes('id="kb-overlay"'), "overlay root");
+  assert.ok(html.includes("<kbd>WASD</kbd>"), "WASD kbd");
+  assert.ok(html.includes("<kbd>Space</kbd>"), "Space kbd");
+  assert.ok(html.includes("<kbd>X</kbd>"), "X kbd");
+  assert.ok(html.includes("抽出要請"), "extract label JA");
+  assert.ok(html.includes("kb-overlay-toggle"), "toggle control");
+
+  const collapsed = buildKeyboardShortcutsOverlayHtml({ hidden: true });
+  assert.ok(collapsed.includes("collapsed"), "collapsed class");
+  assert.ok(collapsed.includes(">キー<"), "show chip JA");
+  assert.ok(!collapsed.includes("<kbd>"), "no key rows when hidden");
+
+  const map = new Map<string, string>();
+  const store = {
+    getItem(k: string) { return map.has(k) ? map.get(k)! : null; },
+    setItem(k: string, v: string) { map.set(k, String(v)); },
+  };
+  assert.equal(isShortcutsOverlayHidden(store), false);
+  setShortcutsOverlayHidden(true, store);
+  assert.equal(store.getItem(SHORTCUTS_HIDDEN_KEY), "1");
+  assert.equal(isShortcutsOverlayHidden(store), true);
+  setShortcutsOverlayHidden(false, store);
+  assert.equal(isShortcutsOverlayHidden(store), false);
+  console.log("explore keyboard shortcuts overlay ok");
 }
 
 console.log("explore selftest: ok");
