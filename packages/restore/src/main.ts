@@ -1,5 +1,6 @@
 import "./style.css";
 import {
+  CTA_COPY,
   encodeEdgeState,
   isPerfectCircuitDebugContext,
   sanitizeEditorName,
@@ -508,7 +509,7 @@ function render(): void {
         <button type="button" class="btn ghost" id="btn-clear" ${locked ? "disabled" : ""}>Clear edges</button>
         ${
           session.source === "demo"
-            ? `<a class="btn ghost" id="link-next-board" href="${escapeHtml(nextHref)}">次の基板を引く</a>`
+            ? `<a class="btn ghost" id="link-next-board" href="${escapeHtml(nextHref)}" target="_top" rel="noopener">${CTA_COPY.again}</a>`
             : ""
         }
       </div>
@@ -527,7 +528,8 @@ function render(): void {
         <tr><td>return URL</td><td class="mono">${escapeHtml(hubUrl)}</td></tr>
       </table>
       <div class="actions">
-        <a class="btn" id="link-return-trade" href="${escapeHtml(hubUrl)}">Hub（trade）へ戻る · ${escapeHtml(outcomeLabel(status))}</a>
+        <span class="cta-chip outcome-${status}" aria-label="${escapeHtml(outcomeLabel(status))}">${escapeHtml(outcomeLabel(status))}</span>
+        <a class="btn" id="link-return-trade" href="${escapeHtml(hubUrl)}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>
       </div>
     </div>
   `;

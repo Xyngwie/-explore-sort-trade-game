@@ -620,3 +620,28 @@ a.btn {
   from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+.cta-chip {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: #c9b896;
+  background: rgba(80, 60, 30, 0.45);
+  border: 1px solid rgba(180, 140, 70, 0.35);
+  vertical-align: middle;
+}
+.cta-chip.outcome-fully_awakened {
+  color: #9ad4b1;
+  border-color: rgba(80, 160, 110, 0.45);
+  background: rgba(30, 70, 50, 0.45);
+}
+.cta-chip.outcome-bypass {
+  color: #d4c49a;
+}
+.cta-chip.outcome-offline {
+  color: #9aa0a6;
+  background: rgba(40, 44, 50, 0.55);
+}
