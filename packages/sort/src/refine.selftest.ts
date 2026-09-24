@@ -60,6 +60,7 @@ import {
   buildValidSupplyGaugeHtml,
   buildYieldPreviewFromDelta,
   formatYieldPreviewChips,
+  nextYieldPreviewMode,
 } from "./playHud";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -1001,22 +1002,29 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(SORT_V0_RULES.settleStepMs === 500, "settleStepMs");
   assert(SORT_V0_RULES.initialFillRows === SORT_V0_RULES.boardRows, "dense fill all rows");
   assert(SORT_V0_RULES.chainWindowMs === SORT_V0_RULES.clearBlinkMs, "chainWindowMs alias");
-  assert(SORT_V0_RULES.swipeMinPx === 18, "swipeMinPx");
-  assert(SORT_V0_RULES.swipeAxisDominanceRatio === 1.15, "swipeAxisDominanceRatio");
+  assert(SORT_V0_RULES.swipeMinPx === 16, "swipeMinPx micro-tune");
+  assert(SORT_V0_RULES.swipeAxisDominanceRatio === 1.12, "swipeAxisDominanceRatio micro-tune");
+  assert(SORT_V0_RULES.junkGaugeLowRatio === 0.2, "junkGaugeLowRatio");
+  assert(SORT_V0_RULES.junkGaugeTensionRatio === 0.08, "junkGaugeTensionRatio");
+  assert(
+    SORT_V0_RULES.junkGaugeTensionAbsolute === SORT_V0_RULES.boardCols,
+    "junkGaugeTensionAbsolute = one board row",
+  );
 }
 
 // Swipe axis judgment: player-favorable dominance, reject true diagonal
 {
   assert(classifySwipeAxis(0, 0) == null, "zero is tap");
   assert(classifySwipeAxis(10, 0) == null, "below min px is tap");
+  assert(classifySwipeAxis(16, 0) === "horizontal", "at min px registers");
   assert(classifySwipeAxis(30, 0) === "horizontal", "pure horizontal");
   assert(classifySwipeAxis(0, 30) === "vertical", "pure vertical");
   assert(classifySwipeAxis(-40, 5) === "horizontal", "mostly left");
   assert(classifySwipeAxis(5, 40) === "vertical", "mostly down");
-  // Almost-diagonal but dominant: 40 vs 34 → ratio ≈ 1.176 >= 1.15
-  assert(classifySwipeAxis(40, 34) === "horizontal", "almost-diagonal still horizontal");
-  assert(classifySwipeAxis(34, 40) === "vertical", "almost-diagonal still vertical");
-  // True / near-equal diagonal: 40 vs 38 → ratio ≈ 1.05 < 1.15
+  // Almost-diagonal but dominant: 40 vs 35 → ratio ≈ 1.143 >= 1.12
+  assert(classifySwipeAxis(40, 35) === "horizontal", "almost-diagonal still horizontal");
+  assert(classifySwipeAxis(35, 40) === "vertical", "almost-diagonal still vertical");
+  // True / near-equal diagonal: 40 vs 38 → ratio ≈ 1.053 < 1.12
   assert(classifySwipeAxis(40, 38) == null, "near-equal diagonal rejected");
   assert(classifySwipeAxis(40, 40) == null, "exact diagonal rejected");
   assert(classifySwipeAxis(-35, 35) == null, "exact diagonal rejected (signs)");
@@ -1128,13 +1136,23 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(full.budget === 10, "gauge budget");
   assert(Math.abs(full.ratio - 0.3) < 1e-9, "gauge ratio 3/10");
   assert(!full.depleted, "gauge not depleted with bag");
+  // remaining 3 ≤ absolute tension (6) → tension even though ratio 0.3 > low
+  assert(full.level === "tension", "absolute remaining overrides ratio for tension");
+
+  const ok = validSupplyGaugeState({
+    bag: Array.from({ length: 40 }, () => "food" as PieceKind),
+    validPieceBudget: 100,
+  });
+  assert(ok.level === "ok", "0.4 ratio + remaining>6 → ok");
 
   const empty = validSupplyGaugeState({ bag: [], validPieceBudget: 50 });
   assert(empty.remaining === 0 && empty.depleted, "empty bag → depleted");
   assert(empty.ratio === 0, "depleted ratio 0");
+  assert(empty.level === "depleted", "empty → depleted level");
 
   const zeroBudget = validSupplyGaugeState({ bag: [], validPieceBudget: 0 });
   assert(zeroBudget.ratio === 0 && zeroBudget.depleted, "zero budget safe");
+  assert(zeroBudget.level === "depleted", "zero budget level");
 
   // junk never counts as supply in the bag filter
   const mixed: PieceKind[] = ["junk", "food", "junk"];
@@ -1143,6 +1161,21 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     validPieceBudget: 2,
   });
   assert(junky.remaining === 1, "junk filtered from remaining");
+  // 1 remaining ≤ absolute tension (6) → tension even if ratio is 0.5
+  assert(junky.level === "tension", "absolute remaining triggers tension");
+
+  const low = validSupplyGaugeState({
+    bag: Array.from({ length: 15 }, () => "food" as PieceKind),
+    validPieceBudget: 100,
+  });
+  assert(Math.abs(low.ratio - 0.15) < 1e-9, "low ratio 0.15");
+  assert(low.level === "low", "0.15 is low (≤0.2, >0.08, >6 abs)");
+
+  const tensionRatio = validSupplyGaugeState({
+    bag: Array.from({ length: 7 }, () => "food" as PieceKind),
+    validPieceBudget: 100,
+  });
+  assert(tensionRatio.level === "tension", "0.07 ratio → tension");
 }
 
 // Play HUD includes remaining-valid gauge (no junk-transition banner copy)
@@ -1168,6 +1201,16 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   });
   assert(depletedHud.includes("depleted"), "depleted class when bag empty");
   assert(depletedHud.includes('aria-valuenow="0"'), "depleted valuenow 0");
+  assert(depletedHud.includes('data-level="depleted"'), "depleted data-level");
+
+  const tensionHud = buildValidSupplyGaugeHtml({
+    bag: ["food", "food", "food"],
+    validPieceBudget: 50,
+  });
+  assert(tensionHud.includes(" tension"), "tension class near junk");
+  assert(tensionHud.includes('data-level="tension"'), "tension data-level");
+  assert(tensionHud.includes("ジャンク間近"), "tension aria text");
+  assert(!tensionHud.includes("ジャンク移行"), "still no junk-transition banner");
 }
 
 
@@ -1403,6 +1446,60 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(cta.includes("未開封のまま格納庫へ"), "cargo skip CTA JA");
   assert(cta.includes('id="btn-skip-cargo-hub"'), "cargo skip button id");
   assert(cta.includes("depositUnopenedContainers=3"), "CTA carries deposit");
+}
+
+// Junk-tension telegraph + session yield toggle (no junk banner)
+{
+  assert(nextYieldPreviewMode("wave") === "session", "wave → session");
+  assert(nextYieldPreviewMode("session") === "wave", "session → wave");
+
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 41);
+  s = {
+    ...s,
+    bag: ["food", "food", "food", "food"],
+    cleared: { food: 5, material: 2, energy: 1 },
+    lastClearDelta: { food: 3, material: 0, energy: 0 },
+    playMode: "settling",
+    chainCount: 1,
+    statusMsg: null,
+  };
+
+  const waveFb = buildTopFeedbackHtml(s, { yieldMode: "wave" });
+  assert(waveFb.includes("hud-flash-yield"), "wave yield flash");
+  assert(waveFb.includes('data-mode="wave"'), "wave toggle mode");
+  assert(waveFb.includes(">今回<"), "wave toggle label JA");
+  assert(waveFb.includes("食3"), "wave shows clear delta pieces");
+  assert(waveFb.includes("+3"), "wave chip from delta");
+
+  const sessionFb = buildTopFeedbackHtml(s, { yieldMode: "session" });
+  assert(sessionFb.includes('data-mode="session"'), "session toggle mode");
+  assert(sessionFb.includes(">累積<"), "session toggle label JA");
+  assert(sessionFb.includes("食5"), "session shows cumulative food");
+  assert(sessionFb.includes("部2"), "session cumulative material");
+  assert(sessionFb.includes("電1"), "session cumulative energy");
+
+  const tensionFb = buildTopFeedbackHtml(s, {
+    showJunkTension: true,
+    yieldMode: "wave",
+  });
+  assert(tensionFb.includes("hud-flash-tension"), "tension telegraph when armed");
+  assert(tensionFb.includes("ジャンク間近"), "tension telegraph copy");
+  assert(tensionFb.includes("緊張"), "tension kicker JA");
+  assert(!tensionFb.includes("ジャンク移行"), "telegraph is not junk-transition banner");
+
+  const quietTension = buildTopFeedbackHtml(s, { showJunkTension: false });
+  assert(!quietTension.includes("hud-flash-tension"), "no telegraph when not armed");
+
+  const hud = buildPlayHudHtml(s, {
+    showJunkTension: true,
+    yieldMode: "session",
+  });
+  assert(hud.includes("hud-gauge"), "gauge present with tension opts");
+  assert(hud.includes(" tension") || hud.includes('data-level="tension"'), "gauge tension class");
+  assert(!hud.includes("ジャンク移行"), "HUD never junk-transition banner");
 }
 
 console.log("sort refine.selftest: ok");

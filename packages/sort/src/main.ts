@@ -26,7 +26,9 @@ import {
   testPlayQueryExample,
   tickSettleStep,
   toCraftingResult,
+  validSupplyGaugeState,
   TEST_PLAY_CONTAINERS,
+  type JunkGaugeLevel,
   type PieceKind,
   type RefineLive,
 } from "./refine";
@@ -46,6 +48,8 @@ import {
 import {
   buildBriefingBagDifficultyHtml,
   buildPlayHudHtml,
+  nextYieldPreviewMode,
+  type YieldPreviewMode,
 } from "./playHud";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
@@ -60,6 +64,13 @@ let sessionSource: SessionSource = "location";
 /** Until this timestamp (ms), show bag-difficulty intro flash at top HUD. */
 let bagIntroUntil = 0;
 let bagIntroTimer: ReturnType<typeof setTimeout> | null = null;
+/** Until this timestamp (ms), show short junk-tension telegraph (gauge-driven). */
+let junkTensionUntil = 0;
+let junkTensionTimer: ReturnType<typeof setTimeout> | null = null;
+/** Last observed gauge level — detect rising into tension for one-shot telegraph. */
+let lastGaugeLevel: JunkGaugeLevel | null = null;
+/** Yield chips: per-clear wave vs session cumulative (toggle in HUD). */
+let yieldPreviewMode: YieldPreviewMode = "wave";
 
 function clearBagIntroTimer() {
   if (bagIntroTimer != null) {
@@ -76,6 +87,36 @@ function armBagIntroFlash(ms = 2800) {
     bagIntroUntil = 0;
     if (state.phase === "play") render();
   }, ms);
+}
+
+function clearJunkTensionTimer() {
+  if (junkTensionTimer != null) {
+    clearTimeout(junkTensionTimer);
+    junkTensionTimer = null;
+  }
+}
+
+function armJunkTensionFlash(ms = 2200) {
+  clearJunkTensionTimer();
+  junkTensionUntil = Date.now() + ms;
+  junkTensionTimer = setTimeout(() => {
+    junkTensionTimer = null;
+    junkTensionUntil = 0;
+    if (state.phase === "play") render();
+  }, ms);
+}
+
+/** Fire a short telegraph when the gauge first enters tension (not depleted). */
+function maybeArmJunkTensionFromState(s: RefineLive) {
+  if (s.phase !== "play") {
+    lastGaugeLevel = null;
+    return;
+  }
+  const level = validSupplyGaugeState(s).level;
+  const enteredTension =
+    level === "tension" && lastGaugeLevel != null && lastGaugeLevel !== "tension";
+  lastGaugeLevel = level;
+  if (enteredTension) armJunkTensionFlash();
 }
 
 function tradeBaseUrl(): string {
@@ -151,6 +192,7 @@ function setState(next: RefineLive) {
   ) {
     schedulePlayTimers();
   }
+  maybeArmJunkTensionFromState(state);
   render();
 }
 
@@ -338,6 +380,8 @@ function render() {
 
   const showBagIntro =
     state.phase === "play" && bagIntroUntil > Date.now();
+  const showJunkTension =
+    state.phase === "play" && junkTensionUntil > Date.now();
   const nearStuckHint =
     state.phase === "play" ? resolveNearStuckHint(state) : null;
 
@@ -366,7 +410,11 @@ function render() {
       <div class="play-field" data-phase="${escapeHtml(stage)}" aria-label="プレイフィールド">
         ${
           state.phase === "play"
-            ? buildPlayHudHtml(state, { showBagIntro })
+            ? buildPlayHudHtml(state, {
+                showBagIntro,
+                showJunkTension,
+                yieldMode: yieldPreviewMode,
+              })
             : ""
         }
         <div class="stage">
@@ -400,14 +448,26 @@ function render() {
   document.getElementById("btn-finish")?.addEventListener("click", () => {
     clearChainTimer();
     clearBagIntroTimer();
+    clearJunkTensionTimer();
     bagIntroUntil = 0;
+    junkTensionUntil = 0;
+    lastGaugeLevel = null;
     setState(finishRefine(state));
   });
   document.getElementById("btn-again")?.addEventListener("click", () => {
     clearChainTimer();
     clearBagIntroTimer();
+    clearJunkTensionTimer();
     bagIntroUntil = 0;
+    junkTensionUntil = 0;
+    lastGaugeLevel = null;
     setState(resolveRestartState(sessionSource, window.location.search));
+  });
+  document.getElementById("btn-yield-mode")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    yieldPreviewMode = nextYieldPreviewMode(yieldPreviewMode);
+    if (state.phase === "play") render();
   });
   root.querySelectorAll<HTMLButtonElement>("button.cell[data-idx]").forEach((btn) => {
     btn.addEventListener("click", (e) => {

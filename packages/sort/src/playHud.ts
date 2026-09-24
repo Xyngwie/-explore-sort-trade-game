@@ -61,22 +61,46 @@ export function buildYieldPreviewFromDelta(
   return yieldBagFromClearedWithMultiplier(delta, craftMultiplier);
 }
 
+/** Per-clear wave vs session-cumulative yield chip source. */
+export type YieldPreviewMode = "wave" | "session";
+
+export const YIELD_PREVIEW_MODE_LABEL_JA: Record<YieldPreviewMode, string> = {
+  wave: "今回",
+  session: "累積",
+};
+
+/** Toggle target for the yield-mode button. */
+export function nextYieldPreviewMode(mode: YieldPreviewMode): YieldPreviewMode {
+  return mode === "wave" ? "session" : "wave";
+}
+
 /**
  * Remaining valid-panel supply gauge for the play HUD.
  * Visualizes bag leftover vs validPieceBudget — no junk-transition banner.
+ * Levels: ok → low → tension (imminent junk color + telegraph) → depleted.
  */
 export function buildValidSupplyGaugeHtml(
   s: Pick<RefineLive, "bag" | "validPieceBudget">,
 ): string {
   const g = validSupplyGaugeState(s);
   const pct = Math.round(g.ratio * 1000) / 10; // one decimal for CSS width
-  const depletedCls = g.depleted ? " depleted" : g.ratio <= 0.2 ? " low" : "";
-  const label = g.depleted
-    ? "有効供給なし（以降ジャンク）"
-    : `残り有効 ${g.remaining}/${g.budget}`;
+  const levelCls =
+    g.level === "depleted"
+      ? " depleted"
+      : g.level === "tension"
+        ? " tension"
+        : g.level === "low"
+          ? " low"
+          : "";
+  const label =
+    g.level === "depleted"
+      ? "有効供給なし（以降ジャンク）"
+      : g.level === "tension"
+        ? `ジャンク間近 残り有効 ${g.remaining}/${g.budget}`
+        : `残り有効 ${g.remaining}/${g.budget}`;
   return `
     <div
-      class="hud-gauge${depletedCls}"
+      class="hud-gauge${levelCls}"
       role="meter"
       aria-label="残り有効パネル"
       aria-valuemin="0"
@@ -84,6 +108,7 @@ export function buildValidSupplyGaugeHtml(
       aria-valuenow="${g.remaining}"
       aria-valuetext="${escapeHtml(label)}"
       title="${escapeHtml(label)}"
+      data-level="${g.level}"
     >
       <div class="hud-gauge-meta">
         <span class="hud-k">有効</span>
@@ -96,15 +121,24 @@ export function buildValidSupplyGaugeHtml(
   `;
 }
 
+export type TopFeedbackOpts = {
+  showBagIntro?: boolean;
+  /** Brief top telegraph when gauge first enters tension (not a junk banner). */
+  showJunkTension?: boolean;
+  /** Wave (per-clear) vs session cumulative yield chips. Default wave. */
+  yieldMode?: YieldPreviewMode;
+};
+
 /**
  * Top feedback strip: chain count, yield preview, status — never a center overlay.
  */
 export function buildTopFeedbackHtml(
   s: RefineLive,
-  opts?: { showBagIntro?: boolean },
+  opts?: TopFeedbackOpts,
 ): string {
   const parts: string[] = [];
   const craft = resolveCraftMultiplier(s.inbound);
+  const yieldMode: YieldPreviewMode = opts?.yieldMode ?? "wave";
 
   // Bag difficulty (briefly at session start) — scale + how far until junk.
   if (opts?.showBagIntro) {
@@ -117,6 +151,20 @@ export function buildTopFeedbackHtml(
         <span class="hud-flash-note">ジャンク変換まで ${untilJunk}</span>
       </div>
     `);
+  }
+
+  // Short junk-tension telegraph (gauge already shifted) — not a persistent banner.
+  if (opts?.showJunkTension) {
+    const g = validSupplyGaugeState(s);
+    if (g.level === "tension") {
+      parts.push(`
+        <div class="hud-flash hud-flash-tension" role="status" aria-live="polite">
+          <span class="hud-flash-k">緊張</span>
+          <span class="hud-flash-v">ジャンク間近</span>
+          <span class="hud-flash-note">有効残り ${g.remaining}</span>
+        </div>
+      `);
+    }
   }
 
   // Active chain / simultaneous clear visualization (top, not center).
@@ -139,11 +187,22 @@ export function buildTopFeedbackHtml(
     `);
   }
 
-  // Yield preview from the clear that just committed (non-blocking top chips).
-  const yieldBag = buildYieldPreviewFromDelta(s.lastClearDelta, craft);
+  // Yield chips: per-clear wave and/or session cumulative (toggle).
+  const waveDelta = s.lastClearDelta;
+  const sessionCounts = s.cleared;
+  const sourceCounts: ClearedCounts | null =
+    yieldMode === "session"
+      ? sessionCounts
+      : waveDelta;
+  const yieldBag = buildYieldPreviewFromDelta(sourceCounts, craft);
   const { chips, extra } = formatYieldPreviewChips(yieldBag);
-  if (chips) {
-    const delta = s.lastClearDelta!;
+  const sessionTotal =
+    sessionCounts.food + sessionCounts.material + sessionCounts.energy;
+  const showYield =
+    chips.length > 0 &&
+    (yieldMode === "session" ? sessionTotal > 0 : waveDelta != null);
+  if (showYield) {
+    const delta = sourceCounts!;
     const pieceBits = [
       delta.food > 0 ? `食${delta.food}` : "",
       delta.material > 0 ? `部${delta.material}` : "",
@@ -151,9 +210,20 @@ export function buildTopFeedbackHtml(
     ]
       .filter(Boolean)
       .join("·");
+    const modeLabel = YIELD_PREVIEW_MODE_LABEL_JA[yieldMode];
+    const nextMode = nextYieldPreviewMode(yieldMode);
+    const nextLabel = YIELD_PREVIEW_MODE_LABEL_JA[nextMode];
     parts.push(`
       <div class="hud-flash hud-flash-yield" role="status" aria-live="polite">
         <span class="hud-flash-k">産出</span>
+        <button
+          type="button"
+          class="hud-yield-toggle"
+          id="btn-yield-mode"
+          data-mode="${yieldMode}"
+          aria-label="産出表示を切り替え（現在 ${escapeHtml(modeLabel)}）"
+          title="タップで${escapeHtml(nextLabel)}表示"
+        >${escapeHtml(modeLabel)}</button>
         <span class="hud-flash-pieces">${escapeHtml(pieceBits)}</span>
         <span class="hud-yield-chips">${chips}${
           extra > 0
@@ -179,11 +249,10 @@ export function buildTopFeedbackHtml(
   return `<div class="hud-feedback" aria-label="プレイフィードバック">${parts.join("")}</div>`;
 }
 
+export type PlayHudOpts = TopFeedbackOpts;
+
 /** Compact play HUD rail: moves / clears / chain + valid-supply gauge + top feedback. */
-export function buildPlayHudHtml(
-  s: RefineLive,
-  opts?: { showBagIntro?: boolean },
-): string {
+export function buildPlayHudHtml(s: RefineLive, opts?: PlayHudOpts): string {
   const chain =
     s.playMode === "clearing" || s.playMode === "settling"
       ? `×${s.chainCount}${s.playMode === "settling" ? " 落下" : " 点滅"}`
