@@ -1,6 +1,8 @@
 import {
   buildSortToTradeUrl,
   buildSortToTradeUrlFromResult,
+  CTA_CHIP,
+  CTA_COPY,
 } from "@estg/shared";
 import {
   createRefineFromLocationSearch,
@@ -56,8 +58,8 @@ export function buildResultRibbonHtml(handoffUrl: string): string {
       <div class="result-ribbon">
         <p class="result-ribbon-title" id="result-ribbon-title">仕分完了！</p>
         <div class="result-ribbon-actions">
-          <a class="btn" id="btn-hangar" href="${href}" target="_top" rel="noopener">格納庫へ</a>
-          <button type="button" class="secondary" id="btn-again">もう一度</button>
+          <a class="btn" id="btn-hangar" href="${href}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>
+          <button type="button" class="secondary" id="btn-again">${CTA_COPY.again}</button>
         </div>
       </div>
     </div>
@@ -124,7 +126,7 @@ export function buildEmptySkipToHubUrl(
  */
 export function buildEmptySkipHubCtaHtml(handoffUrl: string): string {
   const href = escapeHtml(handoffUrl);
-  return `<a class="btn" id="btn-skip-hub" href="${href}" target="_top" rel="noopener">格納庫へ戻る</a>`;
+  return `<a class="btn" id="btn-skip-hub" href="${href}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>`;
 }
 
 /**
@@ -166,5 +168,7 @@ export function buildCargoSkipToHubUrl(
 /** Secondary CTA on briefing — deposit cans as 未開封, skip refine. */
 export function buildCargoSkipHubCtaHtml(handoffUrl: string): string {
   const href = escapeHtml(handoffUrl);
-  return `<a class="btn secondary" id="btn-skip-cargo-hub" href="${href}" target="_top" rel="noopener">未開封のまま格納庫へ</a>`;
+  // Status (未開封) as chip — button text stays tertiary hub CTA only.
+  return `<span class="cta-chip" aria-label="${CTA_CHIP.unopened}">${CTA_CHIP.unopened}</span>
+<a class="btn secondary" id="btn-skip-cargo-hub" href="${href}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>`;
 }

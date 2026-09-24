@@ -42,6 +42,6 @@ npm run test -w @estg/explore
 1b. （任意）invade→explore: `?sectorX=&sectorY=&density=&intelFlags=&engage=&enemyCells=` → 脅威バイアス + 漁場バナー（`invadeIntelBannerText`）  
 2. 出撃 → 探索発見 → 回収（完了で自動帯同）→ 抽出要請（搭乗円）／撤退  
 3. sort へサルベージ URL、ids があるとき hub へ摩耗 URL（フラット returnKind + MechWearReport）  
-4. localhost では「拠点へ摩耗報告」が `http://localhost:5175/` を向く  
+4. localhost では「格納庫へ（摩耗は chip）」が `http://localhost:5175/` を向く  
 
 試し方: [`docs/EXPLORE_IO_V2.md`](../../../docs/EXPLORE_IO_V2.md) §9
