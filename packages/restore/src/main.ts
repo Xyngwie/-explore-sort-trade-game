@@ -29,6 +29,14 @@ import {
   stripInboundSearchFromLocation,
   type RestoreSession,
 } from "./session";
+import {
+  LOOP_CELEBRATE_MS,
+  buildLoopCelebrateNoteHtml,
+  effectSettleClass,
+  shouldArmLoopCelebrate,
+  slitherLoopCelebrateClass,
+  type LoopCelebrateState,
+} from "./loopCelebrate";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const showInjectionDetails = isPerfectCircuitDebugContext({
@@ -63,6 +71,10 @@ let noiseFlashEdge: number | null = null;
 let noiseFlashTimer: ReturnType<typeof setTimeout> | null = null;
 /** Short JA toast after breaking/interfering with a noise edge. */
 let noiseToast: string | null = null;
+/** Loop-close celebrate settle window (ms timestamp). */
+let celebrateUntil = 0;
+let celebrateTimer: ReturnType<typeof setTimeout> | null = null;
+let prevLoopClosed = false;
 
 // Consume trade→restore keys so a refresh uses local session / storage.
 if (session.source === "handoff-board" || session.source === "handoff-id") {
@@ -186,6 +198,7 @@ function boardHtml(
   activeLoopEdges: ReadonlySet<number>,
   scoringCells: ReadonlySet<string>,
   noiseEdges: ReadonlySet<number>,
+  celebrate: LoopCelebrateState,
 ): string {
   const { cols, rows, clues } = puzzle;
   const parts: string[] = [];
@@ -247,7 +260,8 @@ function boardHtml(
     noiseToast != null
       ? `<div class="noise-toast" role="status">${escapeHtml(noiseToast)}</div>`
       : "";
-  return `<div class="slither-wrap">${toast}<div class="slither${locked ? " locked" : ""}${session.hazard !== "none" ? " hazard-board" : ""}" style="--cols:${cols}">${parts.join("")}</div></div>`;
+  const celebrateCls = slitherLoopCelebrateClass(celebrate);
+  return `<div class="slither-wrap">${toast}${buildLoopCelebrateNoteHtml(celebrate)}<div class="slither${locked ? " locked" : ""}${session.hazard !== "none" ? " hazard-board" : ""}${celebrateCls}" style="--cols:${cols}">${parts.join("")}</div></div>`;
 }
 
 function outcomeBanner(status: CircuitOutcome, blurb: string): string {
@@ -264,6 +278,7 @@ function digitBar(
   effectLabel: string,
   activeLoopEdgeCount: number,
   loopCount: number,
+  celebrate: LoopCelebrateState,
 ): string {
   const pct = Math.round(rate * 100);
   const loopNote =
@@ -271,12 +286,13 @@ function digitBar(
       ? `有効ループ ${activeLoopEdgeCount}辺` +
         (loopCount > 1 ? `（${loopCount}ループ中の最小）` : "")
       : "ループなし → 効果 0";
+  const settleCls = effectSettleClass(celebrate);
   return `<div class="board-meters">
     <div class="digit-meter" aria-label="digit satisfaction ${satisfied}/${clueCount}">
       <div class="digit-meter-fill" style="width:${pct}%"></div>
       <span class="digit-meter-label">充足 ${satisfied}/${clueCount} · ${pct}%</span>
     </div>
-    <div class="effect-readout" aria-label="${effectLabel}">
+    <div class="effect-readout${settleCls}" aria-label="${effectLabel}">
       <span class="effect-k">効果値</span>
       <strong class="effect-v">${escapeHtml(effectLabel)}</strong>
     </div>
@@ -341,6 +357,23 @@ function render(): void {
   const scoringCells = new Set(
     effect.scoringCells.map((c) => `${c.x},${c.y}`),
   );
+  if (shouldArmLoopCelebrate(prevLoopClosed, loopClosed)) {
+    celebrateUntil = Date.now() + LOOP_CELEBRATE_MS;
+    if (celebrateTimer != null) clearTimeout(celebrateTimer);
+    celebrateTimer = setTimeout(() => {
+      celebrateTimer = null;
+      celebrateUntil = 0;
+      render();
+    }, LOOP_CELEBRATE_MS);
+  }
+  prevLoopClosed = loopClosed;
+  const celebrating = Date.now() < celebrateUntil;
+  const celebrateState: LoopCelebrateState = {
+    loopClosed,
+    celebrating,
+    perfect,
+    fullyAwakened: status === "fully_awakened",
+  };
   const noiseEdges = hazardNoiseEdgeIndices(
     puzzle.clues,
     puzzle.cols,
@@ -430,7 +463,7 @@ function render(): void {
             ? `<p class="muted">Perfect inject rate ${(session.perfectInjectRate * 100).toFixed(1)}%（未注入）</p>`
             : ""
       }
-      ${boardHtml(activeLoopEdges, scoringCells, noiseEdges)}
+      ${boardHtml(activeLoopEdges, scoringCells, noiseEdges, celebrateState)}
       ${digitBar(
         digits.satisfied,
         digits.clueCount,
@@ -438,6 +471,7 @@ function render(): void {
         effectLabel,
         effect.activeLoopEdgeCount,
         effect.loopCount,
+        celebrateState,
       )}
       ${outcomeEffectPreviewHtml(
         preview.bypass.effect,
