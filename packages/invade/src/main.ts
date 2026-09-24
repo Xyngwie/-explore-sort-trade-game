@@ -43,6 +43,11 @@ import {
   mineCellStatusJa,
 } from "./front-feel";
 import {
+  FLAG_LONG_PRESS_MS,
+  buildFlagOpsGuideHtml,
+  shouldArmFlagLongPress,
+} from "./touchFlag";
+import {
   clearPersistedFrontProgress,
   loadOrCreateFrontSession,
   persistFrontSession,
@@ -505,7 +510,7 @@ function render(): void {
 
     <div class="card">
       <h2 class="card-title">前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）</h2>
-      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。未開マスの色＝危険帯。空白＝探索済。✕＝未解決接触、済＝解決済・再出撃可。左クリック＝開く / 旗・右クリック＝旗。開いたセル＝ルート焦点。</p>
+      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。未開マスの色＝危険帯。空白＝探索済。✕＝未解決接触、済＝解決済・再出撃可。タップ／左クリック＝開く · 長押し／右クリック／旗モード＝旗。開いたセル＝ルート焦点。</p>
       <table>
         <tr><td>状態</td><td>${escapeHtml(statusJa())}</td></tr>
         <tr><td>敵（地雷）</td><td>${board.mineCount}</td></tr>
@@ -537,6 +542,7 @@ function render(): void {
         <button type="button" class="btn ghost" id="btn-clear" ${selected == null || forcedLockActive() ? "disabled" : ""}>焦点クリア</button>
         <button type="button" class="btn ghost" id="btn-skip" ${forcedLockActive() ? "disabled" : ""}>スキップ（quick-battle・ナビなし）</button>
       </div>
+      ${buildFlagOpsGuideHtml(flagMode)}
       <p class="muted" style="margin-top:0.5rem">開いたマス・旗・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。「盤を再生成」は確認のうえ進捗を消します。</p>
       <p class="ok" style="margin-top:0.5rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
     </div>
@@ -600,7 +606,52 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     const sy = Number(btn.dataset.sy);
     if (!Number.isFinite(sx) || !Number.isFinite(sy)) return;
 
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let longPressFired = false;
+
+    const clearLongPress = () => {
+      if (longPressTimer != null) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    const applyFlagAt = () => {
+      const cell = getCell(board, sx, sy);
+      if (!cell || cell.blocked || cell.open) return;
+      const r = toggleFlag(board, sx, sy);
+      if (r.ok) {
+        selected = { sx, sy };
+        skipped = false;
+        lastBoardLog = r.flagged
+          ? `旗立て (${sx},${sy}) · 長押し`
+          : `旗解除 (${sx},${sy}) · 長押し`;
+        saveFrontProgress();
+      }
+      render();
+    };
+
+    btn.addEventListener("pointerdown", (ev) => {
+      if (forcedLockActive()) return;
+      if (!shouldArmFlagLongPress(ev)) return;
+      longPressFired = false;
+      clearLongPress();
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        longPressFired = true;
+        applyFlagAt();
+      }, FLAG_LONG_PRESS_MS);
+    });
+    const cancelLongPress = () => clearLongPress();
+    btn.addEventListener("pointerup", cancelLongPress);
+    btn.addEventListener("pointercancel", cancelLongPress);
+    btn.addEventListener("pointerleave", cancelLongPress);
+
     const onPrimary = () => {
+      if (longPressFired) {
+        longPressFired = false;
+        return;
+      }
       const cell = getCell(board, sx, sy);
       if (!cell || cell.blocked) return;
       if (forcedLockActive()) {
