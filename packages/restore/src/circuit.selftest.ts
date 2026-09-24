@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  LOOP_CELEBRATE_MS,
+  buildLoopCelebrateNoteHtml,
+  effectSettleClass,
+  shouldArmLoopCelebrate,
+  slitherLoopCelebrateClass,
+} from "./loopCelebrate";
+import {
   buildTradeToRestoreUrl,
   createEmptyCircuitBoard,
   decodeEdgeState,
@@ -520,5 +527,57 @@ assert.ok(
   assert.equal(hazardNoiseEdgeIndices(d.clues, 6, 6, "none").size, 0);
 }
 
+
+// RESTORE-01 perfect / closed-loop celebrate (amplifies active-loop)
+{
+  assert.equal(shouldArmLoopCelebrate(false, true), true);
+  assert.equal(shouldArmLoopCelebrate(true, true), false);
+  assert.equal(shouldArmLoopCelebrate(false, false), false);
+  assert.equal(shouldArmLoopCelebrate(true, false), false);
+  assert.ok(LOOP_CELEBRATE_MS >= 800 && LOOP_CELEBRATE_MS <= 1600);
+
+  const closed = {
+    loopClosed: true,
+    celebrating: false,
+    perfect: false,
+  };
+  assert.ok(slitherLoopCelebrateClass(closed).includes("loop-closed"));
+  assert.ok(!slitherLoopCelebrateClass(closed).includes("loop-celebrate"));
+
+  const celeb = {
+    loopClosed: true,
+    celebrating: true,
+    perfect: false,
+  };
+  const cls = slitherLoopCelebrateClass(celeb);
+  assert.ok(cls.includes("loop-closed"));
+  assert.ok(cls.includes("loop-celebrate"));
+  assert.ok(effectSettleClass(celeb).includes("settle"));
+  assert.ok(effectSettleClass(celeb).includes("loop-live"));
+
+  const note = buildLoopCelebrateNoteHtml(celeb);
+  assert.ok(note.includes("loop-celebrate-note"));
+  assert.ok(note.includes("閉ループ成立"));
+  assert.ok(note.includes("active-loop") || note.includes("最小閉ループ"));
+
+  const perfect = {
+    loopClosed: true,
+    celebrating: true,
+    perfect: true,
+    fullyAwakened: true,
+  };
+  assert.ok(slitherLoopCelebrateClass(perfect).includes("loop-perfect"));
+  assert.ok(effectSettleClass(perfect).includes("perfect"));
+  const pnote = buildLoopCelebrateNoteHtml(perfect);
+  assert.ok(pnote.includes("完全ループ成立"));
+
+  const open = buildLoopCelebrateNoteHtml({
+    loopClosed: false,
+    celebrating: false,
+    perfect: false,
+  });
+  assert.equal(open, "");
+  console.log("restore perfect loop celebrate ok");
+}
 
 console.log("restore circuit.selftest ok");
