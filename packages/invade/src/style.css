@@ -408,3 +408,25 @@ a.btn {
   -webkit-user-select: none;
   user-select: none;
 }
+
+.cta-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.cta-chip {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: #c9b896;
+  background: rgba(80, 60, 30, 0.45);
+  border: 1px solid rgba(180, 140, 70, 0.35);
+}
+.cta-chip.danger {
+  color: #f0b4b4;
+  background: rgba(90, 30, 30, 0.5);
+  border-color: rgba(200, 80, 80, 0.45);
+}
