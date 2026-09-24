@@ -69,6 +69,8 @@ import {
   formatCircuitBonusesJa,
   computeCircuitEffectForBoard,
   formatCircuitEffectJa,
+  formatCircuitEffectBreakdownJa,
+  groupCircuitEffectContributions,
   type AggregatedCircuitBonuses,
   type CircuitBoardState,
   type CircuitEffectBreakdown,
@@ -1569,6 +1571,8 @@ export type CircuitHubBriefLine = {
   editor: string | null;
   effect: number;
   effectJa: string;
+  /** Digit contribution breakdown JA (内訳 …). */
+  effectBreakdownJa: string;
 };
 
 export type CircuitHubBrief = {
@@ -1592,6 +1596,7 @@ export function formatCircuitHubBrief(
   const lines: CircuitHubBriefLine[] = list.map((c) => {
     let effect = 0;
     let effectJa = "効果 0";
+    let effectBreakdownJa = "内訳なし";
     try {
       const br: CircuitEffectBreakdown = computeCircuitEffectForBoard(
         c.circuitBoard,
@@ -1599,6 +1604,7 @@ export function formatCircuitHubBrief(
       );
       effect = br.effect;
       effectJa = formatCircuitEffectJa(br);
+      effectBreakdownJa = formatCircuitEffectBreakdownJa(br);
     } catch {
       /* scoring best-effort */
     }
@@ -1611,6 +1617,7 @@ export function formatCircuitHubBrief(
       editor: c.lastEditorName ?? c.circuitBoard.lastEditorName ?? null,
       effect,
       effectJa,
+      effectBreakdownJa,
     };
   });
   if (lines.length === 0) {
@@ -1625,6 +1632,8 @@ export function formatCircuitHubBrief(
 }
 
 export {
+  formatCircuitEffectBreakdownJa,
+  groupCircuitEffectContributions,
   MECH_STATUS_LABEL_JA,
   MECH_FLEET_RULES,
   EXAMPLE_TYPED_REPAIR_COST,

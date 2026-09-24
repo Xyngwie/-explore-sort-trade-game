@@ -120,7 +120,7 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 
 ## 3.4b. 回路売却（仮）
 
-保有回路一覧に **効果値**（Restore/Trade 共通 `computeCircuitEffect*` · 最小閉ループ）を表示し、**売却 仮 = 最低 30c + 出来栄え floor(effect) × 3c**（`$` 相当・既存 `c` 表記）。効果 0 も +30c（最低額のみ）で売却可（在庫クリア）。確認ダイアログは解体と同系統（総額 + 最低/出来栄え内訳）。
+保有回路一覧に **効果値**と**充足数字の内訳**（`formatCircuitEffectBreakdownJa` · 同一最小閉ループ採点）（Restore/Trade 共通 `computeCircuitEffect*` · 最小閉ループ）を表示し、**売却 仮 = 最低 30c + 出来栄え floor(effect) × 3c**（`$` 相当・既存 `c` 表記）。効果 0 も +30c（最低額のみ）で売却可（在庫クリア）。確認ダイアログは解体と同系統（総額 + 最低/出来栄え内訳）。
 
 ## 3.5. レア売却 仮価格表（TBD）
 
@@ -164,7 +164,7 @@ UI の「レア売却 仮価格表」と在庫の「売却 仮Nc」ボタン、�
 10. 「戦線へ」URL に `fromHub=1`（+ 任意 `deployableMechs` / `startingAmmo`）が付く  
 11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（HubSave.circuits 選択またはシード優先）  
 12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
-12b. 「次の出撃」をヒーローに: 探索/戦線/回路の帰還ワンライナー・回路効果値・配備予定/要修理。修理待ち0かつ出撃可なら配備 CTA を強調（HubSave キー追加なし）
+12b. 「次の出撃」をヒーローに（CTA 短縮: 戦線 / 探索 / 修復 / 仕分）: 探索/戦線/回路の帰還ワンライナー・回路効果値・配備予定/要修理。修理待ち0かつ出撃可なら配備 CTA を強調（HubSave キー追加なし）
 13. レア仮価格表が UI に見え、レア在庫の売却が表の単価でクレジット加算・HubSave に残る（非レアは売却不可）
 13b. 保有回路に効果値と「売却 仮Nc」があり、売却で HubSave.circuits から除去・credits += 最低30 + 有効値×3（効果0は +30c 可）
 

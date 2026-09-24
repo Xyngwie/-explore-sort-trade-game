@@ -248,6 +248,8 @@ function circuitRows(s: HangarState): string {
           const line = effectById.get(c.circuitId);
           const effect = line?.effect ?? 0;
           const effectJa = line?.effectJa ?? `効果 ${effect}`;
+          const effectBreakdownJa =
+            line?.effectBreakdownJa ?? "内訳なし";
           const priceBrk = formatCircuitSellPriceJa(effect);
           const price = priceBrk.total;
           return `<tr>
@@ -267,6 +269,7 @@ function circuitRows(s: HangarState): string {
             </td>
             <td>
               <strong>${escapeHtml(effectJa)}</strong>
+              <div class="muted effect-breakdown">${escapeHtml(effectBreakdownJa)}</div>
               <div class="mono muted">売却 仮 ${price}c（${escapeHtml(priceBrk.detailJa)}）</div>
             </td>
             <td>
@@ -369,10 +372,15 @@ function nextSortiePanel(s: HangarState): string {
   const hasExplore = s.lastExploreReturn != null;
   const hasIntel = s.lastInvadeSector != null;
   const hasCircuit = (s.hub.circuits?.length ?? 0) > 0;
-  const activeEffect =
-    circuits.lines.find((l) => l.active)?.effectJa ??
-    circuits.lines[0]?.effectJa ??
-    "効果 —";
+  const activeLine =
+    circuits.lines.find((l) => l.active) ?? circuits.lines[0] ?? null;
+  const activeEffect = activeLine?.effectJa ?? "効果 —";
+  const activeBreakdown = activeLine?.effectBreakdownJa ?? "";
+  const unopenedStock = Math.max(
+    0,
+    Math.floor(s.hub.unopenedContainers ?? 0),
+  );
+  const sortReady = unopenedStock >= 1;
 
   return `
     <div class="card sortie-card sortie-hero${emphasizeDeploy ? " sortie-ready-deploy" : ""}">
@@ -383,13 +391,18 @@ function nextSortiePanel(s: HangarState): string {
         </div>
         <span class="pill sortie-ready">${escapeHtml(ready.readinessLabelJa)}</span>
       </div>
-      <p class="muted sortie-sub">帰還サマリーを確認し、修理が終わったら配備へ。探索 / 戦線 / 回路の起点です。</p>
+      <p class="muted sortie-sub">帰還を確認し、短距離で次へ。戦線 / 探索 / 修復 / 仕分（未開封）。</p>
       <div class="sortie-returns" aria-label="帰還ワンライナー">
         <h3 class="sortie-h3">帰還サマリー</h3>
         <p class="${hasExplore ? "ok" : "muted"} sortie-line">探索: ${escapeHtml(digest.exploreJa)}</p>
         <p class="${hasIntel ? "ok" : "muted"} sortie-line">戦線: ${escapeHtml(digest.invadeJa)}</p>
         <p class="${hasCircuit ? "ok" : "muted"} sortie-line">回路: ${escapeHtml(digest.restoreJa)}</p>
         <p class="sortie-line effect-line"><span class="effect-k">回路効果値</span> <strong>${escapeHtml(activeEffect)}</strong></p>
+        ${
+          activeBreakdown
+            ? `<p class="muted sortie-line effect-breakdown">${escapeHtml(activeBreakdown)}</p>`
+            : ""
+        }
         <p class="muted sortie-line">回路ボーナス: ${escapeHtml(bonuses)}</p>
       </div>
       <div class="sortie-grid">
@@ -402,14 +415,19 @@ function nextSortiePanel(s: HangarState): string {
           ${repairLine}
         </div>
       </div>
-      <div class="row sortie-actions${emphasizeDeploy ? " sortie-actions-hero" : ""}">
+      <div class="row sortie-actions sortie-actions-tight${emphasizeDeploy ? " sortie-actions-hero" : ""}" aria-label="次の出撃ショートカット">
+        <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener" title="Invade">戦線</a>
         ${
           deployUrl
-            ? `<a class="btn${emphasizeDeploy ? " deploy-cta" : ""}" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener">${emphasizeDeploy ? "▶ 探索へ配備（準備完了）" : "探索へ配備"}</a>`
-            : `<button type="button" disabled title="健在機が必要">探索へ配備</button>`
+            ? `<a class="btn${emphasizeDeploy ? " deploy-cta" : ""}" id="link-deploy" href="${escapeHtml(deployUrl)}" target="_top" rel="noopener" title="Explore">${emphasizeDeploy ? "▶ 探索" : "探索"}</a>`
+            : `<button type="button" disabled title="健在機が必要（Explore）">探索</button>`
         }
-        <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener">戦線へ</a>
-        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener">回路修復へ</a>
+        <a class="btn secondary" id="link-restore" href="${escapeHtml(restoreUrl)}" target="_top" rel="noopener" title="Restore">修復</a>
+        ${
+          sortReady
+            ? `<button type="button" class="secondary" id="btn-sortie-sort" title="Sort · 未開封 ${unopenedStock} → 仕分">仕分</button>`
+            : `<button type="button" class="secondary" id="btn-sortie-sort" disabled title="未開封在庫が必要（Sort）">仕分</button>`
+        }
       </div>
       <details class="sortie-details">
         <summary>シミュ帰還 · URL</summary>
@@ -615,6 +633,18 @@ function render() {
     }
     render();
   });
+  document.getElementById("btn-sortie-sort")?.addEventListener("click", () => {
+    const stock = Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0));
+    if (stock < 1) return;
+    const launched = launchSortFromUnopened(state, stock);
+    state = launched.state;
+    if (launched.url) {
+      window.location.assign(launched.url);
+      return;
+    }
+    render();
+  });
+
   document.getElementById("link-deploy")?.addEventListener("click", () => {
     const url = buildDeployUrl(state);
     if (!url) return;

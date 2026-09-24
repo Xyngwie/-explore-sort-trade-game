@@ -589,6 +589,8 @@ import {
   circuitVEdgeIndex,
   computeCircuitEffectValue,
   formatCircuitEffectJa,
+  formatCircuitEffectBreakdownJa,
+  groupCircuitEffectContributions,
   isCircuitSingleLoopClosed,
   listCircuitClosedLoops,
   selectSmallestClosedLoop,
@@ -1412,6 +1414,13 @@ console.log("shared handoff-m45 selftest: ok");
   assert.equal(perfect.perfect, true);
   assert.equal(perfect.effect, 8);
   assert.equal(perfect.zeroBonusApplied, 0);
+  assert.equal(perfect.contributions.length, 4);
+  assert.ok(perfect.contributions.every((c) => c.digit === 2 && c.contribution === 2));
+  assert.equal(groupCircuitEffectContributions(perfect).length, 1);
+  assert.equal(groupCircuitEffectContributions(perfect)[0]!.total, 8);
+  assert.ok(formatCircuitEffectBreakdownJa(perfect).includes("2×4(+8)"));
+  assert.ok(formatCircuitEffectBreakdownJa(noLoop).includes("ループなし"));
+
 
 
   // 3×3 board: unit square around cell (1,1) = 4 edges; 0 at (0,0) with 0 lines.
@@ -1523,6 +1532,13 @@ console.log("shared handoff-m45 selftest: ok");
     assert.equal(multi.hasLoop, true);
     assert.equal(multi.activeLoopEdgeCount, 4);
     assert.equal(multi.effect, 4);
+    // multi active contributions: only digit on smallest loop
+    const multiPos = multi.contributions.filter((c) => c.contribution > 0);
+    assert.equal(multiPos.length, 1);
+    assert.equal(multiPos[0]!.digit, 4);
+    assert.equal(multiPos[0]!.contribution, 4);
+    assert.ok(formatCircuitEffectBreakdownJa(multi).includes("4×1(+4)"));
+
     assert.equal(multi.digits.satisfied, 2);
     assert.equal(multi.digits.clueCount, 2);
   }
