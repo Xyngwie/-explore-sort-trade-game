@@ -1,6 +1,9 @@
 import "./style.css";
 import {
+  CTA_CHIP,
+  CTA_COPY,
   HANDOFF_QUERY_KEYS,
+  resolveModuleBaseUrl,
   stripHandoffParams,
 } from "@estg/shared";
 import {
@@ -502,21 +505,22 @@ function renderDom(): void {
                </table>`
             : ""
         }
-        <div class="row">
-          <a class="btn" href="${sortUrl}" target="_top" rel="noopener">精製炉へ渡す</a>
+        <div class="row result-cta-cluster">
+          <a class="btn" href="${sortUrl}" target="_top" rel="noopener">${CTA_COPY.toSort}</a>
           ${
             wearUrl
-              ? `<a class="btn secondary" href="${wearUrl}" target="_top" rel="noopener">拠点へ摩耗報告</a>`
-              : ""
+              ? `<span class="cta-chip" aria-label="${CTA_CHIP.wearReport}">${CTA_CHIP.wearReport}</span>
+                 <a class="btn secondary" href="${wearUrl}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>`
+              : `<a class="btn secondary" href="${escapeHtml(resolveModuleBaseUrl("trade"))}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>`
           }
-          <button type="button" class="secondary" id="btn-again">再出撃</button>
+          <button type="button" class="secondary" id="btn-again">${CTA_COPY.sortieAgain}</button>
         </div>
         <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(sortUrl)}</p>
         ${
           wearUrl
             ? `<p class="mono muted">${escapeHtml(wearUrl)}</p>
                <p class="muted">localhost では trade (:5175) へ直リンク。摩耗は returnKind フラット減（イベント積み上げは後続）。</p>`
-            : `<p class="muted">deployedInstanceIds 無しのため摩耗 URL は省略（v1 互換）。</p>`
+            : `<p class="muted">deployedInstanceIds 無しのため摩耗 URL は省略（v1 互換）。格納庫リンクは Hub 直リンク。</p>`
         }
       </div>`;
     document.getElementById("btn-again")?.addEventListener("click", () => {

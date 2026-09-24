@@ -321,7 +321,7 @@ function blockedOverlayHtml(s: RefineLive, skipHubUrl?: string): string {
         <p class="warn">${escapeHtml(s.blockReason ?? "開始不可")}</p>
         <p class="stage-copy muted">クエリ例を付けてリロードするか、下のテストプレイを使ってください。</p>
         <div class="row stage-actions">
-          <a class="btn secondary" href="${escapeHtml(demoQueryExample())}">デモクエリで開く</a>
+          <a class="btn secondary" href="${escapeHtml(demoQueryExample())}" target="_top" rel="noopener">デモクエリで開く</a>
           <button type="button" class="secondary" id="btn-test-play">コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ</button>
         </div>
         <p class="mono muted stage-meta">長時間: ${escapeHtml(testPlayQueryExample())}</p>

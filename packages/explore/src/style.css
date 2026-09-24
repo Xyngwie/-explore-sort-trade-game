@@ -499,3 +499,21 @@ button.cover-active {
   }
   .kb-label { max-width: 4.2rem; }
 }
+
+/* CTA status chip — wear / context next to hub button */
+.cta-chip {
+  display: inline-block;
+  align-self: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: #c9b896;
+  background: rgba(80, 60, 30, 0.45);
+  border: 1px solid rgba(180, 140, 70, 0.35);
+}
+.result-cta-cluster {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}

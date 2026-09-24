@@ -1378,7 +1378,8 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   );
 
   const cta = buildEmptySkipHubCtaHtml(skipUrl);
-  assert(cta.includes("格納庫へ戻る"), "empty skip CTA label");
+  assert(cta.includes("格納庫へ"), "empty skip CTA label");
+  assert(!cta.includes("格納庫へ戻る"), "empty skip no legacy 戻る");
   assert(cta.includes('id="btn-skip-hub"'), "empty skip button id");
   assert(cta.includes("importMaterials=0"), "CTA href carries handoff keys");
 
@@ -1446,7 +1447,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   );
 
   const cta = buildCargoSkipHubCtaHtml(skipUrl);
-  assert(cta.includes("未開封のまま格納庫へ"), "cargo skip CTA JA");
+  assert(cta.includes("格納庫へ"), "cargo skip CTA JA hub");
+  assert(cta.includes("未開封"), "cargo skip unopened chip");
+  assert(!cta.includes("未開封のまま格納庫へ"), "cargo skip no legacy long label");
   assert(cta.includes('id="btn-skip-cargo-hub"'), "cargo skip button id");
   assert(cta.includes("depositUnopenedContainers=3"), "CTA carries deposit");
 }
