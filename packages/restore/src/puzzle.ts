@@ -5,6 +5,7 @@
  */
 import {
   buildInjectedOrFlawedPuzzle,
+  circuitCellEdgeIndices,
   circuitDigitSatisfaction,
   computeCircuitEffectValue,
   countLineEdgesAroundCell,
@@ -21,6 +22,7 @@ import {
   isCircuitSingleLoopClosed,
   isPerfectCircuitClearance,
   mulberry32,
+  previewBypassVsAwakenedEffect,
   resolveVerifyTrueClues,
   FLAWED_HAZARD_WEIGHTS as SHARED_FLAWED_HAZARD_WEIGHTS,
   type CircuitBoardState,
@@ -104,6 +106,13 @@ export function generateFlawedClues(
 
 /** Detect the 2×2 block of four 3s used by contradiction hazard (for tests/UI). */
 export function hasContradictionBlock(clues: ClueGrid): boolean {
+  return findContradictionBlockOrigin(clues) != null;
+}
+
+/** Top-left of the first 2×2 contradiction block of 3s, or null. */
+export function findContradictionBlockOrigin(
+  clues: ClueGrid,
+): { x: number; y: number } | null {
   const rows = clues.length;
   const cols = clues[0]?.length ?? 0;
   for (let y = 0; y < rows - 1; y++) {
@@ -114,11 +123,80 @@ export function hasContradictionBlock(clues: ClueGrid): boolean {
         clues[y + 1]![x] === 3 &&
         clues[y + 1]![x + 1] === 3
       ) {
-        return true;
+        return { x, y };
       }
     }
   }
-  return false;
+  return null;
+}
+
+/**
+ * Edges that sit next to hazard / noise digits — stronger break/interfere
+ * feedback when the player toggles them (Module 5 Restore UI).
+ */
+export function hazardNoiseEdgeIndices(
+  clues: ClueGrid,
+  cols: number,
+  rows: number,
+  hazard: HazardKind,
+): Set<number> {
+  const out = new Set<number>();
+  if (hazard === "none") return out;
+
+  const addCellEdges = (cx: number, cy: number) => {
+    for (const i of circuitCellEdgeIndices(cols, rows, cx, cy)) out.add(i);
+  };
+
+  if (hazard === "contradiction") {
+    const origin = findContradictionBlockOrigin(clues);
+    if (origin) {
+      for (const dy of [0, 1]) {
+        for (const dx of [0, 1]) {
+          addCellEdges(origin.x + dx, origin.y + dy);
+        }
+      }
+      return out;
+    }
+  }
+
+  // overdigit / dense_noise / fallback: edges around every digit cell
+  // (dense fill = "noise" the player fights when wiring).
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const c = clues[y]?.[x];
+      if (c == null) continue;
+      if (hazard === "overdigit" && c < 2) continue;
+      addCellEdges(x, y);
+    }
+  }
+  return out;
+}
+
+export type OutcomeEffectPreview = {
+  bypass: CircuitEffectBreakdown;
+  awakened: CircuitEffectBreakdown;
+  /** True when Fully Awakened would score higher (typically 0→4). */
+  awakenedBetter: boolean;
+};
+
+/** Live Bypass vs Fully Awakened effect numbers for the preview panel. */
+export function previewOutcomeEffects(
+  clues: ClueGrid,
+  marks: readonly EdgeMark[],
+  cols: number,
+  rows: number,
+): OutcomeEffectPreview {
+  const { bypass, awakened } = previewBypassVsAwakenedEffect({
+    clues,
+    marks,
+    cols,
+    rows,
+  });
+  return {
+    bypass,
+    awakened,
+    awakenedBetter: awakened.effect > bypass.effect,
+  };
 }
 
 /** Clue density in [0,1] (digits / cells). */
@@ -272,6 +350,7 @@ export function isLoopClosed(
 export {
   computeCircuitEffectValue,
   formatCircuitEffectJa,
+  previewBypassVsAwakenedEffect,
   type CircuitEffectBreakdown,
 };
 
