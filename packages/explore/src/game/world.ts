@@ -34,6 +34,8 @@ function makeUnit(
     instanceId: partial.instanceId ?? null,
     inCover: partial.inCover ?? false,
     quirk: partial.quirk ?? null,
+    hitWarnT: 0,
+    engageWarnT: 0,
     id: partial.id,
     kind: partial.kind,
     name: partial.name,

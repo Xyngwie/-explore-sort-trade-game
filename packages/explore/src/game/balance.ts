@@ -119,6 +119,10 @@ export const BALANCE = {
   /** Sniper quirk: preferred stand-off as fraction of weaponRange. */
   quirkSniperStandFrac: 0.88,
   quirkSniperEngageMul: 1.15,
+  /** Wing panel: seconds to keep 「被弾警告」 after taking damage. */
+  wingHitWarnSec: 1.6,
+  /** Wing panel: seconds to keep 「交戦中」 after firing / engage intent. */
+  wingEngageWarnSec: 1.2,
 } as const;
 
 export type Balance = typeof BALANCE;
