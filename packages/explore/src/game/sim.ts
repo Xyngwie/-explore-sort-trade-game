@@ -72,7 +72,7 @@ function spawnBullet(
     alive: true,
     pos: { ...from.pos },
     vel: { x: dir.x * speed, y: dir.y * speed },
-    ttl: 1.2,
+    ttl: world.balance.bulletTtlSec,
     damage: fromEnemy ? world.balance.enemyDamage : world.balance.bulletDamage,
     fromEnemy,
     ownerId: from.id,
@@ -114,7 +114,7 @@ function updateBullets(world: World, dt: number): void {
     const targets = b.fromEnemy ? friendlyUnits(world) : world.enemies;
     for (const t of targets) {
       if (!t.alive) continue;
-      if (dist(b.pos, t.pos) <= t.radius + 4) {
+      if (dist(b.pos, t.pos) <= t.radius + world.balance.bulletHitPadding) {
         b.alive = false;
         // Resolve cover hit chance (shooter accuracy / target incoming).
         const shooter = b.fromEnemy
@@ -213,7 +213,7 @@ function updateEnemies(world: World, dt: number): void {
       }
     }
     if (!nearest) continue;
-    if (best < world.balance.visionRange * 1.2) {
+    if (best < world.balance.visionRange * world.balance.enemyChaseVisionMul) {
       moveToward(e, nearest.pos, world.balance.enemySpeed, dt, world);
       if (best < world.balance.weaponRange) tryFire(world, e, nearest, true);
     }
@@ -223,12 +223,12 @@ function updateEnemies(world: World, dt: number): void {
 function updateCamera(world: World): void {
   const lead = world.leader.pos;
   world.camera.x = clamp(
-    lead.x - world.camera.w * 0.4,
+    lead.x - world.camera.w * world.balance.cameraLeadXFrac,
     0,
     world.balance.worldW - world.camera.w,
   );
   world.camera.y = clamp(
-    lead.y - world.camera.h * 0.5,
+    lead.y - world.camera.h * world.balance.cameraLeadYFrac,
     0,
     world.balance.worldH - world.camera.h,
   );
@@ -547,8 +547,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (input.move.x !== 0 || input.move.y !== 0) {
       const n = norm(input.move);
       leader.moveTarget = {
-        x: leader.pos.x + n.x * 40,
-        y: leader.pos.y + n.y * 40,
+        x: leader.pos.x + n.x * world.balance.wasdMoveLookahead,
+        y: leader.pos.y + n.y * world.balance.wasdMoveLookahead,
       };
     } else if (input.clickMove) {
       leader.moveTarget = { ...input.clickMove };

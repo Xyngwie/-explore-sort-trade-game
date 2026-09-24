@@ -40,6 +40,8 @@ import { BALANCE, threatFromDensity,
   ENGAGE_BRIEFING_LABEL,
   threatFromInvadeSector
 } from "./game/balance";
+import { EXPLORE_TUNABLES } from "./game/constants";
+import { DEFAULT_EXPEDITION_LOADOUT } from "@estg/shared";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
@@ -1358,6 +1360,24 @@ function advancePinned(
     decoyDist < clingDist,
     `decoy should stand closer to foe than cling (${decoyDist} vs ${clingDist})`,
   );
+}
+
+// --- explore tunables constants aggregation (ISSUE-02) ---
+{
+  assert.equal(EXPLORE_TUNABLES.moveSpeed, BALANCE.moveSpeed);
+  assert.equal(EXPLORE_TUNABLES.wingmanSpeed, BALANCE.wingmanSpeed);
+  assert.equal(EXPLORE_TUNABLES.payloadPenalty, BALANCE.cargoSpeedMulMin);
+  assert.equal(EXPLORE_TUNABLES.cargoSpeedMulMin, 0.45);
+  assert.equal(EXPLORE_TUNABLES.weaponRange, BALANCE.weaponRange);
+  assert.equal(EXPLORE_TUNABLES.engageRange, BALANCE.engageRange);
+  assert.equal(EXPLORE_TUNABLES.visionRange, BALANCE.visionRange);
+  assert.equal(EXPLORE_TUNABLES.startingAmmo, DEFAULT_EXPEDITION_LOADOUT.ammoStock);
+  assert.equal(BALANCE.visionHuntMul, 1.25);
+  assert.equal(BALANCE.recoverChannelFireMul, 0.7);
+  assert.equal(BALANCE.waypointArriveDist, 24);
+  assert.equal(BALANCE.bulletTtlSec, 1.2);
+  assert.equal(BALANCE.wasdMoveLookahead, 40);
+  console.log("explore tunables constants ok");
 }
 
 console.log("explore selftest: ok");
