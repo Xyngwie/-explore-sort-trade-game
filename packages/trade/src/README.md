@@ -20,8 +20,8 @@ npm run dev:trade
 5. 修理（集計 / 型付き）· スクラップ  
 5b. レア YieldBag 売却（明示仮価格表 `RARE_SELL_PRICE_TABLE` · TBD）  
 5c. 保有回路: 効果値表示 + 売却（仮 = 最低30c + 有効値×3c · 共通スコア / 効果0は +30c 可）  
-5d. **未開封コンテナ**（`hub.unopenedContainers`）: 表示 · 購入（仮 15c/個 · 数量指定）· 仕分へ出庫（explore→sort 契約・在庫消費）· sort スキップ預け（`depositUnopenedContainers`）取込  
-6. 「戦線へ」「回路修復へ」で invade / restore プレビュー URL（HANDOFF_M45）  
+5d. **未開封コンテナ**（`hub.unopenedContainers`）: 表示 · 購入（仮 15c/個 · 数量指定）· 仕分へ（explore→sort 契約・在庫消費）· sort スキップ預け（`depositUnopenedContainers`）取込  
+6. 「戦線へ」「修復へ」で invade / restore プレビュー URL（HANDOFF_M45）  
 
 localhost 往復: trade `:5175` ↔ explore `:5173` / invade `:5176` / restore `:5177`  
 

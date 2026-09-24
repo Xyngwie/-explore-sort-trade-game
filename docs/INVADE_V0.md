@@ -109,11 +109,11 @@ P(mine | d) ≈ 0.05 + density * 0.20   // 近傍薄 → 前線 ~25%
 2. HQ は開始時から開放され、地雷にならない  
 3. `d >= 12` は壁（選択・開放不可）と分かる  
 4. 盤進行が `intelFlags`（と軽微な density）に載る  
-5. 地雷踏みで `engage=forced` + 隣接敵の「この漁場で強制出撃」が出る
+5. 地雷踏みで `engage=forced` + 隣接敵の「探索へ（強制交戦 chip）」が出る
 5b. 強制戦闘中は盤・旗・スキップ等を禁止（強制出撃のみ）。ブラウザ戻るで全機大破を Hub/Trade へ渡す
-5c. 開く／旗後、グリッド直下から「この漁場で出撃」できる（セル出撃バー）  
-6. 旗セル選択で `engage=raid` + 当該のみの「この漁場で任意出撃」が出る  
-6b. ルート焦点で「この漁場で出撃」（sector/density/intel → explore）と「格納庫へ渡す」が出る  
+5c. 開く／旗後、グリッド直下から「探索へ」できる（セル出撃バー）  
+6. 旗セル選択で `engage=raid` + 当該のみの「探索へ（任意レイド chip）」が出る  
+6b. ルート焦点で「探索へ」（sector/density/intel → explore）と「格納庫へ」が出る  
 7. 「スキップ（quick-battle）」相当の UI 文言があり、スキップ自体はナビしない  
 8. 報酬表示はインテル／ルート表現に留め、コンテナ数の本払いをしない  
 9. `npm run test -w @estg/invade` が通る  
@@ -179,8 +179,8 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 
 - ベース: `sectorX` / `sectorY` / `density` / `intelFlags`
 - **engage 加算（invade→explore）:**
-  - **強制（`engage=forced`）:** 地雷踏み → 当該セル＋隣接地雷セルを `enemyCells` に載せ、「この漁場で強制出撃」
-  - **任意（`engage=raid`）:** 旗を立てたセルを通常クリックで選択 → 当該セルのみを `enemyCells` に載せ、「この漁場で任意出撃」
+  - **強制（`engage=forced`）:** 地雷踏み → 当該セル＋隣接地雷セルを `enemyCells` に載せ、「探索へ（強制交戦 chip）」
+  - **任意（`engage=raid`）:** 旗を立てたセルを通常クリックで選択 → 当該セルのみを `enemyCells` に載せ、「探索へ（任意レイド chip）」
 - `enemyCells` 圧縮形: `sx,sy;sx,sy;...`（`encodeEnemyCells`）
 - `intelFlags` 例: `minesRemaining`, `sectorCleared`, `scoutHazard`, `sectorFlagged`, `scoutClear`（＋ `routeHint` 等）
 - density は盤結果で微調整（掃討完了でクールダウン、hazard でヒート）。**地雷密度カーブ自体は据え置き**（今は濃くしない）
@@ -195,7 +195,7 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 ## 8.8. 強制戦闘ロックとブラウザ戻る（V0 加算）
 
 - 地雷踏み（`board.hitMine`）後、invade は **強制戦闘ロック**: 開く／旗／再生成／スキップ／通常出撃／格納庫渡しを禁止。
-- 許可: グリッド直下（および該当時ハンドオフ）の **「この漁場で強制出撃」** のみ。
+- 許可: グリッド直下（および該当時ハンドオフ）の **「探索へ（強制交戦 chip）」** のみ。
 - ロック中にブラウザの戻る（`popstate`）→ HubSave 全艦隊 `durability=0`（大破）+ trade URL に `intelFlags=allDestroyed` と `returnKind=fail` の wear を載せる。
 - 意図的な強制出撃 CTA は sessionStorage で handoff intent を立て、wipe しない。
 - explore 側も `engage=forced` の出撃中 `popstate` で同様に wipe → trade（結果画面到達後は intent で抑止）。
@@ -231,8 +231,8 @@ npm run dev:invade
 
 1. 前線格子でセルを開く／旗を立てる（HQ は最初から開放・壁は不可）
 2. 開いたセルをクリックしてルート焦点
-3. **この漁場で出撃**（invade→explore · `intelFlags` / `density`）／**格納庫へ渡す**（invade→trade）
-4. 地雷踏み → **この漁場で強制出撃**（`engage=forced` + 隣接敵）／旗セル選択 → **この漁場で任意出撃**（`engage=raid`）
+3. **この漁場で出撃**（invade→explore · `intelFlags` / `density`）／**格納庫へ**（invade→trade）
+4. 地雷踏み → **探索へ（強制交戦 chip）**（`engage=forced` + 隣接敵）／旗セル選択 → **探索へ（任意レイド chip）**（`engage=raid`）
 
 - パッケージ: `packages/invade`（`@estg/invade`）
 - 共有ヘルパ: `@estg/shared` の sector density プレースホルダ

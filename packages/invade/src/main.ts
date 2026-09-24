@@ -1,5 +1,7 @@
 import "./style.css";
 import {
+  CTA_CHIP,
+  CTA_COPY,
   HANDOFF_QUERY_KEYS,
   SECTOR_FRONT_DISTANCE,
   SECTOR_WALL_DISTANCE,
@@ -127,10 +129,10 @@ function bindForcedHandoffLinks(scope: ParentNode): void {
   });
 }
 
-/** Under-grid sortie CTAs — sortie from the focused cell without scrolling to handoff card. */
+/** Single under-grid CTA cluster: 探索へ (+ engage chip) · 格納庫へ. */
 function cellSortieBarHtml(sel: SectorSel | null): string {
   if (sel == null) {
-    return `<p class="muted cell-sortie-hint">セルを開く／旗すると、この直下から「この漁場で出撃」できます。</p>`;
+    return `<p class="muted cell-sortie-hint">セルを開く／旗すると、この直下から「${CTA_COPY.toExplore}」できます。</p>`;
   }
   const info = sectorDensityAt(sel.sx, sel.sy);
   if (info.blocked) {
@@ -138,6 +140,9 @@ function cellSortieBarHtml(sel: SectorSel | null): string {
   }
   const cell = getCell(board, sel.sx, sel.sy);
   const locked = forcedLockActive();
+  const base = sectorPayload(sel);
+  const toTrade = buildInvadeToTradeUrl(base, tradeBaseUrl());
+  const hangarBtn = `<a class="btn secondary" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>`;
 
   const forcedTargets =
     cell && cell.open && cell.mine
@@ -156,15 +161,16 @@ function cellSortieBarHtml(sel: SectorSel | null): string {
     if (toForced == null) {
       return `<div class="cell-sortie-bar locked" role="alert">
         <p class="warn"><strong>強制戦闘ロック</strong> — 他操作不可。ブラウザ戻る＝全機大破（${ALL_DESTROYED_INTEL}）。</p>
-        <p class="muted">地雷マスを選ぶと「この漁場で強制出撃」が表示されます。</p>
+        <p class="muted">地雷マスを選ぶと「${CTA_COPY.toExplore}」（${CTA_CHIP.forcedCombat}）が表示されます。</p>
       </div>`;
     }
     return `<div class="cell-sortie-bar locked" role="alert">
       <p class="warn"><strong>強制戦闘ロック</strong>（地雷踏み）— 解決／ハンドオフまで他操作不可。</p>
-      <p class="muted">ブラウザの戻る＝<strong>全機大破</strong>として格納庫へ渡します。</p>
+      <p class="muted">ブラウザの戻る＝<strong>全機大破</strong>（${CTA_COPY.toHangar}）。</p>
       <p class="muted mono">cell (${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}</p>
-      <div class="actions">
-        <a class="btn danger" data-forced-handoff href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で強制出撃</a>
+      <div class="actions cta-cluster">
+        <span class="cta-chip danger" aria-label="${CTA_CHIP.forcedCombat}">${CTA_CHIP.forcedCombat}</span>
+        <a class="btn danger" data-forced-handoff href="${escapeHtml(toForced)}" target="_top" rel="noopener">${CTA_COPY.toExplore}</a>
       </div>
     </div>`;
   }
@@ -182,16 +188,16 @@ function cellSortieBarHtml(sel: SectorSel | null): string {
       ? buildInvadeToExploreUrl(raidPayload, exploreBaseUrl())
       : null;
 
-  const base = sectorPayload(sel);
   const toExplore = buildInvadeToExploreUrl(base, exploreBaseUrl());
 
   if (toRaid != null) {
     return `<div class="cell-sortie-bar" role="status">
       <p class="ok"><strong>このセルから出撃</strong>（旗 · engage=raid）</p>
       <p class="muted mono">(${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(raidTargets))}</p>
-      <div class="actions">
-        <a class="btn" href="${escapeHtml(toRaid)}" target="_top" rel="noopener">この漁場で任意出撃</a>
-        <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
+      <div class="actions cta-cluster">
+        <span class="cta-chip" aria-label="${CTA_CHIP.raid}">${CTA_CHIP.raid}</span>
+        <a class="btn" href="${escapeHtml(toRaid)}" target="_top" rel="noopener">${CTA_COPY.toExplore}</a>
+        ${hangarBtn}
       </div>
     </div>`;
   }
@@ -199,11 +205,12 @@ function cellSortieBarHtml(sel: SectorSel | null): string {
   // Resolved open mine (#75 cleared hitMine): still sortie-able, distinct look/copy
   if (cell && isResolvedMineCell(cell, board) && toForced != null) {
     return `<div class="cell-sortie-bar resolved" role="status">
-      <p class="ok"><strong>交戦解決済</strong> — 再出撃できます（${sel.sx},${sel.sy}）</p>
+      <p class="ok"><strong>交戦解決済</strong> — ${CTA_COPY.sortieAgain}できます（${sel.sx},${sel.sy}）</p>
       <p class="muted mono">cell (${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))} · ロック解除済</p>
-      <div class="actions">
-        <a class="btn" href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で再出撃（強制交戦）</a>
-        <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
+      <div class="actions cta-cluster">
+        <span class="cta-chip" aria-label="${CTA_CHIP.forcedCombat}">${CTA_CHIP.forcedCombat}</span>
+        <a class="btn" href="${escapeHtml(toForced)}" target="_top" rel="noopener">${CTA_COPY.toExplore}</a>
+        ${hangarBtn}
       </div>
     </div>`;
   }
@@ -217,8 +224,9 @@ function cellSortieBarHtml(sel: SectorSel | null): string {
           : "";
     return `<div class="cell-sortie-bar" role="status">
       <p class="ok"><strong>このセルから出撃</strong>（${sel.sx},${sel.sy}${blankHint}）</p>
-      <div class="actions">
-        <a class="btn" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
+      <div class="actions cta-cluster">
+        <a class="btn" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">${CTA_COPY.toExplore}</a>
+        ${hangarBtn}
       </div>
     </div>`;
   }
@@ -288,11 +296,11 @@ function inboundSummaryHtml(): string {
 
 function handoffActionsHtml(sel: SectorSel | null): string {
   if (forcedLockActive()) {
-    return `<p class="warn">強制戦闘ロック中 — グリッド直下の「この漁場で強制出撃」のみ可。ブラウザ戻る＝全機大破（${ALL_DESTROYED_INTEL}）。</p>
-      <p class="muted">格納庫へ渡す／通常出撃／盤面操作はハンドオフまで禁止。</p>`;
+    return `<p class="warn">強制戦闘ロック中 — グリッド直下の「${CTA_COPY.toExplore}」（${CTA_CHIP.forcedCombat}）のみ可。ブラウザ戻る＝全機大破（${ALL_DESTROYED_INTEL}）。</p>
+      <p class="muted">${CTA_COPY.toHangar}／通常出撃／盤面操作はハンドオフまで禁止。</p>`;
   }
   if (sel == null) {
-    return `<p class="muted">セルを開く／旗／選択すると「この漁場で出撃」（invade→explore）と格納庫リンクが表示されます。</p>`;
+    return `<p class="muted">セルを開く／旗／選択するとグリッド直下に「${CTA_COPY.toExplore}」と「${CTA_COPY.toHangar}」が出ます（invade→explore / invade→trade）。</p>`;
   }
   const info = sectorDensityAt(sel.sx, sel.sy);
   if (info.blocked) {
@@ -300,81 +308,30 @@ function handoffActionsHtml(sel: SectorSel | null): string {
   }
   const cell = getCell(board, sel.sx, sel.sy);
   const base = sectorPayload(sel);
-  const toTrade = buildInvadeToTradeUrl(base, tradeBaseUrl());
-  const toExplore = buildInvadeToExploreUrl(base, exploreBaseUrl());
   const flags = (base.intelFlags ?? []).join(", ") || "—";
 
-  // Forced: stepped open mine → that cell + adjacent mines
   const forcedTargets =
     cell && cell.open && cell.mine
       ? forcedEngageTargets(board, sel.sx, sel.sy)
       : [];
-  const forcedPayload =
-    forcedTargets.length > 0
-      ? sectorPayload(sel, { mode: "forced", enemyCells: forcedTargets })
-      : null;
-  const toForced =
-    forcedPayload != null
-      ? buildInvadeToExploreUrl(forcedPayload, exploreBaseUrl())
-      : null;
-
-  // Voluntary raid: flagged (closed) cell selected → only that cell
   const raidTargets =
     cell && cell.flagged && !cell.open
       ? raidEngageTarget(board, sel.sx, sel.sy)
       : [];
-  const raidPayload =
-    raidTargets.length > 0
-      ? sectorPayload(sel, { mode: "raid", enemyCells: raidTargets })
-      : null;
-  const toRaid =
-    raidPayload != null
-      ? buildInvadeToExploreUrl(raidPayload, exploreBaseUrl())
-      : null;
 
-  const engageBlock = (() => {
-    if (toForced != null && forcedPayload != null && cell) {
-      if (isPendingMineCell(cell, board)) {
-        return `
-        <div class="engage-box forced">
-          <p class="warn"><strong>強制出撃</strong>（地雷踏み · engage=forced · ロック中）</p>
-          <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}（当該＋隣接敵）</p>
-          <div class="actions">
-            <a class="btn danger" data-forced-handoff href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で強制出撃</a>
-          </div>
-        </div>`;
-      }
-      if (isResolvedMineCell(cell, board)) {
-        return `
-        <div class="engage-box raid">
-          <p class="ok"><strong>解決済接触</strong> — 再出撃可（engage=forced を再送可）</p>
-          <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))} · hitMine クリア済</p>
-          <div class="actions">
-            <a class="btn" href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で再出撃（強制交戦）</a>
-          </div>
-        </div>`;
-      }
-    }
-    if (toRaid != null && raidPayload != null) {
-      return `
-        <div class="engage-box raid">
-          <p class="ok"><strong>任意レイド</strong>（旗セル選択 · engage=raid）</p>
-          <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(raidTargets))}（当該のみ）</p>
-          <div class="actions">
-            <a class="btn" href="${escapeHtml(toRaid)}" target="_top" rel="noopener">この漁場で任意出撃</a>
-          </div>
-        </div>`;
-    }
-    return `<p class="muted" style="margin-top:0.5rem">地雷踏み → 強制出撃（隣接敵も巻込み）。旗を立ててそのセルを選択 → 任意レイド（当該のみ）。</p>`;
-  })();
+  let engageNote = `<p class="muted" style="margin-top:0.5rem">地雷踏み → ${CTA_CHIP.forcedCombat}（隣接敵も巻込み）。旗を立ててそのセルを選択 → ${CTA_CHIP.raid}（当該のみ）。CTA はグリッド直下の単一クラスタのみ。</p>`;
+  if (forcedTargets.length > 0 && cell && isPendingMineCell(cell, board)) {
+    engageNote = `<p class="warn" style="margin-top:0.5rem"><strong>${CTA_CHIP.forcedCombat}</strong> · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}（ロック中 · CTA は直下）</p>`;
+  } else if (forcedTargets.length > 0 && cell && isResolvedMineCell(cell, board)) {
+    engageNote = `<p class="ok" style="margin-top:0.5rem"><strong>解決済接触</strong> — ${CTA_COPY.sortieAgain}可 · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}</p>`;
+  } else if (raidTargets.length > 0) {
+    engageNote = `<p class="ok" style="margin-top:0.5rem"><strong>${CTA_CHIP.raid}</strong> · enemyCells: ${escapeHtml(formatEnemyCells(raidTargets))}</p>`;
+  }
 
   return `
     <p class="muted mono">route (${sel.sx},${sel.sy}) · density: ${base.density.toFixed(3)} · intelFlags: ${escapeHtml(flags)}</p>
-    <div class="actions">
-      <a class="btn" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
-      <a class="btn secondary" href="${escapeHtml(toTrade)}" target="_top" rel="noopener">格納庫へ渡す（invade→trade）</a>
-    </div>
-    ${engageBlock}
+    <p class="muted">出撃／格納庫のボタンはグリッド直下の CTA クラスタに集約（重複なし）。</p>
+    ${engageNote}
     <p class="muted" style="margin-top:0.5rem">地雷マス＝敵位置。engage / enemyCells は explore が戦闘に使う（本 salvage なし）。</p>
   `;
 }

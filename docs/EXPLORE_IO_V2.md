@@ -205,8 +205,8 @@ npm run dev:trade    # http://localhost:5175/
 npm run dev:explore  # http://localhost:5173/
 ```
 
-1. trade: 「機体を受領」→ 健在を選択 →「探索へ配備」（URL に `deployedInstanceIds` と `mechDurability`）
-2. explore: 出撃 → **撤退**（または EXTRACT 生還）→ 結果に MechWearReport 表 →「拠点へ摩耗報告」
+1. trade: 「機体を受領」→ 健在を選択 →「探索へ」（URL に `deployedInstanceIds` と `mechDurability`）
+2. explore: 出撃 → **撤退**（または EXTRACT 生還）→ 結果に MechWearReport 表 →「格納庫へ」（摩耗は chip）
 3. trade: ログに `帰還ウェア …`、耐久バー／状態が更新され HubSave に残る（リロードで確認）
 4. ライブ往復が難しい場合: trade の「シミュ帰還 extract/abort/fail」でも同じ適用経路を確認可
 
