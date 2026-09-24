@@ -297,3 +297,96 @@ a.btn.deploy-cta:hover {
   padding: 0.55rem 0.7rem;
   font-size: 0.9rem;
 }
+
+/* Resource history visualization (TRADE-01) — no price changes */
+.res-history {
+  margin: 0;
+}
+.res-history-lead {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+}
+.res-history-empty {
+  margin: 0;
+  font-size: 0.78rem;
+}
+.res-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.res-row {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  gap: 0.4rem;
+  align-items: start;
+  padding: 0.4rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid #2a313c;
+  background: #0d1014;
+}
+.res-row.polarity-gain {
+  border-color: rgba(63, 185, 80, 0.45);
+  background: linear-gradient(90deg, rgba(35, 134, 54, 0.18), #0d1014 55%);
+}
+.res-row.polarity-spend {
+  border-color: rgba(248, 81, 73, 0.45);
+  background: linear-gradient(90deg, rgba(120, 40, 30, 0.22), #0d1014 55%);
+}
+.res-row.polarity-neutral {
+  border-color: rgba(88, 166, 255, 0.35);
+  background: linear-gradient(90deg, rgba(26, 75, 140, 0.2), #0d1014 55%);
+}
+.res-src {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #9aa0a6;
+  padding-top: 0.1rem;
+}
+.res-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.res-title {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #e8eaed;
+}
+.res-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.3rem;
+}
+.res-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid #3d444d;
+  background: #21262d;
+  font-size: 0.65rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: #c9d1d9;
+}
+.res-chip.gain {
+  border-color: rgba(63, 185, 80, 0.55);
+  color: #56d364;
+  background: #143528;
+}
+.res-chip.spend {
+  border-color: rgba(248, 81, 73, 0.55);
+  color: #ff8b8b;
+  background: #3a1818;
+}
+.res-chip.neutral {
+  border-color: rgba(88, 166, 255, 0.45);
+  color: #79b8ff;
+  background: #1a2a44;
+}

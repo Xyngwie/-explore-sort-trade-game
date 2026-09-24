@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  buildResourceHistoryHtml,
+  parseResourceHistoryLine,
+  resourceHistoryFromLog,
+} from "./resourceHistory";
+import {
   HUB_SAVE_STORAGE_KEY,
   MECH_FLEET_RULES,
   buildExploreToHubWearUrl,
@@ -927,6 +932,66 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
       contributions: [],
     }).includes("ループなし"),
   );
+}
+
+// TRADE-01 resource history visualization (log-derived, no price changes)
+{
+  const mat = parseResourceHistoryLine("搬入 materials +12");
+  assert.ok(mat);
+  assert.equal(mat!.polarity, "gain");
+  assert.equal(mat!.source, "sort");
+  assert.equal(mat!.chips[0]!.amount, 12);
+
+  const yf = parseResourceHistoryLine("搬入 yieldBag mat_ration:3, part_actuator:1");
+  assert.ok(yf);
+  assert.equal(yf!.chips.length, 2);
+  assert.equal(yf!.chips[0]!.label, "mat_ration");
+  assert.equal(yf!.chips[0]!.amount, 3);
+
+  const buy = parseResourceHistoryLine("未開封購入 ×2 → −30c（仮 15c）");
+  assert.ok(buy);
+  assert.equal(buy!.polarity, "spend");
+  assert.equal(buy!.chips[0]!.amount, -30);
+
+  const sell = parseResourceHistoryLine("レア売却 mat_rare_core×1 → +40c（仮）");
+  assert.ok(sell);
+  assert.equal(sell!.polarity, "gain");
+  assert.equal(sell!.source, "hub");
+
+  const wear = parseResourceHistoryLine("帰還ウェア extract ×2 · e1 70→60(ok)");
+  assert.ok(wear);
+  assert.equal(wear!.source, "explore");
+  assert.equal(wear!.polarity, "neutral");
+
+  const junk = parseResourceHistoryLine("デモ初期化");
+  assert.equal(junk, null, "non-resource lines ignored");
+
+  const hist = resourceHistoryFromLog([
+    "搬入 materials +5",
+    "デモ初期化",
+    "restore 回路 board_x → awakened · 刻印 無名",
+    "未開封コンテナ預け +3",
+  ]);
+  assert.equal(hist.length, 3);
+  assert.equal(hist[0]!.title.includes("資材"), true);
+  assert.equal(hist[1]!.source, "restore");
+  assert.equal(hist[2]!.chips[0]!.amount, 3);
+
+  const html = buildResourceHistoryHtml([
+    "搬入 materials +5",
+    "未開封購入 ×1 → −15c（仮 15c）",
+  ]);
+  assert.ok(html.includes("res-history"), "history root");
+  assert.ok(html.includes("polarity-gain"), "gain row");
+  assert.ok(html.includes("polarity-spend"), "spend row");
+  assert.ok(html.includes("精製"), "sort source JA");
+  assert.ok(html.includes("拠点"), "hub source JA");
+  assert.ok(html.includes("materials +5") || html.includes("materials +5m") || html.includes("+5"), "gain chip");
+  assert.ok(!html.includes("circuit-sell-prices"), "no price module leak");
+
+  const empty = buildResourceHistoryHtml(["セーブ読込 (x)", "デモ初期化"]);
+  assert.ok(empty.includes("res-history empty") || empty.includes("まだありません"), "empty state");
+  console.log("trade resource history viz ok");
 }
 
 console.log("trade hangar selftest: ok");
