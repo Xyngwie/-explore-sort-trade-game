@@ -75,6 +75,22 @@ export function nextYieldPreviewMode(mode: YieldPreviewMode): YieldPreviewMode {
 }
 
 /**
+ * Visual intensity tier for consecutive clears / combo chain.
+ * Used by HUD flash + board pending cells (no particles).
+ */
+export function comboFeedbackTier(chain: number): "base" | "combo-2" | "combo-hot" {
+  const n = Math.max(0, Math.floor(chain));
+  if (n >= 3) return "combo-hot";
+  if (n >= 2) return "combo-2";
+  return "base";
+}
+
+export function comboTierClass(chain: number): string {
+  const t = comboFeedbackTier(chain);
+  return t === "base" ? "" : t;
+}
+
+/**
  * Remaining valid-panel supply gauge for the play HUD.
  * Visualizes bag leftover vs validPieceBudget — no junk-transition banner.
  * Levels: ok → low → tension (imminent junk color + telegraph) → depleted.
@@ -171,18 +187,24 @@ export function buildTopFeedbackHtml(
   if (s.playMode === "clearing" || s.playMode === "settling") {
     const modeLabel = s.playMode === "clearing" ? "同時消去" : "落下連鎖";
     const n = Math.max(1, s.chainCount);
+    const tier = comboTierClass(n);
+    const comboNote =
+      n >= 3 ? "連続クリア！" : n >= 2 ? "連鎖中" : "着地済みもスワップ可";
     parts.push(`
-      <div class="hud-flash hud-flash-chain" role="status" aria-live="polite">
+      <div class="hud-flash hud-flash-chain${tier ? ` ${tier}` : ""}" role="status" aria-live="polite" data-combo="${n}">
         <span class="hud-chain-x">×${n}</span>
         <span class="hud-flash-v">${escapeHtml(modeLabel)}</span>
-        <span class="hud-flash-note">着地済みもスワップ可</span>
+        <span class="hud-flash-note">${escapeHtml(comboNote)}</span>
       </div>
     `);
   } else if (s.lastChain > 1 && s.statusMsg?.includes("連鎖完了")) {
+    const n = s.lastChain;
+    const tier = comboTierClass(n);
     parts.push(`
-      <div class="hud-flash hud-flash-chain done" role="status">
-        <span class="hud-chain-x">×${s.lastChain}</span>
+      <div class="hud-flash hud-flash-chain done${tier ? ` ${tier}` : ""}" role="status" data-combo="${n}">
+        <span class="hud-chain-x">×${n}</span>
         <span class="hud-flash-v">連鎖完了</span>
+        <span class="hud-flash-note">${n >= 3 ? "高連鎖" : "コンボ"}</span>
       </div>
     `);
   }

@@ -48,6 +48,7 @@ import {
 import {
   buildBriefingBagDifficultyHtml,
   buildPlayHudHtml,
+  comboTierClass,
   nextYieldPreviewMode,
   type YieldPreviewMode,
 } from "./playHud";
@@ -206,10 +207,17 @@ function boardHtml(
   const hintSet = new Set(
     opts?.hint != null ? [opts.hint.a, opts.hint.b] : [],
   );
+  const chain = Math.max(
+    s.playMode === "clearing" || s.playMode === "settling" ? s.chainCount : 0,
+    0,
+  );
+  const pendingCombo = comboTierClass(chain);
   const cells = s.board
     .map((kind, i) => {
       const extras = [
-        pending.has(i) ? "pending" : "",
+        pending.has(i)
+          ? `pending${pendingCombo ? ` ${pendingCombo}` : ""}`
+          : "",
         !inert && s.selected === i ? "selected" : "",
         !inert && fallInIndices.has(i) && kind != null ? "fall-in" : "",
         !inert && hintSet.has(i) ? "hint" : "",
@@ -229,8 +237,13 @@ function boardHtml(
     })
     .join("");
   const settling = !inert && s.playMode === "settling" ? " settling" : "";
+  const clearing = !inert && s.playMode === "clearing" ? " clearing" : "";
+  const comboBoard =
+    !inert && pendingCombo && (s.playMode === "clearing" || s.playMode === "settling")
+      ? ` ${pendingCombo}`
+      : "";
   const inertCls = inert ? " board-inert" : "";
-  return `<div class="board${settling}${inertCls}" style="--cols:${s.cols};--settle-ms:${settleMs}ms" role="grid" aria-label="精製盤">${cells}</div>`;
+  return `<div class="board${settling}${clearing}${comboBoard}${inertCls}" style="--cols:${s.cols};--settle-ms:${settleMs}ms" role="grid" aria-label="精製盤" data-combo="${Math.max(1, chain) || 0}">${cells}</div>`;
 }
 
 /** Empty silhouette board so briefing/blocked still sit on the same field. */

@@ -59,6 +59,8 @@ import {
   buildTopFeedbackHtml,
   buildValidSupplyGaugeHtml,
   buildYieldPreviewFromDelta,
+  comboFeedbackTier,
+  comboTierClass,
   formatYieldPreviewChips,
   nextYieldPreviewMode,
 } from "./playHud";
@@ -1257,6 +1259,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(feedback.includes("hud-flash-yield"), "top yield flash after clear");
   assert(feedback.includes("産出"), "yield flash label");
   assert(!feedback.includes("stage-overlay"), "no center overlay class in feedback");
+  assert(feedback.includes('data-combo="1"'), "base combo data attr");
 
   s = settleUntilQuiet(s);
   if (s.playMode === "idle") {
@@ -1501,5 +1504,66 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(hud.includes(" tension") || hud.includes('data-level="tension"'), "gauge tension class");
   assert(!hud.includes("ジャンク移行"), "HUD never junk-transition banner");
 }
+
+// SORT-01 combo / consecutive-clear feedback tiers
+{
+  assert(comboFeedbackTier(0) === "base", "tier 0 base");
+  assert(comboFeedbackTier(1) === "base", "tier 1 base");
+  assert(comboFeedbackTier(2) === "combo-2", "tier 2");
+  assert(comboFeedbackTier(3) === "combo-hot", "tier 3 hot");
+  assert(comboFeedbackTier(5) === "combo-hot", "tier 5 hot");
+  assert(comboTierClass(1) === "", "class empty for base");
+  assert(comboTierClass(2) === "combo-2", "class combo-2");
+  assert(comboTierClass(4) === "combo-hot", "class combo-hot");
+
+  let s = createRefineFromLocationSearch(
+    "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
+  );
+  s = startRefine(s, 31);
+  const cols = s.cols;
+  const rows = s.rows;
+  const board: RefineLive["board"] = Array.from(
+    { length: cols * rows },
+    () => null,
+  );
+  const r = rows - 1;
+  board[idx(cols, r, 0)] = "food";
+  board[idx(cols, r, 1)] = "food";
+  board[idx(cols, r, 2)] = "food";
+  s = {
+    ...s,
+    board,
+    pendingClear: [idx(cols, r, 0), idx(cols, r, 1), idx(cols, r, 2)],
+    playMode: "clearing",
+    chainCount: 2,
+    chainWindowMsLeft: 280,
+    lastClearDelta: null,
+  };
+  const fb2 = buildTopFeedbackHtml(s);
+  assert(fb2.includes("combo-2"), "HUD combo-2 class at ×2");
+  assert(fb2.includes("連鎖中"), "combo-2 note JA");
+  assert(fb2.includes('data-combo="2"'), "data-combo 2");
+
+  s = { ...s, chainCount: 3 };
+  const fb3 = buildTopFeedbackHtml(s);
+  assert(fb3.includes("combo-hot"), "HUD combo-hot at ×3");
+  assert(fb3.includes("連続クリア"), "combo-hot note JA");
+  assert(fb3.includes('data-combo="3"'), "data-combo 3");
+
+  s = {
+    ...s,
+    playMode: "idle",
+    pendingClear: [],
+    chainCount: 0,
+    lastChain: 4,
+    statusMsg: "連鎖完了 ×4",
+  };
+  const done = buildTopFeedbackHtml(s);
+  assert(done.includes("hud-flash-chain done"), "done flash");
+  assert(done.includes("combo-hot"), "done keeps hot tier");
+  assert(done.includes("高連鎖"), "done hot note");
+  console.log("sort combo clear feedback ok");
+}
+
 
 console.log("sort refine.selftest: ok");
