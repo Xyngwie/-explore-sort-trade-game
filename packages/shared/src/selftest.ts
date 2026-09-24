@@ -35,6 +35,7 @@ import {
   HANDOFF_QUERY_KEYS,
   UNOPENED_CONTAINER_PRICE_CREDITS,
 } from "./constants";
+import { CTA_COPY, CTA_CHIP } from "./cta-copy";
 import {
   createHubSave,
   parseHubSave,
@@ -1634,3 +1635,23 @@ console.log("shared handoff-m45 selftest: ok");
 }
 
 console.log("shared circuit-effect selftest: ok");
+
+// --- CTA copy constants (labels only; no handoff key changes) ---
+{
+  assert.equal(CTA_COPY.toSort, "仕分へ");
+  assert.equal(CTA_COPY.toHangar, "格納庫へ");
+  assert.equal(CTA_COPY.toExplore, "探索へ");
+  assert.equal(CTA_COPY.toFront, "戦線へ");
+  assert.equal(CTA_COPY.toRestore, "修復へ");
+  assert.equal(CTA_COPY.again, "もう一度");
+  assert.equal(CTA_COPY.sortieAgain, "再出撃");
+  assert.equal(CTA_COPY.view, "閲覧");
+  assert.equal(CTA_CHIP.wearReport, "摩耗報告");
+  assert.equal(CTA_CHIP.unopened, "未開封");
+  assert.equal(CTA_CHIP.forcedCombat, "強制交戦");
+  assert.equal(CTA_CHIP.raid, "任意レイド");
+  for (const k of ["toSort", "toHangar", "toExplore", "toFront", "toRestore"] as const) {
+    assert.ok(CTA_COPY[k].endsWith("へ"), `${k} ends with へ`);
+  }
+  console.log("shared cta-copy selftest: ok");
+}

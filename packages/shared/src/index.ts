@@ -12,3 +12,4 @@ export * from "./circuit-bonuses";
 export * from "./perfect-circuit-seed";
 export * from "./circuit-effect";
 export * from "./circuit-clues";
+export * from "./cta-copy";
