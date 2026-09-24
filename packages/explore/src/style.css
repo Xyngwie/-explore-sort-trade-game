@@ -101,6 +101,46 @@ button.active-stance { outline: 2px solid #fff; outline-offset: 1px; }
   background: #12161c;
 }
 .wing-card.offscreen { border-color: #f0b42966; }
+.wing-card.engaging {
+  border-color: #e5534b99;
+  box-shadow: 0 0 0 1px #e5534b44 inset;
+}
+.wing-card.hit-warn {
+  border-color: #ff6b6b;
+  box-shadow: 0 0 10px #e5534b66;
+  animation: wing-hit-border 0.55s ease-in-out infinite alternate;
+}
+.wing-hp {
+  height: 6px;
+  border-radius: 999px;
+  background: #21262d;
+  overflow: hidden;
+  margin: 0 0 0.35rem;
+}
+.wing-hp-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #3fb950, #56d364);
+  border-radius: 999px;
+  transition: width 0.15s linear;
+}
+.wing-hp.pulse .wing-hp-fill {
+  background: linear-gradient(90deg, #e5534b, #ff7b72);
+  animation: wing-hp-pulse 0.45s ease-in-out infinite alternate;
+}
+.wing-hp.engage-pulse .wing-hp-fill {
+  background: linear-gradient(90deg, #db6d28, #f0b429);
+}
+@keyframes wing-hp-pulse {
+  from { filter: brightness(1); opacity: 1; }
+  to { filter: brightness(1.35); opacity: 0.72; }
+}
+@keyframes wing-hit-border {
+  from { box-shadow: 0 0 6px #e5534b55; }
+  to { box-shadow: 0 0 14px #ff6b6baa; }
+}
+.badge.danger { background: #4a1515; color: #ff8b8b; }
+.badge.combat { background: #3a2410; color: #f0b429; }
 .wing-card h3 {
   margin: 0 0 0.35rem;
   font-size: 0.85rem;

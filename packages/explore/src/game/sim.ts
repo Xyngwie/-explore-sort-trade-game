@@ -89,6 +89,9 @@ function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): vo
   }
   from.cooldown = world.balance.fireCooldown;
   from.heading = angleOf(from.pos, target.pos);
+  if (from.kind === "wingman") {
+    from.engageWarnT = world.balance.wingEngageWarnSec;
+  }
   spawnBullet(world, from, target, fromEnemy);
 }
 
@@ -132,6 +135,9 @@ function updateBullets(world: World, dt: number): void {
           world.combatHitsTaken += 1;
         }
         t.hp -= hitDmg;
+        if (t.kind === "wingman" && t.alive) {
+          t.hitWarnT = world.balance.wingHitWarnSec;
+        }
         if (t.hp <= 0) {
           t.alive = false;
           t.hp = 0;
@@ -595,7 +601,10 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     const wingSpeed =
       world.balance.wingmanSpeed * unitMoveSpeedMul(w, world);
     moveToward(w, intent.moveTarget, wingSpeed, dt, world);
-    if (intent.fireAt) tryFire(world, w, intent.fireAt, false);
+    if (intent.fireAt) {
+      w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75);
+      tryFire(world, w, intent.fireAt, false);
+    }
     if (!timedOut) {
       updateSalvage(world, w, intent.trySalvage, dt);
     }
@@ -606,6 +615,10 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   revealVision(world);
   for (const c of world.containers) {
     if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
+  }
+  for (const w of world.wingmen) {
+    if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt);
+    if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt);
   }
   updateCamera(world);
   updateBoarding(world);

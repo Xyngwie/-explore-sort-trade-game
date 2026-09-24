@@ -1449,4 +1449,60 @@ import {
   console.log("explore clearInvadeForcedLockAfterResolve ok");
 }
 
+// --- wingman off-screen combat UX warn timers ---
+{
+  const world = createWorld(bootstrapFromSearch("?deployableMechs=3&startingAmmo=40"));
+  startSortie(world);
+  const w = world.wingmen[0]!;
+  assert.equal(w.hitWarnT, 0);
+  assert.equal(w.engageWarnT, 0);
+
+  // Simulate engage intent path: fire at nearby foe
+  for (const e of world.enemies) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  const foe = world.enemies[0]!;
+  foe.alive = true;
+  foe.hp = foe.maxHp;
+  w.pos = { ...world.leader.pos };
+  foe.pos = {
+    x: w.pos.x + world.balance.weaponRange * 0.4,
+    y: w.pos.y,
+  };
+  w.stance = "raid";
+  w.waypoint = null;
+  w.cooldown = 0;
+  tickWorld(world, 0.05, {
+    move: { x: 0, y: 0 },
+    clickMove: null,
+    fire: false,
+    interact: false,
+  });
+  assert.ok(
+    w.engageWarnT > 0,
+    `expected engageWarnT after combat tick, got ${w.engageWarnT}`,
+  );
+
+  // Hit-warn arm + decay (deterministic; skip RNG cover miss path)
+  w.hitWarnT = world.balance.wingHitWarnSec;
+  w.engageWarnT = world.balance.wingEngageWarnSec;
+  const hitBefore = w.hitWarnT;
+  const engBefore = w.engageWarnT;
+  // Clear foes so engage intent does not re-arm engageWarnT
+  foe.alive = false;
+  foe.hp = 0;
+  w.stance = "escort";
+  tickWorld(world, 0.5, {
+    move: { x: 0, y: 0 },
+    clickMove: null,
+    fire: false,
+    interact: false,
+  });
+  assert.ok(w.hitWarnT < hitBefore, "hitWarnT should decay");
+  assert.ok(w.hitWarnT > 0, "hitWarnT should still be active after 0.5s");
+  assert.ok(w.engageWarnT < engBefore, "engageWarnT should decay");
+  console.log("explore wingman offscreen combat UX warn ok");
+}
+
 }

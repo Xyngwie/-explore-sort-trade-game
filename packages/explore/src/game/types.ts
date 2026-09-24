@@ -88,6 +88,16 @@ export type Unit = {
   inCover: boolean;
   /** Wingman-only light quirk bias; null on leader/enemy. */
   quirk: WingmanQuirk | null;
+  /**
+   * Remaining seconds to emphasize 「被弾警告」 on the wing panel (0 = none).
+   * Set on HP damage; ticked down during sortie.
+   */
+  hitWarnT: number;
+  /**
+   * Remaining seconds to emphasize 「交戦中」 on the wing panel (0 = none).
+   * Set when the unit fires / has a fire intent; ticked down during sortie.
+   */
+  engageWarnT: number;
 };
 
 export type Container = {

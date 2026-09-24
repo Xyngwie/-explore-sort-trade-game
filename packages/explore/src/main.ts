@@ -302,10 +302,40 @@ function squadOrderBarHtml(): string {
   </div>`;
 }
 
+function wingCombatStatus(w: (typeof world.wingmen)[number]): {
+  cardClass: string;
+  badgeClass: string;
+  badgeText: string;
+} {
+  if (!w.alive) {
+    return { cardClass: "", badgeClass: "", badgeText: "撃破" };
+  }
+  const off = world.phase === "sortie" && isWingmanOffscreen(world, w);
+  const hit = w.hitWarnT > 0;
+  const engaging = w.engageWarnT > 0;
+  if (hit) {
+    return {
+      cardClass: `hit-warn${off ? " offscreen" : ""}`,
+      badgeClass: "danger",
+      badgeText: off ? "画面外·被弾警告" : "被弾警告",
+    };
+  }
+  if (engaging) {
+    return {
+      cardClass: `engaging${off ? " offscreen" : ""}`,
+      badgeClass: "combat",
+      badgeText: off ? "画面外·交戦中" : "交戦中",
+    };
+  }
+  if (off) {
+    return { cardClass: "offscreen", badgeClass: "warn", badgeText: "画面外" };
+  }
+  return { cardClass: "", badgeClass: "", badgeText: STANCE_LABEL[w.stance] };
+}
+
 function wingPanelHtml(): string {
   const cards = world.wingmen
     .map((w) => {
-      const off = world.phase === "sortie" && isWingmanOffscreen(world, w);
       const stances: Stance[] = ["escort", "patrol", "recover", "raid"];
       const btns = stances
         .map((s) => {
@@ -318,11 +348,17 @@ function wingPanelHtml(): string {
           ? ` · 癖:${QUIRK_LABEL[w.quirk]}`
           : "";
       const cover = w.inCover ? " · カバー" : "";
-      return `<div class="wing-card ${off ? "offscreen" : ""}">
+      const status = wingCombatStatus(w);
+      const hpPct = w.maxHp > 0 ? Math.max(0, Math.min(100, (w.hp / w.maxHp) * 100)) : 0;
+      const hpPulse = w.hitWarnT > 0 ? " pulse" : w.engageWarnT > 0 ? " engage-pulse" : "";
+      return `<div class="wing-card ${status.cardClass}">
         <h3>
           <span>${escapeHtml(w.name)} ${w.alive ? "" : "（撃破）"}</span>
-          <span class="badge ${off ? "warn" : ""}">${off ? "画面外" : STANCE_LABEL[w.stance]}</span>
+          <span class="badge ${status.badgeClass}">${status.badgeText}</span>
         </h3>
+        <div class="wing-hp${hpPulse}" role="meter" aria-label="HP" aria-valuenow="${Math.max(0, Math.ceil(w.hp))}" aria-valuemin="0" aria-valuemax="${w.maxHp}">
+          <div class="wing-hp-fill" style="width:${hpPct.toFixed(1)}%"></div>
+        </div>
         <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}${quirk}${cover}</div>
         <div class="row wing-order-row">
           <button type="button" class="secondary" data-rally="${w.id}">召還</button>
