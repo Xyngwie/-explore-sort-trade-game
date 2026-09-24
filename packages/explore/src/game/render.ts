@@ -88,11 +88,12 @@ export function renderWorld(
     ctx.setLineDash([]);
     ctx.fillStyle = "#ffe08acc";
     ctx.font = "11px sans-serif";
+    const drPct = Math.round((1 - world.balance.campDamageTakenMul) * 100);
     const campLabel =
       c.stashedCount > 0
-        ? `CAMP · ${c.stashedCount} · 防衛圏`
+        ? `CAMP · ${c.stashedCount} · 防衛−${drPct}%`
         : `CAMP · ${c.stashedCount}`;
-    ctx.fillText(campLabel, cx - 36, cy - 28);
+    ctx.fillText(campLabel, cx - 44, cy - 28);
   }
 
   // Containers: only discovered (death-drop / purge get pulsing glow)
@@ -151,11 +152,14 @@ export function renderWorld(
   // Wingmen
   for (const w of world.wingmen) {
     if (!w.alive) continue;
+    if (w.inCover) drawCoverRing(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx);
     drawCraft(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx, "#7eb6ff", w.heading);
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
+    const quirkTag = w.quirk ? `·${quirkShort(w.quirk)}` : "";
+    const coverTag = w.inCover ? "·カバー" : "";
     ctx.fillText(
-      `${w.name}·${STANCE_LABEL[w.stance]}`,
+      `${w.name}·${STANCE_LABEL[w.stance]}${quirkTag}${coverTag}`,
       tx(w.pos.x) - 28,
       ty(w.pos.y) - w.radius * sy - 8,
     );
@@ -175,6 +179,14 @@ export function renderWorld(
 
   // Leader
   if (world.leader.alive) {
+    if (world.leader.inCover) {
+      drawCoverRing(
+        ctx,
+        tx(world.leader.pos.x),
+        ty(world.leader.pos.y),
+        world.leader.radius * sx,
+      );
+    }
     drawCraft(
       ctx,
       tx(world.leader.pos.x),
@@ -185,7 +197,8 @@ export function renderWorld(
     );
     ctx.fillStyle = "#b6f5d0";
     ctx.font = "11px sans-serif";
-    ctx.fillText("隊長", tx(world.leader.pos.x) - 12, ty(world.leader.pos.y) - 22);
+    const leadLabel = world.leader.inCover ? "隊長·カバー" : "隊長";
+    ctx.fillText(leadLabel, tx(world.leader.pos.x) - 18, ty(world.leader.pos.y) - 22);
   }
 
   // Vision ring (leader)
@@ -199,6 +212,25 @@ export function renderWorld(
     Math.PI * 2,
   );
   ctx.stroke();
+}
+
+function quirkShort(q: "cling" | "decoy" | "sniper"): string {
+  return q === "cling" ? "密着" : q === "decoy" ? "囮" : "遠射";
+}
+
+function drawCoverRing(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+): void {
+  ctx.strokeStyle = "#8fd3ffaa";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 function drawCraft(

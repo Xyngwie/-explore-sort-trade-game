@@ -3,7 +3,12 @@ import {
   HANDOFF_QUERY_KEYS,
   stripHandoffParams,
 } from "@estg/shared";
-import { STANCE_LABEL, type Stance, type World } from "./game/types";
+import {
+  QUIRK_LABEL,
+  STANCE_LABEL,
+  type Stance,
+  type World,
+} from "./game/types";
 import {
   bootstrapFromSearch,
   createWorld,
@@ -19,6 +24,9 @@ import {
 import {
   applyOrder,
   applyOrderToAllWingmen,
+  campDefenseHudModel,
+  campDrHudFragment,
+  campDrPercent,
   inCampAura,
   isOperationTimedOut,
   pickUpFromCamp,
@@ -26,6 +34,7 @@ import {
   rallyWingman,
   scatterSearch,
   setCampOrDeposit,
+  toggleSquadCover,
   unloadAtCamp,
   unitMoveSpeedMul,
 } from "./game/orders";
@@ -127,7 +136,7 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     const result = unloadAtCamp(world);
     if (result === "unloaded" && world.camp) {
-      flashCampToast(`置場 ${world.camp.stashedCount} · キャンプ圏で被弾軽減`);
+      flashCampToast(`置場 ${world.camp.stashedCount} · 被弾−${campDrPercent(world)}%`);
     }
     needsDom = true;
   }
@@ -139,6 +148,16 @@ window.addEventListener("keydown", (e) => {
   if (k === "p" && world.phase === "sortie") {
     e.preventDefault();
     purgeCargo(world);
+    needsDom = true;
+  }
+  if (k === "v" && world.phase === "sortie" && !e.repeat) {
+    e.preventDefault();
+    const r = toggleSquadCover(world);
+    if (r === "entered") {
+      flashCampToast(`カバー開始 · 被弾命中率−${Math.round((1 - world.balance.coverIncomingHitMul) * 100)}%`);
+    } else if (r === "exited") {
+      flashCampToast("カバー解除");
+    }
     needsDom = true;
   }
   if (world.phase === "sortie" && !e.repeat) {
@@ -220,13 +239,16 @@ function extractReqHudHtml(): string {
 
 
 function timeoutLockBannerHtml(): string {
-  if (!isOperationTimedOut(world) || world.phase !== "sortie") return "";
+  const model = campDefenseHudModel(world);
+  if (!model.active) return "";
   const boardingNote = world.boarding
     ? "進行中の搭乗円は継続（円内なら離昇可）。"
-    : "円外なら移動不可のため新規脱出は不可 — 戦闘か撤退で決着。";
-  return `<div class="timeout-lock-banner" id="timeout-lock-banner" role="status" aria-live="polite">
-    <strong>時間切れ</strong>
-    <span>移動・積み下ろしロック · 戦闘継続 · ${boardingNote}</span>
+    : "円外なら移動不可のため新規脱出は不可 — キャンプ防衛／カバー／撤退で決着。";
+  return `<div class="timeout-lock-banner camp-defense" id="timeout-lock-banner" role="status" aria-live="polite">
+    <strong>${model.title}</strong>
+    <span>時間切れ · 移動・積み下ろしロック · 戦闘継続</span>
+    <span class="defense-focus">${model.stockLine} · ${model.coverHint}</span>
+    <span class="defense-note">${boardingNote}</span>
   </div>`;
 }
 
@@ -291,12 +313,17 @@ function wingPanelHtml(): string {
           return `<button type="button" class="stance-${s} ${active}" data-order="${w.id}:${s}">${STANCE_LABEL[s]}</button>`;
         })
         .join("");
+      const quirk =
+        w.quirk != null
+          ? ` · 癖:${QUIRK_LABEL[w.quirk]}`
+          : "";
+      const cover = w.inCover ? " · カバー" : "";
       return `<div class="wing-card ${off ? "offscreen" : ""}">
         <h3>
           <span>${escapeHtml(w.name)} ${w.alive ? "" : "（撃破）"}</span>
           <span class="badge ${off ? "warn" : ""}">${off ? "画面外" : STANCE_LABEL[w.stance]}</span>
         </h3>
-        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}</div>
+        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}${quirk}${cover}</div>
         <div class="row wing-order-row">
           <button type="button" class="secondary" data-rally="${w.id}">召還</button>
           ${btns}
@@ -382,7 +409,7 @@ function renderDom(): void {
           }
         </table>
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
-        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · C キャンプ設置 · U 荷下ろし · G キャンプから積込 · 右パネルで僚機命令（画面外も可）</p>
+        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · C キャンプ設置 · U 荷下ろし · G キャンプから積込 · V カバー · 右パネルで僚機命令（画面外も可）</p>
       </div>`;
     document.getElementById("btn-start")?.addEventListener("click", () => {
       startSortie(world);
@@ -469,11 +496,13 @@ function renderDom(): void {
         ? "速度 軽装キャンプ圏"
         : "速度 100%"
       : `速度 ${Math.round(speedMul * 100)}%（積載遅延）`;
+  const drFrag = campDrHudFragment(world);
   const campHud = world.camp
     ? world.camp.stashedCount > 0
-      ? `キャンプ 置場${world.camp.stashedCount}·防衛`
+      ? `キャンプ 置場${world.camp.stashedCount}·防衛 ${drFrag}`
       : `キャンプ 置場${world.camp.stashedCount}`
     : "キャンプ 未設置";
+  const coverHud = world.leader.inCover ? "カバー ON" : "カバー OFF";
   root.innerHTML = `
     <p class="pill">MODULE 1 · SORTIE</p>
     <h1>WRECKLINE</h1>
@@ -487,6 +516,7 @@ function renderDom(): void {
       <span>抽出 <strong id="hud-boarding">${extractHud}</strong></span>
       <span><strong id="hud-speed">${speedHud}</strong></span>
       <span><strong id="hud-camp">${campHud}</strong></span>
+      <span><strong id="hud-cover" class="${world.leader.inCover ? "cover-on" : ""}">${coverHud}</strong></span>
     </div>
     <div class="toast" id="camp-toast" hidden></div>
     <div class="layout">
@@ -502,10 +532,11 @@ function renderDom(): void {
           <button type="button" class="secondary" id="btn-purge" ${isOperationTimedOut(world) ? "disabled" : ""} title="パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。">パージ／キャンプへ降ろす</button>
           <button type="button" class="secondary" id="btn-camp-pickup" ${isOperationTimedOut(world) ? "disabled" : ""} title="キャンプ付近で置場から積込（G）。">キャンプから積込</button>
           <button type="button" class="stance-raid" id="btn-scatter" ${isOperationTimedOut(world) ? "disabled" : ""} title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
+          <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。時間切れ防衛でも可。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
         ${squadOrderBarHtml()}
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。C キャンプ・U 小隊荷下ろし・P パージ・G 取り上げ。マップ上端の EXTRACT HUD（未要請はコンパクト）。抽出→搭乗円内コンテナは離昇時に全回収。僚機方針は 1–4 または小隊バー。</p>
+        <p class="help">未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。C キャンプ・U 小隊荷下ろし・P パージ・G 取り上げ・V カバー。時間切れ後はキャンプ防衛フォーカス（移動ロック・戦闘継続）。マップ上端の EXTRACT HUD。僚機方針は 1–4。僚機に軽い癖（密着／囮／遠射）。</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -531,7 +562,7 @@ function renderDom(): void {
   document.getElementById("btn-camp-unload")?.addEventListener("click", () => {
     const result = unloadAtCamp(world);
     if (result === "unloaded" && world.camp) {
-      flashCampToast(`置場 ${world.camp.stashedCount} · キャンプ圏で被弾軽減`);
+      flashCampToast(`置場 ${world.camp.stashedCount} · 被弾−${campDrPercent(world)}%`);
     }
     needsDom = true;
   });
@@ -545,6 +576,15 @@ function renderDom(): void {
   });
   document.getElementById("btn-scatter")?.addEventListener("click", () => {
     doScatterSearch();
+  });
+  document.getElementById("btn-cover")?.addEventListener("click", () => {
+    const r = toggleSquadCover(world);
+    if (r === "entered") {
+      flashCampToast(`カバー開始 · 被弾命中率−${Math.round((1 - world.balance.coverIncomingHitMul) * 100)}%`);
+    } else if (r === "exited") {
+      flashCampToast("カバー解除");
+    }
+    needsDom = true;
   });
   document.getElementById("btn-abort")?.addEventListener("click", () => {
     world.phase = "result";
@@ -669,11 +709,22 @@ function paintHudOnly(): void {
   }
   const campEl = document.getElementById("hud-camp");
   if (campEl) {
+    const dr = campDrHudFragment(world);
     campEl.textContent = world.camp
       ? world.camp.stashedCount > 0
-        ? `キャンプ 置場${world.camp.stashedCount}·防衛`
+        ? `キャンプ 置場${world.camp.stashedCount}·防衛 ${dr}`
         : `キャンプ 置場${world.camp.stashedCount}`
       : "キャンプ 未設置";
+  }
+  const coverEl = document.getElementById("hud-cover");
+  if (coverEl) {
+    coverEl.textContent = world.leader.inCover ? "カバー ON" : "カバー OFF";
+    coverEl.classList.toggle("cover-on", world.leader.inCover);
+  }
+  const coverBtn = document.getElementById("btn-cover") as HTMLButtonElement | null;
+  if (coverBtn) {
+    coverBtn.textContent = world.leader.inCover ? "カバー解除" : "カバー";
+    coverBtn.className = world.leader.inCover ? "cover-active" : "secondary";
   }
 
   const panel = document.getElementById("wing-panel");

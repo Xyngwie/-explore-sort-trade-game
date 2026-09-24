@@ -5,6 +5,7 @@ import {
   isOperationTimedOut,
   onSalvageCompleted,
   pushLog,
+  shotHitChance,
   spawnContainersAt,
   unitMoveSpeedMul,
 } from "./orders";
@@ -112,6 +113,19 @@ function updateBullets(world: World, dt: number): void {
       if (!t.alive) continue;
       if (dist(b.pos, t.pos) <= t.radius + 4) {
         b.alive = false;
+        // Resolve cover hit chance (shooter accuracy / target incoming).
+        const shooter = b.fromEnemy
+          ? world.enemies.find((u) => u.id === b.ownerId)
+          : friendlyUnits(world).find((u) => u.id === b.ownerId);
+        if (shooter) {
+          const chance = shotHitChance(shooter, t, world);
+          if (chance < 1 && Math.random() >= chance) {
+            if (!inCamera(world, t.pos) || !inCamera(world, b.pos)) {
+              reportBattle(world, `${t.name} がカバーで回避`, t.pos);
+            }
+            break;
+          }
+        }
         let hitDmg = b.damage;
         if (b.fromEnemy) {
           hitDmg *= campDamageTakenMul(world, t);

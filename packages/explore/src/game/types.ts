@@ -11,6 +11,24 @@ export const STANCE_LABEL: Record<Stance, string> = {
   raid: "遊撃",
 };
 
+/**
+ * Light wingman quirk bias (playable stub — not a learning system).
+ * Assigned at sortie create; only nudges brain distances / aggression.
+ */
+export type WingmanQuirk = "cling" | "decoy" | "sniper";
+
+export const QUIRK_LABEL: Record<WingmanQuirk, string> = {
+  cling: "密着",
+  decoy: "囮",
+  sniper: "遠射",
+};
+
+/** Deterministic quirk cycle for wingmen by index (A→cling, B→decoy, C→sniper…). */
+export function quirkForWingmanIndex(index: number): WingmanQuirk {
+  const cycle: WingmanQuirk[] = ["cling", "decoy", "sniper"];
+  return cycle[((index % cycle.length) + cycle.length) % cycle.length]!;
+}
+
 /** Invade→explore sector handoff (parsed once on boot). */
 export type InvadeSectorContext = {
   sectorX: number;
@@ -63,6 +81,13 @@ export type Unit = {
   capacity: number;
   /** Bound owned-mech instance when I/O v2 ids present. */
   instanceId: string | null;
+  /**
+   * Cover stance（カバー）: incoming hit rate down, own accuracy slightly up.
+   * Toggle; does not stack with itself. Independent of camp DR (damage mul).
+   */
+  inCover: boolean;
+  /** Wingman-only light quirk bias; null on leader/enemy. */
+  quirk: WingmanQuirk | null;
 };
 
 export type Container = {

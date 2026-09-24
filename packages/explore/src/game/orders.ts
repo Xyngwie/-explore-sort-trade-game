@@ -290,6 +290,94 @@ export function campDamageTakenMul(world: World, unit: Unit): number {
   return world.balance.campDamageTakenMul;
 }
 
+/** Percent DR shown in HUD when stocked camp (e.g. 0.72 → 28). */
+export function campDrPercent(world: World): number {
+  return Math.round((1 - world.balance.campDamageTakenMul) * 100);
+}
+
+/**
+ * Hit chance for a shot. Cover stack rules (v0, provisional):
+ * 1. Base = 1.0 (uncovered fights keep always-hit feel).
+ * 2. Target inCover → × coverIncomingHitMul (incoming hit rate down).
+ * 3. Shooter inCover → × coverAccuracyMul, then clamp ≤ 1 (accuracy tip).
+ * 4. Cover does not stack with itself (boolean toggle).
+ * 5. Independent of camp DR (camp multiplies *damage* after a hit lands).
+ */
+export function shotHitChance(shooter: Unit, target: Unit, world: World): number {
+  let chance = 1;
+  if (target.inCover) chance *= world.balance.coverIncomingHitMul;
+  if (shooter.inCover) chance *= world.balance.coverAccuracyMul;
+  return Math.min(1, Math.max(0, chance));
+}
+
+/** Toggle cover on one living unit. Returns new state or null if denied. */
+export function toggleUnitCover(world: World, unit: Unit): boolean | null {
+  if (world.phase !== "sortie" || !unit.alive) return null;
+  unit.inCover = !unit.inCover;
+  return unit.inCover;
+}
+
+/**
+ * Squad cover（カバー）: sync all living friendlies to the opposite of the
+ * captain's current cover state (enter if captain was out; exit if in).
+ * Works after timeout (combat-defense fantasy).
+ */
+export function toggleSquadCover(world: World): "entered" | "exited" | "denied" {
+  if (world.phase !== "sortie" || !world.leader.alive) return "denied";
+  const enter = !world.leader.inCover;
+  const squad = [world.leader, ...world.wingmen].filter((u) => u.alive);
+  for (const u of squad) u.inCover = enter;
+  const hitPct = Math.round((1 - world.balance.coverIncomingHitMul) * 100);
+  const accPct = Math.round((world.balance.coverAccuracyMul - 1) * 100);
+  if (enter) {
+    pushLog(
+      world,
+      `小隊カバー開始：被弾命中率−${hitPct}% · 命中+${accPct}%（キャンプDRと併用可）。`,
+    );
+    return "entered";
+  }
+  pushLog(world, "小隊カバー解除。");
+  return "exited";
+}
+
+/** Short HUD fragment for stocked-camp DR (empty when irrelevant). */
+export function campDrHudFragment(world: World): string {
+  if (!world.camp || world.camp.stashedCount <= 0) return "";
+  return `被弾−${campDrPercent(world)}%`;
+}
+
+/** Pure model for timeout → camp-defense banner (DOM-free; selftestable). */
+export function campDefenseHudModel(world: World): {
+  active: boolean;
+  title: string;
+  stockLine: string;
+  coverHint: string;
+  drVisible: boolean;
+  drPercent: number | null;
+} {
+  const active = isOperationTimedOut(world) && world.phase === "sortie";
+  const drVisible = !!(world.camp && world.camp.stashedCount > 0);
+  const drPercent = drVisible ? campDrPercent(world) : null;
+  let stockLine: string;
+  if (world.camp != null && world.camp.stashedCount > 0) {
+    stockLine = `置場 ${world.camp.stashedCount} · 防衛圏 被弾−${drPercent}%`;
+  } else if (world.camp) {
+    stockLine = "キャンプあり（空・防衛圏オフ）— 荷下ろし不可のため現状維持";
+  } else {
+    stockLine = "キャンプ未設置 — その場でカバーし戦闘決着を目指せ";
+  }
+  return {
+    active,
+    title: "キャンプ防衛モード",
+    stockLine,
+    coverHint: world.leader.inCover
+      ? "小隊カバー中（V で解除）"
+      : "V / カバーで被弾命中率↓",
+    drVisible,
+    drPercent,
+  };
+}
+
 function friendliesNear(
   world: World,
   pos: { x: number; y: number },

@@ -12,11 +12,12 @@ import {
   type DensityThreat,
 } from "./balance";
 import type { Container, InvadeSectorContext, Unit, World } from "./types";
+import { quirkForWingmanIndex } from "./types";
 import { vec } from "./math";
 
 function makeUnit(
   partial: Pick<Unit, "id" | "kind" | "name" | "pos" | "hp" | "maxHp" | "radius" | "alive"> &
-    Partial<Pick<Unit, "stance" | "waypoint" | "capacity" | "instanceId">>,
+    Partial<Pick<Unit, "stance" | "waypoint" | "capacity" | "instanceId" | "inCover" | "quirk">>,
 ): Unit {
   return {
     vel: vec(0, 0),
@@ -31,6 +32,8 @@ function makeUnit(
     stance: partial.stance ?? "escort",
     capacity: partial.capacity ?? BALANCE.carrierSlotsPerCraft,
     instanceId: partial.instanceId ?? null,
+    inCover: partial.inCover ?? false,
+    quirk: partial.quirk ?? null,
     id: partial.id,
     kind: partial.kind,
     name: partial.name,
@@ -306,7 +309,7 @@ export function createWorld(boot: SortieBootstrap): World {
       makeUnit({
         id: `wing-${tag}`,
         kind: "wingman",
-        name: i === 0 ? "僚機A" : "僚機B",
+        name: i === 0 ? "僚機A" : i === 1 ? "僚機B" : `僚機${i + 1}`,
         pos: {
           x: spawn.x - 40,
           y: spawn.y + (i === 0 ? -40 : 40),
@@ -317,6 +320,7 @@ export function createWorld(boot: SortieBootstrap): World {
         alive: true,
         stance: "escort",
         instanceId,
+        quirk: quirkForWingmanIndex(i),
       }),
     );
   }
@@ -415,5 +419,6 @@ export function startSortie(world: World): void {
     u.salvageId = null;
     u.salvageT = 0;
     u.salvagedCount = 0;
+    u.inCover = false;
   }
 }
