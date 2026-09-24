@@ -126,7 +126,8 @@ export interface CircuitBoardState {
 | 稀少基板 | `rarity=perfect_rare`。seeded true injection（本番 ~1%、DEV ~33%、`?perfectRate=`）または `verify-true-2` |
 | スコア | 満たした digit 数 / 手がかり数（UI メーター） |
 | 成果 | Fully Awakened（閉ループ＋ digit 100%）→ 刻印ロック可 / Bypass（部分進捗）/ Offline（放棄・未着手） |
-| ローカル操作 | Commit Bypass · Abandon→Offline · 次の基板（`?seed=`）· 刻印名入力スタブ |
+| ローカル操作 | Commit Bypass · Abandon→Offline · **もう一度**（`?seed=` 次盤）· 刻印名入力スタブ |
+| Hub 帰還 CTA | **格納庫へ**（outcome は chip · `target="_top"`） |
 | 非スコープ | Multiverse、scout/armor 解放、HubSave v3、タイマー |
 
 ---

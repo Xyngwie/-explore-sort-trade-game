@@ -28,9 +28,9 @@
 
 | 方向 | キー（要約） | Hub 状態 |
 |---|---|---|
-| trade → invade | `fromHub` + 任意艦隊要約 | 「戦線へ（任意）」リンク（`buildTradeToInvadeUrl`） |
+| trade → invade | `fromHub` + 任意艦隊要約 | 「戦線へ」リンク（`buildTradeToInvadeUrl`） |
 | invade → trade | `sectorX/Y` + `density` + `intelFlags?` | 取込 → UI 表示 + `wreckline.hubM45Stash.v0`（セクターのみ・HubSave 未拡張） |
-| trade → restore | `circuitId?` + `circuitBoard?` | 「回路修復へ」＋保有回路一覧から選択 URL（`HubSave.circuits` / シード） |
+| trade → restore | `circuitId?` + `circuitBoard?` | 「修復へ」＋保有回路一覧から選択 URL（`HubSave.circuits` / シード） |
 | restore → trade | `circuitBoard` + `circuitOutcome` | 取込 → `HubSave.hub.circuits` に upsert（旧 `hubM45Stash` から移行可） |
 
 **非ゴールのまま:** invade 本 salvage / YieldBag · セクターの HubSave 本組み込み。
@@ -47,7 +47,7 @@
 
 シード読込 → プレイテスト用 HubSave 一括適用（健在2 + 要修理1・クレジット/型付き資材/弾薬）
 機体を受領 → 艦隊に OwnedMech 追加（空/不足時の手動付与）
-出撃チェック → 「探索へ配備」リンク（deployableMechs + deployedInstanceIds + startingAmmo）
+出撃チェック → 「探索へ」リンク（deployableMechs + deployedInstanceIds + startingAmmo）
 （任意）シミュ帰還 extract/abort/fail → wearFleetAfterSortie
 または explore から ?returnKind=&mechWear= で戻る → applyWearReportsToFleet
 
@@ -162,7 +162,7 @@ UI の「レア売却 仮価格表」と在庫の「売却 仮Nc」ボタン、�
 8. 「シード読込」で混合艦隊 + YieldBag + 弾薬が HubSave に残り、リロード後も維持  
 9. シード読込 → 型付き修理で要修理機が健在になり、出撃 URL にその instanceId が含まれる（不足時はメッセージのみ）  
 10. 「戦線へ」URL に `fromHub=1`（+ 任意 `deployableMechs` / `startingAmmo`）が付く  
-11. 「回路修復へ」URL に `circuitId` / `circuitBoard` が付く（HubSave.circuits 選択またはシード優先）  
+11. 「修復へ」URL に `circuitId` / `circuitBoard` が付く（HubSave.circuits 選択またはシード優先）  
 12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
 12b. 「次の出撃」をヒーローに（CTA 短縮: 戦線 / 探索 / 修復 / 仕分）: 探索/戦線/回路の帰還ワンライナー・回路効果値・配備予定/要修理。修理待ち0かつ出撃可なら配備 CTA を強調（HubSave キー追加なし）
 13. レア仮価格表が UI に見え、レア在庫の売却が表の単価でクレジット加算・HubSave に残る（非レアは売却不可）
@@ -181,10 +181,10 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 ブラウザで `http://localhost:5175/` を開き:
 
 0. （推奨）「シード読込」→ 健在2 + 要修理1・資材/弾薬入りで即プレイテスト可  
-0c. **回路ロック:** 「検証用・既に完璧」→ 一覧に完璧·編集不可 →「閲覧へ」で restore が編集不可表示。または「検証用真盤を受領」→「修復へ」→ 外周一周で完全覚醒 → 拠点へ戻すとロック  
-0b. **修理ループ:** 要修理機の「修理（型付き）」→ 在庫/クレジット減・健在化 → 出撃チェックに載る → 「探索へ配備」  
-1. または「機体を受領」→ 健在機を選択 → 「探索へ配備」の URL を確認（`deployedInstanceIds` + `mechDurability`）  
-2. **実往復:** リンクで explore へ → 撤退 or EXTRACT →「拠点へ摩耗報告」→ trade で耐久減少を確認  
+0c. **回路ロック:** 「検証用・既に完璧」→ 一覧に完璧·編集不可 →「閲覧」で restore が編集不可表示。または「検証用真盤を受領」→「修復へ」→ 外周一周で完全覚醒 → 拠点へ戻すとロック  
+0b. **修理ループ:** 要修理機の「修理（型付き）」→ 在庫/クレジット減・健在化 → 出撃チェックに載る → 「探索へ」  
+1. または「機体を受領」→ 健在機を選択 → 「探索へ」の URL を確認（`deployedInstanceIds` + `mechDurability`）  
+2. **実往復:** リンクで explore へ → 撤退 or EXTRACT →「格納庫へ」→ trade で耐久減少を確認  
 3. **シミュ:** 「シミュ帰還 fail」で要修理化 → 「修理（集計）」  
 4. 「デモ資材バッグ」→ 再度要修理化 → 「修理（型付き）」  
 4b. **レア売却:** 仮価格表を確認 → レア在庫の「売却 仮Nc」→ クレジット増加（TBD 単価）  
