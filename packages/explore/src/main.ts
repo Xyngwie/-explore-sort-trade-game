@@ -16,6 +16,11 @@ import {
 } from "./game/world";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
+  buildKeyboardShortcutsOverlayHtml,
+  isShortcutsOverlayHidden,
+  setShortcutsOverlayHidden,
+} from "./game/keyboardOverlay";
+import {
   armExploreForcedHistory,
   clearInvadeForcedLockAfterResolve,
   markExploreForcedHandoffIntent,
@@ -172,6 +177,13 @@ window.addEventListener("keydown", (e) => {
       applyOrderToAllWingmen(world, squadMap[k]!);
       needsDom = true;
     }
+  }
+  // Toggle corner shortcut overlay (? or Shift+/). Does not affect gameplay.
+  if ((k === "?" || (k === "/" && e.shiftKey)) && !e.repeat) {
+    e.preventDefault();
+    setShortcutsOverlayHidden(!isShortcutsOverlayHidden());
+    needsDom = true;
+    if (world.phase === "sortie") renderDom();
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -560,6 +572,7 @@ function renderDom(): void {
         <div class="canvas-wrap">
           <canvas id="map" width="720" height="420"></canvas>
           ${extractReqHudHtml()}
+          ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden() })}
         </div>
         <div class="row">
           <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。">${boardingActive ? "抽出シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・抽出ロック" : "抽出要請（搭乗円）"}</button>
@@ -587,6 +600,11 @@ function renderDom(): void {
     </div>`;
 
   bindCanvas();
+  document.getElementById("kb-overlay-toggle")?.addEventListener("click", () => {
+    setShortcutsOverlayHidden(!isShortcutsOverlayHidden());
+    needsDom = true;
+    renderDom();
+  });
   document.getElementById("btn-extract")?.addEventListener("click", () => {
     requestExtract(world);
     needsDom = true;
