@@ -31,6 +31,18 @@ import {
   type MsBoard,
 } from "./board";
 import {
+  cellFeelClasses,
+  dangerBandAtCell,
+  dangerBandHintJa,
+  dangerBandLabelJa,
+  dangerBandRangeJa,
+  exploredFeelLabelJa,
+  frontProgressFeel,
+  isPendingMineCell,
+  isResolvedMineCell,
+  mineCellStatusJa,
+} from "./front-feel";
+import {
   clearPersistedFrontProgress,
   loadOrCreateFrontSession,
   persistFrontSession,
@@ -179,9 +191,27 @@ function cellSortieBarHtml(sel: SectorSel | null): string {
     </div>`;
   }
 
+  // Resolved open mine (#75 cleared hitMine): still sortie-able, distinct look/copy
+  if (cell && isResolvedMineCell(cell, board) && toForced != null) {
+    return `<div class="cell-sortie-bar resolved" role="status">
+      <p class="ok"><strong>交戦解決済</strong> — 再出撃できます（${sel.sx},${sel.sy}）</p>
+      <p class="muted mono">cell (${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))} · ロック解除済</p>
+      <div class="actions">
+        <a class="btn" href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で再出撃（強制交戦）</a>
+        <a class="btn secondary" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
+      </div>
+    </div>`;
+  }
+
   if (cell && (cell.open || cell.flagged)) {
+    const blankHint =
+      cell.open && !cell.mine && cell.adjacent === 0
+        ? " · 探索済空白"
+        : cell.flagged
+          ? " · 旗"
+          : "";
     return `<div class="cell-sortie-bar" role="status">
-      <p class="ok"><strong>このセルから出撃</strong>（${sel.sx},${sel.sy}）</p>
+      <p class="ok"><strong>このセルから出撃</strong>（${sel.sx},${sel.sy}${blankHint}）</p>
       <div class="actions">
         <a class="btn" href="${escapeHtml(toExplore)}" target="_top" rel="noopener">この漁場で出撃</a>
       </div>
@@ -298,15 +328,27 @@ function handoffActionsHtml(sel: SectorSel | null): string {
       : null;
 
   const engageBlock = (() => {
-    if (toForced != null && forcedPayload != null) {
-      return `
+    if (toForced != null && forcedPayload != null && cell) {
+      if (isPendingMineCell(cell, board)) {
+        return `
         <div class="engage-box forced">
-          <p class="warn"><strong>強制出撃</strong>（地雷踏み · engage=forced）</p>
+          <p class="warn"><strong>強制出撃</strong>（地雷踏み · engage=forced · ロック中）</p>
           <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}（当該＋隣接敵）</p>
           <div class="actions">
             <a class="btn danger" data-forced-handoff href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で強制出撃</a>
           </div>
         </div>`;
+      }
+      if (isResolvedMineCell(cell, board)) {
+        return `
+        <div class="engage-box raid">
+          <p class="ok"><strong>解決済接触</strong> — 再出撃可（engage=forced を再送可）</p>
+          <p class="muted mono">enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))} · hitMine クリア済</p>
+          <div class="actions">
+            <a class="btn" href="${escapeHtml(toForced)}" target="_top" rel="noopener">この漁場で再出撃（強制交戦）</a>
+          </div>
+        </div>`;
+      }
     }
     if (toRaid != null && raidPayload != null) {
       return `
@@ -334,21 +376,63 @@ function handoffActionsHtml(sel: SectorSel | null): string {
 
 function statusJa(): string {
   if (board.status === "won") return "前線掃討完了";
-  if (board.status === "hazard") return "接触（hazard・強制戦闘ロック中）";
-  return "偵察中";
+  if (board.status === "hazard" || board.hitMine) return "接触（hazard・強制戦闘ロック中）";
+  const feel = frontProgressFeel(board);
+  if (feel.openedMines > 0) return `偵察中（解決済接触 ${feel.openedMines} · 再出撃可）`;
+  return `偵察中 — ${exploredFeelLabelJa(feel.exploredFeel)}`;
 }
 
 function cellTitle(cell: ReturnType<typeof getCell>): string {
   if (!cell) return "";
   if (cell.blocked) return `(${cell.sx},${cell.sy}) WALL d≥${SECTOR_WALL_DISTANCE}`;
+  const band = dangerBandAtCell(cell.sx, cell.sy);
+  const bandJa = dangerBandLabelJa(band);
   if (cell.open) {
-    if (cell.mine) return `(${cell.sx},${cell.sy}) 敵接触`;
+    if (cell.mine) {
+      const st = mineCellStatusJa(cell, board) ?? "敵接触";
+      return `(${cell.sx},${cell.sy}) ${st} · ${bandJa}`;
+    }
     if (cell.isHq) return "HQ (0,0) — 拠点（開始開放）";
-    if (cell.adjacent === 0) return `(${cell.sx},${cell.sy}) 探索済セーフ`;
-    return `(${cell.sx},${cell.sy}) 周囲敵 ${cell.adjacent}`;
+    if (cell.adjacent === 0) return `(${cell.sx},${cell.sy}) 探索済空白 · ${bandJa}`;
+    return `(${cell.sx},${cell.sy}) 周囲敵 ${cell.adjacent} · ${bandJa}`;
   }
-  if (cell.flagged) return `(${cell.sx},${cell.sy}) 旗`;
-  return `(${cell.sx},${cell.sy}) 未開 d=${sectorDensityAt(cell.sx, cell.sy).distance}`;
+  if (cell.flagged) return `(${cell.sx},${cell.sy}) 旗 · ${bandJa}`;
+  const d = sectorDensityAt(cell.sx, cell.sy).distance;
+  return `(${cell.sx},${cell.sy}) 未開 d=${d} · ${bandJa}（${dangerBandHintJa(band)}）`;
+}
+
+
+function dangerLegendHtml(): string {
+  const bands: Array<"near" | "mid" | "front"> = ["near", "mid", "front"];
+  const swatches = bands
+    .map((b) => {
+      return `<span class="danger-swatch ${b}" title="${escapeHtml(dangerBandRangeJa(b))}"><span class="chip" aria-hidden="true"></span>${escapeHtml(dangerBandLabelJa(b))} · ${escapeHtml(dangerBandHintJa(b))}</span>`;
+    })
+    .join("");
+  return `<div class="danger-legend" role="group" aria-label="危険度凡例">
+    <span class="danger-swatch blank"><span class="chip" aria-hidden="true"></span>探索済空白</span>
+    <span class="danger-swatch flag"><span class="chip" aria-hidden="true"></span>旗</span>
+    <span class="danger-swatch pending"><span class="chip" aria-hidden="true"></span>敵接触・未解決</span>
+    <span class="danger-swatch resolved"><span class="chip" aria-hidden="true"></span>解決済・再出撃可</span>
+    ${swatches}
+  </div>
+  <p class="muted" style="margin-top:0.35rem;font-size:0.72rem">未開マスの色は HQ からの距離帯（爆弾密度の手触り）。近傍薄 → 前線濃。</p>`;
+}
+
+function progressFeelHtml(): string {
+  const feel = frontProgressFeel(board);
+  const pct = Math.round(feel.openSafeRatio * 100);
+  return `<div class="progress-feel" role="status" aria-label="前線進捗">
+    <p class="muted" style="margin:0;font-size:0.78rem"><strong style="color:#e8eaed">前線進捗</strong> — ${escapeHtml(exploredFeelLabelJa(feel.exploredFeel))}</p>
+    <div class="bar-track" aria-hidden="true"><div class="bar-fill" style="width:${pct}%"></div></div>
+    <div class="stats">
+      <span>セーフ開放 <strong>${feel.openSafe}</strong>/${feel.playableSafe}（${pct}%）</span>
+      <span>空白 <strong>${feel.blanksOpen}</strong></span>
+      <span>旗 <strong>${feel.flagged}</strong></span>
+      <span>残敵 <strong>${feel.minesRemaining}</strong>/${feel.mineCount}</span>
+      <span>解決済接触 <strong>${board.hitMine ? 0 : feel.openedMines}</strong></span>
+    </div>
+  </div>`;
 }
 
 function render(): void {
@@ -360,6 +444,7 @@ function render(): void {
       const c = getCell(board, sx, sy)!;
       const isSel =
         selected != null && selected.sx === sx && selected.sy === sy;
+      const feel = cellFeelClasses(c, board);
       const cls = [
         "cell",
         "ms-cell",
@@ -373,12 +458,13 @@ function render(): void {
         isSel ? "selected" : "",
         !c.blocked && !c.open ? "pickable" : "",
         c.open && !c.blocked ? "focusable" : "",
+        ...feel,
       ]
         .filter(Boolean)
         .join(" ");
       const disabled = c.blocked ? "disabled" : "";
       cellsHtml.push(
-        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}" title="${escapeHtml(cellTitle(c))}" ${disabled}>${escapeHtml(cellGlyph(c))}</button>`,
+        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}" title="${escapeHtml(cellTitle(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</button>`,
       );
     }
   }
@@ -390,12 +476,15 @@ function render(): void {
     !selInfo.blocked &&
     selInfo.distance >= SECTOR_FRONT_DISTANCE;
 
+  const resolvedMineCount = frontProgressFeel(board).openedMines;
   const statusBanner =
     board.status === "won"
       ? `<div class="banner ok-banner" role="status">前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
-      : board.status === "hazard"
+      : board.hitMine || board.status === "hazard"
         ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。強制戦闘ロック — 強制出撃のみ可。ブラウザ戻る＝全機大破。</div>`
-        : "";
+        : resolvedMineCount > 0
+          ? `<div class="banner ok-banner" role="status">交戦解決済の接触マスが ${resolvedMineCount} — 「済」セルから再出撃できます（盤操作も再開）。</div>`
+          : "";
 
   root.innerHTML = `
     <p class="pill">MODULE 4 · INVADE / FRONT · FRONT = MINESWEEPER</p>
@@ -416,7 +505,7 @@ function render(): void {
 
     <div class="card">
       <h2 class="card-title">前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）</h2>
-      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。左クリック＝開く / 旗モードまたは右クリック＝旗。開いたセル＝ルート焦点。旗セル通常クリック＝任意レイド選択。地雷踏み＝強制出撃。</p>
+      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。未開マスの色＝危険帯。空白＝探索済。✕＝未解決接触、済＝解決済・再出撃可。左クリック＝開く / 旗・右クリック＝旗。開いたセル＝ルート焦点。</p>
       <table>
         <tr><td>状態</td><td>${escapeHtml(statusJa())}</td></tr>
         <tr><td>敵（地雷）</td><td>${board.mineCount}</td></tr>
@@ -438,6 +527,8 @@ function render(): void {
           ? `<p class="mono" style="margin-top:0.5rem">${escapeHtml(lastBoardLog)}</p>`
           : ""
       }
+      ${progressFeelHtml()}
+      ${dangerLegendHtml()}
       <div class="grid front-ms${forcedLockActive() ? " locked" : ""}" style="--cols:${cols}">${cellsHtml.join("")}</div>
       ${cellSortieBarHtml(selected)}
       <div class="actions">

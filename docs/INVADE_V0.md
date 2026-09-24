@@ -201,6 +201,22 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 - explore 側も `engage=forced` の出撃中 `popstate` で同様に wipe → trade（結果画面到達後は intent で抑止）。
 - **強制戦闘が任意の終端（生還 / 失敗 / abort / back-wipe）に達したら** `HubSave.frontProgress.hitMine` をクリアする。再入場で stale ロックを復活させない（開いた地雷マスの見た目は残す）。pending 中（未ハンドオフ）は従来どおりロック。
 
+
+## 8.9. 前線の手触り（危険凡例・解決済マス・進捗感）
+
+UI のみの加算。**`HubSave.frontProgress` の形は変えない**（seed / opened / flagged / focus / hitMine）。#75 のロック解除規則もそのまま。
+
+| 見た目 | 意味 |
+|---|---|
+| 未開マスの色帯 | HQ からの Chebyshev 距離帯（近傍薄 → 前線濃）。爆弾密度の手触り |
+| 空白（開いた 0） | 探索済セーフ地帯を強調 |
+| 旗 | 任意レイド候補を強調 |
+| ✕（赤） | 開いた地雷かつ `hitMine=true`（強制ロック中・未解決） |
+| 済（緑） | 開いた地雷かつ `hitMine=false`（#75 解決後・再出撃可） |
+| 進捗バー | セーフ開放率・空白数・旗・残敵（派生表示。永続フィールドではない） |
+
+実装: `packages/invade/src/front-feel.ts` + `main.ts` / `style.css`。
+
 ## 9. パッケージ / 試し方（ひな型）
 
 

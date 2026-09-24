@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "selftest": "tsx src/density.selftest.ts && tsx src/sweep.selftest.ts && tsx src/board.selftest.ts && tsx src/hub-persist.selftest.ts && tsx src/forced-combat.selftest.ts",
+    "selftest": "tsx src/density.selftest.ts && tsx src/sweep.selftest.ts && tsx src/board.selftest.ts && tsx src/hub-persist.selftest.ts && tsx src/forced-combat.selftest.ts && tsx src/front-feel.selftest.ts",
     "test": "npm run typecheck && npm run selftest"
   },
   "dependencies": {

@@ -511,12 +511,22 @@ export function raidEngageTarget(
   return [{ sx, sy }];
 }
 
-/** Display glyph for a cell (UI). */
-export function cellGlyph(cell: MsCell): string {
+/**
+ * Display glyph for a cell (UI).
+ * `hitMine` optional: when false and cell is an open mine → 「済」(resolved / can sortie again).
+ * Pending forced lock (`hitMine === true`) keeps 「✕」.
+ */
+export function cellGlyph(
+  cell: MsCell,
+  opts?: { hitMine?: boolean },
+): string {
   if (cell.blocked) return "壁";
   if (cell.flagged && !cell.open) return "⚑";
   if (!cell.open) return "";
-  if (cell.mine) return "✕";
+  if (cell.mine) {
+    if (opts?.hitMine === false) return "済";
+    return "✕";
+  }
   if (cell.isHq && cell.adjacent === 0) return "HQ";
   if (cell.isHq) return "HQ";
   if (cell.adjacent === 0) return "";
