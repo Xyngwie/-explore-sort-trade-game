@@ -13,7 +13,8 @@ function readHubUnopenedContainers(): number {
   }
 }
 
-function spendOneHubContainer(): boolean {
+function spendHubContainers(count: number): boolean {
+  if (count < 1) return false;
   try {
     const raw = localStorage.getItem(HUB_SAVE_STORAGE_KEY);
     if (!raw) return false;
@@ -24,8 +25,8 @@ function spendOneHubContainer(): boolean {
     };
     if (!parsed.hub) return false;
     const have = Number(parsed.hub.unopenedContainers ?? 0);
-    if (!Number.isFinite(have) || have < 1) return false;
-    parsed.hub.unopenedContainers = Math.floor(have) - 1;
+    if (!Number.isFinite(have) || have < count) return false;
+    parsed.hub.unopenedContainers = Math.floor(have) - count;
     parsed.savedAt = new Date().toISOString();
     localStorage.setItem(HUB_SAVE_STORAGE_KEY, JSON.stringify(parsed));
     return true;
@@ -39,7 +40,7 @@ function isExploreHandoffQuery(): boolean {
   return p.has("salvagedContainers") || p.has("totalStockPieces") || p.has("isExtracted");
 }
 
-function addOneContainerToQuery(): void {
+function addContainersToQuery(count: number): void {
   const u = new URL(window.location.href);
   const containers = Math.max(0, Number.parseInt(u.searchParams.get("salvagedContainers") ?? "0", 10) || 0);
   const stock = Math.max(
@@ -47,13 +48,13 @@ function addOneContainerToQuery(): void {
     Number.parseInt(u.searchParams.get("totalStockPieces") ?? "0", 10) ||
       containers * PIECES_PER_CONTAINER,
   );
-  u.searchParams.set("salvagedContainers", String(containers + 1));
-  u.searchParams.set("totalStockPieces", String(stock + PIECES_PER_CONTAINER));
+  u.searchParams.set("salvagedContainers", String(containers + count));
+  u.searchParams.set("totalStockPieces", String(stock + count * PIECES_PER_CONTAINER));
   if (!u.searchParams.has("isExtracted")) u.searchParams.set("isExtracted", "1");
   window.location.assign(u.toString());
 }
 
-function installContainerButton(): void {
+function installContainerButtons(): void {
   if (!isExploreHandoffQuery()) return;
   const actions = document.querySelector<HTMLElement>(".stage-overlay[aria-label='精製ブリーフィング'] .stage-actions");
   if (!actions || actions.querySelector("#btn-add-hub-container")) return;
@@ -61,23 +62,38 @@ function installContainerButton(): void {
   const remaining = readHubUnopenedContainers();
   if (remaining <= 0) return;
 
-  const button = document.createElement("button");
-  button.type = "button";
-  button.id = "btn-add-hub-container";
-  button.className = "secondary";
-  button.textContent = `＋ 未開封コンテナを1個追加（HUB残り ${remaining}）`;
-  button.title = "HUBに保管している未開封コンテナを今回の精製へ追加します";
-  button.addEventListener("click", () => {
-    button.disabled = true;
-    if (!spendOneHubContainer()) {
-      button.disabled = false;
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.id = "btn-add-hub-container";
+  addButton.className = "secondary";
+  addButton.textContent = `＋1 未開封コンテナ（残り ${remaining}）`;
+  addButton.title = "HUBの未開封コンテナを1個だけ今回の精製へ追加します";
+
+  const allButton = document.createElement("button");
+  allButton.type = "button";
+  allButton.id = "btn-add-all-hub-containers";
+  allButton.className = "secondary";
+  allButton.textContent = `＋ALL（${remaining}個）`;
+  allButton.title = "HUBに残っている未開封コンテナをすべて今回の精製へ追加します";
+
+  const handleAdd = (count: number) => {
+    addButton.disabled = true;
+    allButton.disabled = true;
+    if (!spendHubContainers(count)) {
+      addButton.disabled = false;
+      allButton.disabled = false;
       return;
     }
-    addOneContainerToQuery();
-  });
-  actions.appendChild(button);
+    addContainersToQuery(count);
+  };
+
+  addButton.addEventListener("click", () => handleAdd(1));
+  allButton.addEventListener("click", () => handleAdd(remaining));
+
+  actions.appendChild(addButton);
+  actions.appendChild(allButton);
 }
 
-const observer = new MutationObserver(installContainerButton);
+const observer = new MutationObserver(installContainerButtons);
 observer.observe(document.body, { childList: true, subtree: true });
-installContainerButton();
+installContainerButtons();
