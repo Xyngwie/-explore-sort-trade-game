@@ -206,6 +206,10 @@ a.btn {
   border-radius: 8px;
   border: 1px solid #3d4450;
   background: #1a2230;
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 20;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
 }
 .cell-sortie-bar .actions {
   margin-top: 0.5rem;
@@ -216,7 +220,7 @@ a.btn {
 .cell-sortie-bar.locked {
   border-color: #f85149;
   background: #2a1515;
-  box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.25);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(248, 81, 73, 0.25);
 }
 .grid.front-ms.locked {
   outline: 1px solid #f85149;
