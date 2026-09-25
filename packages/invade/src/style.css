@@ -430,3 +430,23 @@ a.btn {
   background: rgba(90, 30, 30, 0.5);
   border-color: rgba(200, 80, 80, 0.45);
 }
+
+/* Keep an actionable sortie CTA visible even when the selected cell is off-screen. */
+.cell-sortie-bar:has(.cta-cluster) {
+  position: fixed;
+  left: max(0.75rem, calc(50% - 20rem));
+  right: max(0.75rem, calc(50% - 20rem));
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  z-index: 1000;
+  margin-top: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.cell-sortie-bar:has(.cta-cluster) .actions {
+  margin-top: 0;
+}
+@media (max-width: 42rem) {
+  .cell-sortie-bar:has(.cta-cluster) {
+    left: 0.75rem;
+    right: 0.75rem;
+  }
+}
