@@ -1,51 +1,91 @@
 # explore-sort-trade-game
 
-Explore → sort/refine → trade/hub のモノレポです。Module 4 / 5 は薄いプレイアブル・スタブ。ハンドオフは **キー契約のみ**（[`HANDOFF_M45_V0.md`](docs/HANDOFF_M45_V0.md)）で UI ナビは未配線。Pages プレビューは全モジュール対応。
+`explore → sort/refine → trade/hub` を中心に、Module 4 `invade` / Module 5 `restore` までを同一リポジトリで開発するモノレポです。
 
-| パッケージ | ゲーム上の役割 | 現行プレビュー |
+## 現在地
+
+- **GitHub `main` がソース正本 (SoT)**。旧 `.grok.me` は正本ではなく、残存する場合もプレビュー／練習用途です。
+- Module 1〜3 はプレイ可能な実装を持ち、Module 4〜5 も薄いプレイアブル・スタブまで進んでいます。
+- モジュール間の受け渡しは `packages/shared` の型・契約と `docs/` の契約文書を基準にします。
+- UI の遷移 CTA は `packages/shared` の共通定数を基準に揃えています。2026-09-24 時点で explore / sort / trade / invade / restore の主要結果画面まで整合済みです。
+- GitHub Pages に全モジュールのプレビューがあります。
+
+| パッケージ | 役割 | プレビュー |
 |---|---|---|
-| `packages/shared` | 共通型・ハンドオフ・セーブスキーマ | — |
-| `packages/explore` | Module 1 探索（WRECKLINE）・振る舞い垂直スライス | [Pages `/explore/`](https://xyngwie.github.io/-explore-sort-trade-game/explore/)（ローカル `dev:explore`） |
-| `packages/sort` | Module 2 精製（Athanor） | [Pages `/sort/`](https://xyngwie.github.io/-explore-sort-trade-game/sort/)（ローカル `dev:sort`） |
-| `packages/trade` | Module 3 拠点（BASE HUB） | [Pages ルート](https://xyngwie.github.io/-explore-sort-trade-game/)（ローカル `dev:trade`） |
-| `packages/invade` | Module 4 戦線（invade / front）薄いスタブ | [Pages `/invade/`](https://xyngwie.github.io/-explore-sort-trade-game/invade/)（ローカル `dev:invade` · :5176） |
-| `packages/restore` | Module 5 回路修復（restore）薄いスタブ | [Pages `/restore/`](https://xyngwie.github.io/-explore-sort-trade-game/restore/)（ローカル `dev:restore` · :5177） |
+| `packages/shared` | 共通型・ハンドオフ・セーブスキーマ・共有 UI 契約 | — |
+| `packages/explore` | Module 1 探索（WRECKLINE） | `/explore/` |
+| `packages/sort` | Module 2 精製（Athanor） | `/sort/` |
+| `packages/trade` | Module 3 拠点（BASE HUB） | `/` |
+| `packages/invade` | Module 4 戦線／ルート選択スタブ | `/invade/` |
+| `packages/restore` | Module 5 回路修復スタブ | `/restore/` |
 
-## 正本
+プレビュー: `https://xyngwie.github.io/-explore-sort-trade-game/`
 
-- **ソース正本:** この GitHub リポジトリの `main`（explore / sort / trade ともモノレポ）
-- **Module 1:** `packages/explore` が SoT。旧 `.grok.me` Module1 は **退役／練習用**（URL を正本にしない）
-- 旧 split `.grok.me` URL は退役方向。正本プレビューは GitHub Pages（詳細は PREVIEW_HOSTING_V0）
+## 仕様の読み方
 
-プロダクトビジョン（願望・未実装）: [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md)  
-運用方針: [`docs/agent_development_policy.md`](docs/agent_development_policy.md)  
-制約適応版オーケストレーション: [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md)  
-Sort v2 ルール: [`docs/SORT_V2_RULES.md`](docs/SORT_V2_RULES.md)  
-機体フリート循環: [`docs/MECH_FLEET.md`](docs/MECH_FLEET.md)  
-Explore I/O v2（機体インスタンス入出力）: [`docs/EXPLORE_IO_V2.md`](docs/EXPLORE_IO_V2.md)  
-Explore Behavior v0（僚機方針・発見・戦報）: [`docs/EXPLORE_BEHAVIOR_V0.md`](docs/EXPLORE_BEHAVIOR_V0.md)  
-Sort Yield v2（型付き資材／パーツ成果）: [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md)  
-Trade Hangar v0（最小ハンガー）: [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_HANGAR_V0.md)  
-Sort v0（最小精製）: [`docs/SORT_V0.md`](docs/SORT_V0.md)
-Invade / Front v0（戦線ひな型・ドラフト）: [`docs/INVADE_V0.md`](docs/INVADE_V0.md)  
-Restore v0（精密回路修復・ドラフト）: [`docs/RESTORE_V0.md`](docs/RESTORE_V0.md)  
-Handoff M4/M5 v0（trade↔invade/restore キー契約）: [`docs/HANDOFF_M45_V0.md`](docs/HANDOFF_M45_V0.md)  
-Preview Hosting v0（GitHub Pages・全モジュール）: [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md)
-Pages 用 workflow 正本（UI で `.github/workflows/` へコピー）: [`docs/ci/deploy-modules-preview.yml`](docs/ci/deploy-modules-preview.yml)
+**実装・契約を決める文書**と、**将来像を置く文書**を分けます。
+
+1. 現在のコード (`packages/*`) が実装上の一次情報
+2. `docs/*_V0.md` / `*_V2.md` / 契約文書が各機能の受入条件・境界を定義
+3. [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) が現在の開発順序と未完了事項を整理
+4. [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md) は願望・将来像であり、未実装事項を現在仕様として扱わない
+
+主要ドキュメント:
+
+- [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md) — 開発運用、エージェント／人間の役割、Git/PR方針
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — 現在の実装状況と次の開発計画
+- [`docs/EXPLORE_IO_V2.md`](docs/EXPLORE_IO_V2.md) — Explore 入出力契約
+- [`docs/EXPLORE_BEHAVIOR_V0.md`](docs/EXPLORE_BEHAVIOR_V0.md) — Explore の僚機方針・発見・戦報
+- [`docs/SORT_V2_RULES.md`](docs/SORT_V2_RULES.md) — Sort のルール
+- [`docs/SORT_YIELD_V2.md`](docs/SORT_YIELD_V2.md) — Sort 成果物契約
+- [`docs/TRADE_HANGAR_V0.md`](docs/TRADE_HANGAR_V0.md) — Trade/Hangar の最小仕様
+- [`docs/INVADE_V0.md`](docs/INVADE_V0.md) — Invade / Front ドラフト仕様
+- [`docs/RESTORE_V0.md`](docs/RESTORE_V0.md) — Restore ドラフト仕様
+- [`docs/HANDOFF_M45_V0.md`](docs/HANDOFF_M45_V0.md) — Module 4/5 と Hub のハンドオフ契約
+- [`docs/HUB_SAVE_CONTRACT.md`](docs/HUB_SAVE_CONTRACT.md) — Hub セーブ契約
+- [`docs/PREVIEW_HOSTING_V0.md`](docs/PREVIEW_HOSTING_V0.md) — GitHub Pages プレビュー運用
 
 ## セットアップ
+
+Node.js 20 以上を使用します。
 
 ```bash
 npm install
 npm run typecheck
-npm run dev:explore   # packages/explore 最小出撃
-npm run dev:sort      # packages/sort 最小精製
-npm run dev:trade     # packages/trade 最小ハンガー
-npm run dev:invade    # packages/invade 戦線スタブ (:5176)
-npm run dev:restore   # packages/restore 回路スタブ (:5177)
+npm test
 ```
 
+個別モジュールの開発／ビルド:
 
-## ブランチ
+```bash
+npm run dev:explore
+npm run dev:sort
+npm run dev:trade
+npm run dev:invade
+npm run dev:restore
 
-`feature/<module>-<task>` / `fix/<module>-<issue>` — `main` へは PR 経由。
+npm run build:explore
+npm run build:sort
+npm run build:trade
+npm run build:invade
+npm run build:restore
+```
+
+## Git / PR
+
+`main` への直接作業ではなく、タスクごとのブランチ → commit → PR を基本とします。
+
+```text
+feature/<module>-<task>
+fix/<module>-<issue>
+docs/<task>
+```
+
+PR では、変更範囲・確認したコマンド・未確認事項を明記します。マージ前にコードとドキュメントの整合を確認してください。
+
+## 開発上の原則
+
+- 実装されていないビジョンを「現行仕様」として扱わない。
+- `packages/shared` の境界をまたぐ変更は、先に契約への影響を確認する。
+- 経済、セーブ、ハンドオフ URL/key などの契約変更は、UI 文言変更と混ぜずに明示する。
+- まず現在の実装を読み、最小の変更で目的を達成する。大規模なリファクタリングは別タスクに分離する。
