@@ -1,11 +1,11 @@
-# Modules preview (explore + sort + trade + invade + restore) — build always; deploy when Pages opted in.
+# Modules preview (explore + sort + trade + invade + restore) — build and deploy GitHub Pages.
 #
 # Single GitHub Pages artifact with subpaths:
 #   /           → trade hangar
 #   /explore/   → explore
 #   /sort/      → sort
-#   /invade/    → invade (Module 4 scaffold)
-#   /restore/   → restore (Module 5 scaffold)
+#   /invade/   → invade
+#   /restore/  → restore
 #
 # Live URLs (owner Xyngwie, project Pages):
 #   https://xyngwie.github.io/-explore-sort-trade-game/
@@ -14,12 +14,7 @@
 #   https://xyngwie.github.io/-explore-sort-trade-game/invade/
 #   https://xyngwie.github.io/-explore-sort-trade-game/restore/
 #
-# To enable Deploy:
-#   1. Repo public (or plan with private Pages)
-#   2. Settings → Pages → Source: GitHub Actions
-#   3. Actions variable ENABLE_GITHUB_PAGES=true
-#
-# Replaces deploy-trade-preview.yml (trade-only). See docs/PREVIEW_HOSTING_V0.md.
+# GitHub Pages must use GitHub Actions as its source.
 
 name: Deploy Modules Preview
 
@@ -103,7 +98,6 @@ jobs:
 
   deploy:
     needs: build
-    if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
