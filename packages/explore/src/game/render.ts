@@ -55,7 +55,12 @@ export function renderWorld(
     ctx.setLineDash([]);
 
     // Visual countdown ring: same timer as the HUD, with no gameplay effect.
-    const liftEta = Math.max(0, world.balance.boardingCargoDelaySec + world.balance.boardingLiftOffDelaySec - (world.elapsed - b.requestedAt));
+    const liftEta = Math.max(
+      0,
+      world.balance.boardingCargoDelaySec +
+        world.balance.boardingLiftOffDelaySec -
+        (world.elapsed - b.requestedAt),
+    );
     const progress = extractionProgressPct(
       liftEta,
       world.balance.boardingCargoDelaySec,
@@ -64,7 +69,13 @@ export function renderWorld(
     ctx.strokeStyle = b.cargoArrived ? "#3dd68c" : "#7eb6ff";
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(cx, cy, Math.max(4, rr - 5), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (progress / 100));
+    ctx.arc(
+      cx,
+      cy,
+      Math.max(4, rr - 5),
+      -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * (progress / 100),
+    );
     ctx.stroke();
 
     ctx.fillStyle = b.cargoArrived ? "#3dd68ccc" : "#7eb6ffcc";
@@ -231,4 +242,56 @@ export function renderWorld(
 
 function quirkShort(q: "cling" | "decoy" | "sniper"): string {
   return q === "cling" ? "密着" : q === "decoy" ? "囮" : "遠射";
+}
+
+function drawCoverRing(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+): void {
+  ctx.strokeStyle = "#8fd3ffaa";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawCraft(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  color: string,
+  heading: number,
+): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(-r * 0.7, r * 0.7);
+  ctx.lineTo(-r * 0.4, 0);
+  ctx.lineTo(-r * 0.7, -r * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+export function worldFromCanvas(
+  canvas: HTMLCanvasElement,
+  world: World,
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  const nx = (clientX - rect.left) / rect.width;
+  const ny = (clientY - rect.top) / rect.height;
+  return {
+    x: world.camera.x + nx * world.camera.w,
+    y: world.camera.y + ny * world.camera.h,
+  };
 }
