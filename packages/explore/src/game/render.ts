@@ -1,3 +1,4 @@
+import { extractionProgressPct } from "../extractProgress";
 import { STANCE_LABEL, type World } from "./types";
 
 export function renderWorld(
@@ -52,6 +53,31 @@ export function renderWorld(
     ctx.arc(cx, cy, rr, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // Visual countdown ring: same timer as the HUD, with no gameplay effect.
+    const liftEta = Math.max(
+      0,
+      world.balance.boardingCargoDelaySec +
+        world.balance.boardingLiftOffDelaySec -
+        (world.elapsed - b.requestedAt),
+    );
+    const progress = extractionProgressPct(
+      liftEta,
+      world.balance.boardingCargoDelaySec,
+      world.balance.boardingLiftOffDelaySec,
+    );
+    ctx.strokeStyle = b.cargoArrived ? "#3dd68c" : "#7eb6ff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(
+      cx,
+      cy,
+      Math.max(4, rr - 5),
+      -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * (progress / 100),
+    );
+    ctx.stroke();
+
     ctx.fillStyle = b.cargoArrived ? "#3dd68ccc" : "#7eb6ffcc";
     ctx.font = "12px sans-serif";
     const label = b.cargoArrived ? "BOARDING · CARGO" : "BOARDING";

@@ -41,7 +41,8 @@ export function effectSettleClass(state: LoopCelebrateState): string {
 }
 
 export function buildLoopCelebrateNoteHtml(state: LoopCelebrateState): string {
-  if (!state.loopClosed) return "";
+  const guide = `<p class="restore-rule-guide" role="note">数字＝そのマスの上下左右に接する線の本数。線をつないで閉ループを作り、数字を満たします。</p>`;
+  if (!state.loopClosed) return guide;
   if (state.celebrating) {
     const title =
       state.perfect || state.fullyAwakened
@@ -51,10 +52,10 @@ export function buildLoopCelebrateNoteHtml(state: LoopCelebrateState): string {
       state.perfect || state.fullyAwakened
         ? "効果値が確定トーンで着地 · 青白グローは採点中の最小閉ループ"
         : "効果値が着地 · 青白グローは採点中の最小閉ループ（既存ハイライトを強化）";
-    return `<div class="loop-celebrate-note" role="status" aria-live="polite">
+    return `${guide}<div class="loop-celebrate-note" role="status" aria-live="polite">
       <span class="loop-celebrate-k">${title}</span>
       <span class="loop-celebrate-v">${blurb}</span>
     </div>`;
   }
-  return `<p class="loop-hint muted loop-live-hint">閉ループ採点中 · グロー強調は active-loop を上書きせず増幅</p>`;
+  return `${guide}<p class="loop-hint muted loop-live-hint">閉ループ採点中 · グロー強調は active-loop を上書きせず増幅</p>`;
 }
