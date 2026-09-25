@@ -47,9 +47,7 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   gap: 2px;
   margin-top: 0.75rem;
 }
-.front-ms {
-  gap: 1px;
-}
+.front-ms { gap: 1px; }
 .cell {
   aspect-ratio: 1;
   border-radius: 2px;
@@ -69,15 +67,9 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .cell.pickable { cursor: pointer; }
 .cell.pickable:hover,
-.cell.closed:hover {
-  outline: 1px solid #58a6ff;
-  z-index: 1;
-}
+.cell.closed:hover { outline: 1px solid #58a6ff; z-index: 1; }
 .cell.focusable { cursor: pointer; }
-.cell.focusable:hover {
-  outline: 1px solid #f0c14b;
-  z-index: 1;
-}
+.cell.focusable:hover { outline: 1px solid #f0c14b; z-index: 1; }
 .cell.hq { font-weight: 700; font-size: 0.45rem; }
 .cell.selected {
   outline: 2px solid #f0c14b;
@@ -93,13 +85,8 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   color: #f85149;
   font-size: 0.4rem;
 }
-.cell.open {
-  background: #0d1014;
-  cursor: default;
-}
-.cell.open.blank {
-  background: #161b22;
-}
+.cell.open { background: #0d1014; cursor: default; }
+.cell.open.blank { background: #161b22; }
 .cell.open.hq {
   background: #1a3320;
   border-color: #3fb950;
@@ -143,36 +130,17 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   cursor: pointer;
 }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn.ghost {
-  background: transparent;
-  border-color: #2a313c;
-  color: #9aa0a6;
-}
+.btn.ghost { background: transparent; border-color: #2a313c; color: #9aa0a6; }
 .card-title {
   font-size: 0.85rem;
   margin: 0 0 0.5rem;
   letter-spacing: 0.04em;
   color: #c9d1d9;
 }
-a.btn {
-  display: inline-block;
-  text-decoration: none;
-  line-height: 1.2;
-}
-.btn.secondary {
-  background: #21262d;
-  border-color: #388bfd;
-  color: #58a6ff;
-}
-.btn.secondary:hover {
-  background: #30363d;
-}
-.ok-banner {
-  background: #1a3320;
-  border: 1px solid #3fb950;
-  color: #7ee787;
-}
-
+a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
+.btn.secondary { background: #21262d; border-color: #388bfd; color: #58a6ff; }
+.btn.secondary:hover { background: #30363d; }
+.ok-banner { background: #1a3320; border: 1px solid #3fb950; color: #7ee787; }
 .engage-box {
   margin-top: 0.75rem;
   padding: 0.65rem 0.75rem;
@@ -180,26 +148,11 @@ a.btn {
   border: 1px solid #2a313c;
   background: #1a1f27;
 }
-.engage-box.forced {
-  border-color: #f85149;
-  background: #2a1515;
-}
-.engage-box.raid {
-  border-color: #3fb950;
-  background: #152a1a;
-}
-.btn.danger {
-  background: #da3633;
-  border-color: #f85149;
-  color: #fff;
-}
+.engage-box.forced { border-color: #f85149; background: #2a1515; }
+.engage-box.raid { border-color: #3fb950; background: #152a1a; }
+.btn.danger { background: #da3633; border-color: #f85149; color: #fff; }
 .btn.danger:hover { filter: brightness(1.08); }
-
-/* Cell-local sortie bar (under grid) */
-.cell-sortie-hint {
-  margin: 0.6rem 0 0;
-  font-size: 0.8rem;
-}
+.cell-sortie-hint { margin: 0.6rem 0 0; font-size: 0.8rem; }
 .cell-sortie-bar {
   margin-top: 0.65rem;
   padding: 0.65rem 0.75rem;
@@ -207,36 +160,19 @@ a.btn {
   border: 1px solid #3d4450;
   background: #1a2230;
 }
-.cell-sortie-bar .actions {
-  margin-top: 0.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
+.cell-sortie-bar .actions { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cell-sortie-bar.locked {
   border-color: #f85149;
   background: #2a1515;
   box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.25);
 }
-.grid.front-ms.locked {
-  outline: 1px solid #f85149;
-  opacity: 0.92;
-}
-.grid.front-ms.locked button.cell:not(.mine) {
-  cursor: not-allowed;
-}
-
-/* --- Front feel: explored blanks, flags, progress --- */
+.grid.front-ms.locked { outline: 1px solid #f85149; opacity: 0.92; }
+.grid.front-ms.locked button.cell:not(.mine) { cursor: not-allowed; }
 .cell.open.blank,
-.cell.open.explored {
-  background: #1a2430;
-  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.18);
-}
+.cell.open.explored { background: #1a2430; box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.18); }
 .cell.open.blank.selected,
 .cell.open.explored.selected {
-  box-shadow:
-    inset 0 0 0 1px rgba(88, 166, 255, 0.28),
-    0 0 0 1px #0d1014;
+  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.28), 0 0 0 1px #0d1014;
 }
 .cell.flagged {
   background: #3d3420;
@@ -244,23 +180,17 @@ a.btn {
   box-shadow: inset 0 0 0 1px rgba(240, 193, 75, 0.55);
   font-size: 0.65rem;
 }
-
-/* Pending forced-combat mine (lock on) */
 .cell.open.mine.mine-pending {
   background: #4a1818;
   color: #ff7b72;
   font-weight: 700;
-  box-shadow:
-    inset 0 0 0 1px rgba(248, 81, 73, 0.85),
-    0 0 8px rgba(248, 81, 73, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.85), 0 0 8px rgba(248, 81, 73, 0.35);
   animation: mine-pending-pulse 1.4s ease-in-out infinite;
 }
 @keyframes mine-pending-pulse {
   0%, 100% { filter: brightness(1); }
   50% { filter: brightness(1.12); }
 }
-
-/* Resolved mine after #75 clear — can sortie again */
 .cell.open.mine.mine-resolved {
   background: #1f2d24;
   color: #7ee787;
@@ -271,27 +201,14 @@ a.btn {
   filter: none;
 }
 .cell.open.mine.mine-resolved:hover,
-.cell.open.mine.mine-resolved.focusable:hover {
-  outline: 1px solid #3fb950;
-  z-index: 1;
-}
-
-/* Closed-cell danger tint by distance from HQ (bomb density feel) */
-.cell.closed.danger-near {
-  background: #1c2420;
-  border-color: #2d3b34;
-}
-.cell.closed.danger-mid {
-  background: #242018;
-  border-color: #3d3728;
-}
+.cell.open.mine.mine-resolved.focusable:hover { outline: 1px solid #3fb950; z-index: 1; }
+.cell.closed.danger-near { background: #1c2420; border-color: #2d3b34; }
+.cell.closed.danger-mid { background: #242018; border-color: #3d3728; }
 .cell.closed.danger-front {
   background: #2a1c1c;
   border-color: #4a2e2e;
   box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.12);
 }
-
-/* Danger legend */
 .danger-legend {
   display: flex;
   flex-wrap: wrap;
@@ -323,24 +240,10 @@ a.btn {
 .danger-swatch.near .chip { background: #1c2420; border-color: #2d3b34; }
 .danger-swatch.mid .chip { background: #242018; border-color: #3d3728; }
 .danger-swatch.front .chip { background: #2a1c1c; border-color: #4a2e2e; }
-.danger-swatch.resolved .chip {
-  background: #1f2d24;
-  border-color: #3fb950;
-}
-.danger-swatch.pending .chip {
-  background: #4a1818;
-  border-color: #f85149;
-}
-.danger-swatch.blank .chip {
-  background: #1a2430;
-  border-color: rgba(88, 166, 255, 0.35);
-}
-.danger-swatch.flag .chip {
-  background: #3d3420;
-  border-color: rgba(240, 193, 75, 0.55);
-}
-
-/* Progress feel meter */
+.danger-swatch.resolved .chip { background: #1f2d24; border-color: #3fb950; }
+.danger-swatch.pending .chip { background: #4a1818; border-color: #f85149; }
+.danger-swatch.blank .chip { background: #1a2430; border-color: rgba(88, 166, 255, 0.35); }
+.danger-swatch.flag .chip { background: #3d3420; border-color: rgba(240, 193, 75, 0.55); }
 .progress-feel {
   margin-top: 0.65rem;
   padding: 0.55rem 0.65rem;
@@ -361,23 +264,9 @@ a.btn {
   background: linear-gradient(90deg, #238636, #58a6ff);
   transition: width 0.2s ease;
 }
-.progress-feel .stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem 0.85rem;
-  font-size: 0.75rem;
-  color: #9aa0a6;
-}
-.progress-feel .stats strong {
-  color: #e8eaed;
-  font-weight: 600;
-}
-.cell-sortie-bar.resolved {
-  border-color: #3fb950;
-  background: #152a1a;
-}
-
-/* Touch flag plant — short ops guide */
+.progress-feel .stats { display: flex; flex-wrap: wrap; gap: 0.55rem 0.85rem; font-size: 0.75rem; color: #9aa0a6; }
+.progress-feel .stats strong { color: #e8eaed; font-weight: 600; }
+.cell-sortie-bar.resolved { border-color: #3fb950; background: #152a1a; }
 .flag-ops-guide {
   margin-top: 0.55rem;
   padding: 0.45rem 0.55rem;
@@ -385,36 +274,11 @@ a.btn {
   border: 1px solid #2a313c;
   background: #12161c;
 }
-.flag-ops-title {
-  margin: 0 0 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #79b8ff;
-}
-.flag-ops-list {
-  margin: 0;
-  padding-left: 1.1rem;
-  font-size: 0.72rem;
-  color: #9aa0a6;
-  line-height: 1.45;
-}
-.flag-ops-list strong {
-  color: #e8eaed;
-  font-weight: 650;
-}
-.cell.ms-cell {
-  touch-action: manipulation;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.cta-cluster {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-}
+.flag-ops-title { margin: 0 0 0.25rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; color: #79b8ff; }
+.flag-ops-list { margin: 0; padding-left: 1.1rem; font-size: 0.72rem; color: #9aa0a6; line-height: 1.45; }
+.flag-ops-list strong { color: #e8eaed; font-weight: 650; }
+.cell.ms-cell { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+.cta-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 .cta-chip {
   display: inline-block;
   padding: 0.15rem 0.45rem;
@@ -430,8 +294,6 @@ a.btn {
   background: rgba(90, 30, 30, 0.5);
   border-color: rgba(200, 80, 80, 0.45);
 }
-
-/* Keep an actionable sortie CTA visible even when the selected cell is off-screen. */
 .cell-sortie-bar:has(.cta-cluster) {
   position: fixed;
   left: max(0.75rem, calc(50% - 20rem));
@@ -441,12 +303,28 @@ a.btn {
   margin-top: 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
-.cell-sortie-bar:has(.cta-cluster) .actions {
-  margin-top: 0;
-}
+.cell-sortie-bar:has(.cta-cluster) .actions { margin-top: 0; }
 @media (max-width: 42rem) {
+  .cell-sortie-bar:has(.cta-cluster) { left: 0.75rem; right: 0.75rem; }
+}
+
+/* Short landscape viewports: compact the fixed sortie bar so it does not cover the lower grid. */
+@media (orientation: landscape) and (max-height: 34rem) {
   .cell-sortie-bar:has(.cta-cluster) {
-    left: 0.75rem;
-    right: 0.75rem;
+    padding: 0.35rem 0.5rem;
+    max-height: 5.25rem;
+    overflow: auto;
   }
+  .cell-sortie-bar:has(.cta-cluster) p { margin: 0.15rem 0; }
+  .cell-sortie-bar:has(.cta-cluster) .mono { display: none; }
+  .cell-sortie-bar:has(.cta-cluster) .actions { gap: 0.3rem; }
+  .cell-sortie-bar:has(.cta-cluster) .btn { padding: 0.3rem 0.55rem; }
+}
+@media (orientation: landscape) and (max-height: 24rem) {
+  .cell-sortie-bar:has(.cta-cluster) {
+    padding: 0.25rem 0.4rem;
+    max-height: 3.75rem;
+  }
+  .cell-sortie-bar:has(.cta-cluster) p:first-child { display: none; }
+  .cell-sortie-bar:has(.cta-cluster) .btn { padding: 0.25rem 0.5rem; font-size: 0.72rem; }
 }
