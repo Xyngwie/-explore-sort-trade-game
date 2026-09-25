@@ -13,13 +13,21 @@
 | パッケージ | 役割 | プレビュー |
 |---|---|---|
 | `packages/shared` | 共通型・ハンドオフ・セーブスキーマ・共有 UI 契約 | — |
-| `packages/explore` | Module 1 探索（WRECKLINE） | `/explore/` |
-| `packages/sort` | Module 2 精製（Athanor） | `/sort/` |
-| `packages/trade` | Module 3 拠点（BASE HUB） | `/` |
-| `packages/invade` | Module 4 戦線／ルート選択スタブ | `/invade/` |
-| `packages/restore` | Module 5 回路修復スタブ | `/restore/` |
+| `packages/explore` | Module 1 探索（WRECKLINE） | [Explore](https://xyngwie.github.io/-explore-sort-trade-game/explore/) |
+| `packages/sort` | Module 2 精製（Athanor） | [Sort](https://xyngwie.github.io/-explore-sort-trade-game/sort/) |
+| `packages/trade` | Module 3 拠点（BASE HUB） | [Trade / Hangar](https://xyngwie.github.io/-explore-sort-trade-game/) |
+| `packages/invade` | Module 4 戦線／ルート選択スタブ | [Invade](https://xyngwie.github.io/-explore-sort-trade-game/invade/) |
+| `packages/restore` | Module 5 回路修復スタブ | [Restore](https://xyngwie.github.io/-explore-sort-trade-game/restore/) |
 
-プレビュー: `https://xyngwie.github.io/-explore-sort-trade-game/`
+### プレイ用プレビュー
+
+- [Trade / Hangar](https://xyngwie.github.io/-explore-sort-trade-game/)
+- [Explore](https://xyngwie.github.io/-explore-sort-trade-game/explore/)
+- [Sort](https://xyngwie.github.io/-explore-sort-trade-game/sort/)
+- [Invade](https://xyngwie.github.io/-explore-sort-trade-game/invade/)
+- [Restore](https://xyngwie.github.io/-explore-sort-trade-game/restore/)
+
+> **注:** これらは GitHub Pages のライブプレビューです。`main` のモジュール変更時に `Deploy Modules Preview` ワークフローがビルド・デプロイします。
 
 ## 仕様の読み方
 
