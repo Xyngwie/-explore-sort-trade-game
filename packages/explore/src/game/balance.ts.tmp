@@ -1,1 +1,0 @@
-Combat balance target: standard enemy TTK ~10s, leader TTD ~20s. This marker is temporary and should be removed before merge if the branch diff tooling cannot validate the balance file directly.
