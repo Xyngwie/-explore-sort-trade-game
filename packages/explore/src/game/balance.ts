@@ -1,5 +1,14 @@
 /**
  * Single tuning table for the explore behavior slice.
+ *
+ * Primary playtest knobs (ISSUE-02 / run-20260924-002):
+ * - moveSpeed / wingmanSpeed — captain & wingman base move
+ * - cargoSpeedMulMin (+ cargoSpeedRefSlots) — payload slowdown floor
+ * - visionRange / weaponRange / engageRange — detection & combat range
+ * - defaultTimeSec — sortie clock
+ *
+ * Prefer editing this file (or the re-export index `./constants.ts`) over
+ * sprinkling literals in brain/sim/orders.
  */
 export const BALANCE = {
   worldW: 1400,
@@ -97,6 +106,7 @@ export const BALANCE = {
 
 export type Balance = typeof BALANCE;
 
+/** Clamp density to 0..1. */
 export function clampDensity(density: number): number {
   if (!Number.isFinite(density)) return 0;
   return Math.min(1, Math.max(0, density));
@@ -111,31 +121,16 @@ export type DensityThreat = {
 
 export function threatFromDensity(density: number | null): DensityThreat {
   if (density == null) {
-    return {
-      enemyCount: BALANCE.baselineEnemyCount,
-      spawnDist: BALANCE.baselineSpawnDist,
-      enemySpeedMul: 1,
-      enemyHpMul: 1,
-    };
+    return { enemyCount: BALANCE.baselineEnemyCount, spawnDist: BALANCE.baselineSpawnDist, enemySpeedMul: 1, enemyHpMul: 1 };
   }
   const t = clampDensity(density);
-  const enemyCount = Math.round(
-    BALANCE.densityEnemyCountMin +
-      (BALANCE.densityEnemyCountMax - BALANCE.densityEnemyCountMin) * t,
-  );
-  const spawnDist =
-    BALANCE.densitySpawnDistFar +
-    (BALANCE.densitySpawnDistNear - BALANCE.densitySpawnDistFar) * t;
-  const enemySpeedMul =
-    BALANCE.densityEnemySpeedMulMin +
-    (BALANCE.densityEnemySpeedMulMax - BALANCE.densityEnemySpeedMulMin) * t;
+  const enemyCount = Math.round(BALANCE.densityEnemyCountMin + (BALANCE.densityEnemyCountMax - BALANCE.densityEnemyCountMin) * t);
+  const spawnDist = BALANCE.densitySpawnDistFar + (BALANCE.densitySpawnDistNear - BALANCE.densitySpawnDistFar) * t;
+  const enemySpeedMul = BALANCE.densityEnemySpeedMulMin + (BALANCE.densityEnemySpeedMulMax - BALANCE.densityEnemySpeedMulMin) * t;
   return { enemyCount, spawnDist, enemySpeedMul, enemyHpMul: 1 };
 }
 
-export const ENGAGE_BRIEFING_LABEL = {
-  forced: "強制交戦・周囲引き込み",
-  raid: "任意侵入",
-} as const;
+export const ENGAGE_BRIEFING_LABEL = { forced: "強制交戦・周囲引き込み", raid: "任意侵入" } as const;
 
 export type EngageThreatInput = {
   density: number | null;
@@ -147,66 +142,28 @@ export type EngageThreatInput = {
 export function threatFromEngage(input: EngageThreatInput): DensityThreat {
   const base = threatFromDensity(input.density);
   const cellCount = input.enemyCells?.length ?? 0;
-  const neighborCount =
-    input.neighborCount != null && Number.isFinite(input.neighborCount)
-      ? Math.max(0, Math.floor(input.neighborCount))
-      : null;
-
+  const neighborCount = input.neighborCount != null && Number.isFinite(input.neighborCount) ? Math.max(0, Math.floor(input.neighborCount)) : null;
   if (input.engage === "forced") {
     let enemyCount: number;
     if (cellCount > 0) enemyCount = cellCount;
     else if (neighborCount != null) enemyCount = 1 + neighborCount;
     else enemyCount = base.enemyCount + 2;
-    enemyCount = Math.min(
-      BALANCE.engageForcedEnemyCountMax,
-      Math.max(BALANCE.engageForcedEnemyCountMin, enemyCount),
-    );
-    return {
-      enemyCount,
-      spawnDist: Math.min(base.spawnDist, BALANCE.engageForcedSpawnDist),
-      enemySpeedMul: Math.max(base.enemySpeedMul, BALANCE.engageForcedSpeedMul),
-      enemyHpMul: BALANCE.engageForcedHpMul,
-    };
+    enemyCount = Math.min(BALANCE.engageForcedEnemyCountMax, Math.max(BALANCE.engageForcedEnemyCountMin, enemyCount));
+    return { enemyCount, spawnDist: Math.min(base.spawnDist, BALANCE.engageForcedSpawnDist), enemySpeedMul: Math.max(base.enemySpeedMul, BALANCE.engageForcedSpeedMul), enemyHpMul: BALANCE.engageForcedHpMul };
   }
-
-  let enemyCount: number;
-  if (cellCount > 0) enemyCount = cellCount;
-  else enemyCount = BALANCE.engageRaidEnemyCountDefault;
-  enemyCount = Math.min(
-    BALANCE.engageRaidEnemyCountMax,
-    Math.max(1, enemyCount),
-  );
-  return {
-    enemyCount,
-    spawnDist: BALANCE.engageRaidSpawnDist,
-    enemySpeedMul: BALANCE.engageRaidSpeedMul,
-    enemyHpMul: BALANCE.engageRaidHpMul,
-  };
+  let enemyCount = cellCount > 0 ? cellCount : BALANCE.engageRaidEnemyCountDefault;
+  enemyCount = Math.min(BALANCE.engageRaidEnemyCountMax, Math.max(1, enemyCount));
+  return { enemyCount, spawnDist: BALANCE.engageRaidSpawnDist, enemySpeedMul: BALANCE.engageRaidSpeedMul, enemyHpMul: BALANCE.engageRaidHpMul };
 }
 
-export function threatFromInvadeSector(opts: {
-  density: number | null;
-  engage?: "forced" | "raid" | null;
-  enemyCells?: readonly { sx: number; sy: number }[];
-  neighborCount?: number;
-}): DensityThreat {
-  if (opts.engage === "forced" || opts.engage === "raid") {
-    return threatFromEngage({
-      density: opts.density,
-      engage: opts.engage,
-      enemyCells: opts.enemyCells,
-      neighborCount: opts.neighborCount,
-    });
-  }
+export function threatFromInvadeSector(opts: { density: number | null; engage?: "forced" | "raid" | null; enemyCells?: readonly { sx: number; sy: number }[]; neighborCount?: number }): DensityThreat {
+  if (opts.engage === "forced" || opts.engage === "raid") return threatFromEngage({ density: opts.density, engage: opts.engage, enemyCells: opts.enemyCells, neighborCount: opts.neighborCount });
   return threatFromDensity(opts.density);
 }
 
 export function balanceForThreat(threat: DensityThreat): Balance {
   if (threat.enemySpeedMul === 1) return BALANCE;
-  return {
-    ...BALANCE,
-    enemySpeed: BALANCE.enemySpeed * threat.enemySpeedMul,
-  } as Balance;
+  return { ...BALANCE, enemySpeed: BALANCE.enemySpeed * threat.enemySpeedMul } as Balance;
 }
 
 export function balanceForDensity(density: number | null): Balance {
