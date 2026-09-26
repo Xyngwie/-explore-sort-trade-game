@@ -55,13 +55,10 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, _
   if (state.escapeT > 0 || !moving || outward) return;
   if (centerDistance > nearest.radius + COVER_ATTRACT_TRIGGER) return;
 
-  // Entering the attraction zone makes the cover center the movement target.
-  // The normal movement system then carries the unit all the way to the center,
-  // making the cover interaction visually obvious instead of barely nudging it.
+  // Entering the cover area snaps the unit directly to the cover center.
+  // Escape behavior above is intentionally unchanged.
+  unit.pos = { x: nearest.pos.x, y: nearest.pos.y };
   unit.moveTarget = { x: nearest.pos.x, y: nearest.pos.y };
-
-  if (centerDistance <= coverBoundary) {
-    unit.inCover = true;
-    state.coverId = nearest.id;
-  }
+  unit.inCover = true;
+  state.coverId = nearest.id;
 }
