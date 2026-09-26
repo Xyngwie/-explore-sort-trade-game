@@ -116,7 +116,6 @@ function updateBullets(world: World, dt: number): void {
       if (!t.alive) continue;
       if (dist(b.pos, t.pos) <= t.radius + world.balance.bulletHitPadding) {
         b.alive = false;
-        // Resolve cover hit chance (shooter accuracy / target incoming).
         const shooter = b.fromEnemy
           ? world.enemies.find((u) => u.id === b.ownerId)
           : friendlyUnits(world).find((u) => u.id === b.ownerId);
@@ -145,7 +144,6 @@ function updateBullets(world: World, dt: number): void {
             ? "敵"
             : friendlyUnits(world).find((u) => u.id === b.ownerId)?.name ?? "分隊";
           reportBattle(world, `${killer} が ${t.name} を撃破`, t.pos);
-          // Enemy wrecks may spill 0–2 salvage containers at the death site.
           if (t.kind === "enemy") {
             spawnEnemyDeathDrops(world, t.pos);
           }
@@ -165,8 +163,6 @@ function updateBullets(world: World, dt: number): void {
 
 function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): void {
   if (!unit.alive) return;
-  // Hard MAX carry abolished — cargo only slows movement (soft ref curve).
-
   if (!want && !unit.salvageId) return;
 
   let crate = unit.salvageId
@@ -214,8 +210,21 @@ function updateEnemies(world: World, dt: number): void {
     }
     if (!nearest) continue;
     if (best < world.balance.visionRange * world.balance.enemyChaseVisionMul) {
-      moveToward(e, nearest.pos, world.balance.enemySpeed, dt, world);
-      if (best < world.balance.weaponRange) tryFire(world, e, nearest, true);
+      // Ranged enemies close only until weapon range, then hold position.
+      // This prevents the baseline ranged fight from collapsing into contact.
+      if (best > world.balance.weaponRange) {
+        const dx = nearest.pos.x - e.pos.x;
+        const dy = nearest.pos.y - e.pos.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const standOffTarget = {
+          x: nearest.pos.x - (dx / len) * world.balance.weaponRange,
+          y: nearest.pos.y - (dy / len) * world.balance.weaponRange,
+        };
+        moveToward(e, standOffTarget, world.balance.enemySpeed, dt, world);
+      } else {
+        e.vel = { x: 0, y: 0 };
+      }
+      if (best <= world.balance.weaponRange) tryFire(world, e, nearest, true);
     }
   }
 }
@@ -236,7 +245,6 @@ function updateCamera(world: World): void {
 
 export type PlayerInput = {
   move: Vec2;
-  /** Leader click-to-move target in world space. */
   clickMove: Vec2 | null;
   fire: boolean;
   interact: boolean;
@@ -263,16 +271,7 @@ export function boardingLiftOffEta(world: World): number | null {
   return Math.max(0, world.balance.boardingLiftOffDelaySec - boardingElapsed(world));
 }
 
-
-/**
- * Roll and spawn 0..enemyDeathDropMax containers at an enemy death site.
- * `forcedCount` overrides the roll (tests).
- */
-export function spawnEnemyDeathDrops(
-  world: World,
-  at: Vec2,
-  forcedCount?: number,
-): number {
+export function spawnEnemyDeathDrops(world: World, at: Vec2, forcedCount?: number): number {
   const max = world.balance.enemyDeathDropMax;
   const count =
     forcedCount != null
@@ -284,9 +283,7 @@ export function spawnEnemyDeathDrops(
     idPrefix: "drop",
   });
   const glow = world.balance.deathDropGlowSec;
-  for (const c of spawned) {
-    c.glowT = glow;
-  }
+  for (const c of spawned) c.glowT = glow;
   pushLog(
     world,
     `敵撃破ドロップ：コンテナ ${spawned.length} 出現！（発光マーカー）`,
@@ -297,12 +294,9 @@ export function spawnEnemyDeathDrops(
 
 export type BoardingRequirementsHud = {
   active: boolean;
-  /** Seconds until lift-off; null when idle. */
   liftOffEta: number | null;
-  /** Seconds until cargo; null when idle or cargo already arrived. */
   cargoEta: number | null;
   cargoArrived: boolean;
-  /** Product rule: captain must be inside for success. */
   mustBeIn: string;
   captainInside: boolean;
   aliveCount: number;
@@ -310,14 +304,9 @@ export type BoardingRequirementsHud = {
   outsideCount: number;
   outsideNames: string[];
   insideNames: string[];
-  /** Large-HUD lines (JP). */
   lines: string[];
 };
 
-/**
- * Always-clear extract / return requirements for the top/edge HUD.
- * Failures must not feel like unclear rules. Compact when idle.
- */
 export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
   const mustBeIn = "隊長が搭乗円内";
   if (!world.boarding) {
@@ -352,9 +341,7 @@ export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
   const cargoArrived = world.boarding.cargoArrived;
   const lines: string[] = [
     "EXTRACT / 帰還要件",
-    liftOffEta != null
-      ? `離昇まで ${liftOffEta.toFixed(1)}s`
-      : "離昇直前",
+    liftOffEta != null ? `離昇まで ${liftOffEta.toFixed(1)}s` : "離昇直前",
     `必須: ${mustBeIn} → ${captainInside ? "円内 OK" : "円外！戻れ"}`,
     `円内 ${inside.length} / 生存 ${alive.length}` +
       (outside.length > 0
@@ -383,11 +370,6 @@ export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
   };
 }
 
-/**
- * Captain requests extract from anywhere. Spawns a fixed boarding circle at the
- * request-time captain position, auto-patrols living wingmen on that center.
- * No cancel / no second request while active (v0).
- */
 export function requestExtract(world: World): boolean {
   if (world.phase !== "sortie" || !world.leader.alive) return false;
   if (isOperationTimedOut(world)) {
@@ -409,7 +391,6 @@ export function requestExtract(world: World): boolean {
     requestedAt: world.elapsed,
     cargoArrived: false,
   };
-  // Keep legacy extract marker aligned with active boarding for any readers.
   world.extract = { pos: { ...center }, radius };
 
   for (const w of world.wingmen) {
@@ -423,7 +404,6 @@ export function requestExtract(world: World): boolean {
   return true;
 }
 
-/** @deprecated Use requestExtract — kept as alias for call sites during transition. */
 export function tryExtract(world: World): boolean {
   return requestExtract(world);
 }
@@ -451,8 +431,6 @@ function resolveBoardingLiftOff(world: World): void {
   world.phase = "result";
 
   if (captainIn) {
-    // Escape-circle recovery: every untaken container inside the boarding
-    // circle is recovered (not a subset / not carry-only).
     let circleCrates = 0;
     for (const c of world.containers) {
       if (c.taken) continue;
@@ -499,8 +477,6 @@ function updateBoarding(world: World): void {
   }
 }
 
-
-/** Abort in-progress salvage channels when the operation clock expires. */
 function leaderAbortSalvageOnTimeout(world: World): void {
   for (const u of friendlyUnits(world)) {
     u.salvageId = null;
@@ -513,7 +489,6 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
 
   world.elapsed += dt;
   world.timeLeft = Math.max(0, world.timeLeft - dt);
-  // Clock expiry locks move/cargo; does NOT auto-fail. Combat + boarding continue.
   if (world.timeLeft <= 0 && !world.operationTimedOut) {
     world.operationTimedOut = true;
     leaderAbortSalvageOnTimeout(world);
@@ -538,12 +513,10 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
 
   leader.cooldown = Math.max(0, leader.cooldown - dt);
 
-  // Leader movement: locked after timeout (player cannot reposition).
   if (timedOut) {
     leader.moveTarget = null;
     leader.vel = { x: 0, y: 0 };
   } else {
-    // Leader movement: WASD vector wins; else click target.
     if (input.move.x !== 0 || input.move.y !== 0) {
       const n = norm(input.move);
       leader.moveTarget = {
@@ -558,8 +531,6 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     moveToward(leader, leader.moveTarget, leadSpeed, dt, world);
   }
 
-  // Leader fire: movement stays player-led; auto-engage nearest threat in weapon
-  // range (escort-style reaction fire). Space/F also requests the same shot.
   let leadTarget: Unit | null = null;
   let best: number = world.balance.engageRange;
   for (const e of world.enemies) {
@@ -577,10 +548,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     tryFire(world, leader, leadTarget, false);
   }
 
-  // Cargo salvage locked after timeout (積み下ろし不可 includes crate pickup).
   if (!timedOut) {
-    // Captain auto-starts/continues salvage on a discovered untaken crate in
-    // interactRadius. E (input.interact) remains an optional explicit hold.
     const leaderWantSalvage =
       input.interact ||
       world.containers.some(
@@ -596,7 +564,6 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);
     const intent = decideWingman(world, w, dt);
-    // Wingmen may still reposition for combat after timeout; salvage blocked.
     w.moveTarget = intent.moveTarget;
     const wingSpeed =
       world.balance.wingmanSpeed * unitMoveSpeedMul(w, world);
