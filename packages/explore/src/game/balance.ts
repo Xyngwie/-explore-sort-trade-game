@@ -32,11 +32,11 @@ export const BALANCE = {
   enemyRadius: 13,
   leaderHp: 100,
   wingmanHp: 80,
-  enemyHp: 40,
-  fireCooldown: 0.45,
+  enemyHp: 100,
+  fireCooldown: 1.0,
   bulletSpeed: 320,
-  bulletDamage: 12,
-  enemyDamage: 8,
+  bulletDamage: 10,
+  enemyDamage: 5,
   /**
    * Soft personal cargo-speed reference (NOT a hard carry cap).
    * speedMul hits cargoSpeedMulMin around this many carried containers.
