@@ -1,5 +1,5 @@
 import {
-  HUB_SAVE_STORAGE_KEY,
+  INITIAL_HUB,
   RESOURCE_IDS,
   RESOURCE_LABEL_JA,
   loadHubSaveFromLocalStorage,
@@ -62,8 +62,7 @@ function renderTradeCard(existing: HTMLElement, hub: HubSnapshot): void {
 
 function tradeResource(id: ResourceId, action: "buy" | "sell"): void {
   const save = loadHubSaveFromLocalStorage();
-  if (!save) return;
-  const hub = normalizeHubSnapshot(save.hub);
+  const hub = normalizeHubSnapshot(save?.hub ?? INITIAL_HUB);
   const current = Math.max(0, Math.floor(hub.inventory?.[id] ?? 0));
 
   if (action === "sell") {
@@ -99,8 +98,7 @@ function installFourResourceTradeWindow(): void {
     if (!(card instanceof HTMLElement)) return;
     if (card.id === TRADE_RESOURCE_CARD_ID) return;
     const save = loadHubSaveFromLocalStorage();
-    if (!save) return;
-    renderTradeCard(card, normalizeHubSnapshot(save.hub));
+    renderTradeCard(card, normalizeHubSnapshot(save?.hub ?? INITIAL_HUB));
   };
 
   const observer = new MutationObserver(install);
