@@ -23,6 +23,10 @@ export function norm(v: Vec2): Vec2 {
   return { x: v.x / len, y: v.y / len };
 }
 
+export function dot(a: Vec2, b: Vec2): number {
+  return a.x * b.x + a.y * b.y;
+}
+
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
