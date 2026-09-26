@@ -1,1 +1,1 @@
-Cover movement integration is wired in tickWorld before moveToward.
+Cover acceptance: no global cover toggle, object-only entry, center snap, input-driven escape.
