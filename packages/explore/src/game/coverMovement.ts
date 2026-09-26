@@ -17,10 +17,10 @@ function stateFor(unit: Unit): CoverState {
   return state;
 }
 
-export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, _dt: number): void {
+export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, dt: number): void {
   if (!unit.alive) return;
   const state = stateFor(unit);
-  state.escapeT = Math.max(0, state.escapeT - _dt);
+  state.escapeT = Math.max(0, state.escapeT - dt);
 
   let nearest: ReturnType<typeof getCoverObjects>[number] | null = null;
   let nearestDistance = Infinity;
@@ -61,4 +61,5 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, _
   unit.moveTarget = { x: nearest.pos.x, y: nearest.pos.y };
   unit.inCover = true;
   state.coverId = nearest.id;
+  state.escapeT = 0;
 }
