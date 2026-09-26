@@ -10,17 +10,8 @@ export type ClearedPieceCounts =
 /** The only resources produced and stored by the new model. */
 export const RESOURCE_IDS = ["ammo", "armor", "power", "junk"] as const;
 export type ResourceId = (typeof RESOURCE_IDS)[number];
-export type YieldItemId = ResourceId;
-export type YieldBag = Partial<Record<ResourceId, number>>;
 
-export const RESOURCE_LABEL_JA: Record<ResourceId, string> = {
-  ammo: "弾薬",
-  armor: "装甲パーツ",
-  power: "電力パーツ",
-  junk: "ジャンク",
-};
-
-/** Deprecated compatibility names retained for existing HUB callers. */
+/** Deprecated compatibility ids retained so old Hub/repair code can compile and old saves can be read. */
 export type BasicMaterialId =
   | ResourceId
   | "mat_scrap"
@@ -35,6 +26,16 @@ export type PartId =
   | "part_power_cell"
   | "part_sensor_array"
   | "part_hydraulic_line";
+export type LegacyYieldItemId = Exclude<BasicMaterialId, ResourceId> | Exclude<PartId, ResourceId>;
+export type YieldItemId = ResourceId | LegacyYieldItemId;
+export type YieldBag = Partial<Record<YieldItemId, number>>;
+
+export const RESOURCE_LABEL_JA: Record<ResourceId, string> = {
+  ammo: "弾薬",
+  armor: "装甲パーツ",
+  power: "電力パーツ",
+  junk: "ジャンク",
+};
 
 export const BASIC_MATERIAL_LABEL_JA: Record<BasicMaterialId, string> = {
   ammo: "弾薬",
@@ -65,7 +66,7 @@ export function isBasicMaterialId(value: string): value is BasicMaterialId {
 export function isPartId(value: string): value is PartId {
   return (Object.keys(PART_LABEL_JA) as string[]).includes(value);
 }
-export function isYieldItemId(value: string): value is YieldItemId {
+export function isYieldItemId(value: string): value is ResourceId {
   return (RESOURCE_IDS as readonly string[]).includes(value);
 }
 
