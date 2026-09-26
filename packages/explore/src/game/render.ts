@@ -1,4 +1,5 @@
 import { extractionProgressPct } from "../extractProgress";
+import { getCoverObjects } from "./coverObjects";
 import { STANCE_LABEL, type World } from "./types";
 
 export function renderWorld(
@@ -36,6 +37,21 @@ export function renderWorld(
     ctx.stroke();
   }
 
+  // Cover objects: visual-only in this PR. Positions are generated once per sortie.
+  for (const cover of getCoverObjects(world)) {
+    const px = tx(cover.pos.x);
+    const py = ty(cover.pos.y);
+    const r = cover.radius * sx;
+    ctx.fillStyle = "#4b5b66";
+    ctx.fillRect(px - r, py - r * 0.7, r * 2, r * 1.4);
+    ctx.strokeStyle = "#8fa7b5";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px - r, py - r * 0.7, r * 2, r * 1.4);
+    ctx.fillStyle = "#b8c7d0aa";
+    ctx.font = "10px sans-serif";
+    ctx.fillText("COVER", px - 18, py - r * 0.85);
+  }
+
   // Boarding / extract circle (only while request active)
   if (world.boarding) {
     const b = world.boarding;
@@ -54,7 +70,6 @@ export function renderWorld(
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Visual countdown ring: same timer as the HUD, with no gameplay effect.
     const liftEta = Math.max(
       0,
       world.balance.boardingCargoDelaySec +
@@ -152,8 +167,6 @@ export function renderWorld(
     }
   }
 
-  // Enemies (only if in vision of any friendly — keep simple: always draw if in cam,
-  // but undiscussed fog for crates is the product rule; enemies use vision soft)
   const vision = world.balance.visionRange;
   const friendlies = [world.leader, ...world.wingmen];
   for (const e of world.enemies) {
