@@ -47,3 +47,6 @@ export function formatCircuitSellPriceJa(effectValue: number): {
     detailJa: `最低 ${base}c + 出来栄え ${craft}c`,
   };
 }
+
+// Module 3 UI side effect: replace the legacy typed-material inventory card.
+import "./trade-resource-ui";
