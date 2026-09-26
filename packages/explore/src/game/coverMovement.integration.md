@@ -1,5 +1,7 @@
-# Cover movement integration note
+# Cover movement integration
 
-The cover movement helper sets `unit.moveTarget` to the selected cover center while the unit is in the attraction zone. The normal movement loop must call `updateCoverMovement` before applying movement input/target movement.
+Cover entry is object-based: when the leader enters a cover object's interaction radius while moving inward, the unit snaps to the cover center and becomes `inCover`.
 
-This change intentionally does not alter damage/block calculations, cover placement, or wingman formation behavior.
+Cover exit remains input-driven: outward movement clears `inCover` and grants a short re-entry grace period.
+
+The old global V/button cover toggle is guarded at the UI layer in PR #120 so cover cannot be enabled in open ground.

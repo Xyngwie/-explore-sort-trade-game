@@ -37,23 +37,62 @@ export function renderWorld(
     ctx.stroke();
   }
 
-  // Cover objects: visual-only in this PR. Positions are generated once per sortie.
+  // Cover objects: readable physical rubble/barriers with a subtle interaction boundary.
   for (const cover of getCoverObjects(world)) {
     const px = tx(cover.pos.x);
     const py = ty(cover.pos.y);
     const r = cover.radius * Math.min(sx, sy);
-    ctx.fillStyle = "#4b5b66";
-    ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#8fa7b5";
-    ctx.lineWidth = 2;
+
+    ctx.strokeStyle = "#8fa7b544";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = "#b8c7d0aa";
-    ctx.font = "10px sans-serif";
-    ctx.fillText("COVER", px - 18, py - r - 5);
+    ctx.setLineDash([]);
+
+    // Low circular debris mound, leaving the snapped-to center readable.
+    ctx.fillStyle = "#3f4b52";
+    ctx.beginPath();
+    const chunks = 9;
+    for (let i = 0; i < chunks; i += 1) {
+      const a = (Math.PI * 2 * i) / chunks;
+      const rr = r * (0.58 + (i % 3) * 0.05);
+      const x = px + Math.cos(a) * rr;
+      const y = py + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    for (let i = 0; i < 7; i += 1) {
+      const a = (Math.PI * 2 * i) / 7 + 0.18;
+      const rr = r * (0.52 + (i % 2) * 0.08);
+      const cx = px + Math.cos(a) * rr;
+      const cy = py + Math.sin(a) * rr;
+      const w = r * (0.16 + (i % 3) * 0.025);
+      const h = r * (0.11 + ((i + 1) % 3) * 0.025);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a + Math.PI / 5);
+      ctx.fillStyle = i % 2 === 0 ? "#66737a" : "#566168";
+      ctx.fillRect(-w / 2, -h / 2, w, h);
+      ctx.strokeStyle = "#87949a99";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
+
+    ctx.fillStyle = "#253037";
+    ctx.beginPath();
+    ctx.arc(px, py, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#9aa8ae66";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(px, py, r * 0.24, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   // Boarding / extract circle (only while request active)
@@ -88,15 +127,8 @@ export function renderWorld(
     ctx.strokeStyle = b.cargoArrived ? "#3dd68c" : "#7eb6ff";
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(
-      cx,
-      cy,
-      Math.max(4, rr - 5),
-      -Math.PI / 2,
-      -Math.PI / 2 + Math.PI * 2 * (progress / 100),
-    );
+    ctx.arc(cx, cy, Math.max(4, rr - 5), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (progress / 100));
     ctx.stroke();
-
     ctx.fillStyle = b.cargoArrived ? "#3dd68ccc" : "#7eb6ffcc";
     ctx.font = "12px sans-serif";
     const label = b.cargoArrived ? "BOARDING · CARGO" : "BOARDING";
@@ -134,10 +166,7 @@ export function renderWorld(
     ctx.fillStyle = "#ffe08acc";
     ctx.font = "11px sans-serif";
     const drPct = Math.round((1 - world.balance.campDamageTakenMul) * 100);
-    const campLabel =
-      c.stashedCount > 0
-        ? `CAMP · ${c.stashedCount} · 防衛−${drPct}%`
-        : `CAMP · ${c.stashedCount}`;
+    const campLabel = c.stashedCount > 0 ? `CAMP · ${c.stashedCount} · 防衛−${drPct}%` : `CAMP · ${c.stashedCount}`;
     ctx.fillText(campLabel, cx - 44, cy - 28);
   }
 
@@ -175,9 +204,7 @@ export function renderWorld(
   const friendlies = [world.leader, ...world.wingmen];
   for (const e of world.enemies) {
     if (!e.alive) continue;
-    const seen = friendlies.some(
-      (u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision,
-    );
+    const seen = friendlies.some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision);
     if (!seen) continue;
     ctx.fillStyle = "#ff6b6b";
     ctx.beginPath();
@@ -201,43 +228,19 @@ export function renderWorld(
     ctx.font = "11px sans-serif";
     const quirkTag = w.quirk ? `·${quirkShort(w.quirk)}` : "";
     const coverTag = w.inCover ? "·カバー" : "";
-    ctx.fillText(
-      `${w.name}·${STANCE_LABEL[w.stance]}${quirkTag}${coverTag}`,
-      tx(w.pos.x) - 28,
-      ty(w.pos.y) - w.radius * sy - 8,
-    );
+    ctx.fillText(`${w.name}·${STANCE_LABEL[w.stance]}${quirkTag}${coverTag}`, tx(w.pos.x) - 28, ty(w.pos.y) - w.radius * sy - 8);
     if (w.stance === "patrol" && w.waypoint) {
       ctx.strokeStyle = "#f0b42955";
       ctx.beginPath();
-      ctx.arc(
-        tx(w.waypoint.x),
-        ty(w.waypoint.y),
-        world.balance.patrolRadius * sx,
-        0,
-        Math.PI * 2,
-      );
+      ctx.arc(tx(w.waypoint.x), ty(w.waypoint.y), world.balance.patrolRadius * sx, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
 
   // Leader
   if (world.leader.alive) {
-    if (world.leader.inCover) {
-      drawCoverRing(
-        ctx,
-        tx(world.leader.pos.x),
-        ty(world.leader.pos.y),
-        world.leader.radius * sx,
-      );
-    }
-    drawCraft(
-      ctx,
-      tx(world.leader.pos.x),
-      ty(world.leader.pos.y),
-      world.leader.radius * sx,
-      "#5cdb95",
-      world.leader.heading,
-    );
+    if (world.leader.inCover) drawCoverRing(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), world.leader.radius * sx);
+    drawCraft(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), world.leader.radius * sx, "#5cdb95", world.leader.heading);
     ctx.fillStyle = "#b6f5d0";
     ctx.font = "11px sans-serif";
     const leadLabel = world.leader.inCover ? "隊長·カバー" : "隊長";
@@ -247,13 +250,7 @@ export function renderWorld(
   // Vision ring (leader)
   ctx.strokeStyle = "#ffffff18";
   ctx.beginPath();
-  ctx.arc(
-    tx(world.leader.pos.x),
-    ty(world.leader.pos.y),
-    vision * sx,
-    0,
-    Math.PI * 2,
-  );
+  ctx.arc(tx(world.leader.pos.x), ty(world.leader.pos.y), vision * sx, 0, Math.PI * 2);
   ctx.stroke();
 }
 
@@ -261,12 +258,7 @@ function quirkShort(q: "cling" | "decoy" | "sniper"): string {
   return q === "cling" ? "密着" : q === "decoy" ? "囮" : "遠射";
 }
 
-function drawCoverRing(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  r: number,
-): void {
+function drawCoverRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   ctx.strokeStyle = "#8fd3ffaa";
   ctx.lineWidth = 2;
   ctx.setLineDash([3, 3]);
@@ -276,14 +268,7 @@ function drawCoverRing(
   ctx.setLineDash([]);
 }
 
-function drawCraft(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  r: number,
-  color: string,
-  heading: number,
-): void {
+function drawCraft(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, heading: number): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(heading);
@@ -298,17 +283,9 @@ function drawCraft(
   ctx.restore();
 }
 
-export function worldFromCanvas(
-  canvas: HTMLCanvasElement,
-  world: World,
-  clientX: number,
-  clientY: number,
-): { x: number; y: number } {
+export function worldFromCanvas(canvas: HTMLCanvasElement, world: World, clientX: number, clientY: number): { x: number; y: number } {
   const rect = canvas.getBoundingClientRect();
   const nx = (clientX - rect.left) / rect.width;
   const ny = (clientY - rect.top) / rect.height;
-  return {
-    x: world.camera.x + nx * world.camera.w,
-    y: world.camera.y + ny * world.camera.h,
-  };
+  return { x: world.camera.x + nx * world.camera.w, y: world.camera.y + ny * world.camera.h };
 }

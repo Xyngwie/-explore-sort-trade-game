@@ -1,11 +1,10 @@
 /**
  * Subtle corner keyboard-shortcut overlay for Explore sortie.
- * Lists only keys wired in main.ts input handlers.
+ * Lists only keys that remain player-facing after cover became object-based.
  */
 
 export const SHORTCUTS_HIDDEN_KEY = "estg.explore.shortcutsHidden";
 
-/** Keys actually handled in Explore (see main.ts keydown / syncMoveFromKeys). */
 export const EXPLORE_SHORTCUTS: ReadonlyArray<{
   keys: ReadonlyArray<string>;
   label: string;
@@ -18,10 +17,39 @@ export const EXPLORE_SHORTCUTS: ReadonlyArray<{
   { keys: ["U"], label: "荷下ろし" },
   { keys: ["G"], label: "積込" },
   { keys: ["P"], label: "パージ" },
-  { keys: ["V"], label: "カバー" },
   { keys: ["1–4"], label: "僚機方針" },
   { keys: ["?"], label: "この表示" },
 ];
+
+/**
+ * Cover is now entered only by physically reaching a cover object.
+ * Keep the legacy V/button UI from invoking the old global toggle while the
+ * legacy handler remains in main.ts. This guard can be removed once that
+ * handler is deleted in the follow-up cleanup.
+ */
+function installLegacyCoverUiGuard(): void {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key.toLowerCase() !== "v") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
+    true,
+  );
+
+  const hideLegacyButton = (): void => {
+    document.getElementById("btn-cover")?.remove();
+  };
+
+  hideLegacyButton();
+  const observer = new MutationObserver(hideLegacyButton);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+installLegacyCoverUiGuard();
 
 function storage(): Pick<Storage, "getItem" | "setItem"> | null {
   try {

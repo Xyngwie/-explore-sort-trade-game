@@ -1,1 +1,1 @@
-Cover movement integration is wired in tickWorld before moveToward.
+Object-based cover acceptance checks now include visual readability and legacy-toggle removal.
