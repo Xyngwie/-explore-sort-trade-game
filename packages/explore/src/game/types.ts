@@ -3,200 +3,27 @@ import type { Balance } from "./balance";
 import type { DensityThreat } from "./balance";
 
 export type Stance = "patrol" | "escort" | "recover" | "raid";
-
-export const STANCE_LABEL: Record<Stance, string> = {
-  patrol: "哨戒",
-  escort: "帯同",
-  recover: "回収",
-  raid: "遊撃",
-};
-
-/**
- * Light wingman quirk bias (playable stub — not a learning system).
- * Assigned at sortie create; only nudges brain distances / aggression.
- */
+export const STANCE_LABEL: Record<Stance, string> = { patrol: "哨戒", escort: "帯同", recover: "回収", raid: "遊撃" };
 export type WingmanQuirk = "cling" | "decoy" | "sniper";
-
-export const QUIRK_LABEL: Record<WingmanQuirk, string> = {
-  cling: "密着",
-  decoy: "囮",
-  sniper: "遠射",
-};
-
-/** Deterministic quirk cycle for wingmen by index (A→cling, B→decoy, C→sniper…). */
-export function quirkForWingmanIndex(index: number): WingmanQuirk {
-  const cycle: WingmanQuirk[] = ["cling", "decoy", "sniper"];
-  return cycle[((index % cycle.length) + cycle.length) % cycle.length]!;
-}
-
-/** Invade→explore sector handoff (parsed once on boot). */
-export type InvadeSectorContext = {
-  sectorX: number;
-  sectorY: number;
-  /** 0..1 provisional density from invade. */
-  density: number;
-  intelFlags: string[];
-  /**
-   * Combat handoff from invade minesweeper.
-   * forced = mine step (cell + neighbors); raid = voluntary flagged cell.
-   */
-  engage?: "forced" | "raid";
-  /** Enemy/mine cells pulled into the fight (world coords). */
-  enemyCells?: Array<{ sx: number; sy: number }>;
-  /** Optional neighbor count when enemyCells omitted (forced fallback). */
-  neighborCount?: number;
-};
-
+export const QUIRK_LABEL: Record<WingmanQuirk, string> = { cling: "密着", decoy: "囮", sniper: "遠射" };
+export function quirkForWingmanIndex(index: number): WingmanQuirk { const cycle: WingmanQuirk[] = ["cling", "decoy", "sniper"]; return cycle[((index % cycle.length) + cycle.length) % cycle.length]!; }
+export type InvadeSectorContext = { sectorX: number; sectorY: number; density: number; intelFlags: string[]; engage?: "forced" | "raid"; enemyCells?: Array<{ sx: number; sy: number }>; neighborCount?: number; };
 export type Phase = "briefing" | "sortie" | "result";
-/** extract_missed = captain outside boarding circle at lift-off.
- *  timeout remains for legacy/manual fail wear tests only — clock expiry no longer auto-fails. */
 export type FailReason = "timeout" | "leader_down" | "extract_missed" | null;
-
 export type UnitKind = "leader" | "wingman" | "enemy";
-
 export type Unit = {
-  id: string;
-  kind: UnitKind;
-  name: string;
-  pos: Vec2;
-  vel: Vec2;
-  heading: number;
-  hp: number;
-  maxHp: number;
-  radius: number;
-  alive: boolean;
-  stance: Stance;
-  /** Patrol/recover focus. Raid never uses a player-picked point. */
-  waypoint: Vec2 | null;
-  moveTarget: Vec2 | null;
-  cooldown: number;
-  patrolAngle: number;
-  salvageId: string | null;
-  salvageT: number;
-  salvagedCount: number;
-  /**
-   * Soft personal reference for cargo-speed curve only (not a hard carry cap).
-   * Hard MAX carry was abolished — units may carry any count.
-   */
-  capacity: number;
-  /** Bound owned-mech instance when I/O v2 ids present. */
-  instanceId: string | null;
-  /**
-   * Cover stance（カバー）: incoming hit rate down, own accuracy slightly up.
-   * Toggle; does not stack with itself. Independent of camp DR (damage mul).
-   */
+  id: string; kind: UnitKind; name: string; pos: Vec2; vel: Vec2; heading: number; hp: number; maxHp: number; radius: number; alive: boolean; stance: Stance; waypoint: Vec2 | null; moveTarget: Vec2 | null; cooldown: number; patrolAngle: number; salvageId: string | null; salvageT: number; salvagedCount: number; capacity: number; instanceId: string | null;
   inCover: boolean;
-  /** Wingman-only light quirk bias; null on leader/enemy. */
-  quirk: WingmanQuirk | null;
-  /**
-   * Remaining seconds to emphasize 「被弾警告」 on the wing panel (0 = none).
-   * Set on HP damage; ticked down during sortie.
-   */
-  hitWarnT: number;
-  /**
-   * Remaining seconds to emphasize 「交戦中」 on the wing panel (0 = none).
-   * Set when the unit fires / has a fire intent; ticked down during sortie.
-   */
-  engageWarnT: number;
+  coverEscapeT?: number;
+  coverId?: string | null;
+  quirk: WingmanQuirk | null; hitWarnT: number; engageWarnT: number;
 };
-
-export type Container = {
-  id: string;
-  pos: Vec2;
-  taken: boolean;
-  /** True after any friendly unit has seen it. */
-  discovered: boolean;
-  /**
-   * Remaining highlight seconds (death-drop / purge emphasis).
-   * 0 = no special glow. Ticked down during sortie.
-   */
-  glowT: number;
-};
-
-export type Bullet = {
-  alive: boolean;
-  pos: Vec2;
-  vel: Vec2;
-  ttl: number;
-  damage: number;
-  fromEnemy: boolean;
-  ownerId: string;
-};
-
+export type Container = { id: string; pos: Vec2; taken: boolean; discovered: boolean; glowT: number; };
+export type Bullet = { alive: boolean; pos: Vec2; vel: Vec2; ttl: number; damage: number; fromEnemy: boolean; ownerId: string; };
 export type LogLine = { t: number; text: string; kind: "tactical" | "battle" };
-
-/** Active boarding circle while an extract request is in progress. */
-export type BoardingState = {
-  /** World position of circle center (= captain pos at request). */
-  center: Vec2;
-  radius: number;
-  /** `world.elapsed` when the captain requested extract. */
-  requestedAt: number;
-  /** True after cargo delay elapsed (visual / log flag). */
-  cargoArrived: boolean;
-};
-
-/** @deprecated Prefer boarding circle; kept for map label fallback when idle. */
+export type BoardingState = { center: Vec2; radius: number; requestedAt: number; cargoArrived: boolean; };
 export type ExtractPoint = { pos: Vec2; radius: number };
-
 export type Camera = { x: number; y: number; w: number; h: number };
-
-/** Temporary staging depot for stashed salvaged containers. */
-export type CampState = {
-  /** World position (= captain pos when set / last moved). */
-  pos: Vec2;
-  /** Containers deposited here (still counted in world.salvaged). */
-  stashedCount: number;
-};
-
-export type World = {
-  balance: Balance;
-  phase: Phase;
-  timeLeft: number;
-  /** True once sortie clock hits 0; locks move/cargo but does not auto-fail. */
-  operationTimedOut: boolean;
-  elapsed: number;
-  maxOperationTimeSec: number;
-  leader: Unit;
-  wingmen: Unit[];
-  enemies: Unit[];
-  containers: Container[];
-  /** Legacy fixed pad — not used for extract success; boarding supersedes. */
-  extract: ExtractPoint;
-  /** Active extract / boarding phase; null when idle. */
-  boarding: BoardingState | null;
-  /** Optional staging camp; null when unset. */
-  camp: CampState | null;
-  bullets: Bullet[];
-  logs: LogLine[];
-  salvaged: number;
-  /**
-   * Legacy expedition field (shared ExploreResult). Explore no longer enforces
-   * this as a hard MAX — set high / informational for handoff only.
-   */
-  carrierCapacity: number;
-  ammo: number;
-  extracted: boolean;
-  failReason: FailReason;
-  note: string;
-  deployedInstanceIds: string[];
-  /** Durability at deploy time (from trade mechDurability); empty → assume max. */
-  deployedDurability: Record<string, number>;
-  /** Hub circuit durability buffer (wear absorb); from trade circuitBonuses. */
-  circuitDurabilityBuffer: number;
-  /** Hub circuit craft multiplier; forwarded explore→sort when > 1. */
-  circuitCraftMultiplier: number;
-  /** Invade sector when opened via invade→explore; null for direct / trade-only. */
-  invadeSector: InvadeSectorContext | null;
-  /** Resolved threat from density (or baseline). */
-  densityThreat: DensityThreat;
-  camera: Camera;
-  /** Accumulated damage events for wear scaffold (flat returnKind still primary). */
-  combatHitsTaken: number;
-};
-
-export type WingmanIntent = {
-  moveTarget: Vec2 | null;
-  fireAt: Unit | null;
-  trySalvage: boolean;
-};
+export type CampState = { pos: Vec2; stashedCount: number; };
+export type World = { balance: Balance; phase: Phase; timeLeft: number; operationTimedOut: boolean; elapsed: number; maxOperationTimeSec: number; leader: Unit; wingmen: Unit[]; enemies: Unit[]; containers: Container[]; extract: ExtractPoint; boarding: BoardingState | null; camp: CampState | null; bullets: Bullet[]; logs: LogLine[]; salvaged: number; carrierCapacity: number; ammo: number; extracted: boolean; failReason: FailReason; note: string; deployedInstanceIds: string[]; deployedDurability: Record<string, number>; circuitDurabilityBuffer: number; circuitCraftMultiplier: number; invadeSector: InvadeSectorContext | null; densityThreat: DensityThreat; camera: Camera; combatHitsTaken: number; };
+export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };
