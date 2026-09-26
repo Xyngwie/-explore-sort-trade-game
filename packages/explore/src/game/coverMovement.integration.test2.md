@@ -1,0 +1,1 @@
+Cover movement integration is wired in tickWorld before moveToward.
