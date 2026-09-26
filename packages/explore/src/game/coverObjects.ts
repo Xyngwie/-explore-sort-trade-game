@@ -19,7 +19,10 @@ export function getCoverObjects(world: World): CoverObject[] {
   let attempts = 0;
   while (covers.length < COVER_COUNT && attempts < 1000) {
     attempts += 1;
-    const pos = { x: margin + Math.random() * (world.balance.worldW - margin * 2), y: margin + Math.random() * (world.balance.worldH - margin * 2) };
+    const pos = {
+      x: margin + Math.random() * (world.balance.worldW - margin * 2),
+      y: margin + Math.random() * (world.balance.worldH - margin * 2),
+    };
     if (Math.hypot(pos.x - SPAWN.x, pos.y - SPAWN.y) < SPAWN_AVOID_RADIUS) continue;
     if (covers.some((cover) => Math.hypot(cover.pos.x - pos.x, cover.pos.y - pos.y) < MIN_SEPARATION)) continue;
     covers.push({ id: `cover-${covers.length}`, pos, radius: COVER_RADIUS });
