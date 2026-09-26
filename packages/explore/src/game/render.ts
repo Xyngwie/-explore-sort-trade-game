@@ -41,15 +41,19 @@ export function renderWorld(
   for (const cover of getCoverObjects(world)) {
     const px = tx(cover.pos.x);
     const py = ty(cover.pos.y);
-    const r = cover.radius * sx;
+    const r = cover.radius * Math.min(sx, sy);
     ctx.fillStyle = "#4b5b66";
-    ctx.fillRect(px - r, py - r * 0.7, r * 2, r * 1.4);
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = "#8fa7b5";
     ctx.lineWidth = 2;
-    ctx.strokeRect(px - r, py - r * 0.7, r * 2, r * 1.4);
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.fillStyle = "#b8c7d0aa";
     ctx.font = "10px sans-serif";
-    ctx.fillText("COVER", px - 18, py - r * 0.85);
+    ctx.fillText("COVER", px - 18, py - r - 5);
   }
 
   // Boarding / extract circle (only while request active)
