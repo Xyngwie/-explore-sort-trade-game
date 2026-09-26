@@ -1,20 +1,17 @@
-/**
- * Sort Yield — four-resource model.
- *
- * Sort extracts usable resources from matched pieces. Anything left on the
- * board when the session ends is converted to junk.
- */
+/** Sort Yield — four-resource model. */
 
-/** Sort board colors / extracted resources. */
 export const SORT_PIECE_TYPES = ["ammo", "armor", "power"] as const;
 export type SortPieceType = (typeof SORT_PIECE_TYPES)[number];
+export type LegacySortPieceType = "food" | "material" | "energy";
+export type ClearedPieceCounts =
+  | Record<SortPieceType, number>
+  | Record<LegacySortPieceType, number>;
 
-/** The four resources shared by Sort and HUB. */
+/** The only resources produced and stored by the new model. */
 export const RESOURCE_IDS = ["ammo", "armor", "power", "junk"] as const;
 export type ResourceId = (typeof RESOURCE_IDS)[number];
 export type YieldItemId = ResourceId;
 export type YieldBag = Partial<Record<ResourceId, number>>;
-export type ClearedPieceCounts = Record<SortPieceType, number>;
 
 export const RESOURCE_LABEL_JA: Record<ResourceId, string> = {
   ammo: "弾薬",
@@ -23,17 +20,16 @@ export const RESOURCE_LABEL_JA: Record<ResourceId, string> = {
   junk: "ジャンク",
 };
 
-/**
- * Legacy names are retained only as compatibility aliases for older HUB code.
- * New Sort yields never create these IDs.
- */
+/** Deprecated compatibility names retained for existing HUB callers. */
 export type BasicMaterialId =
+  | ResourceId
   | "mat_scrap"
   | "mat_polymer"
   | "mat_circuit"
   | "mat_ration"
   | "mat_coolant";
 export type PartId =
+  | ResourceId
   | "part_actuator"
   | "part_armor_plate"
   | "part_power_cell"
@@ -41,6 +37,10 @@ export type PartId =
   | "part_hydraulic_line";
 
 export const BASIC_MATERIAL_LABEL_JA: Record<BasicMaterialId, string> = {
+  ammo: "弾薬",
+  armor: "装甲パーツ",
+  power: "電力パーツ",
+  junk: "ジャンク",
   mat_scrap: "旧・スクラップ鋼",
   mat_polymer: "旧・ポリマー",
   mat_circuit: "旧・回路素体",
@@ -48,6 +48,10 @@ export const BASIC_MATERIAL_LABEL_JA: Record<BasicMaterialId, string> = {
   mat_coolant: "旧・冷却剤",
 };
 export const PART_LABEL_JA: Record<PartId, string> = {
+  ammo: "弾薬",
+  armor: "装甲パーツ",
+  power: "電力パーツ",
+  junk: "ジャンク",
   part_actuator: "旧・アクチュエータ",
   part_armor_plate: "旧・装甲板",
   part_power_cell: "旧・電力セル",
@@ -55,15 +59,11 @@ export const PART_LABEL_JA: Record<PartId, string> = {
   part_hydraulic_line: "旧・油圧ライン",
 };
 
-const LEGACY_BASIC_IDS = Object.keys(BASIC_MATERIAL_LABEL_JA) as BasicMaterialId[];
-const LEGACY_PART_IDS = Object.keys(PART_LABEL_JA) as PartId[];
-
-/** Compatibility predicates used by existing HUB UI. */
 export function isBasicMaterialId(value: string): value is BasicMaterialId {
-  return LEGACY_BASIC_IDS.includes(value as BasicMaterialId);
+  return (Object.keys(BASIC_MATERIAL_LABEL_JA) as string[]).includes(value);
 }
 export function isPartId(value: string): value is PartId {
-  return LEGACY_PART_IDS.includes(value as PartId);
+  return (Object.keys(PART_LABEL_JA) as string[]).includes(value);
 }
 export function isYieldItemId(value: string): value is YieldItemId {
   return (RESOURCE_IDS as readonly string[]).includes(value);
@@ -82,15 +82,10 @@ export function compactYieldBag(bag: YieldBag): YieldBag {
   }
   return out;
 }
-
-export function emptyYieldBag(): YieldBag {
-  return {};
-}
-
+export function emptyYieldBag(): YieldBag { return {}; }
 export function yieldBagTotal(bag: YieldBag): number {
   return RESOURCE_IDS.reduce((sum, id) => sum + nonNegInt(bag[id] ?? 0), 0);
 }
-
 export function mergeYieldBags(...bags: readonly YieldBag[]): YieldBag {
   const out: YieldBag = {};
   for (const bag of bags) {
@@ -101,52 +96,48 @@ export function mergeYieldBags(...bags: readonly YieldBag[]): YieldBag {
   }
   return compactYieldBag(out);
 }
-
 export function scaleYieldBag(bag: YieldBag, multiplier: number): YieldBag {
   const m = Number.isFinite(multiplier) ? Math.max(0, multiplier) : 0;
   const out: YieldBag = {};
   for (const id of RESOURCE_IDS) {
-    const n = nonNegInt(bag[id] ?? 0);
-    const scaled = Math.floor(n * m);
+    const scaled = Math.floor(nonNegInt(bag[id] ?? 0) * m);
     if (scaled > 0) out[id] = scaled;
   }
   return out;
 }
-
 export function applyYieldBagToInventory(inventory: YieldBag, bag: YieldBag): YieldBag {
   return mergeYieldBags(inventory, bag);
 }
-
 export function canAffordYieldCost(inventory: YieldBag, cost: YieldBag): boolean {
-  for (const id of RESOURCE_IDS) {
-    const need = nonNegInt(cost[id] ?? 0);
-    if (need > 0 && nonNegInt(inventory[id] ?? 0) < need) return false;
-  }
-  return true;
+  return RESOURCE_IDS.every((id) => nonNegInt(inventory[id] ?? 0) >= nonNegInt(cost[id] ?? 0));
 }
-
 export function spendYieldBag(inventory: YieldBag, cost: YieldBag): YieldBag | null {
   if (!canAffordYieldCost(inventory, cost)) return null;
   const out = { ...compactYieldBag(inventory) };
   for (const id of RESOURCE_IDS) {
-    const need = nonNegInt(cost[id] ?? 0);
-    if (need <= 0) continue;
-    const next = nonNegInt(out[id] ?? 0) - need;
+    const next = nonNegInt(out[id] ?? 0) - nonNegInt(cost[id] ?? 0);
     if (next > 0) out[id] = next;
     else delete out[id];
   }
   return compactYieldBag(out);
 }
 
-/** One matched red/blue/yellow piece extracts one corresponding resource. */
+/** One matched board piece extracts one corresponding resource. */
 export function yieldBagFromClearedCounts(cleared: ClearedPieceCounts): YieldBag {
-  const bag: YieldBag = {};
-  if (cleared.ammo > 0) bag.ammo = nonNegInt(cleared.ammo);
-  if (cleared.armor > 0) bag.armor = nonNegInt(cleared.armor);
-  if (cleared.power > 0) bag.power = nonNegInt(cleared.power);
-  return compactYieldBag(bag);
+  if ("ammo" in cleared) {
+    return compactYieldBag({
+      ammo: cleared.ammo,
+      armor: cleared.armor,
+      power: cleared.power,
+    });
+  }
+  // Migration path for the current Sort engine: food→ammo, material→armor, energy→power.
+  return compactYieldBag({
+    ammo: cleared.food,
+    armor: cleared.material,
+    power: cleared.energy,
+  });
 }
-
 export function yieldBagFromClearedWithMultiplier(
   cleared: ClearedPieceCounts,
   craftMultiplier: number,
@@ -160,7 +151,6 @@ export function encodeYieldBagCompact(bag: YieldBag): string {
     .map((id) => `${id}:${nonNegInt(bag[id] ?? 0)}`)
     .join(";");
 }
-
 export function parseYieldBagCompact(raw: string | null | undefined): YieldBag {
   if (raw == null || raw.trim() === "") return {};
   const out: YieldBag = {};
@@ -176,27 +166,17 @@ export function parseYieldBagCompact(raw: string | null | undefined): YieldBag {
   return compactYieldBag(out);
 }
 
-/** Legacy typed repair shape retained for callers during migration. */
+/** Legacy repair type retained so existing fleet code compiles during migration. */
 export type TypedRepairCost = {
   credits: number;
-  basicMaterials: Partial<Record<BasicMaterialId, number>>;
-  parts: Partial<Record<PartId, number>>;
+  basicMaterials: Partial<Record<Exclude<BasicMaterialId, ResourceId>, number>>;
+  parts: Partial<Record<Exclude<PartId, ResourceId>, number>>;
 };
-
-/** Map legacy repair costs to the new single armor resource. */
 export function yieldBagFromTypedRepairCost(cost: TypedRepairCost): YieldBag {
-  const legacyBasic = Object.values(cost.basicMaterials).reduce(
-    (sum, n) => sum + nonNegInt(n ?? 0),
-    0,
-  );
-  const legacyParts = Object.values(cost.parts).reduce(
-    (sum, n) => sum + nonNegInt(n ?? 0),
-    0,
-  );
-  const armor = legacyBasic + legacyParts;
-  return armor > 0 ? { armor } : {};
+  const basic = Object.values(cost.basicMaterials).reduce((s, n) => s + nonNegInt(n ?? 0), 0);
+  const parts = Object.values(cost.parts).reduce((s, n) => s + nonNegInt(n ?? 0), 0);
+  return basic + parts > 0 ? { armor: basic + parts } : {};
 }
-
 export const EXAMPLE_TYPED_REPAIR_COST: TypedRepairCost = {
   credits: 50,
   basicMaterials: {},
