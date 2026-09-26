@@ -3,7 +3,6 @@ import { getCoverObjects } from "./coverObjects";
 import type { Unit, World } from "./types";
 
 const COVER_ATTRACT_TRIGGER = 18;
-const COVER_ATTRACT_SPEED = 55;
 const COVER_ESCAPE_GRACE_SEC = 0.35;
 
 type CoverState = { coverId: string | null; escapeT: number };
@@ -18,10 +17,10 @@ function stateFor(unit: Unit): CoverState {
   return state;
 }
 
-export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, dt: number): void {
+export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, _dt: number): void {
   if (!unit.alive) return;
   const state = stateFor(unit);
-  state.escapeT = Math.max(0, state.escapeT - dt);
+  state.escapeT = Math.max(0, state.escapeT - _dt);
 
   let nearest: ReturnType<typeof getCoverObjects>[number] | null = null;
   let nearestDistance = Infinity;
@@ -56,11 +55,10 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
   if (state.escapeT > 0 || !moving || outward) return;
   if (centerDistance > nearest.radius + COVER_ATTRACT_TRIGGER) return;
 
-  const pull = norm(delta);
-  unit.moveTarget = {
-    x: unit.pos.x + pull.x * COVER_ATTRACT_SPEED * dt,
-    y: unit.pos.y + pull.y * COVER_ATTRACT_SPEED * dt,
-  };
+  // Entering the attraction zone makes the cover center the movement target.
+  // The normal movement system then carries the unit all the way to the center,
+  // making the cover interaction visually obvious instead of barely nudging it.
+  unit.moveTarget = { x: nearest.pos.x, y: nearest.pos.y };
 
   if (centerDistance <= coverBoundary) {
     unit.inCover = true;
