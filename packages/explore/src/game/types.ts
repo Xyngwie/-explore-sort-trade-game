@@ -2,6 +2,7 @@ import type { Vec2 } from "./math";
 import type { Balance } from "./balance";
 import type { DensityThreat } from "./balance";
 import type { CoverObject } from "./coverObjects";
+import type { CommandUnlockState } from "./commandUnlock";
 
 export type Stance = "patrol" | "escort" | "recover" | "raid";
 export const STANCE_LABEL: Record<Stance, string> = { patrol: "哨戒", escort: "帯同", recover: "回収", raid: "遊撃" };
@@ -23,5 +24,7 @@ export type BoardingState = { center: Vec2; radius: number; requestedAt: number;
 export type ExtractPoint = { pos: Vec2; radius: number };
 export type Camera = { x: number; y: number; w: number; h: number };
 export type CampState = { pos: Vec2; stashedCount: number; };
-export type World = { balance: Balance; phase: Phase; timeLeft: number; operationTimedOut: boolean; elapsed: number; maxOperationTimeSec: number; leader: Unit; wingmen: Unit[]; enemies: Unit[]; containers: Container[]; extract: ExtractPoint; boarding: BoardingState | null; camp: CampState | null; bullets: Bullet[]; logs: LogLine[]; salvaged: number; carrierCapacity: number; ammo: number; extracted: boolean; failReason: FailReason; note: string; deployedInstanceIds: string[]; deployedDurability: Record<string, number>; circuitDurabilityBuffer: number; circuitCraftMultiplier: number; invadeSector: InvadeSectorContext | null; densityThreat: DensityThreat; camera: Camera; combatHitsTaken: number; coverObjects?: CoverObject[]; };
+export type World = { balance: Balance; phase: Phase; timeLeft: number; operationTimedOut: boolean; elapsed: number; maxOperationTimeSec: number; leader: Unit; wingmen: Unit[]; enemies: Unit[]; containers: Container[]; extract: ExtractPoint; boarding: BoardingState | null; camp: CampState | null; bullets: Bullet[]; logs: LogLine[]; salvaged: number; carrierCapacity: number; ammo: number; extracted: boolean; failReason: FailReason; note: string; deployedInstanceIds: string[]; deployedDurability: Record<string, number>; circuitDurabilityBuffer: number; circuitCraftMultiplier: number; invadeSector: InvadeSectorContext | null; densityThreat: DensityThreat; camera: Camera; combatHitsTaken: number; coverObjects?: CoverObject[];
+  /** Explore-local command unlock mode + equipped circuits (not a save/handoff contract). */
+  commandUnlock: CommandUnlockState; };
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };

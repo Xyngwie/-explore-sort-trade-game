@@ -2,22 +2,25 @@
  * Subtle corner keyboard-shortcut overlay for Explore sortie.
  * Lists only keys that remain player-facing after cover became object-based.
  */
+import type { ExploreCommandId } from "./commandUnlock";
 
 export const SHORTCUTS_HIDDEN_KEY = "estg.explore.shortcutsHidden";
 
 export const EXPLORE_SHORTCUTS: ReadonlyArray<{
   keys: ReadonlyArray<string>;
   label: string;
+  /** Commands issued by this row (for circuit lock display). Omit → never locked. */
+  commands?: ReadonlyArray<ExploreCommandId>;
 }> = [
-  { keys: ["WASD"], label: "移動" },
-  { keys: ["Space", "F"], label: "射撃" },
-  { keys: ["E"], label: "回収（任意）" },
-  { keys: ["X"], label: "抽出要請" },
-  { keys: ["C"], label: "キャンプ" },
-  { keys: ["U"], label: "荷下ろし" },
-  { keys: ["G"], label: "積込" },
-  { keys: ["P"], label: "パージ" },
-  { keys: ["1–4"], label: "僚機方針" },
+  { keys: ["WASD"], label: "移動", commands: ["move"] },
+  { keys: ["Space", "F"], label: "射撃", commands: ["fire"] },
+  { keys: ["E"], label: "回収（任意）", commands: ["collect"] },
+  { keys: ["X"], label: "抽出要請", commands: ["extract"] },
+  { keys: ["C"], label: "キャンプ", commands: ["camp_set"] },
+  { keys: ["U"], label: "荷下ろし", commands: ["camp_unload"] },
+  { keys: ["G"], label: "積込", commands: ["camp_pickup"] },
+  { keys: ["P"], label: "パージ", commands: ["purge"] },
+  { keys: ["1–4"], label: "僚機方針", commands: ["wing_escort", "wing_patrol", "wing_recover", "wing_raid"] },
   { keys: ["?"], label: "この表示" },
 ];
 
@@ -87,6 +90,8 @@ export function setShortcutsOverlayHidden(
 
 export function buildKeyboardShortcutsOverlayHtml(opts?: {
   hidden?: boolean;
+  /** Circuit lock predicate; a row is shown locked when ALL its commands are locked. */
+  isLocked?: (id: ExploreCommandId) => boolean;
 }): string {
   const hidden = opts?.hidden === true;
   if (hidden) {
@@ -94,12 +99,19 @@ export function buildKeyboardShortcutsOverlayHtml(opts?: {
       <button type="button" class="kb-show" id="kb-overlay-toggle" title="ショートカット表示（?）" aria-expanded="false">キー</button>
     </div>`;
   }
-  const rows = EXPLORE_SHORTCUTS.map(
-    (row) =>
-      `<div class="kb-row"><span class="kb-keys">${row.keys
-        .map((k) => `<kbd>${k}</kbd>`)
-        .join("")}</span><span class="kb-label">${row.label}</span></div>`,
-  ).join("");
+  const isLocked = opts?.isLocked;
+  const rows = EXPLORE_SHORTCUTS.map((row) => {
+    const locked =
+      isLocked != null &&
+      row.commands != null &&
+      row.commands.length > 0 &&
+      row.commands.every((id) => isLocked(id));
+    const cls = locked ? "kb-row locked" : "kb-row";
+    const label = locked ? `🔒 ${row.label}（回路）` : row.label;
+    return `<div class="${cls}"><span class="kb-keys">${row.keys
+      .map((k) => `<kbd>${k}</kbd>`)
+      .join("")}</span><span class="kb-label">${label}</span></div>`;
+  }).join("");
   return `<div class="kb-overlay" id="kb-overlay" role="region" aria-label="キーボードショートカット">
     <div class="kb-head">
       <span class="kb-title">操作</span>

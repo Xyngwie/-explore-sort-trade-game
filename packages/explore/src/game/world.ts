@@ -14,6 +14,8 @@ import {
 import type { Container, InvadeSectorContext, Unit, World } from "./types";
 import { quirkForWingmanIndex } from "./types";
 import { vec } from "./math";
+import { defaultCommandUnlockState } from "./commandUnlock";
+import { resolveCommandUnlockMode } from "./unlockMode";
 
 function makeUnit(
   partial: Pick<Unit, "id" | "kind" | "name" | "pos" | "hp" | "maxHp" | "radius" | "alive"> &
@@ -390,6 +392,8 @@ export function createWorld(boot: SortieBootstrap): World {
     densityThreat: { ...threat },
     camera: { x: 0, y: 200, w: 720, h: 420 },
     combatHitsTaken: 0,
+    // Mode from the single build flag / debug toggle; no circuit equip source yet → [].
+    commandUnlock: defaultCommandUnlockState(resolveCommandUnlockMode()),
   };
 }
 

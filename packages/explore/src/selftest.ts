@@ -1394,7 +1394,8 @@ function advancePinned(
   assert.ok(keysFlat.includes("Space"), "lists Space");
   assert.ok(keysFlat.includes("X"), "lists extract X");
   assert.ok(keysFlat.includes("C"), "lists camp C");
-  assert.ok(keysFlat.includes("V"), "lists cover V");
+  // #120: cover became object-based; the global V toggle is no longer listed.
+  assert.ok(!keysFlat.includes("V"), "no legacy cover V");
   assert.ok(!keysFlat.includes("Q"), "no unused Q");
   assert.ok(!keysFlat.includes("Z"), "no unused Z");
 
@@ -1570,4 +1571,212 @@ import {
   console.log("explore wingman offscreen combat UX warn ok");
 }
 
+}
+
+// ---------------------------------------------------------------------------
+// Circuit command unlock foundation (game/commandUnlock.ts, game/commands.ts,
+// game/unlockMode.ts). Provisional table below is TEST-ONLY — not game design.
+// ---------------------------------------------------------------------------
+import {
+  BASIC_COMMAND_IDS,
+  CIRCUIT_COMMAND_UNLOCKS,
+  EXPLORE_COMMANDS,
+  isCommandUnlocked,
+  isCommandUnlockedFor,
+  isWingmanAccompanyUnlocked,
+  type CircuitCommandUnlockTable,
+  type CommandUnlockMode,
+  type ExploreCommandId,
+} from "./game/commandUnlock";
+import {
+  commandRequestForKey,
+  dispatchExploreKey,
+  executeExploreCommand,
+} from "./game/commands";
+import {
+  COMMAND_UNLOCK_MODE_STORAGE_KEY,
+  EXPLORE_RELEASE_LOCKS,
+  isDebugUnlockToggleVisible,
+  parseReleaseLocksFlag,
+  readDebugCommandUnlockMode,
+  resolveCommandUnlockMode,
+  writeDebugCommandUnlockMode,
+} from "./game/unlockMode";
+
+const TEST_ONLY_TABLE: CircuitCommandUnlockTable = {
+  "test-circuit-camp": ["camp_set", "camp_unload", "camp_pickup"],
+  "test-circuit-squad": ["wing_escort", "wing_patrol", "wing_recover", "wing_raid", "scatter_search", "purge"],
+};
+const CIRCUIT_IDS = EXPLORE_COMMANDS.filter((d) => d.tier === "circuit").map((d) => d.id);
+
+function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: CircuitCommandUnlockTable) {
+  const w = createWorld(bootstrapFromSearch(""));
+  startSortie(w);
+  w.commandUnlock = { mode, equippedCircuits: equipped, ...(table ? { table } : {}) };
+  return w;
+}
+
+// Pure check
+{
+  assert.deepEqual([...BASIC_COMMAND_IDS].sort(), ["abort", "collect", "extract", "fire", "move"]);
+  assert.deepEqual(Object.keys(CIRCUIT_COMMAND_UNLOCKS), [], "production mapping stays empty (Phase 3)");
+  for (const id of BASIC_COMMAND_IDS) {
+    assert.equal(isCommandUnlocked(id, []), true, `basic ${id} on w/o circuits`);
+    assert.equal(isCommandUnlocked(id, null, { mode: "release" }), true);
+    assert.equal(isCommandUnlocked(id, [], { mode: "all_unlocked" }), true);
+  }
+  for (const id of CIRCUIT_IDS) {
+    assert.equal(isCommandUnlocked(id, []), false, `${id} locked w/o circuit (release)`);
+    assert.equal(isCommandUnlocked(id, ["unknown-circuit"], { table: TEST_ONLY_TABLE }), false);
+    assert.equal(isCommandUnlocked(id, ["test-circuit-camp"]), false, `${id} not unlocked by empty prod table`);
+    assert.equal(isCommandUnlocked(id, [], { mode: "all_unlocked" }), true, `${id} on in all_unlocked`);
+  }
+  assert.equal(isCommandUnlocked("camp_set", ["test-circuit-camp"], { table: TEST_ONLY_TABLE }), true);
+  assert.equal(isCommandUnlocked("purge", ["test-circuit-camp"], { table: TEST_ONLY_TABLE }), false);
+  assert.equal(isCommandUnlocked("purge", ["test-circuit-camp", "test-circuit-squad"], { table: TEST_ONLY_TABLE }), true);
+  assert.equal(isCommandUnlocked("camp_set", ["__proto__", "toString"], { table: TEST_ONLY_TABLE }), false);
+  assert.equal(isCommandUnlockedFor({}, "camp_set"), true, "missing state → legacy all unlocked");
+  assert.equal(isWingmanAccompanyUnlocked([], { mode: "release" }), true, "wingman hook not enforced yet");
+  console.log("explore command unlock pure check ok");
+}
+
+// Mode resolution / flag / debug storage
+{
+  assert.equal(EXPLORE_RELEASE_LOCKS, false, "no build flag under node → preview default");
+  assert.equal(parseReleaseLocksFlag(undefined), false);
+  assert.equal(parseReleaseLocksFlag("0"), false);
+  assert.equal(parseReleaseLocksFlag("1"), true);
+  assert.equal(parseReleaseLocksFlag("TRUE"), true);
+  assert.equal(isDebugUnlockToggleVisible(false), true);
+  assert.equal(isDebugUnlockToggleVisible(true), false, "release build hides debug toggle");
+  const mem = new Map<string, string>();
+  const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "all_unlocked", "preview default all unlocked");
+  writeDebugCommandUnlockMode("release", store);
+  assert.equal(mem.get(COMMAND_UNLOCK_MODE_STORAGE_KEY), "release");
+  assert.equal(readDebugCommandUnlockMode(store), "release");
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "release", "debug choice persists");
+  writeDebugCommandUnlockMode("all_unlocked", store);
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "all_unlocked");
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: true, store }), "release", "release build always locks");
+  mem.set(COMMAND_UNLOCK_MODE_STORAGE_KEY, "garbage");
+  assert.equal(readDebugCommandUnlockMode(store), "all_unlocked");
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store: null }), "all_unlocked");
+  const fresh = createWorld(bootstrapFromSearch(""));
+  assert.equal(fresh.commandUnlock.mode, "all_unlocked", "new world in preview/test = all unlocked");
+  assert.deepEqual(fresh.commandUnlock.equippedCircuits, [], "no circuit equip source yet");
+  assert.equal(fresh.wingmen.length, 2, "wingmen still deploy (no accompany gate)");
+  console.log("explore command unlock mode resolution ok");
+}
+
+// Execution side — all_unlocked: everything runs as before
+{
+  const w = unlockWorld("all_unlocked");
+  assert.equal(executeExploreCommand(w, { id: "camp_set" }).status, "done");
+  assert.ok(w.camp, "camp set in all_unlocked");
+  assert.equal(executeExploreCommand(w, { id: "wing_patrol" }).status, "done");
+  assert.ok(w.wingmen.every((x) => x.stance === "patrol"));
+  assert.equal(executeExploreCommand(w, { id: "wing_escort", wingId: w.wingmen[0]!.id, rally: true }).status, "done");
+  assert.equal(w.wingmen[0]!.stance, "escort");
+  assert.equal(executeExploreCommand(w, { id: "scatter_search" }).status, "done");
+  assert.equal(executeExploreCommand(w, { id: "purge" }).status, "done");
+  assert.equal(executeExploreCommand(w, { id: "camp_pickup" }).status, "done");
+  assert.equal(executeExploreCommand(w, { id: "camp_unload" }).status, "done");
+  const k = dispatchExploreKey(w, "4");
+  assert.equal(k?.status, "done");
+  assert.ok(w.wingmen.every((x) => x.stance === "raid"), "key 4 raid in all_unlocked");
+  assert.equal(dispatchExploreKey(w, "2", { repeat: true }), null, "squad key repeat ignored (unchanged)");
+  assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+  assert.ok(w.boarding, "extract runs");
+  console.log("explore command unlock all_unlocked execution ok");
+}
+
+// Execution side — release mode, no circuits: circuit tier blocked (buttons + keys), world unchanged
+{
+  const w = unlockWorld("release");
+  const stances = w.wingmen.map((x) => x.stance);
+  for (const id of ["camp_set", "camp_unload", "camp_pickup", "purge", "scatter_search"] as const) {
+    const r = executeExploreCommand(w, { id });
+    assert.equal(r.status, "locked", `${id} locked`);
+  }
+  assert.equal(w.camp, null, "camp not set when locked");
+  for (const id of ["wing_escort", "wing_patrol", "wing_recover", "wing_raid"] as const) {
+    assert.equal(executeExploreCommand(w, { id }).status, "locked");
+    assert.equal(executeExploreCommand(w, { id, wingId: w.wingmen[0]!.id }).status, "locked");
+  }
+  assert.equal(executeExploreCommand(w, { id: "wing_escort", wingId: w.wingmen[0]!.id, rally: true }).status, "locked", "召還 locked");
+  assert.deepEqual(w.wingmen.map((x) => x.stance), stances, "stances unchanged when locked");
+  // Key input path
+  for (const key of ["c", "u", "g", "p", "1", "2", "3", "4"]) {
+    const r = dispatchExploreKey(w, key);
+    assert.equal(r?.status, "locked", `key ${key} blocked in release`);
+  }
+  assert.equal(w.camp, null);
+  assert.ok(w.logs.some((l) => l.text.includes("🔒")), "lock message logged");
+  const lockLogs = w.logs.filter((l) => l.text.includes("🔒 キャンプ設置")).length;
+  dispatchExploreKey(w, "c");
+  dispatchExploreKey(w, "c");
+  assert.equal(w.logs.filter((l) => l.text.includes("🔒 キャンプ設置")).length, lockLogs + 1, "repeat lock log deduped");
+  assert.equal(commandRequestForKey("v"), null, "V cover not a command (object-based cover)");
+  assert.equal(commandRequestForKey("?"), null, "overlay toggle out of scope");
+  // Basic 4 still work in release w/o circuits
+  const startX = w.leader.pos.x;
+  tickWorld(w, 0.2, { move: { x: 1, y: 0 }, clickMove: null, fire: false, interact: false });
+  assert.ok(w.leader.pos.x > startX, "move works in release");
+  const foe = w.enemies.find((e) => e.alive)!;
+  foe.pos = { x: w.leader.pos.x + w.balance.weaponRange * 0.5, y: w.leader.pos.y };
+  w.leader.cooldown = 0;
+  const ammo0 = w.ammo;
+  tickWorld(w, 0.02, { move: { x: 0, y: 0 }, clickMove: null, fire: true, interact: false });
+  assert.ok(w.ammo < ammo0, "fire works in release");
+  foe.alive = false;
+  const crate = w.containers[0]!;
+  crate.discovered = true;
+  crate.taken = false;
+  crate.pos = { ...w.leader.pos };
+  const salv0 = w.salvaged;
+  for (let t = 0; t < w.balance.salvageSeconds + 0.5; t += 0.05) {
+    tickWorld(w, 0.05, { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: true });
+  }
+  assert.ok(w.salvaged > salv0, "collect works in release");
+  const ex = dispatchExploreKey(w, "x");
+  assert.equal(ex?.status, "done", "X extract works in release");
+  assert.ok(w.boarding, "boarding requested in release");
+  const ab = executeExploreCommand(w, { id: "abort" });
+  assert.equal(ab.status, "done", "abort works in release");
+  assert.equal(w.phase, "result");
+  console.log("explore command unlock release (no circuit) execution ok");
+}
+
+// Execution side — release mode WITH provisional test circuit: gate opens only listed commands
+{
+  const w = unlockWorld("release", ["test-circuit-camp"], TEST_ONLY_TABLE);
+  assert.equal(dispatchExploreKey(w, "c")?.status, "done", "key C unlocked by test circuit");
+  assert.ok(w.camp, "camp set via unlocked key");
+  assert.equal(executeExploreCommand(w, { id: "camp_unload" }).status, "done");
+  assert.equal(executeExploreCommand(w, { id: "purge" }).status, "locked", "purge still locked (not in row)");
+  assert.equal(dispatchExploreKey(w, "3")?.status, "locked");
+  w.commandUnlock.equippedCircuits.push("test-circuit-squad");
+  assert.equal(dispatchExploreKey(w, "4")?.status, "done");
+  assert.ok(w.wingmen.every((x) => x.stance === "raid"), "squad key unlocked by second test circuit");
+  assert.equal(executeExploreCommand(w, { id: "scatter_search" }).status, "done");
+  // Switching mode at runtime (debug toggle) takes effect immediately on execution
+  const w2 = unlockWorld("release");
+  assert.equal(executeExploreCommand(w2, { id: "camp_set" }).status, "locked");
+  w2.commandUnlock.mode = "all_unlocked";
+  assert.equal(executeExploreCommand(w2, { id: "camp_set" }).status, "done");
+  console.log("explore command unlock provisional circuit execution ok");
+}
+
+// UI: keyboard overlay marks locked rows only when locked
+{
+  const all = unlockWorld("all_unlocked");
+  const rel = unlockWorld("release");
+  const htmlAll = buildKeyboardShortcutsOverlayHtml({ hidden: false, isLocked: (id: ExploreCommandId) => !isCommandUnlockedFor(all, id) });
+  const htmlRel = buildKeyboardShortcutsOverlayHtml({ hidden: false, isLocked: (id: ExploreCommandId) => !isCommandUnlockedFor(rel, id) });
+  assert.ok(!htmlAll.includes("🔒"), "no lock marks in all_unlocked");
+  assert.ok(htmlRel.includes("🔒 キャンプ"), "camp row locked in release");
+  assert.ok(htmlRel.includes("🔒 僚機方針"), "squad row locked in release");
+  assert.ok(!htmlRel.includes("🔒 移動") && !htmlRel.includes("🔒 射撃") && !htmlRel.includes("🔒 抽出要請"), "basic rows never locked");
+  console.log("explore command unlock overlay ok");
 }
