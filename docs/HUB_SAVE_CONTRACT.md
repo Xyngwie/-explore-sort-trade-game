@@ -192,7 +192,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
   - `unrestored` のとき `circuitBoard.outcome` は空。それ以外は `restoreState` と同じ。
   - 評価値は保存しない（`circuitEffectValue` で毎回計算。手がかり生成の互換は selftest で固定、設計 §9 U17）。
 - **件数の切り詰めを廃止**。`HUB_LIMITS.maxCircuits`（8）は trade が参照しているので `@deprecated` で残す。
-- `perfectMaxSize: number`（0〜64）。パーフェクト（Fully Awakened かつ locked）にできた最大の辺。欠落時（v1/v2 からの移行）は既存のパーフェクト回路の最大辺で初期化（U11）。保存値があればそのまま使う（売っても下がらない）。
+- `perfectMaxSize: number`（0〜20。Restore の最大 20×20 に合わせ、読み込み時に 20 を超える値は 20 に丸める。2026-09-28 までは 0〜64）。パーフェクト（Fully Awakened かつ locked）にできた最大の辺。欠落時（v1/v2 からの移行）は既存のパーフェクト回路の最大辺で初期化（U11）。保存値があればそのまま使う（売っても下がらない）。
 - `fieldDrops: FieldCircuitDrop[]`（`{ dropId, frontSeed, cell, circuit, cause, fromMechInstanceId?, droppedAt }`）。欠落時 `[]`。読めない要素は 1 件ずつ捨てる。
 - `appliedSortieIds?: string[]`（直近 20 件）。出撃報告の二重反映防止。
 

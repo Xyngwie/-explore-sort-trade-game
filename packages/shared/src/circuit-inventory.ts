@@ -110,21 +110,22 @@ export function recordPerfectSize(
   rec: Pick<HubCircuitRecord, "restoreState" | "locked" | "circuitBoard">,
 ): HubSnapshot {
   if (!isPerfectRestoredCircuit(rec)) return hub;
-  const n = Math.min(HUB_LIMITS.maxCircuitSide, circuitSize(rec));
+  const n = Math.min(HUB_LIMITS.maxRestoreSide, circuitSize(rec));
   if (n <= hub.perfectMaxSize) return hub;
   return { ...hub, perfectMaxSize: n };
 }
 
 /**
- * Largest junk-craft side: max(2, perfectMaxSize + 1). `ceiling` (Restore's
- * max side, U12) is decided in impl B; omitted → no clamp.
+ * Largest junk-craft side: min(ceiling, max(2, perfectMaxSize + 1)).
+ * `ceiling` defaults to Restore's max side (U12: {@link HUB_LIMITS.maxRestoreSide}
+ * = 20). The trade craft UI wiring is impl B.
  */
 export function craftMaxSize(
   hub: Pick<HubSnapshot, "perfectMaxSize">,
-  ceiling?: number,
+  ceiling: number = HUB_LIMITS.maxRestoreSide,
 ): number {
   const n = Math.max(2, Math.floor(hub.perfectMaxSize ?? 0) + 1);
-  if (ceiling == null || !Number.isFinite(ceiling)) return n;
+  if (!Number.isFinite(ceiling)) return n;
   return Math.max(2, Math.min(n, Math.floor(ceiling)));
 }
 

@@ -185,6 +185,27 @@ export function isCircuitOutcome(x: unknown): x is CircuitOutcome {
 
 
 /**
+ * Largest board side Restore generates and plays (STATUS 12/14, data model
+ * U12): 20×20. Generation (flawed and Perfect) clamps larger requests to this;
+ * the junk-craft ceiling is also this ({@link craftMaxSize}).
+ */
+export const RESTORE_MAX_SIDE = 20;
+
+/**
+ * Largest side accepted when *decoding* a stored / URL board. Kept at the
+ * pre-20×20 value so an older save holding a bigger board is not dropped on
+ * load; Restore clamps such a board to {@link RESTORE_MAX_SIDE} when opened.
+ */
+export const CIRCUIT_BOARD_DECODE_MAX_SIDE = 64;
+
+/** Clamp a requested board side to 1..{@link RESTORE_MAX_SIDE} (non-finite → 1). */
+export function clampRestoreSide(n: number): number {
+  const v = Math.floor(Number(n));
+  if (!Number.isFinite(v)) return 1;
+  return Math.max(1, Math.min(RESTORE_MAX_SIDE, v));
+}
+
+/**
  * Normalize a loose board blob. Returns null if cols/rows/edgeState unusable.
  * Does not invent a board from nothing (caller supplies fallback empty board if needed).
  */
@@ -197,7 +218,14 @@ export function normalizeCircuitBoard(
   const cols = Math.floor(Number(obj.cols));
   const rows = Math.floor(Number(obj.rows));
   if (v !== 1 || !Number.isFinite(cols) || !Number.isFinite(rows)) return null;
-  if (cols < 1 || rows < 1 || cols > 64 || rows > 64) return null;
+  if (
+    cols < 1 ||
+    rows < 1 ||
+    cols > CIRCUIT_BOARD_DECODE_MAX_SIDE ||
+    rows > CIRCUIT_BOARD_DECODE_MAX_SIDE
+  ) {
+    return null;
+  }
   const edgeState = typeof obj.edgeState === "string" ? obj.edgeState : "";
   const board: CircuitBoardState = {
     v: 1,
@@ -247,7 +275,14 @@ export function parseCircuitBoardCompact(
   const cols = Number.parseInt(parts[1]!, 10);
   const rows = Number.parseInt(parts[2]!, 10);
   if (v !== 1 || !Number.isFinite(cols) || !Number.isFinite(rows)) return null;
-  if (cols < 1 || rows < 1 || cols > 64 || rows > 64) return null;
+  if (
+    cols < 1 ||
+    rows < 1 ||
+    cols > CIRCUIT_BOARD_DECODE_MAX_SIDE ||
+    rows > CIRCUIT_BOARD_DECODE_MAX_SIDE
+  ) {
+    return null;
+  }
   const edgeState = parts[3] ?? "";
   const puzzleId = (parts[4] ?? "").trim();
   const outcomeRaw = (parts[5] ?? "").trim();
