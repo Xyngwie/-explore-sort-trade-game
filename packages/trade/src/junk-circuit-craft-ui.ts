@@ -1,14 +1,20 @@
 import {
-  HUB_LIMITS,
-  createEmptyCircuitBoard,
+  RESTORE_MAX_SIDE,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   saveHubSaveToLocalStorage,
-  type HubCircuitRecord,
 } from "@estg/shared";
+import {
+  backfillPerfectMaxSize,
+  craftJunkCircuit,
+  heldJunk,
+  junkCraftMaxSide,
+  junkCraftOptions,
+  type JunkCraftOption,
+} from "./junk-craft";
 
-const JUNK_COST = 4;
 const CARD_ID = "junk-circuit-craft";
+const SIZE_SELECT_ID = "junk-circuit-craft-size";
 
 function makeCircuitId(): string {
   try {
@@ -23,63 +29,70 @@ function makeCircuitId(): string {
 
 function getHub() {
   const save = loadHubSaveFromLocalStorage();
-  return normalizeHubSnapshot(save?.hub);
+  // Same backfill as hangar load, so the cap is right even before hangar persists.
+  return backfillPerfectMaxSize(normalizeHubSnapshot(save?.hub));
 }
 
-function craftCircuit(): void {
-  const hub = getHub();
-  const junk = Math.max(0, Math.floor(hub.inventory.junk ?? 0));
-  if (junk < JUNK_COST) return;
+function optionLabel(o: JunkCraftOption): string {
+  const cost = `ジャンク${o.junk}・${o.credits}c`;
+  if (o.reason === "over_cap") return `${o.side}×${o.side}（${cost}・未解放）`;
+  if (o.reason === "no_junk") return `${o.side}×${o.side}（${cost}・ジャンク不足）`;
+  if (o.reason === "no_credits") return `${o.side}×${o.side}（${cost}・クレジット不足）`;
+  return `${o.side}×${o.side}（${cost}）`;
+}
 
-  const circuitId = makeCircuitId();
-  const board = createEmptyCircuitBoard(4, 4, circuitId);
-  board.outcome = "offline";
-
-  const record: HubCircuitRecord = {
-    circuitId,
-    circuitBoard: board,
-    // HubSave v3 required fields; behavior unchanged (white board → unrestored is impl B).
-    restoreState: "offline",
-    origin: "crafted",
-    equippedTo: null,
-    outcome: "offline",
-    updatedAt: new Date().toISOString(),
-  };
-
-  const inventory = { ...hub.inventory };
-  const remainingJunk = junk - JUNK_COST;
-  if (remainingJunk > 0) inventory.junk = remainingJunk;
-  else delete inventory.junk;
-
-  saveHubSaveToLocalStorage({
-    ...hub,
-    inventory,
-    circuits: [record, ...hub.circuits].slice(0, HUB_LIMITS.maxCircuits),
-  });
-
+function craftCircuit(side: number): void {
+  const result = craftJunkCircuit(getHub(), side, { circuitId: makeCircuitId() });
+  if (!result.ok) return;
+  saveHubSaveToLocalStorage(result.hub);
   window.location.reload();
 }
 
 function render(card: HTMLElement): void {
   const hub = getHub();
-  const junk = Math.max(0, Math.floor(hub.inventory.junk ?? 0));
-  const canCraft = junk >= JUNK_COST;
+  const junk = heldJunk(hub);
+  const cap = junkCraftMaxSide(hub);
+  // List every size up to 20; over-cap / unaffordable sizes are disabled.
+  const options = junkCraftOptions(hub, RESTORE_MAX_SIDE);
+  const firstEnabled = [...options].reverse().find((o) => o.enabled) ?? null;
 
   card.id = CARD_ID;
   card.innerHTML = `
     <h2 style="font-size:1rem;margin:0 0 0.5rem">回路作成</h2>
     <p class="muted" style="margin:0 0 0.5rem;font-size:0.75rem">
-      ジャンク ${JUNK_COST}個から回路を1枚作成します。
+      ジャンクとクレジットで N×N の回路を1枚作成します（最大 ${cap}×${cap}。パーフェクトで直した最大サイズ＋1）。
     </p>
-    <div class="row" style="justify-content:space-between;align-items:center;gap:0.5rem">
-      <span>ジャンク：${junk}</span>
-      <button type="button" class="secondary" data-junk-circuit-craft ${canCraft ? "" : "disabled"}>
+    <div class="row" style="justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
+      <span>ジャンク：${junk} · ${Math.max(0, Math.floor(hub.credits))}c</span>
+      <select id="${SIZE_SELECT_ID}" aria-label="回路サイズ">
+        ${options
+          .map(
+            (o) =>
+              `<option value="${o.side}" ${o.enabled ? "" : "disabled"} ${
+                firstEnabled?.side === o.side ? "selected" : ""
+              }>${optionLabel(o)}</option>`,
+          )
+          .join("")}
+      </select>
+      <button type="button" class="secondary" data-junk-circuit-craft ${firstEnabled ? "" : "disabled"}>
         回路を作成
       </button>
     </div>
   `;
 
-  card.querySelector<HTMLButtonElement>("[data-junk-circuit-craft]")?.addEventListener("click", craftCircuit);
+  const select = card.querySelector<HTMLSelectElement>(`#${SIZE_SELECT_ID}`);
+  const button = card.querySelector<HTMLButtonElement>("[data-junk-circuit-craft]");
+  const sync = () => {
+    const side = Number(select?.value);
+    const opt = options.find((o) => o.side === side);
+    if (button) button.disabled = !opt?.enabled;
+  };
+  select?.addEventListener("change", sync);
+  sync();
+  button?.addEventListener("click", () => {
+    const side = Number(select?.value);
+    if (Number.isFinite(side)) craftCircuit(side);
+  });
 }
 
 function findAnchorCard(): HTMLElement | null {

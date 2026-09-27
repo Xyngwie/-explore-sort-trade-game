@@ -59,6 +59,7 @@ import {
   spendYieldBag,
   stripHandoffParams,
   upsertCircuitIntoHub,
+  recordPerfectSize,
   removeCircuitFromHub,
   aggregateCircuitBonuses,
   applyRepairDiscountToCost,
@@ -81,6 +82,7 @@ import {
   type SortieReturnKind,
   type YieldBag,
 } from "@estg/shared";
+import { backfillPerfectMaxSize } from "./junk-craft";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
   yieldBagFromTypedRepairCost,
@@ -385,6 +387,17 @@ export function createInitialHangar(
     );
   }
 
+  // Impl B one-time backfill: perfects achieved before the restore-import hook
+  // (e.g. between impl A and B) raise perfectMaxSize. Never lowers it.
+  const beforeBackfill = hub;
+  hub = backfillPerfectMaxSize(hub);
+  const backfilled = hub !== beforeBackfill;
+  if (backfilled) {
+    log.unshift(
+      `パーフェクト最大サイズを補正 → ${hub.perfectMaxSize}×${hub.perfectMaxSize}`,
+    );
+  }
+
   const lastCircuit = resolveActiveCircuit(hub, stash.lastCircuit);
   const craftSignature = loadCraftSignature(storage ?? undefined);
   const state: HangarState = {
@@ -398,7 +411,7 @@ export function createInitialHangar(
     lastExploreReturn: null,
     craftSignature,
   };
-  if (migratedCircuit) {
+  if (migratedCircuit || backfilled) {
     return persistHangar(state, storage ?? undefined);
   }
   return state;
@@ -527,6 +540,13 @@ export function ingestLocationSearch(
       perfect:
         restore.perfect === true || restore.circuitBoard.perfect === true,
     });
+    // Impl B: a Perfect (Fully Awakened + locked) result raises perfectMaxSize
+    // (U10); backfill also counts perfects held from before this hook.
+    const imported = hub.circuits.find(
+      (c) => c.circuitId === (restore.circuitId ?? restore.circuitBoard.puzzleId ?? ""),
+    );
+    if (imported) hub = recordPerfectSize(hub, imported);
+    hub = backfillPerfectMaxSize(hub);
     lastCircuit = resolveActiveCircuit(hub, {
       ...restore,
       lastEditorName: editor,

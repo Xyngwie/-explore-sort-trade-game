@@ -73,7 +73,7 @@
   | 10×10 | 20 個 | **231c**（旧 1,024c） | **462c**（旧 2,048c） |
   | 20×20 | 40 個 | **13,301c**（旧 1,048,576c） | **26,602c**（旧 2,097,152c） |
 
-  - 現行の実装（#133 `packages/trade/src/junk-circuit-craft-ui.ts`）との差: 現行は **ジャンク 4 個・クレジット 0 で常に 4×4**（`JUNK_COST = 4`、`createEmptyCircuitBoard(4, 4, …)`）。新しいコストでは 4×4 はジャンク 8 個＋20c、ジャンク 4 個で作れるのは 2×2（＋9c）。実装は STATUS 項目14（コードの値は本書では変えない）。§9.2 C10。
+  - 現行の実装（#133 `packages/trade/src/junk-circuit-craft-ui.ts`）との差: 現行は **ジャンク 4 個・クレジット 0 で常に 4×4**（`JUNK_COST = 4`、`createEmptyCircuitBoard(4, 4, …)`）。新しいコストでは 4×4 はジャンク 8 個＋20c、ジャンク 4 個で作れるのは 2×2（＋9c）。実装は STATUS 項目14・データモデル実装 B（`trade/src/junk-craft.ts`: サイズ選択 2×2〜min(最大＋1, 20)、コストは shared `circuitCraftJunkCost`／`circuitCraftCreditCost`）。§9.2 C10。
 - ~~**追加決定（旧 §8.5-2）:** 回路の売値は **現行どおり 30c ＋ 評価値 × 3c**（変更なし）。~~（下の改定で置き換え）
 - **追加決定（旧 §8.5-2 の改定、2026-09-28・価格の変更として承認済み）:** 回路の売値は **25c ＋ 評価値 × 3c**。最低額を 30c から 25c に下げる（評価値1あたりの 3c は変えない）。**Restore していない回路も今までどおり売れる**（評価値0なら 25c）。
   - 実装: `packages/trade/src/circuit-sell-prices.ts` の `CIRCUIT_SELL_BASE_CREDITS = 25`・`CIRCUIT_SELL_CREDITS_PER_EFFECT = 3`・`circuitSellPriceCredits(effect) = 25 + floor(effect) × 3`。売却処理は `packages/trade/src/hangar.ts` の `sellCircuit`（盤から `computeCircuitEffectForBoard` で評価値を出して価格を決める。基本の 25c＋評価値×3c は成果状態を見ない。完璧ボーナスは下の追加決定）。文書は `TRADE_HANGAR_V0.md` §3.4b。定数は `hangar.selftest.ts` で 25 / 3 を検証している。
