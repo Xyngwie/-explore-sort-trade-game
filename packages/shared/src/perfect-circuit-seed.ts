@@ -13,7 +13,7 @@ import {
 import {
   SIZED_TRUE_MAX_SIDE,
   SIZED_TRUE_MIN_SIDE,
-  buildSizedTruePuzzleId,
+  buildSizedTruePuzzleIdV2,
   resolveSizedTruePuzzle,
 } from "./perfect-circuit-sized";
 
@@ -141,7 +141,8 @@ export function resolveVerifyTrueClues(
 
 /**
  * Fixed / regenerated clues for any true (Perfect-solvable) puzzleId:
- * verify-true (2×2 fixed) or a sized true board (`perfect-true-{c}x{r}-…`).
+ * verify-true (2×2 fixed) or a sized true board (v1 `perfect-true-{c}x{r}-…`,
+ * v2 `perfect-true-v2-{c}x{r}-…` with hidden clues = null).
  * Size comes from the id (callers must use the returned cols/rows).
  */
 export function resolveTrueBoardClues(
@@ -324,7 +325,8 @@ export type TruePuzzleFromSolution = {
  * (generate-from-solution). Never samples random digits.
  * - No size, or 2×2 → the fixed verify-true board (`verify-true-2`).
  * - Other sizes (each side 2..{@link SIZED_TRUE_MAX_SIDE}) → a sized true
- *   board at the requested size (`perfect-true-{c}x{r}-…`, seeded by `seed`).
+ *   board at the requested size (v2 `perfect-true-v2-{c}x{r}-…`, seeded by
+ *   `seed`: loop touches all 4 sides, clues hidden while uniquely solvable).
  * - Out-of-range sizes fall back to verify-true.
  */
 export function buildTruePuzzleFromSolution(opts?: {
@@ -337,7 +339,7 @@ export function buildTruePuzzleFromSolution(opts?: {
       Number.isInteger(n) && n >= SIZED_TRUE_MIN_SIDE && n <= SIZED_TRUE_MAX_SIDE;
     if (okSide(opts.cols) && okSide(opts.rows)) {
       const sized = resolveSizedTruePuzzle(
-        buildSizedTruePuzzleId(opts.seed, opts.cols, opts.rows),
+        buildSizedTruePuzzleIdV2(opts.seed, opts.cols, opts.rows),
       )!;
       return {
         kind: "true",

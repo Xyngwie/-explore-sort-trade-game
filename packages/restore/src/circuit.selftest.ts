@@ -21,7 +21,9 @@ import {
   PERFECT_CIRCUIT_DEV_RATE,
   PERFECT_CIRCUIT_PROD_RATE,
   resolvePerfectCircuitInjectRate,
-  buildSizedTruePuzzleId,
+  buildSizedTruePuzzleIdV2,
+  countCircuitLoopSolutions,
+  loopTouchesAllOuterSides,
   resolveSizedTruePuzzle,
   computeCircuitEffectForBoard,
   computeCircuitEffectValue,
@@ -431,7 +433,7 @@ assert.ok(
   assert.equal(trueBoard.injectedTrue, true);
   assert.equal(trueBoard.rarity, "perfect_rare");
   assert.equal(trueBoard.hazard, "none");
-  assert.equal(trueBoard.puzzleId, buildSizedTruePuzzleId("roll-me", 6, 6));
+  assert.equal(trueBoard.puzzleId, buildSizedTruePuzzleIdV2("roll-me", 6, 6));
   assert.equal(trueBoard.cols, 6);
   assert.equal(trueBoard.rows, 6);
   const sol = resolveSizedTruePuzzle(trueBoard.puzzleId)!.solution;
@@ -459,7 +461,7 @@ assert.ok(
   const always = generatePuzzle("r1", 6, 6, { injectRate: 1, rng: () => 0.99 });
   assert.equal(always.injectedTrue, true);
   assert.equal(always.rarity, "perfect_rare");
-  assert.equal(always.puzzleId, buildSizedTruePuzzleId("r1", 6, 6));
+  assert.equal(always.puzzleId, buildSizedTruePuzzleIdV2("r1", 6, 6));
   assert.equal(always.cols, 6);
 
   // bootstrap with explicit DEV rate + rng-forced inject via injectRate 1
@@ -467,7 +469,7 @@ assert.ok(
   assert.equal(injectedSession.injectedTrue, true);
   assert.equal(
     injectedSession.puzzle.puzzleId,
-    buildSizedTruePuzzleId("restore-stub-6", 6, 6),
+    buildSizedTruePuzzleIdV2("restore-stub-6", 6, 6),
   );
   assert.equal(injectedSession.puzzle.cols, 6);
   assert.equal(injectedSession.rarity, "perfect_rare");
@@ -637,7 +639,18 @@ assert.ok(
           ? buildVerifyTrueSolutionMarks()
           : resolveSizedTruePuzzle(t.puzzleId)!.solution;
       if (size === 2) assert.equal(t.puzzleId, VERIFY_TRUE_PUZZLE_ID);
-      else assert.equal(t.puzzleId, buildSizedTruePuzzleId(`${seed}-true`, size, size));
+      else {
+        assert.equal(t.puzzleId, buildSizedTruePuzzleIdV2(`${seed}-true`, size, size));
+        // Hidden clues (null) on v2 perfect boards; unique; loop on all 4 sides.
+        const sized = resolveSizedTruePuzzle(t.puzzleId)!;
+        const nulls = t.clues.flat().filter((c) => c == null).length;
+        assert.equal(nulls, sized.hiddenCount);
+        assert.ok(nulls > 0);
+        assert.equal(loopTouchesAllOuterSides(solution, size, size), true);
+      }
+      const uniq = countCircuitLoopSolutions(t.clues, size, size);
+      assert.equal(uniq.count, 1);
+      assert.equal(uniq.aborted, false);
       assert.equal(isLoopClosed(solution, size, size), true);
       assert.equal(digitSatisfaction(t.clues, solution, size, size).rate, 1);
       const perfectRes = classifyPlayResult(t.clues, solution, size, size);
