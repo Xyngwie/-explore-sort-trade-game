@@ -577,6 +577,10 @@ import {
 } from "./perfect-circuit-seed";
 import {
   buildSizedTruePuzzleId,
+  buildSizedTruePuzzleIdV2,
+  clearSizedTruePuzzleCache,
+  loopTouchesAllOuterSides,
+  sizedTrueHiddenFraction,
   isSizedTruePuzzleId,
   resolveSizedTruePuzzle,
 } from "./perfect-circuit-sized";
@@ -601,6 +605,7 @@ import {
   generateFlawedClues,
   resolveCluesForCircuitBoard,
 } from "./circuit-clues";
+import { countCircuitLoopSolutions } from "./circuit-solver";
 
 
 // --- Perfect Circuit verify-true seed (2×2 outer loop) ---
@@ -760,7 +765,8 @@ import {
   });
   assert.equal(injected.injectedTrue, true);
   // Injection now honors the requested size (STATUS 項目12).
-  assert.equal(injected.puzzleId, buildSizedTruePuzzleId("any-seed", 6, 6));
+  // v2 id (4-side loop + hidden clues) since the hidden-clue change.
+  assert.equal(injected.puzzleId, buildSizedTruePuzzleIdV2("any-seed", 6, 6));
   assert.equal(injected.cols, 6);
   assert.equal(injected.rows, 6);
   // 2×2 request keeps the fixed verify-true board.
@@ -834,6 +840,144 @@ import {
     assert.equal(again.injectedTrue, true);
     assert.equal(again.puzzleId, id);
     assert.equal(again.cols, 5);
+  }
+
+  // --- v1 ids keep regenerating the exact #150 board (all clues shown) ---
+  {
+    clearSizedTruePuzzleCache();
+    const v1 = resolveSizedTruePuzzle("perfect-true-3x3-1fgfwf6")!;
+    assert.equal(v1.version, 1);
+    assert.equal(v1.hiddenCount, 0);
+    assert.deepEqual(v1.clues, [
+      [0, 0, 1],
+      [1, 2, 3],
+      [3, 2, 2],
+    ]);
+  }
+
+  // --- v2 sized true boards: 4-side loop, unique solution, hidden clues ---
+  {
+    // Independent brute force for ≤4×4: every simple loop on a grid is the
+    // boundary of a cell region, so enumerate regions and count matches.
+    const bruteCount = (
+      clues: ReadonlyArray<ReadonlyArray<number | null>>,
+      n: number,
+    ): number => {
+      let found = 0;
+      const total = n * n;
+      const E = (n + 1) * n * 2;
+      for (let mask = 1; mask < 1 << total; mask++) {
+        const marks = Array.from({ length: E }, () => 0 as 0 | 1 | 2);
+        const inside = (x: number, y: number) =>
+          x >= 0 && y >= 0 && x < n && y < n && ((mask >> (y * n + x)) & 1) === 1;
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            if (!inside(x, y)) continue;
+            if (!inside(x, y - 1)) marks[y * n + x] = 1;
+            if (!inside(x, y + 1)) marks[(y + 1) * n + x] = 1;
+            if (!inside(x - 1, y)) marks[n * (n + 1) + y * (n + 1) + x] = 1;
+            if (!inside(x + 1, y)) marks[n * (n + 1) + y * (n + 1) + x + 1] = 1;
+          }
+        }
+        if (!isCircuitSingleLoopClosed(marks, n, n)) continue;
+        let ok = true;
+        for (let y = 0; y < n && ok; y++) {
+          for (let x = 0; x < n && ok; x++) {
+            const c = clues[y]![x];
+            if (c != null && countLineEdgesAroundCell(marks, n, n, x, y) !== c) ok = false;
+          }
+        }
+        if (ok) found++;
+      }
+      return found;
+    };
+
+    // verify-true-2 stays as is (all 2s) and is uniquely solvable.
+    const vt = countCircuitLoopSolutions(VERIFY_TRUE_CLUES, 2, 2);
+    assert.equal(vt.count, 1);
+    assert.equal(bruteCount(VERIFY_TRUE_CLUES, 2), 1);
+
+    const seeds = ["hc-a", "hc-b", "hc-c", "hc-d", "hc-e", "hc-f"];
+    for (let n = 2; n <= 8; n++) {
+      for (const seed of seeds) {
+        const id = buildSizedTruePuzzleIdV2(seed, n, n);
+        assert.ok(id.startsWith("perfect-true-v2-") && id.length <= 64 && !id.includes("|"));
+        assert.equal(isSizedTruePuzzleId(id), true);
+        clearSizedTruePuzzleCache();
+        const p = resolveSizedTruePuzzle(id)!;
+        assert.equal(p.version, 2);
+        assert.equal(p.cols, n);
+        assert.equal(p.rows, n);
+        // 4-side rule + single loop.
+        assert.equal(isCircuitSingleLoopClosed(p.solution, n, n), true);
+        assert.equal(loopTouchesAllOuterSides(p.solution, n, n), true);
+        // Displayed clues match the loop; hidden = null.
+        let nulls = 0;
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            const c = p.clues[y]![x];
+            if (c == null) nulls++;
+            else assert.equal(c, countLineEdgesAroundCell(p.solution, n, n, x, y));
+          }
+        }
+        assert.equal(nulls, p.hiddenCount);
+        assert.ok(p.hiddenCount <= Math.floor(n * n * sizedTrueHiddenFraction(n)));
+        // Unique: solver finds exactly one solution = the generating loop.
+        const cnt = countCircuitLoopSolutions(p.clues, n, n);
+        assert.equal(cnt.aborted, false);
+        assert.equal(cnt.count, 1);
+        assert.deepEqual(cnt.first, p.solution.map((m) => (m === 1 ? 1 : 0)));
+        if (n <= 4) assert.equal(bruteCount(p.clues, n), 1);
+        // Round-trip: regenerate from scratch → same clues + same hidden set.
+        clearSizedTruePuzzleCache();
+        const again = resolveSizedTruePuzzle(id)!;
+        assert.deepEqual(again.clues, p.clues);
+        assert.deepEqual(again.solution, p.solution);
+        // Hub/trade scoring path (resolveCluesForCircuitBoard) sees the same
+        // clues incl. nulls → hidden cells never score.
+        assert.deepEqual(resolveCluesForCircuitBoard({ cols: n, rows: n, puzzleId: id }), p.clues);
+        const direct = computeCircuitEffectValue({
+          clues: p.clues,
+          marks: p.solution,
+          cols: n,
+          rows: n,
+          perfect: true,
+          outcome: "fully_awakened",
+        });
+        for (const cc of direct.contributions) {
+          assert.notEqual(p.clues[cc.y]![cc.x], null);
+        }
+        const viaBoard = computeCircuitEffectForBoard(
+          {
+            v: 1,
+            cols: n,
+            rows: n,
+            edgeState: encodeEdgeState(p.solution),
+            puzzleId: id,
+            outcome: "fully_awakened",
+            perfect: true,
+          },
+          { perfect: true },
+        );
+        assert.equal(viaBoard.effect, direct.effect);
+      }
+    }
+    // Hidden fraction grows with N (target; generation may stop earlier).
+    assert.equal(sizedTrueHiddenFraction(3), 0.25);
+    assert.equal(sizedTrueHiddenFraction(8), 0.5);
+    assert.equal(sizedTrueHiddenFraction(12), 0.6);
+    // Solver sanity: a closed 2×2 with all 2s vs an unconstrained board.
+    assert.equal(countCircuitLoopSolutions([[null, null], [null, null]], 2, 2).count, 2);
+    assert.equal(countCircuitLoopSolutions([[4, 4], [4, 4]], 2, 2).count, 0);
+    // 8×8 generation time (UI budget): from scratch, generous bound.
+    const t0 = Date.now();
+    for (const seed of seeds) {
+      clearSizedTruePuzzleCache();
+      resolveSizedTruePuzzle(buildSizedTruePuzzleIdV2(seed, 8, 8));
+    }
+    const perBoard = (Date.now() - t0) / seeds.length;
+    assert.ok(perBoard < 500, `8×8 v2 generation ${perBoard}ms/board`);
+    console.log(`shared sized-true v2 ok (8×8 ~${perBoard.toFixed(1)}ms/board)`);
   }
 
   const flawed = buildInjectedOrFlawedPuzzle({
