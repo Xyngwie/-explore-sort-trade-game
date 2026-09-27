@@ -2,7 +2,6 @@ import { dist, dot, norm, type Vec2 } from "./math";
 import { getCoverObjects } from "./coverObjects";
 import type { Unit, World } from "./types";
 
-const COVER_ATTRACT_TRIGGER = 18;
 const COVER_ESCAPE_GRACE_SEC = 0.35;
 
 type CoverState = { coverId: string | null; escapeT: number };
@@ -39,10 +38,11 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
 
   const delta = { x: nearest.pos.x - unit.pos.x, y: nearest.pos.y - unit.pos.y };
   const centerDistance = Math.hypot(delta.x, delta.y);
-  const coverBoundary = Math.max(0, nearest.radius - unit.radius);
   const moving = Math.hypot(moveInput.x, moveInput.y) > 0.01;
   const outward = moving && dot(norm(moveInput), norm(delta)) < -0.2;
 
+  // Escape behavior is intentionally unchanged: while in cover, an outward
+  // movement input immediately releases the unit and starts the re-attach grace.
   if (unit.inCover) {
     if (outward) {
       unit.inCover = false;
@@ -52,11 +52,11 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
     return;
   }
 
-  if (state.escapeT > 0 || !moving || outward) return;
-  if (centerDistance > nearest.radius + COVER_ATTRACT_TRIGGER) return;
+  // Entry behavior is intentionally simple: once the unit enters the cover
+  // circle, snap it directly to the center. No movement-input direction or
+  // speed threshold is required to enter cover.
+  if (state.escapeT > 0 || centerDistance > nearest.radius) return;
 
-  // Entering the cover area snaps the unit directly to the cover center.
-  // Escape behavior above is intentionally unchanged.
   unit.pos = { x: nearest.pos.x, y: nearest.pos.y };
   unit.moveTarget = { x: nearest.pos.x, y: nearest.pos.y };
   unit.inCover = true;
