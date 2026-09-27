@@ -42,6 +42,14 @@ import {
   slitherLoopCelebrateClass,
   type LoopCelebrateState,
 } from "./loopCelebrate";
+import {
+  ZOOM_MODES,
+  fitZoom,
+  nearestEdgeAt,
+  shouldUseLargeBoardLayout,
+  zoomFactor,
+  type ZoomMode,
+} from "./boardHit";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const showInjectionDetails = isPerfectCircuitDebugContext({
@@ -80,6 +88,19 @@ let noiseToast: string | null = null;
 let celebrateUntil = 0;
 let celebrateTimer: ReturnType<typeof setTimeout> | null = null;
 let prevLoopClosed = false;
+
+/* --- Mobile / large-board view state (UI only; never persisted) --- */
+/** Board zoom: "1" = 37.6px pitch (comfortable tap spacing), "fit" = whole board. */
+let zoomMode: ZoomMode = "1";
+/** Last measured fit factor (so the next render can inline it without a 2nd layout). */
+let lastFitZoom = 1;
+let fitMeasured = false;
+/** Open `<details data-fold>` ids — innerHTML rebuilds would otherwise close them. */
+const openFolds = new Set<string>();
+/** Board scroll-container padding (px) — keep in sync with `.board-scroll` in style.css. */
+const BOARD_SCROLL_PAD_PX = 6;
+/** `.board-scroll.large` max-height in vh — keep in sync with style.css. */
+const BOARD_SCROLL_MAX_VH = 72;
 
 // Consume trade→restore keys so a refresh uses local session / storage.
 if (session.source === "handoff-board" || session.source === "handoff-id") {
@@ -204,6 +225,8 @@ function boardHtml(
   scoringCells: ReadonlySet<string>,
   noiseEdges: ReadonlySet<number>,
   celebrate: LoopCelebrateState,
+  large: boolean,
+  zoom: number,
 ): string {
   const { cols, rows, clues } = puzzle;
   const parts: string[] = [];
@@ -266,7 +289,9 @@ function boardHtml(
       ? `<div class="noise-toast" role="status">${escapeHtml(noiseToast)}</div>`
       : "";
   const celebrateCls = slitherLoopCelebrateClass(celebrate);
-  return `<div class="slither-wrap">${toast}${buildLoopCelebrateNoteHtml(celebrate)}<div class="slither${locked ? " locked" : ""}${session.hazard !== "none" ? " hazard-board" : ""}${celebrateCls}" style="--cols:${cols}">${parts.join("")}</div></div>`;
+  // The scroll container owns taps (nearest-edge hit test, see onRootClick);
+  // edge <button>s stay for keyboard / screen-reader access.
+  return `<div class="slither-wrap">${toast}${buildLoopCelebrateNoteHtml(celebrate)}<div class="board-scroll${large ? " large" : ""}${locked ? " locked" : ""}" role="group" aria-label="回路盤 ${cols}×${rows}"><div class="slither${locked ? " locked" : ""}${session.hazard !== "none" ? " hazard-board" : ""}${celebrateCls}" style="--cols:${cols};--zoom:${zoom.toFixed(4)}">${parts.join("")}</div></div></div>`;
 }
 
 function outcomeBanner(status: CircuitOutcome, blurb: string): string {
@@ -340,7 +365,137 @@ function outcomeEffectPreviewHtml(
   </div>`;
 }
 
+/** Root font size (px); cached — refreshed on resize only (avoids a style flush per render). */
+let cachedRemPx = 0;
+function remPx(): number {
+  if (!cachedRemPx) {
+    cachedRemPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  }
+  return cachedRemPx;
+}
+
+/** Board width available in the default (small) layout — used to pick the layout. */
+function smallLayoutBoardAvailPx(rem: number): number {
+  // Cached viewport width (updated on resize) — reading clientWidth here would force layout.
+  const vw = lastLayoutWidth || window.innerWidth;
+  // #app max 34rem, padding 1.25rem · card padding 1rem + 1px border · scroll padding
+  return Math.min(vw, 34 * rem) - 2 * 1.25 * rem - 2 * (rem + 1) - 2 * BOARD_SCROLL_PAD_PX;
+}
+
+function fold(id: string, summary: string, body: string): string {
+  return `<details class="fold" data-fold="${id}"${openFolds.has(id) ? " open" : ""}>
+      <summary>${escapeHtml(summary)}</summary>
+      <div class="fold-body">${body}</div>
+    </details>`;
+}
+
+function zoomBarHtml(): string {
+  const label: Record<ZoomMode, string> = { fit: "全体", "1": "1×", "1.5": "1.5×" };
+  const title: Record<ZoomMode, string> = {
+    fit: "盤全体を表示",
+    "1": "標準（タップしやすい間隔）",
+    "1.5": "拡大",
+  };
+  return `<div class="zoom-bar" role="group" aria-label="盤の表示倍率">${ZOOM_MODES.map(
+    (m) =>
+      `<button type="button" class="zoom-btn${zoomMode === m ? " on" : ""}" data-zoom="${m}" aria-pressed="${zoomMode === m}" title="${title[m]}">${label[m]}</button>`,
+  ).join("")}</div>`;
+}
+
+interface ViewSnapshot {
+  scrollLeft: number;
+  scrollTop: number;
+  clientWidth: number;
+  clientHeight: number;
+  zoom: number;
+  focusEdge: string | null;
+  focusZoom: string | null;
+}
+
+/**
+ * Board scroll offsets, cached from `scroll` events so a re-render does not
+ * have to read layout (keeps rapid taps from forcing a sync layout each time).
+ */
+let boardScrollLeft = 0;
+let boardScrollTop = 0;
+/** Set by the zoom buttons: the next render re-anchors the scroll around the centre. */
+let zoomAnchorPending = false;
+/** The click that triggered this render came from the keyboard (detail 0). */
+let keyboardActivation = false;
+
+function snapshotView(): ViewSnapshot | null {
+  const sc = root.querySelector<HTMLElement>(".board-scroll");
+  // Re-focus only after keyboard activation (focus() forces a sync layout, and
+  // pointer users do not need a focused edge button).
+  const active = keyboardActivation ? (document.activeElement as HTMLElement | null) : null;
+  keyboardActivation = false;
+  const focusEdge =
+    active && root.contains(active) && active.matches("button.edge") ? (active.dataset.edge ?? null) : null;
+  const focusZoom =
+    active && root.contains(active) && active.matches("[data-zoom]") ? (active.dataset.zoom ?? null) : null;
+  if (!sc) return null;
+  const sl = root.querySelector<HTMLElement>(".slither");
+  const measure = zoomAnchorPending;
+  zoomAnchorPending = false;
+  return {
+    scrollLeft: measure ? sc.scrollLeft : boardScrollLeft,
+    scrollTop: measure ? sc.scrollTop : boardScrollTop,
+    clientWidth: measure ? sc.clientWidth : 0,
+    clientHeight: measure ? sc.clientHeight : 0,
+    zoom: Number(sl?.style.getPropertyValue("--zoom")) || 1,
+    focusEdge,
+    focusZoom,
+  };
+}
+
+function restoreView(prev: ViewSnapshot | null, zoom: number): void {
+  const sc = root.querySelector<HTMLElement>(".board-scroll");
+  if (!sc || !prev) return;
+  if (Math.abs(prev.zoom - zoom) < 1e-4) {
+    // Writing scroll offsets forces a sync layout — skip when there is nothing to restore.
+    if (prev.scrollLeft) sc.scrollLeft = prev.scrollLeft;
+    if (prev.scrollTop) sc.scrollTop = prev.scrollTop;
+  } else {
+    // Zoom changed: keep the point at the centre of the viewport in place.
+    const r = zoom / prev.zoom;
+    const cx = (prev.scrollLeft + prev.clientWidth / 2) * r;
+    const cy = (prev.scrollTop + prev.clientHeight / 2) * r;
+    sc.scrollLeft = Math.max(0, cx - sc.clientWidth / 2);
+    sc.scrollTop = Math.max(0, cy - sc.clientHeight / 2);
+    boardScrollLeft = sc.scrollLeft;
+    boardScrollTop = sc.scrollTop;
+  }
+  const sel =
+    prev.focusEdge != null
+      ? `button.edge[data-edge="${prev.focusEdge}"]`
+      : prev.focusZoom != null
+        ? `[data-zoom="${prev.focusZoom}"]`
+        : null;
+  if (sel) root.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true });
+}
+
+/** After innerHTML: measure the real container and correct the fit zoom if needed. */
+function applyFitZoom(): number {
+  const sc = root.querySelector<HTMLElement>(".board-scroll");
+  const sl = root.querySelector<HTMLElement>(".slither");
+  if (!sc || !sl) return lastFitZoom;
+  const rem = remPx();
+  // −1px slack for sub-pixel rounding; the height cap is border-box (1px borders).
+  const availW = sc.clientWidth - 2 * BOARD_SCROLL_PAD_PX - 1;
+  const availH = sc.classList.contains("large")
+    ? (window.innerHeight * BOARD_SCROLL_MAX_VH) / 100 - 2 * BOARD_SCROLL_PAD_PX - 2 - 1
+    : Number.POSITIVE_INFINITY;
+  const z = fitZoom(puzzle.cols, puzzle.rows, availW, availH, rem);
+  lastFitZoom = z;
+  if (zoomMode === "fit") {
+    const cur = Number(sl.style.getPropertyValue("--zoom"));
+    if (Math.abs(cur - z) > 1e-3) sl.style.setProperty("--zoom", z.toFixed(4));
+  }
+  return z;
+}
+
 function render(): void {
+  const prevView = snapshotView();
   const classified = play();
   const {
     outcome: status,
@@ -404,25 +559,28 @@ function render(): void {
   const rarityClass =
     session.rarity === "perfect_rare" ? "rarity-perfect" : "rarity-flawed";
 
-  root.innerHTML = `
-    <p class="pill">MODULE 5 · RESTORE · PLAYABLE THICKEN</p>
-    <h1>精密回路修復</h1>
-    <p class="muted">大半は不完全基板。稀に可解コア。部分修復→Bypass、完全ループ→Fully Awakened（刻印ロック）、放棄→Offline。タイマー圧なし。</p>
+  const rem = remPx();
+  const large = shouldUseLargeBoardLayout(
+    puzzle.cols,
+    puzzle.rows,
+    smallLayoutBoardAvailPx(rem),
+    rem,
+  );
+  // Small boards always render at 1× (unchanged desktop look); zoom is a large-layout control.
+  const zoom = large ? zoomFactor(zoomMode, lastFitZoom) : 1;
 
-    ${
-      locked
-        ? `<div class="card lock-banner">
+  const introHtml = `<p class="muted">大半は不完全基板。稀に可解コア。部分修復→Bypass、完全ループ→Fully Awakened（刻印ロック）、放棄→Offline。タイマー圧なし。</p>`;
+
+  const lockHtml = locked
+    ? `<div class="card lock-banner">
       <p class="lock-title">完璧な回路・編集不可</p>
       <p class="muted">最終編集者（刻印） <strong class="engraved">${escapeHtml(displayName)}</strong></p>
     </div>`
-        : ""
-    }
+    : "";
 
-    ${outcomeBanner(status, blurb)}
-
-    ${
-      !locked && session.rarity === "flawed_majority" && status !== "fully_awakened"
-        ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
+  const heroHtml =
+    !locked && session.rarity === "flawed_majority" && status !== "fully_awakened"
+      ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
       <p class="bypass-hero-title">不完全基板 — Bypass で確定</p>
       <p class="bypass-hero-body">全解は期待しない盤です。部分充足のまま <strong>Bypass</strong> で拠点へ戻せます。</p>
       <p class="bypass-hero-body bypass-hero-effect"><strong>${escapeHtml(bypassGuideEffectJa(preview.bypass))}</strong></p>
@@ -430,8 +588,8 @@ function render(): void {
         Bypass を確定する
       </button>
     </div>`
-        : !locked && status === "bypass"
-          ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
+      : !locked && status === "bypass"
+        ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
       <p class="bypass-hero-title">Bypass 準備完了</p>
       <p class="bypass-hero-body">部分修復として確定できます。</p>
       <p class="bypass-hero-body bypass-hero-effect"><strong>${escapeHtml(bypassGuideEffectJa(preview.bypass))}</strong></p>
@@ -439,20 +597,16 @@ function render(): void {
         Bypass を確定する
       </button>
     </div>`
-          : ""
-    }
+        : "";
 
-
-    <div class="card">
-      <div class="meta-row">
-        <span class="rarity-badge ${rarityClass}">${escapeHtml(rarityLabel(session.rarity))}</span>
+  const badgesHtml = `<span class="rarity-badge ${rarityClass}">${escapeHtml(rarityLabel(session.rarity))}</span>
         ${
           session.hazard !== "none"
             ? `<span class="hazard-badge">${escapeHtml(hazardLabel(session.hazard))}</span>`
             : ""
-        }
-      </div>
-      <p class="muted">${escapeHtml(session.note)}</p>
+        }`;
+
+  const infoHtml = `<p class="muted">${escapeHtml(session.note)}</p>
       <p class="muted">puzzleSeed <span class="mono">${escapeHtml(puzzle.puzzleId)}</span> · ${puzzle.cols}×${puzzle.rows} · 辺: 空 → 線 → × → 空${
         circuitId
           ? ` · circuitId <span class="mono">${escapeHtml(circuitId)}</span>`
@@ -469,27 +623,26 @@ function render(): void {
           : showInjectionDetails && session.perfectInjectRate != null
             ? `<p class="muted">Perfect inject rate ${(session.perfectInjectRate * 100).toFixed(1)}%（未注入）</p>`
             : ""
-      }
-      ${boardHtml(activeLoopEdges, scoringCells, noiseEdges, celebrateState)}
-      ${digitBar(
-        digits.satisfied,
-        digits.clueCount,
-        digits.rate,
-        effectLabel,
-        effect.activeLoopEdgeCount,
-        effect.loopCount,
-        celebrateState,
-      )}
-      ${outcomeEffectPreviewHtml(
-        preview.bypass.effect,
-        preview.awakened.effect,
-        preview.bypass.hasLoop,
-        preview.awakenedBetter,
-      )}
-    </div>
+      }`;
 
-    <div class="card">
-      <table>
+  const boardBlock = boardHtml(activeLoopEdges, scoringCells, noiseEdges, celebrateState, large, zoom);
+  const digitHtml = digitBar(
+    digits.satisfied,
+    digits.clueCount,
+    digits.rate,
+    effectLabel,
+    effect.activeLoopEdgeCount,
+    effect.loopCount,
+    celebrateState,
+  );
+  const previewHtml = outcomeEffectPreviewHtml(
+    preview.bypass.effect,
+    preview.awakened.effect,
+    preview.bypass.hasLoop,
+    preview.awakenedBetter,
+  );
+
+  const judgeTableHtml = `<table>
         <tr><td>loop-closed?</td><td class="${loopClosed ? "ok" : ""}">${loopClosed ? "yes" : "no"}</td></tr>
         <tr><td>digit satisfaction</td><td>${digits.satisfied}/${digits.clueCount} (${(digits.rate * 100).toFixed(0)}%)</td></tr>
         <tr><td>効果値</td><td class="ok"><strong>${escapeHtml(effectLabel)}</strong> <span class="muted">(ループ ${effect.loopCount})</span></td></tr>
@@ -498,17 +651,15 @@ function render(): void {
         <tr><td>line edges</td><td>${lineCount}</td></tr>
         <tr><td>edgeState</td><td class="mono">${escapeHtml(enc || "(empty)")}</td></tr>
         <tr><td>board.outcome</td><td>${escapeHtml(board.outcome ?? "—")}</td></tr>
-      </table>
+      </table>`;
 
-      ${
-        !locked
-          ? `<label class="editor-field">最終編集者名（刻印スタブ）
+  const editorHtml = !locked
+    ? `<label class="editor-field">最終編集者名（刻印スタブ）
         <input type="text" id="inp-editor" maxlength="32" value="${escapeHtml(editorName)}" placeholder="例: 整備班・葵" />
       </label>`
-          : `<p class="muted">刻印 <span class="engraved">${escapeHtml(displayName)}</span></p>`
-      }
+    : `<p class="muted">刻印 <span class="engraved">${escapeHtml(displayName)}</span></p>`;
 
-      <div class="actions">
+  const actionsHtml = `<div class="actions">
         <button type="button" class="btn" id="btn-commit-awaken" ${canAwaken ? "" : "disabled"} title="完全ループ＋数字充足で有効">Commit Fully Awakened</button>
         <button type="button" class="btn ${session.rarity === "flawed_majority" || status === "bypass" ? "bypass-confirm" : ""}" id="btn-commit-bypass" ${canBypass ? "" : "disabled"}>Commit Bypass</button>
         <button type="button" class="btn ghost" id="btn-abandon" ${locked ? "disabled" : ""}>Abandon → Offline</button>
@@ -522,34 +673,85 @@ function render(): void {
       <label class="persist">
         <input type="checkbox" id="chk-persist" ${persist ? "checked" : ""} ${locked ? "disabled" : ""} />
         localStorage に edgeState を保存（この puzzleId）
-      </label>
-      <p class="muted" style="margin-top:0.75rem">判定は digit 充足＋単一ループ。Perfect は Fully Awakened かつ完全充足でロック。制限タイマーなし。</p>
-    </div>
+      </label>`;
 
-    <div class="card">
-      <p class="muted">restore → trade（HANDOFF_M45 · <span class="mono">buildRestoreToTradeUrl</span>）</p>
+  const judgeNoteHtml = `<p class="muted" style="margin-top:0.75rem">判定は digit 充足＋単一ループ。Perfect は Fully Awakened かつ完全充足でロック。制限タイマーなし。</p>`;
+
+  const handoffTableHtml = `<p class="muted">restore → trade（HANDOFF_M45 · <span class="mono">buildRestoreToTradeUrl</span>）</p>
       <table>
         <tr><td>circuitOutcome</td><td class="mono">${escapeHtml(status)}</td></tr>
         <tr><td>lastEditorName</td><td class="engraved">${escapeHtml(sanitizeEditorName(editorName) ?? "—")}</td></tr>
         <tr><td>return URL</td><td class="mono">${escapeHtml(hubUrl)}</td></tr>
-      </table>
-      <div class="actions">
+      </table>`;
+
+  const ctaHtml = `<div class="actions">
         <span class="cta-chip outcome-${status}" aria-label="${escapeHtml(outcomeLabel(status))}">${escapeHtml(outcomeLabel(status))}</span>
         <a class="btn" id="link-return-trade" href="${escapeHtml(hubUrl)}" target="_top" rel="noopener">${CTA_COPY.toHangar}</a>
-      </div>
+      </div>`;
+
+  const head = `<p class="pill">MODULE 5 · RESTORE · PLAYABLE THICKEN</p>
+    <h1>精密回路修復</h1>`;
+
+  root.classList.toggle("large-board", large);
+  if (!large) {
+    // Default layout (unchanged order): intro → banners → board card → judgement → handoff.
+    root.innerHTML = `
+    ${head}
+    ${introHtml}
+    ${lockHtml}
+    ${outcomeBanner(status, blurb)}
+    ${heroHtml}
+    <div class="card">
+      <div class="meta-row">${badgesHtml}</div>
+      ${infoHtml}
+      ${boardBlock}
+      ${digitHtml}
+      ${previewHtml}
+    </div>
+    <div class="card">
+      ${judgeTableHtml}
+      ${editorHtml}
+      ${actionsHtml}
+      ${judgeNoteHtml}
+    </div>
+    <div class="card">
+      ${handoffTableHtml}
+      ${ctaHtml}
     </div>
   `;
+  } else {
+    // Large-board layout: board first (near the top), details folded (expandable).
+    root.innerHTML = `
+    ${head}
+    <div class="card board-card">
+      <div class="meta-row">${badgesHtml}<span class="board-size mono">${puzzle.cols}×${puzzle.rows}</span>${zoomBarHtml()}</div>
+      ${boardBlock}
+      ${digitHtml}
+    </div>
+    ${lockHtml}
+    ${outcomeBanner(status, blurb)}
+    ${heroHtml}
+    <div class="card">
+      ${editorHtml}
+      ${actionsHtml}
+      ${fold("judge", "判定の詳細", judgeTableHtml + judgeNoteHtml)}
+    </div>
+    <div class="card">
+      ${ctaHtml}
+      ${fold("info", "盤情報・成果プレビュー", introHtml + infoHtml + previewHtml)}
+      ${fold("handoff", "restore → trade 詳細", handoffTableHtml)}
+    </div>
+  `;
+  }
+
+  // Measure the real container once (first large render / after a width change).
+  if (large && !fitMeasured) {
+    applyFitZoom();
+    fitMeasured = true;
+  }
+  restoreView(prevView, large ? zoomFactor(zoomMode, lastFitZoom) : 1);
 
   if (!locked) {
-    root.querySelectorAll<HTMLButtonElement>("button.edge").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const i = Number(btn.dataset.edge);
-        if (!Number.isFinite(i)) return;
-        const noiseAdj = btn.dataset.noise === "1";
-        toggleEdge(i, noiseAdj);
-      });
-    });
-
     root.querySelector("#inp-editor")?.addEventListener("input", (ev) => {
       editorName = (ev.target as HTMLInputElement).value;
     });
@@ -598,5 +800,108 @@ function render(): void {
     });
   }
 }
+
+/**
+ * Pointer/touch tap → nearest edge. Vertex (0,0) and (cols,rows) are the first
+ * and last `.dot`, so the geometry follows zoom / scroll / layout for free.
+ */
+function edgeFromPointer(clientX: number, clientY: number): number | null {
+  const sl = root.querySelector<HTMLElement>(".slither");
+  if (!sl) return null;
+  const first = sl.querySelector<HTMLElement>(".dot");
+  const dots = sl.querySelectorAll<HTMLElement>(".dot");
+  const last = dots[dots.length - 1];
+  if (!first || !last) return null;
+  const a = first.getBoundingClientRect();
+  const b = last.getBoundingClientRect();
+  const originX = a.left + a.width / 2;
+  const originY = a.top + a.height / 2;
+  const hit = nearestEdgeAt(clientX, clientY, {
+    cols: puzzle.cols,
+    rows: puzzle.rows,
+    originX,
+    originY,
+    pitchX: (b.left + b.width / 2 - originX) / puzzle.cols,
+    pitchY: (b.top + b.height / 2 - originY) / puzzle.rows,
+  });
+  return hit ? hit.index : null;
+}
+
+function toggleEdgeByIndex(index: number): void {
+  const btn = root.querySelector<HTMLButtonElement>(`button.edge[data-edge="${index}"]`);
+  toggleEdge(index, btn?.dataset.noise === "1");
+}
+
+// One delegated listener (attached once) instead of one per edge per render.
+// `click` (not pointerdown) so a pan / scroll inside the board never toggles an edge.
+root.addEventListener("click", (ev) => {
+  const target = ev.target as HTMLElement | null;
+  if (!target) return;
+  keyboardActivation = ev.detail === 0;
+  const zoomBtn = target.closest<HTMLElement>("[data-zoom]");
+  if (zoomBtn && root.contains(zoomBtn)) {
+    const m = zoomBtn.dataset.zoom as ZoomMode;
+    if (ZOOM_MODES.includes(m) && m !== zoomMode) {
+      zoomMode = m;
+      zoomAnchorPending = true;
+      render();
+    }
+    return;
+  }
+  if (locked || !target.closest(".board-scroll")) return;
+  const btn = target.closest<HTMLButtonElement>("button.edge");
+  if (ev.detail === 0) {
+    // Keyboard (Enter / Space on a focused edge button) or programmatic click.
+    if (btn) {
+      const i = Number(btn.dataset.edge);
+      if (Number.isFinite(i)) toggleEdge(i, btn.dataset.noise === "1");
+    }
+    return;
+  }
+  const i = edgeFromPointer(ev.clientX, ev.clientY);
+  if (i != null) toggleEdgeByIndex(i);
+});
+
+// "scroll" does not bubble either → capture to cache the board offsets.
+root.addEventListener(
+  "scroll",
+  (ev) => {
+    const el = ev.target as HTMLElement | null;
+    if (el?.classList?.contains("board-scroll")) {
+      boardScrollLeft = el.scrollLeft;
+      boardScrollTop = el.scrollTop;
+    }
+  },
+  { capture: true, passive: true },
+);
+
+// <details> "toggle" does not bubble → capture it to remember open folds.
+root.addEventListener(
+  "toggle",
+  (ev) => {
+    const d = ev.target as HTMLElement | null;
+    const id = d?.dataset?.fold;
+    if (!id) return;
+    if ((d as HTMLDetailsElement).open) openFolds.add(id);
+    else openFolds.delete(id);
+  },
+  true,
+);
+
+// Re-layout on width changes only (mobile URL-bar show/hide changes height while scrolling).
+let lastLayoutWidth = document.documentElement.clientWidth;
+let resizeRaf = 0;
+window.addEventListener("resize", () => {
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    const w = document.documentElement.clientWidth;
+    if (w === lastLayoutWidth) return;
+    lastLayoutWidth = w;
+    cachedRemPx = 0;
+    fitMeasured = false;
+    render();
+  });
+});
 
 render();
