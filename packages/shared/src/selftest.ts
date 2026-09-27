@@ -91,8 +91,8 @@ import {
 } from "./geolocation";
 
 import {
-  BASIC_MATERIAL_IDS,
-  PART_IDS,
+  RESOURCE_IDS,
+  SORT_PIECE_TYPES,
   yieldBagFromClearedCounts,
   yieldBagFromClearedWithMultiplier,
   mergeYieldBags,
@@ -102,10 +102,7 @@ import {
   canAffordYieldCost,
   spendYieldBag,
   applyYieldBagToInventory,
-  yieldBagFromTypedRepairCost,
-  EXAMPLE_TYPED_REPAIR_COST,
-  isBasicMaterialId,
-  isPartId,
+  yieldBagTotal,
 } from "./sort-yield";
 
 
@@ -412,62 +409,56 @@ assert.equal(resolveModuleBaseUrl("restore", { hostname: "example.com" }), MODUL
 
 console.log("shared explore-io selftest: ok");
 
-// --- sort yield v2 ---
-assert.equal(BASIC_MATERIAL_IDS.length, 5);
-assert.equal(PART_IDS.length, 5);
-assert.equal(isBasicMaterialId("mat_scrap"), true);
-assert.equal(isPartId("part_actuator"), true);
-assert.equal(isPartId("mat_scrap"), false);
+// --- sort yield (four-resource model, #115) ---
+// 1 cleared piece → 1 resource. Legacy Sort board names map food→ammo,
+// material→armor, energy→power. junk is a stored resource but never a Sort yield.
+assert.deepEqual([...RESOURCE_IDS], ["ammo", "armor", "power", "junk"]);
+assert.deepEqual([...SORT_PIECE_TYPES], ["ammo", "armor", "power"]);
 
 const bag = yieldBagFromClearedCounts({
   food: 10,
   material: 20,
   energy: 12,
 });
-assert.equal(bag.mat_ration, 10);
-assert.equal(bag.mat_scrap, 12); // floor(20*0.6)
-assert.equal(bag.mat_polymer, 8); // floor(20*0.4)
-assert.equal(bag.part_actuator, 2); // floor(20/10)
-assert.equal(bag.part_armor_plate, 1); // floor(20/15)
-assert.equal(bag.part_hydraulic_line, 1); // floor(20/20)
-assert.equal(bag.mat_circuit, 6); // floor(12*0.5)
-assert.equal(bag.mat_coolant, 6);
-assert.equal(bag.part_power_cell, 1); // floor(12/12)
-assert.equal(bag.part_sensor_array, undefined); // floor(12/18)=0
+assert.deepEqual(bag, { ammo: 10, armor: 20, power: 12 });
+assert.deepEqual(
+  yieldBagFromClearedCounts({ ammo: 3, armor: 0, power: 5 }),
+  { ammo: 3, power: 5 },
+);
+assert.equal(yieldBagTotal(bag), 42);
 
 const scaled = yieldBagFromClearedWithMultiplier(
   { food: 10, material: 0, energy: 0 },
   1.05,
 );
-assert.equal(scaled.mat_ration, 10); // floor(10*1.05)=10
+assert.equal(scaled.ammo, 10); // floor(10*1.05)=10
+assert.equal(
+  yieldBagFromClearedWithMultiplier({ food: 10, material: 0, energy: 0 }, 1.1).ammo,
+  11,
+); // floor(10*1.1)
 
-const merged = mergeYieldBags({ mat_scrap: 3 }, { mat_scrap: 2, part_actuator: 1 });
-assert.equal(merged.mat_scrap, 5);
-assert.equal(merged.part_actuator, 1);
+const merged = mergeYieldBags({ armor: 3 }, { armor: 2, power: 1 });
+assert.equal(merged.armor, 5);
+assert.equal(merged.power, 1);
 
-assert.equal(scaleYieldBag({ mat_scrap: 10 }, 0).mat_scrap, undefined);
+assert.equal(scaleYieldBag({ armor: 10 }, 0).armor, undefined);
 
 const compact = encodeYieldBagCompact(bag);
 const roundTrip = parseYieldBagCompact(compact);
-assert.equal(roundTrip.mat_ration, bag.mat_ration);
-assert.equal(roundTrip.part_actuator, bag.part_actuator);
-assert.deepEqual(parseYieldBagCompact("nope:1;mat_scrap:4;ghost:9").mat_scrap, 4);
+assert.deepEqual(roundTrip, bag);
+// Unknown / retired legacy ids are ignored on parse.
+assert.deepEqual(parseYieldBagCompact("nope:1;armor:4;mat_scrap:9;ghost:9"), { armor: 4 });
 
-const inv = applyYieldBagToInventory(bag, {
-  mat_scrap: 20,
-  mat_polymer: 10,
-  part_actuator: 1,
-});
-const costBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
+const inv = applyYieldBagToInventory(bag, { armor: 5, junk: 2 });
+assert.deepEqual(inv, { ammo: 10, armor: 25, power: 12, junk: 2 });
+const costBag = { armor: 25, junk: 1 };
 assert.equal(canAffordYieldCost(inv, costBag), true);
-assert.equal(canAffordYieldCost(bag, costBag), false); // bag alone lacks scrap/polymer
+assert.equal(canAffordYieldCost(bag, costBag), false); // bag alone lacks armor/junk
 const spent = spendYieldBag(inv, costBag);
 assert.ok(spent);
-assert.equal(spent!.mat_scrap, (bag.mat_scrap ?? 0)); // +20 then -20
-assert.equal(spent!.mat_polymer, (bag.mat_polymer ?? 0)); // +10 then -10
-assert.equal(spent!.part_actuator, (bag.part_actuator ?? 0)); // +1 then -1
+assert.deepEqual(spent, { ammo: 10, power: 12, junk: 1 });
 assert.equal(
-  spendYieldBag({ mat_scrap: 1 }, { mat_scrap: 5 }),
+  spendYieldBag({ armor: 1 }, { armor: 5 }),
   null,
 );
 
@@ -479,7 +470,7 @@ const payload = buildSortToTradePayloadFromResult({
 });
 assert.equal(payload.importMaterials, 42);
 assert.ok(payload.yieldBag);
-assert.equal(payload.yieldBag!.mat_ration, 10);
+assert.deepEqual(payload.yieldBag, { ammo: 10, armor: 20, power: 12 });
 
 const yieldUrl = buildSortToTradeUrlFromResult({
   yieldFood: 10,
@@ -489,8 +480,8 @@ const yieldUrl = buildSortToTradeUrlFromResult({
 });
 const yieldParsed = parseSortToTradeSearch(new URL(yieldUrl).search);
 assert.equal(yieldParsed?.importMaterials, 42);
-assert.equal(yieldParsed?.yieldBag?.mat_scrap, 12);
-assert.equal(yieldParsed?.yieldBag?.part_actuator, 2);
+assert.equal(yieldParsed?.yieldBag?.armor, 20);
+assert.equal(yieldParsed?.yieldBag?.power, 12);
 
 // v1 URL without yieldBag still parses
 const v1Trade = parseSortToTradeSearch("importMaterials=9&craftMultiplier=1.000");
@@ -503,26 +494,26 @@ const explicit = buildSortToTradePayloadFromResult({
   yieldMaterial: 1,
   yieldEnergy: 1,
   craftMultiplier: 1,
-  yieldBag: { mat_scrap: 99 },
+  yieldBag: { armor: 99 },
 });
-assert.equal(explicit.yieldBag?.mat_scrap, 99);
+assert.equal(explicit.yieldBag?.armor, 99);
 
 console.log("shared sort-yield selftest: ok");
 
 // --- hub inventory (YieldBag) ---
 assert.deepEqual(INITIAL_HUB.inventory, {});
 const withBag = importYieldBagIntoHub(INITIAL_HUB, {
-  mat_scrap: 5,
-  part_actuator: 1,
+  armor: 5,
+  power: 1,
 });
-assert.equal(withBag.inventory.mat_scrap, 5);
-assert.equal(withBag.inventory.part_actuator, 1);
-const mergedBag = importYieldBagIntoHub(withBag, { mat_scrap: 3 });
-assert.equal(mergedBag.inventory.mat_scrap, 8);
+assert.equal(withBag.inventory.armor, 5);
+assert.equal(withBag.inventory.power, 1);
+const mergedBag = importYieldBagIntoHub(withBag, { armor: 3 });
+assert.equal(mergedBag.inventory.armor, 8);
 const saveInv = createHubSave(mergedBag);
-assert.equal(saveInv.hub.inventory.mat_scrap, 8);
+assert.equal(saveInv.hub.inventory.armor, 8);
 const parsedInv = parseHubSave(saveInv);
-assert.equal(parsedInv?.hub.inventory.mat_scrap, 8);
+assert.equal(parsedInv?.hub.inventory.armor, 8);
 // missing inventory on legacy blob → empty
 const noInv = parseHubSave({
   v: 2,

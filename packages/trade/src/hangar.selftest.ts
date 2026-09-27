@@ -167,8 +167,13 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const statuses = seedHub.fleet.map((m) => m.status).sort();
   assert.deepEqual(statuses, ["needs_repair", "operational", "operational"]);
   assert.ok(seedHub.credits >= 50);
-  assert.ok((seedHub.inventory.mat_scrap ?? 0) >= 20);
-  assert.ok((seedHub.inventory.part_actuator ?? 0) >= 1);
+  // Four-resource model (#115/#119): typed repair cost collapses to armor;
+  // legacy ids (mat_* / part_*) are compatibility-only and never stored.
+  assert.ok((seedHub.inventory.armor ?? 0) >= 1);
+  assert.ok(
+    Object.keys(seedHub.inventory).every((k) => ["ammo", "armor", "power", "junk"].includes(k)),
+    "seed inventory holds only the four resources",
+  );
   assert.ok(
     seedHub.ammoLoad.ammo_standard +
       seedHub.ammoLoad.ammo_ap +
@@ -189,10 +194,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     "needs_repair",
   );
   assert.equal(afterSeed.hub.credits, seedHub.credits);
-  assert.equal(
-    afterSeed.hub.inventory.mat_scrap ?? 0,
-    seedHub.inventory.mat_scrap ?? 0,
-  );
+  assert.deepEqual(afterSeed.hub.inventory, seedHub.inventory);
 }
 
 
@@ -217,16 +219,15 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(describeTypedRepairShortfall(seeded.hub.credits, seeded.hub.inventory), null);
 
   const derived = buildSeedYieldBagForTypedRepair(3);
-  assert.ok((derived.mat_scrap ?? 0) >= (costBag.mat_scrap ?? 0) * 3);
-  assert.ok((derived.part_actuator ?? 0) >= (costBag.part_actuator ?? 0) * 3);
+  assert.ok((costBag.armor ?? 0) >= 1, "typed repair cost maps to armor");
+  assert.ok((derived.armor ?? 0) >= (costBag.armor ?? 0) * 3);
 
   const damaged = seeded.hub.fleet.find((m) => m.instanceId === "seed_repair_gen1")!;
   assert.equal(damaged.status, "needs_repair");
   assert.ok(!seeded.selectedDeployIds.includes("seed_repair_gen1"));
 
   const creditsBefore = seeded.hub.credits;
-  const scrapBefore = seeded.hub.inventory.mat_scrap ?? 0;
-  const actuatorBefore = seeded.hub.inventory.part_actuator ?? 0;
+  const armorBefore = seeded.hub.inventory.armor ?? 0;
 
   seeded = repairTyped(seeded, "seed_repair_gen1");
 
@@ -239,12 +240,8 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   );
   assert.equal(seeded.hub.credits, creditsBefore - EXAMPLE_TYPED_REPAIR_COST.credits);
   assert.equal(
-    seeded.hub.inventory.mat_scrap ?? 0,
-    scrapBefore - (costBag.mat_scrap ?? 0),
-  );
-  assert.equal(
-    seeded.hub.inventory.part_actuator ?? 0,
-    actuatorBefore - (costBag.part_actuator ?? 0),
+    seeded.hub.inventory.armor ?? 0,
+    armorBefore - (costBag.armor ?? 0),
   );
   assert.ok(seeded.notice.includes("健在"));
   assert.ok(seeded.log.some((l) => l.includes("修理(型付き)")));
@@ -479,16 +476,20 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.ok(isRareYieldItemId("mat_circuit"));
   assert.equal(isRareYieldItemId("mat_scrap"), false);
   assert.equal(rareSellPriceCredits("mat_scrap"), null);
+  // Four-resource model (#115/#119): legacy rare ids are compatibility-only and
+  // are never stored in HubSave inventory, so the demo bag keeps none of them and
+  // a legacy rare sell cannot succeed (no credits minted from nothing).
+  assert.ok(
+    Object.keys(s.hub.inventory).every((k) => ["ammo", "armor", "power", "junk"].includes(k)),
+    "demo inventory holds only the four resources",
+  );
   const beforeC = s.hub.credits;
-  const beforeAct = s.hub.inventory.part_actuator ?? 0;
-  assert.ok(beforeAct >= 1);
-  const unit = RARE_SELL_PRICE_CREDITS.part_actuator;
+  assert.equal(s.hub.inventory.part_actuator ?? 0, 0);
   s = sellRareItem(s, "part_actuator", 1);
-  assert.equal(s.hub.credits, beforeC + unit);
-  assert.equal(s.hub.inventory.part_actuator ?? 0, beforeAct - 1);
+  assert.equal(s.hub.credits, beforeC, "no credits without stock");
+  assert.match(s.notice, /不足/);
   const re = createInitialHangar(storage);
   assert.equal(re.hub.credits, s.hub.credits);
-  assert.equal(re.hub.inventory.part_actuator ?? 0, s.hub.inventory.part_actuator ?? 0);
   const blocked = sellRareItem(s, "mat_scrap", 1);
   assert.match(blocked.notice, /レア対象外/);
 }
