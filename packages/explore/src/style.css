@@ -555,4 +555,5 @@ button.cmd-locked:disabled {
 
 /* wing_mobility locked: wingman stands still, self-defense only */
 .wing-immobile { margin-top: 0.2rem; font-size: 0.78rem; color: #f59e0b; }
+.left-behind { margin: 0.35rem 0 0.6rem; padding-left: 1.1rem; color: #f59e0b; font-size: 0.9rem; }
 .wing-card.immobile { border-style: dashed; }

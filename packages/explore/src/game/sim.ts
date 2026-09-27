@@ -11,6 +11,7 @@ import {
 } from "./orders";
 import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
 import { updateCoverMovement } from "./coverMovement";
+import { isWingmanMobileFor } from "./commandUnlock";
 import type { Bullet, Unit, World } from "./types";
 
 export { isOperationTimedOut } from "./orders";
@@ -267,6 +268,9 @@ function resolveBoardingLiftOff(world: World): void {
   const inside = alive.filter((u) => dist(u.pos, boarding.center) <= boarding.radius);
   const outside = alive.filter((u) => dist(u.pos, boarding.center) > boarding.radius);
   const captainIn = world.leader.alive && isInsideBoarding(world, world.leader);
+  world.leftBehind = outside
+    .filter((u) => u.kind === "wingman")
+    .map((u) => ({ id: u.id, name: u.name, reason: isWingmanMobileFor(world, u.id) ? "outside_circle" : "no_circuit" }));
   if (outside.length > 0) pushLog(world, `置き去り：${outside.map((u) => u.name).join("・")}（搭乗円外のため回収せず）。`);
   if (inside.length > 0) pushLog(world, `回収完了：${inside.map((u) => u.name).join("・")}。`);
   world.boarding = null; world.camp = null; world.phase = "result";
