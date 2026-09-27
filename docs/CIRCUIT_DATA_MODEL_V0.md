@@ -16,7 +16,7 @@
 - HubSave は **`v: 3` に上げ、保存キーも `wreckline.hubSave.v3` に分ける**。旧キー（中身 v1/v2）は読み込み元として使い、消さずにバックアップとして残す。
 - trade→explore に **機体ごとの装備回路** を渡す任意キー `mechCircuits` を足す。既存キーは変えない。
 - 落とし物（置き去り僚機の回路を含む）は HubSave の **`fieldDrops`**（Invade の盤のマスに紐づく）に記録する。Explore は結果確定時に「失った機体・回収した落とし物」を HubSave に反映する（§9 U9 で決定）。
-- パーフェクト最大サイズは HubSave の **`perfectMaxSize`** に持ち、ジャンク作成は **2×2〜`max(2, perfectMaxSize+1)`** の正方形から選ぶ。
+- パーフェクト最大サイズは HubSave の **`perfectMaxSize`** に持ち、ジャンク作成は **2×2〜`min(20, max(2, perfectMaxSize+1))`** の正方形から選ぶ（20×20 が天井、U12）。
 
 ---
 
@@ -354,12 +354,12 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 
 | 項目 | 案（数値はすべて設計メモ §2.2 のまま） |
 |---|---|
-| 選べるサイズ | 2×2 〜 `craftMaxSize(hub) = max(2, perfectMaxSize + 1)` の正方形（最初は 2×2 だけ） |
+| 選べるサイズ | 2×2 〜 `craftMaxSize(hub) = min(20, max(2, perfectMaxSize + 1))` の正方形（最初は 2×2 だけ） |
 | コスト | N×N で **ジャンク 2N 個＋round(4×1.5^N) クレジット**（2×2＝4 個＋9c 〜 6×6＝12 個＋46c。2026-09-28 に 2^N から改定。shared `circuitCraftJunkCost`／`circuitCraftCreditCost` を使う） |
 | 作る回路 | `createEmptyCircuitBoard(N, N, circuitId)`（白回路・初期マークなし）、`restoreState: "unrestored"`、`origin: "crafted"`、`equippedTo: null` |
 | 置き換える現行 | `trade/src/junk-circuit-craft-ui.ts`（`JUNK_COST = 4`・クレジット消費なし・常に 4×4・`outcome: "offline"`・`maxCircuits` で切り詰め） |
 | コスト式の置き場所 | trade（売値の `circuit-sell-prices.ts` と同じく trade の定数）。`craftMaxSize` は HubSave に依存するので shared |
-| 上の天井 | Restore が扱える最大サイズで頭打ち（§9 U12）。項目12（#150）で真盤の生成は 2〜16 辺（`SIZED_TRUE_MIN_SIDE`／`SIZED_TRUE_MAX_SIDE`、`shared/src/perfect-circuit-sized.ts`）、selftest の保証は 2×2〜8×8。具体値は実装 B で決める |
+| 上の天井 | **20×20**（§9 U12、2026-09-28 決定）。Restore が扱える最大サイズ＝`shared` の `RESTORE_MAX_SIDE = 20`（`circuit-board.ts`）。真盤の生成も 2〜20 辺（`SIZED_TRUE_MAX_SIDE = RESTORE_MAX_SIDE`）、2×2〜20×20 を selftest で保証。`craftMaxSize(hub, ceiling = 20)`、`perfectMaxSize` も 20 で頭打ち。保存・URL の読み込みは古いセーブを落とさないよう 64 まで受け付ける（`HUB_LIMITS.maxCircuitSide`）。trade の作成画面への反映は実装 B |
 
 - Restore は Hub から渡された盤をその盤のサイズで開く（設計メモ §9.2 C16）ので、2×2・3×3 の作成は項目12（新規生成の盤サイズ可変化。別の作業が進行中）を待たずに動くはず（推測。2×2・3×3 での手がかり生成が動くことは設計メモ C16 で確認済み）。
 
@@ -403,7 +403,7 @@ U7 は神宮の決定。ほかは起草時の推奨どおりに決定。
 | U9 | 喪失・落下・回収の反映経路 | explore が結果確定時に HubSave へ直接反映（`sortieId` で 1 回だけ） | 摩耗 URL 方式はボタンの選び方で記録が消える（§5.4）。ローカル開発で反映されない制約は `forcedBackWipe.ts` と同じ |
 | U10 | パーフェクト最大サイズの更新条件 | `fully_awakened` かつパーフェクト（`locked`） | 通常プレイでは同じ。デバッグの成果上書きで上がるのを防ぐ |
 | U11 | 移行時の `perfectMaxSize` の初期値 | 既存のパーフェクト回路の最大サイズ | 既に達成した人が後退しない。検証用の「既に完璧」盤（2×2）を受け取っていると 2 になる点は許容 |
-| U12 | 作成サイズの天井 | Restore が扱える最大サイズで頭打ち | 具体値は実装 B（項目12 の対応範囲に合わせる） |
+| U12 | 作成サイズの天井 | Restore が扱える最大サイズで頭打ち＝**20×20**（2026-09-28 神宮の決定） | Restore の最大も 20×20。`RESTORE_MAX_SIDE = 20`・`craftMaxSize` の既定の天井は実装済み、trade の作成画面は実装 B |
 | U13 | 非正方形の既存盤のサイズ | `min(cols, rows)` | 今の生成経路は正方形のみなので実害は小さい |
 | U14 | 装着中の回路を売る・Restore に出す | 売却は自動で外して売る（確認あり）。Restore は装着したまま可 | どちらも HUB 内の操作 |
 | U15 | 隊長機の指定 | 今どおり `deployedInstanceIds` の先頭 | 選ぶ UI は項目7で検討 |

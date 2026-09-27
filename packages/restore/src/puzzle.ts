@@ -12,6 +12,7 @@ import {
   createEmptyCircuitBoard,
   circuitHEdgeIndex,
   circuitVEdgeIndex,
+  clampRestoreSide,
   decodeEdgeState,
   encodeEdgeState,
   edgeCount,
@@ -231,7 +232,8 @@ export function clueDensity(clues: ClueGrid): number {
 
 /**
  * Generate a clue grid from puzzleSeed at cols×rows (default 6×6; any size
- * 2..16 per side works). With `injectRate`, may inject a seeded true board
+ * 2..`RESTORE_MAX_SIDE` (20) per side works; larger requests are
+ * clamped to 20 for both flawed and Perfect boards). With `injectRate`, may inject a seeded true board
  * (generate-from-solution) at the requested size (2×2 → fixed verify-true);
  * otherwise flawed/hazardous as majority. Never relies on natural random digits for Perfect.
  */
@@ -241,6 +243,9 @@ export function generatePuzzle(
   rows = 6,
   opts?: GeneratePuzzleOptions,
 ): RestorePuzzle {
+  // Restore max side: clamp (never fall back to another size).
+  cols = clampRestoreSide(cols);
+  rows = clampRestoreSide(rows);
   // verify-true (2×2) or sized true id (`perfect-true-{c}x{r}-…`): fixed size.
   const fixed = resolveTrueBoardClues(puzzleSeed);
   if (fixed) {

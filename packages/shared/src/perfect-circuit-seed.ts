@@ -327,13 +327,22 @@ export type TruePuzzleFromSolution = {
  * - Other sizes (each side 2..{@link SIZED_TRUE_MAX_SIDE}) → a sized true
  *   board at the requested size (v2 `perfect-true-v2-{c}x{r}-…`, seeded by
  *   `seed`: loop touches all 4 sides, clues hidden while uniquely solvable).
- * - Out-of-range sizes fall back to verify-true.
+ * - Sides above {@link SIZED_TRUE_MAX_SIDE} (Restore max, 20) are clamped to
+ *   it — never turned into the 2×2 board.
+ * - Sides below 2 / non-integers fall back to verify-true.
  */
 export function buildTruePuzzleFromSolution(opts?: {
   seed: string;
   cols: number;
   rows: number;
 }): TruePuzzleFromSolution {
+  if (opts != null) {
+    opts = {
+      ...opts,
+      cols: Math.min(SIZED_TRUE_MAX_SIDE, opts.cols),
+      rows: Math.min(SIZED_TRUE_MAX_SIDE, opts.rows),
+    };
+  }
   if (opts != null && !(opts.cols === VERIFY_TRUE_COLS && opts.rows === VERIFY_TRUE_ROWS)) {
     const okSide = (n: number) =>
       Number.isInteger(n) && n >= SIZED_TRUE_MIN_SIDE && n <= SIZED_TRUE_MAX_SIDE;
@@ -402,6 +411,13 @@ export function buildInjectedOrFlawedPuzzle(args: {
       injectedTrue: true,
     };
   }
+
+  // Restore max side (20): larger requests are clamped for both kinds.
+  args = {
+    ...args,
+    cols: Math.min(SIZED_TRUE_MAX_SIDE, args.cols),
+    rows: Math.min(SIZED_TRUE_MAX_SIDE, args.rows),
+  };
 
   const inject =
     args.forceKind === "true"

@@ -6,6 +6,11 @@
  * Constraint propagation (cell counts, vertex degree 0/2) + DFS, with early
  * rejection of a closed sub-loop while other line edges remain.
  *
+ * Sub-loop detection is incremental: a DFS node only walks the line paths
+ * through edges fixed since its parent (a new closed cycle must contain one),
+ * with a running line-edge count — instead of rescanning the whole board.
+ * The search tree (node order and count) is identical to a full rescan.
+ *
  * Deterministic: no randomness. A node budget guards pathological inputs;
  * when exhausted the result is `aborted: true` (callers treat that as
  * "not proven unique").
@@ -126,12 +131,18 @@ export function countCircuitLoopSolutions(
   let first: EdgeMark[] | null = null;
   let nodes = 0;
   let aborted = false;
+  /** Running count of line (state 1) edges — kept by set/undo. */
+  let totalOn = 0;
+  /** Per-edge visit stamp for {@link loopStatusSince} (avoids clearing). */
+  const stamp = new Uint32Array(g.edges);
+  let epoch = 0;
 
   const set = (e: number, v: number): boolean => {
     const cur = state[e]!;
     if (cur === v) return true;
     if (cur !== -1) return false;
     state[e] = v;
+    if (v === 1) totalOn++;
     trail.push(e);
     queue.push(e);
     return true;
@@ -207,50 +218,50 @@ export function countCircuitLoopSolutions(
   };
 
   const undo = (mark: number) => {
-    while (trail.length > mark) state[trail.pop()!] = -1;
+    while (trail.length > mark) {
+      const e = trail.pop()!;
+      if (state[e] === 1) totalOn--;
+      state[e] = -1;
+    }
     queue.length = 0;
   };
 
   /**
-   * Sub-loop check on current line edges.
+   * Sub-loop check on current line edges, given that the parent node had no
+   * closed cycle: any closed cycle now must contain an edge fixed at
+   * `trail[from..]`. Walks the line path from each such edge (vertex on-degree
+   * is ≤ 2 after propagation).
    * Returns: "none" (no closed cycle), "fail" (closed cycle + other lines),
    * "single" (exactly one closed cycle and it holds every line edge).
    */
-  const visited = new Uint8Array(g.verts);
-  const loopStatus = (): "none" | "fail" | "single" => {
-    visited.fill(0);
-    let totalOn = 0;
-    for (let e = 0; e < g.edges; e++) if (state[e] === 1) totalOn++;
+  const loopStatusSince = (from: number): "none" | "fail" | "single" => {
     if (totalOn === 0) return "none";
-    for (let e = 0; e < g.edges; e++) {
-      if (state[e] !== 1) continue;
-      const start = g.edgeVerts[e * 2]!;
-      if (visited[start]) continue;
-      // Walk the component; closed if every vertex has on-degree 2.
-      const stack = [start];
-      visited[start] = 1;
-      let closed = true;
-      let compEdges = 0;
-      while (stack.length > 0) {
-        const v = stack.pop()!;
-        let deg = 0;
+    epoch++;
+    for (let i = from; i < trail.length; i++) {
+      const e0 = trail[i]!;
+      if (state[e0] !== 1 || stamp[e0] === epoch) continue;
+      stamp[e0] = epoch;
+      const start = g.edgeVerts[e0 * 2]!;
+      let prevE = e0;
+      let v = g.edgeVerts[e0 * 2 + 1]!;
+      let len = 1;
+      for (;;) {
+        if (v === start) return len === totalOn ? "single" : "fail";
+        let next = -1;
         for (let k = 0; k < 4; k++) {
           const ee = g.vertEdges[v * 4 + k]!;
           if (ee < 0) break;
-          if (state[ee] !== 1) continue;
-          deg++;
-          compEdges++;
-          const a = g.edgeVerts[ee * 2]!;
-          const w = a === v ? g.edgeVerts[ee * 2 + 1]! : a;
-          if (!visited[w]) {
-            visited[w] = 1;
-            stack.push(w);
+          if (ee !== prevE && state[ee] === 1) {
+            next = ee;
+            break;
           }
         }
-        if (deg !== 2) closed = false;
-      }
-      if (closed) {
-        return compEdges / 2 === totalOn ? "single" : "fail";
+        if (next < 0) break; // open path end
+        stamp[next] = epoch;
+        len++;
+        const a = g.edgeVerts[next * 2]!;
+        v = a === v ? g.edgeVerts[next * 2 + 1]! : a;
+        prevE = next;
       }
     }
     return "none";
@@ -264,7 +275,7 @@ export function countCircuitLoopSolutions(
       for (let i = 0; i < 4; i++) if (state[g.cellEdges[c * 4 + i]!] === 1) on++;
       if (on !== k) return false;
     }
-    // Vertices: every on-degree must be 0 or 2 (loopStatus single ⇒ yes).
+    // Vertices: every on-degree must be 0 or 2 (loopStatusSince "single" ⇒ yes).
     return true;
   };
 
@@ -293,14 +304,15 @@ export function countCircuitLoopSolutions(
     return -1;
   };
 
-  const dfs = (): void => {
+  /** `from` = trail index where this node's assignments begin. */
+  const dfs = (from: number): void => {
     if (count >= limit || aborted) return;
     nodes++;
     if (nodes > budget) {
       aborted = true;
       return;
     }
-    const ls = loopStatus();
+    const ls = loopStatusSince(from);
     if (ls === "fail") return;
     if (ls === "single") {
       // The loop is closed: every other edge must be off.
@@ -311,7 +323,7 @@ export function countCircuitLoopSolutions(
     if (e < 0) return; // no unknowns and no closed loop → invalid
     for (const val of [1, 0]) {
       const mark = trail.length;
-      if (set(e, val) && propagate()) dfs();
+      if (set(e, val) && propagate()) dfs(mark);
       undo(mark);
       if (count >= limit || aborted) return;
     }
@@ -322,7 +334,7 @@ export function countCircuitLoopSolutions(
   for (let c = 0; c < g.cells && ok; c++) ok = checkCell(c);
   for (let v = 0; v < g.verts && ok; v++) ok = checkVertex(v);
   ok = ok && propagate();
-  if (ok) dfs();
+  if (ok) dfs(0);
   return { count: Math.min(count, limit), aborted, first, nodes };
 }
 

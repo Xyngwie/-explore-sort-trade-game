@@ -645,3 +645,22 @@ a.btn {
   color: #9aa0a6;
   background: rgba(40, 44, 50, 0.55);
 }
+
+/* 「生成中…」 notice shown before a large Perfect board generates (main.ts). */
+.generating-notice {
+  text-align: center;
+}
+.generating-title {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #58a6ff;
+  animation: generating-pulse 1.2s ease-in-out infinite;
+}
+@keyframes generating-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .generating-title { animation: none; }
+}

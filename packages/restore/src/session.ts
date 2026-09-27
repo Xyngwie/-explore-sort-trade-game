@@ -4,11 +4,13 @@
  */
 import {
   HANDOFF_QUERY_KEYS,
+  RESTORE_MAX_SIDE,
   buildRestoreToTradeUrl,
   decodeEdgeState,
   edgeCount,
   isCircuitLocked,
   loadHubSaveFromLocalStorage,
+  parseSizedTruePuzzleId,
   parseTradeToRestoreSearch,
   resolveModuleBaseUrl,
   resolvePerfectCircuitInjectRate,
@@ -106,6 +108,28 @@ function resolveInjectRateForBootstrap(
   });
 }
 
+/** Perfect boards at/above this side show 「生成中…」 before generating. */
+export const SLOW_PERFECT_NOTICE_MIN_SIDE = 15;
+
+/**
+ * Side N (= max(cols, rows)) of the v2 Perfect board this URL will generate
+ * when N ≥ {@link SLOW_PERFECT_NOTICE_MIN_SIDE}, else null. Mirrors the seed
+ * choice of {@link bootstrapFromSearch} (inbound board puzzleId → circuitId →
+ * local `?seed=`). v2 boards run the uniqueness search (≈0.1 s on desktop at
+ * 20×20, several times slower on phones); v1 / flawed boards are instant.
+ */
+export function slowPerfectBoardSide(search: string): number | null {
+  const inbound = parseTradeToRestoreSearch(search);
+  const seed =
+    (inbound?.circuitBoard?.puzzleId && inbound.circuitBoard.puzzleId.trim()) ||
+    (inbound?.circuitId && inbound.circuitId.trim()) ||
+    (inbound == null ? readLocalSeedFromSearch(search) : null);
+  const parsed = parseSizedTruePuzzleId(seed);
+  if (parsed == null || parsed.version !== 2) return null;
+  const n = Math.max(parsed.cols, parsed.rows);
+  return n >= SLOW_PERFECT_NOTICE_MIN_SIDE ? n : null;
+}
+
 /** Local demo seed from `?seed=` (restore-only play loop; not a handoff key). */
 export function readLocalSeedFromSearch(search: string): string | null {
   try {
@@ -169,7 +193,14 @@ export function bootstrapFromSearch(
     const cols = puzzle.cols;
     const rows = puzzle.rows;
     const n = edgeCount(cols, rows);
-    const marks = decodeEdgeState(board.edgeState, n);
+    // A stored board above the Restore max (older save, up to 64) opens
+    // clamped to 20×20; its marks belong to the old geometry → start empty.
+    const clampedFromOversize =
+      (board.cols > RESTORE_MAX_SIDE || board.rows > RESTORE_MAX_SIDE) &&
+      (cols !== board.cols || rows !== board.rows);
+    const marks = clampedFromOversize
+      ? freshMarks(cols, rows)
+      : decodeEdgeState(board.edgeState, n);
     const injectedTrue = puzzle.injectedTrue === true;
     const session: RestoreSession = {
       puzzle,
