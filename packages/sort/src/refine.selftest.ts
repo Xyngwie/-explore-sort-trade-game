@@ -583,8 +583,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     material: 10,
     energy: 0,
   });
-  assert(result.yieldBag!.mat_ration === expected.mat_ration, "mat_ration");
-  assert(result.yieldBag!.mat_scrap === expected.mat_scrap, "mat_scrap");
+  // Four-resource model (#115): food→ammo, material→armor, 1 piece = 1 resource.
+  assert(result.yieldBag!.ammo === expected.ammo && expected.ammo === 5, "ammo from food");
+  assert(result.yieldBag!.armor === expected.armor && expected.armor === 10, "armor from material");
   assert(result.craftMultiplier === 1, "default craftMultiplier 1");
 }
 
@@ -612,9 +613,10 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     material: 0,
     energy: 0,
   });
-  const ration = unscaled.mat_ration ?? 0;
+  const ammo = unscaled.ammo ?? 0;
+  assert(ammo === 10, "unscaled ammo from food");
   assert(
-    result.yieldBag!.mat_ration === Math.floor(ration * 1.1),
+    result.yieldBag!.ammo === Math.floor(ammo * 1.1),
     "yieldBag scaled by craftMultiplier",
   );
 }
@@ -1249,9 +1251,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.lastClearDelta!.food === 3, "delta food 3");
   assert(s.lastClearDelta!.material === 0, "delta material 0");
   const preview = buildYieldPreviewFromDelta(s.lastClearDelta, 1);
-  assert((preview.mat_ration ?? 0) === 3, "yield preview ration from food clear");
+  assert((preview.ammo ?? 0) === 3, "yield preview ammo from food clear");
   const chips = formatYieldPreviewChips(preview);
-  assert(chips.chips.includes("糧食パック"), "yield chip label ja");
+  assert(chips.chips.includes("弾薬"), "yield chip label ja");
   assert(chips.chips.includes("+3"), "yield chip count");
 
   const feedback = buildTopFeedbackHtml(s);
