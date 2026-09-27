@@ -144,12 +144,16 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 }
 
 .slither {
-  --cell: 2rem;
-  --edge: 0.35rem;
-  --dot: 0.35rem;
-  margin: 0.75rem auto 0;
+  /* --zoom is set inline by app.ts (1 = 37.6px vertex pitch; fit / 1.5× on large boards).
+     Keep in sync with boardHit.ts (CELL_REM, DOT_REM, MIN_DOT_PX). */
+  --zoom: 1;
+  --cell: calc(2rem * var(--zoom));
+  --edge: max(3px, calc(0.35rem * var(--zoom)));
+  --dot: max(3px, calc(0.35rem * var(--zoom)));
+  margin: 0 auto;
   width: max-content;
   user-select: none;
+  -webkit-user-select: none;
 }
 .hrow, .vrow {
   display: flex;
@@ -169,7 +173,7 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   cursor: pointer;
   background: #30363d;
   color: #f85149;
-  font-size: 0.65rem;
+  font-size: max(0.45rem, calc(0.65rem * var(--zoom)));
   line-height: 1;
   display: flex;
   align-items: center;
@@ -196,7 +200,7 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
+  font-size: max(0.55rem, calc(0.95rem * var(--zoom)));
   font-variant-numeric: tabular-nums;
   color: #e8eaed;
   flex: 0 0 auto;
@@ -343,6 +347,67 @@ a.btn {
 .slither-wrap {
   position: relative;
   margin-top: 0.75rem;
+}
+
+/* --- Mobile: board scroll container + nearest-edge taps (see boardHit.ts) --- */
+.board-scroll {
+  /* Padding = BOARD_SCROLL_PAD_PX in app.ts; gives border edges some tap room. */
+  padding: 6px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* No double-tap zoom (so quick taps are not delayed/zoomed); pinch stays browser default. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /* iOS only dispatches click on non-interactive elements with cursor: pointer. */
+  cursor: pointer;
+}
+.board-scroll.locked { cursor: default; }
+.board-scroll.large {
+  /* = BOARD_SCROLL_MAX_VH in app.ts */
+  max-height: 72vh;
+  border-radius: 8px;
+  background: #0f1318;
+  border: 1px solid #2a313c;
+}
+.zoom-bar {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.zoom-btn {
+  min-width: 2.75rem;
+  min-height: 2.25rem;
+  padding: 0 0.6rem;
+  border: none;
+  border-left: 1px solid #30363d;
+  background: #21262d;
+  color: #c9d1d9;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.zoom-btn:first-child { border-left: none; }
+.zoom-btn.on { background: #1f6feb; color: #fff; }
+.board-size { color: #9aa0a6; }
+#app.large-board { max-width: 56rem; }
+#app.large-board .board-card .slither-wrap { margin-top: 0.5rem; }
+.fold { margin-top: 0.75rem; }
+.fold > summary {
+  cursor: pointer;
+  min-height: 2.25rem;
+  display: flex;
+  align-items: center;
+  color: #c9d1d9;
+  font-size: 0.85rem;
+}
+.fold-body { padding-top: 0.25rem; }
+@media (max-width: 480px) {
+  #app.large-board { padding: 0.75rem 0.5rem; }
+  #app.large-board .card { padding: 0.75rem 0.6rem; margin-top: 0.75rem; }
+  #app.large-board .board-card { padding: 0.5rem 0.4rem; }
+  #app.large-board h1 { font-size: 1.05rem; }
 }
 
 .noise-toast {
@@ -664,3 +729,9 @@ a.btn {
 @media (prefers-reduced-motion: reduce) {
   .generating-title { animation: none; }
 }
+#app.large-board .board-card .meta-row { align-items: center; margin-bottom: 0; }
+#app.large-board .restore-rule-guide { font-size: 0.8rem; line-height: 1.4; color: #9aa0a6; margin: 0.4rem 0; }
+.fold > summary { list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before { content: "▸"; margin-right: 0.45rem; color: #8b949e; }
+.fold[open] > summary::before { content: "▾"; }
