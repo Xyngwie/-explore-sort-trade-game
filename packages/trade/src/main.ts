@@ -18,7 +18,7 @@ import {
   canAffordRepair,
   canAffordYieldCost,
   canDeploy,
-  circuitOutcomeLabelJa,
+  circuitRestoreStateLabelJa,
   clearHandoffFromUrl,
   createInitialHangar,
   describeTypedRepairShortfall,
@@ -270,8 +270,8 @@ function circuitRows(s: HangarState): string {
               <div class="muted" style="font-size:0.75rem">${escapeHtml(active.trim())}</div>
             </td>
             <td>
-              ${escapeHtml(circuitOutcomeLabelJa(c.outcome))}
-              <span class="mono muted">(${escapeHtml(c.outcome)})</span>
+              ${escapeHtml(circuitRestoreStateLabelJa(c.restoreState))}
+              <span class="mono muted">(${escapeHtml(c.restoreState)})</span>
               <div class="engraved" style="font-size:0.8rem">刻印 ${escapeHtml(editor)}</div>
             </td>
             <td>
