@@ -30,20 +30,12 @@ import {
   resolveExploreForcedBackWipe,
 } from "./game/forcedBackWipe";
 import {
-  applyOrder,
-  applyOrderToAllWingmen,
   campDefenseHudModel,
   campDrHudFragment,
   campDrPercent,
   inCampAura,
   isOperationTimedOut,
-  pickUpFromCamp,
-  purgeCargo,
-  rallyWingman,
-  scatterSearch,
-  setCampOrDeposit,
   toggleSquadCover,
-  unloadAtCamp,
   unitMoveSpeedMul,
 } from "./game/orders";
 import {
@@ -51,10 +43,22 @@ import {
   boardingLiftOffEta,
   boardingRequirementsHud,
   isWingmanOffscreen,
-  requestExtract,
   tickWorld,
   type PlayerInput,
 } from "./game/sim";
+import {
+  WING_COMMAND_FOR_STANCE,
+  dispatchExploreKey,
+  executeExploreCommand,
+  isExploreCommandAvailable,
+  type ExploreCommandOutcome,
+} from "./game/commands";
+import type { ExploreCommandId } from "./game/commandUnlock";
+import {
+  COMMAND_UNLOCK_MODE_LABEL,
+  isDebugUnlockToggleVisible,
+  writeDebugCommandUnlockMode,
+} from "./game/unlockMode";
 import { renderWorld, worldFromCanvas } from "./game/render";
 import {
   buildSortieOutcome,
@@ -130,33 +134,12 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
   if (["w", "a", "s", "d", " "].includes(k)) e.preventDefault();
-  if (k === "x" && world.phase === "sortie") {
+  // Discrete sortie commands (X/C/U/G/P/1–4) go through the execution-side
+  // circuit unlock gate (game/commands.ts), same as the buttons.
+  const keyOutcome = dispatchExploreKey(world, k, { repeat: e.repeat });
+  if (keyOutcome) {
     e.preventDefault();
-    requestExtract(world);
-    needsDom = true;
-  }
-  if (k === "c" && world.phase === "sortie") {
-    e.preventDefault();
-    setCampOrDeposit(world);
-    needsDom = true;
-  }
-  if (k === "u" && world.phase === "sortie") {
-    e.preventDefault();
-    const result = unloadAtCamp(world);
-    if (result === "unloaded" && world.camp) {
-      flashCampToast(`置場 ${world.camp.stashedCount} · 被弾−${campDrPercent(world)}%`);
-    }
-    needsDom = true;
-  }
-  if (k === "g" && world.phase === "sortie") {
-    e.preventDefault();
-    pickUpFromCamp(world);
-    needsDom = true;
-  }
-  if (k === "p" && world.phase === "sortie") {
-    e.preventDefault();
-    purgeCargo(world);
-    needsDom = true;
+    afterCommand(keyOutcome);
   }
   if (k === "v" && world.phase === "sortie" && !e.repeat) {
     e.preventDefault();
@@ -167,19 +150,6 @@ window.addEventListener("keydown", (e) => {
       flashCampToast("カバー解除");
     }
     needsDom = true;
-  }
-  if (world.phase === "sortie" && !e.repeat) {
-    const squadMap: Record<string, Stance> = {
-      "1": "escort",
-      "2": "patrol",
-      "3": "recover",
-      "4": "raid",
-    };
-    if (k in squadMap) {
-      e.preventDefault();
-      applyOrderToAllWingmen(world, squadMap[k]!);
-      needsDom = true;
-    }
   }
   // Toggle corner shortcut overlay (? or Shift+/). Does not affect gameplay.
   if ((k === "?" || (k === "/" && e.shiftKey)) && !e.repeat) {
@@ -267,23 +237,62 @@ function timeoutLockBannerHtml(): string {
   </div>`;
 }
 
-function order(wingId: string, stance: Stance): void {
-  const wing = world.wingmen.find((w) => w.id === wingId);
-  if (!wing) return;
-  applyOrder(world, wing, stance);
+/** Shared post-command UI feedback (toast for unload, repaint). */
+function afterCommand(outcome: ExploreCommandOutcome): void {
+  if (
+    outcome.status === "done" &&
+    outcome.id === "camp_unload" &&
+    outcome.result === "unloaded" &&
+    world.camp
+  ) {
+    flashCampToast(`置場 ${world.camp.stashedCount} · 被弾−${campDrPercent(world)}%`);
+  }
   needsDom = true;
+}
+
+function order(wingId: string, stance: Stance): void {
+  afterCommand(
+    executeExploreCommand(world, { id: WING_COMMAND_FOR_STANCE[stance], wingId }),
+  );
 }
 
 function rally(wingId: string): void {
-  const wing = world.wingmen.find((w) => w.id === wingId);
-  if (!wing) return;
-  rallyWingman(world, wing);
-  needsDom = true;
+  afterCommand(executeExploreCommand(world, { id: "wing_escort", wingId, rally: true }));
 }
 
-function doScatterSearch(): void {
-  scatterSearch(world);
-  needsDom = true;
+function cmdLocked(id: ExploreCommandId): boolean {
+  return !isExploreCommandAvailable(world, id);
+}
+
+const LOCK_TITLE = "🔒 回路で解放（未装備）";
+
+/** Class / disabled / label decoration for a circuit-gated button. */
+function lockDeco(id: ExploreCommandId): { locked: boolean; cls: string; attr: string; prefix: string } {
+  const locked = cmdLocked(id);
+  return locked
+    ? { locked, cls: " cmd-locked", attr: ` disabled data-cmd-locked="1" aria-disabled="true"`, prefix: "🔒 " }
+    : { locked, cls: "", attr: "", prefix: "" };
+}
+
+function debugUnlockToggleHtml(): string {
+  if (!isDebugUnlockToggleVisible()) return "";
+  const mode = world.commandUnlock.mode;
+  const next = mode === "release" ? "all_unlocked" : "release";
+  return `<div class="debug-unlock-bar mode-${mode}" id="debug-unlock-bar" role="status" aria-live="polite">
+    <span class="debug-tag">DEBUG</span>
+    <span class="debug-unlock-mode" id="debug-unlock-mode">回路ロック: <strong>${COMMAND_UNLOCK_MODE_LABEL[mode]}</strong></span>
+    <button type="button" class="secondary debug-unlock-toggle" id="btn-debug-unlock" title="プレビュー専用。全解放 ⇄ リリース相当（回路なしは基本4＝移動・射撃・回収・帰還のみ）を切替。localStorage に保存。">→ ${COMMAND_UNLOCK_MODE_LABEL[next]}</button>
+  </div>`;
+}
+
+function bindDebugUnlockToggle(): void {
+  document.getElementById("btn-debug-unlock")?.addEventListener("click", () => {
+    const next = world.commandUnlock.mode === "release" ? "all_unlocked" : "release";
+    writeDebugCommandUnlockMode(next);
+    world.commandUnlock.mode = next;
+    needsDom = true;
+    renderDom();
+  });
 }
 
 function bindCanvas(): void {
@@ -298,6 +307,29 @@ function bindCanvas(): void {
   });
 }
 
+/** Sortie action-row buttons that are circuit-gated (id → command). */
+const GATED_BUTTONS: ReadonlyArray<readonly [string, ExploreCommandId]> = [
+  ["btn-camp", "camp_set"],
+  ["btn-camp-unload", "camp_unload"],
+  ["btn-purge", "purge"],
+  ["btn-camp-pickup", "camp_pickup"],
+  ["btn-scatter", "scatter_search"],
+];
+
+function gatedButtonHtml(
+  domId: string,
+  cmd: ExploreCommandId,
+  baseCls: string,
+  title: string,
+  label: string,
+): string {
+  const d = lockDeco(cmd);
+  const disabled = d.locked || isOperationTimedOut(world) ? " disabled" : "";
+  const lockAttrs = d.locked ? ` data-cmd-locked="1" aria-disabled="true"` : "";
+  const t = d.locked ? `${LOCK_TITLE} — ${title}` : title;
+  return `<button type="button" class="${baseCls}${d.cls}" id="${domId}"${disabled}${lockAttrs} title="${t}">${d.prefix}${label}</button>`;
+}
+
 function squadOrderBarHtml(): string {
   const items: Array<{ stance: Stance; key: string }> = [
     { stance: "escort", key: "1" },
@@ -306,10 +338,11 @@ function squadOrderBarHtml(): string {
     { stance: "raid", key: "4" },
   ];
   const btns = items
-    .map(
-      ({ stance, key }) =>
-        `<button type="button" class="stance-${stance} squad-order" data-squad-order="${stance}" title="全僚機へ${STANCE_LABEL[stance]}（${key}）"><span class="hotkey">${key}</span>${STANCE_LABEL[stance]}</button>`,
-    )
+    .map(({ stance, key }) => {
+      const d = lockDeco(WING_COMMAND_FOR_STANCE[stance]);
+      const title = d.locked ? LOCK_TITLE : `全僚機へ${STANCE_LABEL[stance]}（${key}）`;
+      return `<button type="button" class="stance-${stance} squad-order${d.cls}" data-squad-order="${stance}" title="${title}"${d.attr}><span class="hotkey">${key}</span>${d.prefix}${STANCE_LABEL[stance]}</button>`;
+    })
     .join("");
   return `<div class="squad-order-bar" role="group" aria-label="小隊方針">
     <span class="squad-label">小隊方針</span>
@@ -355,7 +388,9 @@ function wingPanelHtml(): string {
       const btns = stances
         .map((s) => {
           const active = w.stance === s ? "active-stance" : "";
-          return `<button type="button" class="stance-${s} ${active}" data-order="${w.id}:${s}">${STANCE_LABEL[s]}</button>`;
+          const d = lockDeco(WING_COMMAND_FOR_STANCE[s]);
+          const title = d.locked ? ` title="${LOCK_TITLE}"` : "";
+          return `<button type="button" class="stance-${s} ${active}${d.cls}" data-order="${w.id}:${s}"${title}${d.attr}>${d.prefix}${STANCE_LABEL[s]}</button>`;
         })
         .join("");
       const quirk =
@@ -376,7 +411,10 @@ function wingPanelHtml(): string {
         </div>
         <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}${quirk}${cover}</div>
         <div class="row wing-order-row">
-          <button type="button" class="secondary" data-rally="${w.id}">召還</button>
+          ${(() => {
+            const d = lockDeco("wing_escort");
+            return `<button type="button" class="secondary${d.cls}" data-rally="${w.id}"${d.locked ? ` title="${LOCK_TITLE}"` : ""}${d.attr}>${d.prefix}召還</button>`;
+          })()}
           ${btns}
         </div>
       </div>`;
@@ -415,6 +453,7 @@ function renderDom(): void {
       <p class="pill">MODULE 1 · EXPLORE · BEHAVIOR v0</p>
       <h1>WRECKLINE 探索（振る舞い垂直スライス）</h1>
       <p class="muted">モノレポ正本。旧 grok.me Module1 は練習用／退役 — URL 非依存。</p>
+      ${debugUnlockToggleHtml()}
       <div class="card">
         <div class="muted">${escapeHtml(world.note)}</div>
         ${invadeBannerHtml}
@@ -462,6 +501,7 @@ function renderDom(): void {
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
         <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · C キャンプ設置 · U 荷下ろし · G キャンプから積込 · V カバー · 右パネルで僚機命令（画面外も可）</p>
       </div>`;
+    bindDebugUnlockToggle();
     document.getElementById("btn-start")?.addEventListener("click", () => {
       startSortie(world);
       needsDom = true;
@@ -558,6 +598,7 @@ function renderDom(): void {
   root.innerHTML = `
     <p class="pill">MODULE 1 · SORTIE</p>
     <h1>WRECKLINE</h1>
+    ${debugUnlockToggleHtml()}
     ${invadeBannerThinHtml}
     ${timeoutLockBannerHtml()}
     <div class="hud">
@@ -576,15 +617,15 @@ function renderDom(): void {
         <div class="canvas-wrap">
           <canvas id="map" width="720" height="420"></canvas>
           ${extractReqHudHtml()}
-          ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden() })}
+          ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden(), isLocked: cmdLocked })}
         </div>
         <div class="row">
           <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。">${boardingActive ? "抽出シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・抽出ロック" : "抽出要請（搭乗円）"}</button>
-          <button type="button" class="secondary" id="btn-camp" ${isOperationTimedOut(world) ? "disabled" : ""} title="隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。">キャンプ設置</button>
-          <button type="button" class="secondary" id="btn-camp-unload" ${isOperationTimedOut(world) ? "disabled" : ""} title="隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。">小隊荷下ろし</button>
-          <button type="button" class="secondary" id="btn-purge" ${isOperationTimedOut(world) ? "disabled" : ""} title="パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。">パージ／キャンプへ降ろす</button>
-          <button type="button" class="secondary" id="btn-camp-pickup" ${isOperationTimedOut(world) ? "disabled" : ""} title="キャンプ付近で置場から積込（G）。">キャンプから積込</button>
-          <button type="button" class="stance-raid" id="btn-scatter" ${isOperationTimedOut(world) ? "disabled" : ""} title="隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。">散開捜索</button>
+          ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
+          ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
+          ${gatedButtonHtml("btn-purge", "purge", "secondary", "パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。", "パージ／キャンプへ降ろす")}
+          ${gatedButtonHtml("btn-camp-pickup", "camp_pickup", "secondary", "キャンプ付近で置場から積込（G）。", "キャンプから積込")}
+          ${gatedButtonHtml("btn-scatter", "scatter_search", "stance-raid", "隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。", "散開捜索")}
           <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。時間切れ防衛でも可。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
@@ -604,36 +645,29 @@ function renderDom(): void {
     </div>`;
 
   bindCanvas();
+  bindDebugUnlockToggle();
   document.getElementById("kb-overlay-toggle")?.addEventListener("click", () => {
     setShortcutsOverlayHidden(!isShortcutsOverlayHidden());
     needsDom = true;
     renderDom();
   });
   document.getElementById("btn-extract")?.addEventListener("click", () => {
-    requestExtract(world);
-    needsDom = true;
+    afterCommand(executeExploreCommand(world, { id: "extract" }));
   });
   document.getElementById("btn-camp")?.addEventListener("click", () => {
-    setCampOrDeposit(world);
-    needsDom = true;
+    afterCommand(executeExploreCommand(world, { id: "camp_set" }));
   });
   document.getElementById("btn-camp-unload")?.addEventListener("click", () => {
-    const result = unloadAtCamp(world);
-    if (result === "unloaded" && world.camp) {
-      flashCampToast(`置場 ${world.camp.stashedCount} · 被弾−${campDrPercent(world)}%`);
-    }
-    needsDom = true;
+    afterCommand(executeExploreCommand(world, { id: "camp_unload" }));
   });
   document.getElementById("btn-purge")?.addEventListener("click", () => {
-    purgeCargo(world);
-    needsDom = true;
+    afterCommand(executeExploreCommand(world, { id: "purge" }));
   });
   document.getElementById("btn-camp-pickup")?.addEventListener("click", () => {
-    pickUpFromCamp(world);
-    needsDom = true;
+    afterCommand(executeExploreCommand(world, { id: "camp_pickup" }));
   });
   document.getElementById("btn-scatter")?.addEventListener("click", () => {
-    doScatterSearch();
+    afterCommand(executeExploreCommand(world, { id: "scatter_search" }));
   });
   document.getElementById("btn-cover")?.addEventListener("click", () => {
     const r = toggleSquadCover(world);
@@ -645,13 +679,7 @@ function renderDom(): void {
     needsDom = true;
   });
   document.getElementById("btn-abort")?.addEventListener("click", () => {
-    world.phase = "result";
-    world.extracted = false;
-    world.failReason = null;
-    world.salvaged = 0;
-    world.boarding = null;
-    world.camp = null;
-    needsDom = true;
+    afterCommand(executeExploreCommand(world, { id: "abort" }));
   });
   bindWingControls(root);
 }
@@ -675,8 +703,7 @@ function bindWingControls(scope: ParentNode): void {
     btn.addEventListener("click", () => {
       const stance = btn.dataset.squadOrder as Stance | undefined;
       if (!stance) return;
-      applyOrderToAllWingmen(world, stance);
-      needsDom = true;
+      afterCommand(executeExploreCommand(world, { id: WING_COMMAND_FOR_STANCE[stance] }));
     });
   });
 }
@@ -744,15 +771,9 @@ function paintHudOnly(): void {
         ? "時間切れ・抽出ロック"
         : "抽出要請（搭乗円）";
   }
-  for (const id of [
-    "btn-camp",
-    "btn-camp-unload",
-    "btn-purge",
-    "btn-camp-pickup",
-    "btn-scatter",
-  ]) {
+  for (const [id, cmd] of GATED_BUTTONS) {
     const btn = document.getElementById(id) as HTMLButtonElement | null;
-    if (btn) btn.disabled = timedOut;
+    if (btn) btn.disabled = timedOut || cmdLocked(cmd);
   }
 
   const speedEl = document.getElementById("hud-speed");

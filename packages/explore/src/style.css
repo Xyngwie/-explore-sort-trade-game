@@ -517,3 +517,38 @@ button.cover-active {
   align-items: center;
   gap: 0.4rem;
 }
+
+/* Circuit command unlock (foundation) — locked commands + preview DEBUG mode bar */
+button.cmd-locked,
+button.cmd-locked:disabled {
+  opacity: 0.55;
+  border-style: dashed;
+  background: #1b1d22;
+  color: #8a93a3;
+  cursor: not-allowed;
+}
+.kb-row.locked .kb-label { color: #8a93a3; }
+.kb-row.locked kbd { opacity: 0.5; }
+.debug-unlock-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px dashed #6b7280;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: rgba(20, 24, 32, 0.7);
+}
+.debug-unlock-bar.mode-release { border-color: #f59e0b; background: rgba(58, 46, 18, 0.55); }
+.debug-unlock-bar .debug-tag {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0 0.35rem;
+  border-radius: 3px;
+  background: #6b7280;
+  color: #0b0d10;
+}
+.debug-unlock-bar.mode-release .debug-tag { background: #f59e0b; }
+.debug-unlock-bar .debug-unlock-toggle { padding: 0.15rem 0.5rem; font-size: 0.78rem; }
