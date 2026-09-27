@@ -77,7 +77,7 @@
 - **追加決定（完璧ボーナス、2026-09-28・価格の変更として承認済み）:** **パーフェクト（Fully Awakened）の回路だけ**、売値に **完璧ボーナス 2^(N+1) クレジット** を足す（N＝盤の一辺）。パーフェクトの売値は **25c ＋ 評価値 × 3c ＋ 2^(N+1)c**。Bypass・Offline・未 Restore は **25c ＋ 評価値 × 3c** のまま。数字 0 の数え方（パーフェクト時だけ各 4）は変えない。
   - N の決め方: 保存されている盤の `cols`・`rows` の **大きい方**（`max(cols, rows)`）。作成回路は正方形なので N×N の N と同じ。puzzleId からは読まない。
   - 「パーフェクト」の判定: 評価値の計算と同じフラグ（`circuitBoard.perfect ?? locked`）が立っていて、**かつ** 成果が `fully_awakened`。
-  - 例（コードで計算した値。評価値は盤ごとに違う）: 2×2（`verify-true-2`、評価値 8）＝ 25＋24＋8＝**57c**。6×6（selftest の盤、評価値 81）＝ 25＋243＋128＝**396c**。8×8（selftest の盤、評価値 177）＝ 25＋531＋512＝**1068c**。目安は 6×6 で約 400c、8×8 で約 1000c。
+  - 例（評価値は盤ごとに違う）: 2×2（`verify-true-2`、評価値 8）＝ 25＋24＋8＝**57c**。数字を隠す新しい盤（v2、`perfect-true-v2-…`、§2.1）では 6×6 で約 **294〜312c**、8×8 で約 **726〜780c**。これは v2 の盤の値で、数字隠しの導入（#154）より前に出た盤（v1、数字は全部表示）は評価値が高くなり、売値もこれより高くなりうる。
   - 実装: `packages/trade/src/circuit-sell-prices.ts` の `perfectCircuitSellBonusCredits(N) = 2^(N+1)`・`circuitSellPerfectSide(rec)`・`circuitSellPriceCredits(effect, { perfectSide })`。`hangar.ts` `sellCircuit` と保有回路一覧の表示（内訳に「完璧ボーナス」）が使う。`hangar.selftest.ts` で 2×2／6×6／8×8 のパーフェクトと、同じ線の Bypass・空の Offline 盤（ボーナスなし）を検証。
 - 回路をお金で買うときの値段は未決（§8.1）。
 
