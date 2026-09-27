@@ -7,5 +7,5 @@
     "rootDir": "src"
   },
   "include": ["src"],
-  "exclude": ["src/hangar.selftest.ts"]
+  "exclude": ["src/hangar.selftest.ts", "src/junk-craft.selftest.ts"]
 }

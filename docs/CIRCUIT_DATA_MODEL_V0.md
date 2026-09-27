@@ -1,6 +1,6 @@
 # 回路データモデル・保存契約・受け渡し 設計 v0
 
-**ステータス:** **承認済み（2026-09-28、神宮）** / 実装: A（shared の保存契約 v3）済み、B〜G は未実装。起草は Cursor（Grok Bot）。契約変更（`HUB_SAVE_CONTRACT` の版上げ、URL キーの追加）を含む。実装は §8 の A〜G の順。§9 の U1〜U19 はすべて決定済み（U7 は神宮の決定、ほかは起草時の推奨どおり）。  
+**ステータス:** **承認済み（2026-09-28、神宮）** / 実装: A（shared の保存契約 v3）済み、B（trade のジャンク作成サイズとコスト）は PR 準備中、C〜G は未実装。起草は Cursor（Grok Bot）。契約変更（`HUB_SAVE_CONTRACT` の版上げ、URL キーの追加）を含む。実装は §8 の A〜G の順。§9 の U1〜U19 はすべて決定済み（U7 は神宮の決定、ほかは起草時の推奨どおり）。  
 **対象:** [`STATUS.md`](./STATUS.md)「回路・部隊設計 v0 由来の仕様変更」の **項目1**（回路のデータモデル）・**項目2**（モジュール間の受け渡し形式の変更）・**項目14**（パーフェクト最大サイズの記録とジャンク作成サイズ上限）をまとめて設計する。  
 **性質:** 本書は承認済みの設計。ゲームの決定事項の正本は [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md)（以下「設計メモ」）で、本書はそれを **変えない**。既存の契約文書・コードは本書では書き換えていない（各実装 PR で直す）。起草時に未決だった点は §9 で決定済み。
 
@@ -355,7 +355,7 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 | 項目 | 案（数値はすべて設計メモ §2.2 のまま） |
 |---|---|
 | 選べるサイズ | 2×2 〜 `craftMaxSize(hub) = min(20, max(2, perfectMaxSize + 1))` の正方形（最初は 2×2 だけ） |
-| コスト | N×N で **ジャンク 2N 個＋2^N クレジット**（2×2＝4 個＋4c 〜 6×6＝12 個＋64c） |
+| コスト | N×N で **ジャンク 2N 個＋round(4×1.5^N) クレジット**（2×2＝4 個＋9c 〜 6×6＝12 個＋46c。2026-09-28 に 2^N から改定。shared `circuitCraftJunkCost`／`circuitCraftCreditCost` を使う） |
 | 作る回路 | `createEmptyCircuitBoard(N, N, circuitId)`（白回路・初期マークなし）、`restoreState: "unrestored"`、`origin: "crafted"`、`equippedTo: null` |
 | 置き換える現行 | `trade/src/junk-circuit-craft-ui.ts`（`JUNK_COST = 4`・クレジット消費なし・常に 4×4・`outcome: "offline"`・`maxCircuits` で切り詰め） |
 | コスト式の置き場所 | trade（売値の `circuit-sell-prices.ts` と同じく trade の定数）。`craftMaxSize` は HubSave に依存するので shared |
@@ -372,7 +372,7 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 | # | PR | 触るパッケージ | STATUS 項目 | 内容 | 前提 |
 |---|---|---|---|---|---|
 | A | 保存契約 v3 と受け渡しキー | `shared`（＋`docs/HUB_SAVE_CONTRACT.md`・`HANDOFF` 系の追記） | 1・2・14 | `HubSaveV3`・新キーと読み込み順・v1/v2→v3 移行・壊れたセーブの退避・切り詰め廃止（`maxCircuits` は deprecated で残す）・§2〜§5・§7 の純関数・`mechCircuits` の build/parse・`HANDOFF_QUERY_KEYS` 追加・selftest | 本書の承認（済） |
-| B | ジャンク作成サイズとコスト | `trade` | 14 | サイズ選択（2×2〜`craftMaxSize`）、コスト 2N＋2^N、`unrestored`／`crafted`、restore 取込で `perfectMaxSize` 更新、`maxCircuits` 参照の削除 | A |
+| B | ジャンク作成サイズとコスト | `trade` | 14 | サイズ選択（2×2〜`craftMaxSize`）、コスト 2N＋round(4×1.5^N)（shared の関数）、`unrestored`／`crafted`、restore 取込で `perfectMaxSize` 更新、`maxCircuits` 参照の削除 | A |
 | C | 倉庫と付け替え | `trade` | 1（＋7 の付け替え） | 倉庫一覧・機体ごとの装着 UI（HUB のみ・無料）、装着中の回路の売却・Restore の扱い（U14）、`circuitBonuses` の集計対象（U5）、移行の案内 | A |
 | D | 出撃 URL に装着回路 | `trade` | 2 | `buildDeployUrl` に `mechCircuits` を載せる | A（C があると実データが入る） |
 | E | explore の機体ごと判定 | `explore` | 1・2 | `equippedByUnit`、隊長／僚機ごとの判定、FA・Bypass だけ有効。小隊方針の対象外表示（C20）を同時にやるかは別判断 | A（D がなくても `[]` で動く） |

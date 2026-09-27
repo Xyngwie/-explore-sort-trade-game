@@ -3,15 +3,17 @@
  *
  * Formula (神宮):
  * - **最低 25c + 出来栄え floor(effect) × 3c**（2026-09-28 に 30c→25c）.
- * - **Perfect (Fully Awakened) only:** + 完璧ボーナス **2^(N+1) c**, N = board
- *   side length (2026-09-28). Bypass / Offline / un-Restored get no bonus.
+ * - **Perfect (Fully Awakened) only:** + 完璧ボーナス **2 × round(4 × 1.5^N) c**
+ *   (= 2 × junk craft credit cost, shared `circuitPerfectSellBonusCredits`;
+ *   2026-09-28, was 2^(N+1)). N = board side length. Bypass / Offline /
+ *   un-Restored get no bonus.
  *   Boards are cols×rows; N = max(cols, rows) (crafted circuits are square).
  * Uses the shared circuit-effect scorer (smallest closed loop; perfect 0→4).
  * Display matches hangar wallet notation (`c` credits), not a separate `$` unit.
  *
  * Effect 0 → price 25c (floor only; sell still allowed, including un-Restored circuits).
  */
-import type { HubCircuitRecord } from "@estg/shared";
+import { circuitPerfectSellBonusCredits, type HubCircuitRecord } from "@estg/shared";
 
 /** Credits floor always paid on sell (最低額). */
 export const CIRCUIT_SELL_BASE_CREDITS = 25 as const;
@@ -29,15 +31,14 @@ export type CircuitSellPriceOptions = {
 };
 
 /**
- * 完璧ボーナス for a Perfect board of side N: `2^(N+1)` credits.
+ * 完璧ボーナス for a Perfect board of side N: `2 × round(4 × 1.5^N)` credits
+ * (twice the junk craft credit cost; single source in @estg/shared).
  * Returns 0 for missing / non-positive N.
  */
 export function perfectCircuitSellBonusCredits(
   side: number | null | undefined,
 ): number {
-  const n = Math.floor(Number(side) || 0);
-  if (n < 1) return 0;
-  return 2 ** (n + 1);
+  return circuitPerfectSellBonusCredits(side);
 }
 
 /**
@@ -61,7 +62,7 @@ export function circuitSellPerfectSide(
 
 /**
  * Provisional sell price in credits:
- * `25 + floor(effect) * 3` (+ `2^(N+1)` when Perfect).
+ * `25 + floor(effect) * 3` (+ `2 × round(4 × 1.5^N)` when Perfect).
  * Effect 0, not Perfect → 25c (最低額 only).
  */
 export function circuitSellPriceCredits(
@@ -101,7 +102,7 @@ export function formatCircuitSellPriceJa(
   const total = base + craft + perfectBonus;
   const detailJa =
     perfectBonus > 0
-      ? `最低 ${base}c + 出来栄え ${craft}c + 完璧ボーナス ${perfectBonus}c（2^(${perfectSide}+1)）`
+      ? `最低 ${base}c + 出来栄え ${craft}c + 完璧ボーナス ${perfectBonus}c（${perfectSide}×${perfectSide}）`
       : `最低 ${base}c + 出来栄え ${craft}c`;
   return {
     total,
