@@ -15,3 +15,4 @@ export * from "./circuit-solver";
 export * from "./circuit-effect";
 export * from "./circuit-clues";
 export * from "./cta-copy";
+export * from "./circuit-inventory";

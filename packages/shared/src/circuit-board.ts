@@ -14,6 +14,58 @@ export const CIRCUIT_OUTCOMES: readonly CircuitOutcome[] = [
   "offline",
 ] as const;
 
+/**
+ * Hub-side restore state of an owned circuit (HubSave v3).
+ * `unrestored` = not yet through Restore (crafted / bought / dropped / picked up).
+ * The other three are Restore results (same values as CircuitOutcome).
+ * See docs/CIRCUIT_DATA_MODEL_V0.md §2.1.
+ */
+export type CircuitRestoreState = "unrestored" | CircuitOutcome;
+
+export const CIRCUIT_RESTORE_STATES: readonly CircuitRestoreState[] = [
+  "unrestored",
+  "fully_awakened",
+  "bypass",
+  "offline",
+] as const;
+
+export function isCircuitRestoreState(x: unknown): x is CircuitRestoreState {
+  return x === "unrestored" || isCircuitOutcome(x);
+}
+
+/** Effects apply only for Fully Awakened and Bypass (設計メモ §2.1 旧 §8.4-2). */
+export function isCircuitRestoreStateActive(state: CircuitRestoreState): boolean {
+  return state === "fully_awakened" || state === "bypass";
+}
+
+/**
+ * Legacy 3-value outcome mirror for a restore state.
+ * `unrestored` has no effect either way, so it mirrors to `offline`.
+ */
+export function outcomeFromRestoreState(state: CircuitRestoreState): CircuitOutcome {
+  return state === "unrestored" ? "offline" : state;
+}
+
+/** Where an owned circuit came from (HubSave v3). `crafted` = white board; others = used (中古). */
+export type CircuitOrigin =
+  | "crafted"
+  | "bought"
+  | "enemy_drop"
+  | "picked_up"
+  | "legacy";
+
+export const CIRCUIT_ORIGINS: readonly CircuitOrigin[] = [
+  "crafted",
+  "bought",
+  "enemy_drop",
+  "picked_up",
+  "legacy",
+] as const;
+
+export function isCircuitOrigin(x: unknown): x is CircuitOrigin {
+  return typeof x === "string" && (CIRCUIT_ORIGINS as readonly string[]).includes(x);
+}
+
 export interface CircuitBoardState {
   v: 1;
   cols: number;

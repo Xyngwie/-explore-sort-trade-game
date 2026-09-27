@@ -151,7 +151,7 @@ assert.equal(wingmanCountFromMechs(3), 2);
 const hub = importMaterialsIntoHub(INITIAL_HUB, 80);
 assert.equal(hub.materials, INITIAL_HUB.materials + 80);
 const save = createHubSave(hub);
-assert.equal(save.v, 2);
+assert.equal(save.v, 3);
 assert.equal(parseHubSave(save)?.hub.materials, hub.materials);
 
 const state = applyPuzzleResult(
@@ -298,7 +298,7 @@ const legacy = parseHubSave({
   },
 });
 assert.ok(legacy);
-assert.equal(legacy!.v, 2);
+assert.equal(legacy!.v, 3);
 assert.equal(legacy!.hub.fleet.length, 2);
 assert.equal(legacy!.hub.fleet[0]!.catalogId, "mech_gen1");
 assert.equal(legacy!.hub.fleet[0]!.status, "operational");
@@ -1076,7 +1076,7 @@ console.log("shared selftest: sector-density + circuit-board ok");
   assert.equal(hub.circuits[0]!.circuitId, "board_other", "most recent first");
 
   const save = createHubSave(hub);
-  assert.equal(save.v, 2);
+  assert.equal(save.v, 3);
   const parsed = parseHubSave(save);
   assert.ok(parsed);
   assert.equal(parsed!.hub.circuits.length, 2);
