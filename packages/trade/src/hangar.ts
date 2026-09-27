@@ -9,7 +9,6 @@ import {
   INITIAL_HUB,
   MECH_FLEET_RULES,
   MECH_STATUS_LABEL_JA,
-  EXAMPLE_TYPED_REPAIR_COST,
   addMechToHub,
   ammoTotal,
   applyRepair,
@@ -61,7 +60,6 @@ import {
   stripHandoffParams,
   upsertCircuitIntoHub,
   removeCircuitFromHub,
-  yieldBagFromTypedRepairCost,
   aggregateCircuitBonuses,
   applyRepairDiscountToCost,
   applyDurabilityBufferToWear,
@@ -83,6 +81,10 @@ import {
   type SortieReturnKind,
   type YieldBag,
 } from "@estg/shared";
+import {
+  EXAMPLE_TYPED_REPAIR_COST,
+  yieldBagFromTypedRepairCost,
+} from "./legacy-typed-repair";
 
 import {
   RARE_SELL_PRICE_CREDITS,
@@ -597,13 +599,14 @@ export function grantStarterFleet(state: HangarState): HangarState {
 
 /** Demo bag so typed repair can be tried without sort. */
 export function grantDemoInventory(state: HangarState): HangarState {
-  const bag: YieldBag = {
+  // Legacy ids are compatibility-only; importYieldBagIntoHub keeps only the four resources.
+  const bag = {
     mat_scrap: 40,
     mat_polymer: 20,
     mat_circuit: 5,
     part_actuator: 2,
     part_armor_plate: 1,
-  };
+  } as Record<string, number> as YieldBag;
   const hub = importYieldBagIntoHub(state.hub, bag);
   const next: HangarState = {
     ...state,
@@ -700,8 +703,10 @@ export function buildSeedYieldBagForTypedRepair(
     if (v > 0) inventory[id] = v;
   }
   // Demo extras (not required by EXAMPLE_TYPED_REPAIR_COST)
-  inventory.mat_circuit = Math.max(inventory.mat_circuit ?? 0, 8);
-  inventory.part_armor_plate = Math.max(inventory.part_armor_plate ?? 0, 2);
+  // Legacy ids are compatibility-only (dropped by normalizeHubSnapshot).
+  const legacy = inventory as Record<string, number | undefined>;
+  legacy.mat_circuit = Math.max(legacy.mat_circuit ?? 0, 8);
+  legacy.part_armor_plate = Math.max(legacy.part_armor_plate ?? 0, 2);
   return inventory;
 }
 
@@ -1253,13 +1258,15 @@ export function sellRareItem(
     return { ...state, notice: "レア対象外（売却不可）" };
   }
   const n = Math.max(1, Math.floor(qty));
-  const have = Math.floor(Number(state.hub.inventory[itemId] ?? 0) || 0);
+  const have = Math.floor(
+    Number((state.hub.inventory as Record<string, number | undefined>)[itemId] ?? 0) || 0,
+  );
   if (have < n) {
     return { ...state, notice: `${itemId} 不足（持 ${have}）` };
   }
   const unit = RARE_SELL_PRICE_CREDITS[itemId];
   const gained = unit * n;
-  const nextInv = spendYieldBag(state.hub.inventory, { [itemId]: n });
+  const nextInv = spendYieldBag(state.hub.inventory, { [itemId]: n } as Record<string, number> as YieldBag);
   if (!nextInv) return { ...state, notice: "売却失敗（在庫）" };
   const hub = normalizeHubSnapshot({
     ...state.hub,
