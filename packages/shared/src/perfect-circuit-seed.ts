@@ -10,6 +10,12 @@ import {
   type CircuitBoardState,
   type EdgeMark,
 } from "./circuit-board";
+import {
+  SIZED_TRUE_MAX_SIDE,
+  SIZED_TRUE_MIN_SIDE,
+  buildSizedTruePuzzleId,
+  resolveSizedTruePuzzle,
+} from "./perfect-circuit-sized";
 
 /** puzzleId stamped on CircuitBoardState / restore generatePuzzle lookup. */
 export const VERIFY_TRUE_PUZZLE_ID = "verify-true-2";
@@ -133,6 +139,30 @@ export function resolveVerifyTrueClues(
   };
 }
 
+/**
+ * Fixed / regenerated clues for any true (Perfect-solvable) puzzleId:
+ * verify-true (2×2 fixed) or a sized true board (`perfect-true-{c}x{r}-…`).
+ * Size comes from the id (callers must use the returned cols/rows).
+ */
+export function resolveTrueBoardClues(
+  puzzleId: string | null | undefined,
+): {
+  cols: number;
+  rows: number;
+  puzzleId: string;
+  clues: ReadonlyArray<ReadonlyArray<number | null>>;
+} | null {
+  const verify = resolveVerifyTrueClues(puzzleId);
+  if (verify) return verify;
+  const sized = resolveSizedTruePuzzle(puzzleId);
+  if (!sized) return null;
+  return {
+    cols: sized.cols,
+    rows: sized.rows,
+    puzzleId: sized.puzzleId,
+    clues: sized.clues,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Perfect Circuit injection rates (seeded true boards among flawed majority)
@@ -290,10 +320,34 @@ export type TruePuzzleFromSolution = {
 };
 
 /**
- * Guaranteed uniquely solvable puzzle from the known Perfect Circuit solution
- * (generate-from-solution / verify-true seed). Never samples random digits.
+ * Guaranteed solvable puzzle from a known Perfect Circuit solution
+ * (generate-from-solution). Never samples random digits.
+ * - No size, or 2×2 → the fixed verify-true board (`verify-true-2`).
+ * - Other sizes (each side 2..{@link SIZED_TRUE_MAX_SIDE}) → a sized true
+ *   board at the requested size (`perfect-true-{c}x{r}-…`, seeded by `seed`).
+ * - Out-of-range sizes fall back to verify-true.
  */
-export function buildTruePuzzleFromSolution(): TruePuzzleFromSolution {
+export function buildTruePuzzleFromSolution(opts?: {
+  seed: string;
+  cols: number;
+  rows: number;
+}): TruePuzzleFromSolution {
+  if (opts != null && !(opts.cols === VERIFY_TRUE_COLS && opts.rows === VERIFY_TRUE_ROWS)) {
+    const okSide = (n: number) =>
+      Number.isInteger(n) && n >= SIZED_TRUE_MIN_SIDE && n <= SIZED_TRUE_MAX_SIDE;
+    if (okSide(opts.cols) && okSide(opts.rows)) {
+      const sized = resolveSizedTruePuzzle(
+        buildSizedTruePuzzleId(opts.seed, opts.cols, opts.rows),
+      )!;
+      return {
+        kind: "true",
+        cols: sized.cols,
+        rows: sized.rows,
+        puzzleId: sized.puzzleId,
+        clues: sized.clues,
+      };
+    }
+  }
   const fixed = resolveVerifyTrueClues(VERIFY_TRUE_PUZZLE_ID)!;
   return {
     kind: "true",
@@ -332,9 +386,11 @@ export function buildInjectedOrFlawedPuzzle(args: {
   clues: ReadonlyArray<ReadonlyArray<number | null>>;
   injectedTrue: boolean;
 } {
-  // Explicit verify-true seed always returns the solution board (no roll).
-  if (isVerifyTruePuzzleId(args.seed)) {
-    const t = buildTruePuzzleFromSolution();
+  // Explicit true seed (verify-true or sized true id) always returns that
+  // solution board (no roll).
+  const fixedTrue = resolveTrueBoardClues(args.seed);
+  if (fixedTrue) {
+    const t = fixedTrue;
     return {
       kind: "true",
       cols: t.cols,
@@ -353,7 +409,12 @@ export function buildInjectedOrFlawedPuzzle(args: {
         : rollPerfectCircuit(args.rng, { rate: args.rate });
 
   if (inject) {
-    const t = buildTruePuzzleFromSolution();
+    // Requested size (2×2 keeps the fixed verify-true board).
+    const t = buildTruePuzzleFromSolution({
+      seed: args.seed,
+      cols: args.cols,
+      rows: args.rows,
+    });
     return {
       kind: "true",
       cols: t.cols,
