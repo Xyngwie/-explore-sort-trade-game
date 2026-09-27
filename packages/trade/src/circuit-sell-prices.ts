@@ -48,5 +48,6 @@ export function formatCircuitSellPriceJa(effectValue: number): {
   };
 }
 
-// Module 3 UI side effect: load the four-resource trade window directly from the HUB entry graph.
+// Module 3 UI side effects: trade window + junk→circuit crafting.
 import "./four-resource-trade-ui";
+import "./junk-circuit-craft-ui";
