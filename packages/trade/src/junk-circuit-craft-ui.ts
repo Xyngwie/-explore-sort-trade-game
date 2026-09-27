@@ -8,6 +8,7 @@ import {
   backfillPerfectMaxSize,
   craftJunkCircuit,
   heldJunk,
+  junkCraftConfirmText,
   junkCraftMaxSide,
   junkCraftOptions,
   type JunkCraftOption,
@@ -42,6 +43,9 @@ function optionLabel(o: JunkCraftOption): string {
 }
 
 function craftCircuit(side: number): void {
+  // Same style as the sell confirm; only for 100c and up (8×8+).
+  const confirmText = junkCraftConfirmText(side);
+  if (confirmText && !window.confirm(confirmText)) return;
   const result = craftJunkCircuit(getHub(), side, { circuitId: makeCircuitId() });
   if (!result.ok) return;
   saveHubSaveToLocalStorage(result.hub);
@@ -54,7 +58,8 @@ function render(card: HTMLElement): void {
   const cap = junkCraftMaxSide(hub);
   // List every size up to 20; over-cap / unaffordable sizes are disabled.
   const options = junkCraftOptions(hub, RESTORE_MAX_SIDE);
-  const firstEnabled = [...options].reverse().find((o) => o.enabled) ?? null;
+  // Default to the smallest enabled size so nobody spends a lot by accident.
+  const firstEnabled = options.find((o) => o.enabled) ?? null;
 
   card.id = CARD_ID;
   card.innerHTML = `

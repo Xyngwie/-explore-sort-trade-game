@@ -7,7 +7,7 @@
  *   (at least 2).
  * - Cost: circuitCraftJunkCost(N) junk (2N) + circuitCraftCreditCost(N) credits
  *   (round(4 × 1.5^N)) — shared single source (circuit-craft-cost.ts).
- * - Circuit: empty N×N board, restoreState "offline", origin "crafted",
+ * - Circuit: empty N×N board, restoreState "unrestored" (白回路), origin "crafted",
  *   equippedTo null. No count cap (the old 8-circuit truncation is gone).
  */
 import {
@@ -23,6 +23,16 @@ import {
 } from "@estg/shared";
 
 export const JUNK_CRAFT_MIN_SIDE = 2;
+
+/** Crafts costing at least this many credits ask for confirmation (8×8 = 103c and up). */
+export const JUNK_CRAFT_CONFIRM_MIN_CREDITS = 100;
+
+/** Confirm text for a craft, or null when no confirmation is needed (< 100c). */
+export function junkCraftConfirmText(side: number): string | null {
+  const credits = circuitCraftCreditCost(side);
+  if (credits < JUNK_CRAFT_CONFIRM_MIN_CREDITS) return null;
+  return `回路を作成しますか？\n${side}×${side}\nジャンク ${circuitCraftJunkCost(side)}個・${credits}c`;
+}
 
 /** Largest side the player may craft now (min(perfectMaxSize + 1, 20), ≥ 2). */
 export function junkCraftMaxSide(hub: Pick<HubSnapshot, "perfectMaxSize">): number {
@@ -115,12 +125,12 @@ export function craftJunkCircuit(
   const creditCost = circuitCraftCreditCost(side);
   const at = (opts.at ?? new Date()).toISOString();
 
+  // Unrestored white board: no board.outcome (normalize keeps it empty).
   const board = createEmptyCircuitBoard(side, side, opts.circuitId);
-  board.outcome = "offline";
   const record: HubCircuitRecord = {
     circuitId: opts.circuitId,
     circuitBoard: board,
-    restoreState: "offline",
+    restoreState: "unrestored",
     origin: "crafted",
     equippedTo: null,
     outcome: "offline",

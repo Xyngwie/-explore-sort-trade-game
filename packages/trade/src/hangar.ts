@@ -74,6 +74,7 @@ import {
   type CircuitBoardState,
   type CircuitEffectBreakdown,
   type CircuitOutcome,
+  type CircuitRestoreState,
   type HubCircuitRecord,
   type HubSnapshot,
   type InvadeToTradePayload,
@@ -1045,6 +1046,12 @@ export function circuitOutcomeLabelJa(outcome: CircuitOutcome): string {
   return "オフライン";
 }
 
+/** Label for HubSave v3 restoreState (adds 未Restore for crafted white boards). */
+export function circuitRestoreStateLabelJa(state: CircuitRestoreState): string {
+  if (state === "unrestored") return "未Restore";
+  return circuitOutcomeLabelJa(state);
+}
+
 /** Remember last deploy set when user opens the explore link. */
 export function markDeployed(state: HangarState, ids: string[]): HangarState {
   const next: HangarState = {
@@ -1647,7 +1654,7 @@ export function formatCircuitHubBrief(
     return {
       circuitId: c.circuitId,
       outcome: c.outcome,
-      outcomeJa: circuitOutcomeLabelJa(c.outcome),
+      outcomeJa: circuitRestoreStateLabelJa(c.restoreState),
       locked: isCircuitLocked(c),
       active: activeId != null && c.circuitId === activeId,
       editor: c.lastEditorName ?? c.circuitBoard.lastEditorName ?? null,

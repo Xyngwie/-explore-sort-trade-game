@@ -12,16 +12,27 @@ import {
   resolveSizedTruePuzzle,
   serializeHubSave,
   upsertCircuitIntoHub,
+  circuitActiveEffect,
+  circuitEffectValue,
+  equipCircuit,
   type CircuitBoardState,
   type HubSnapshot,
 } from "@estg/shared";
 import {
+  JUNK_CRAFT_CONFIRM_MIN_CREDITS,
   backfillPerfectMaxSize,
   craftJunkCircuit,
+  junkCraftConfirmText,
   junkCraftMaxSide,
   junkCraftOptions,
 } from "./junk-craft";
-import { createInitialHangar, ingestLocationSearch } from "./hangar";
+import {
+  circuitSellPerfectSide,
+  createInitialHangar,
+  formatCircuitHubBrief,
+  ingestLocationSearch,
+  sellCircuit,
+} from "./hangar";
 
 function memoryStorage(): Storage {
   const map = new Map<string, string>();
@@ -107,8 +118,9 @@ assert.equal(junkCraftMaxSide(hubWith({ perfectMaxSize: 20 })), 20);
   assert.equal(rec.circuitId, "junk_craft_t4");
   assert.equal(rec.circuitBoard.cols, 4);
   assert.equal(rec.circuitBoard.rows, 4);
-  assert.equal(rec.restoreState, "offline");
-  assert.equal(rec.outcome, "offline");
+  assert.equal(rec.restoreState, "unrestored");
+  assert.equal(rec.outcome, "offline", "deprecated mirror of unrestored");
+  assert.equal(rec.circuitBoard.outcome, undefined, "unrestored → no board outcome");
   assert.equal(rec.origin, "crafted");
   assert.equal(rec.equippedTo, null);
   assert.equal(rec.acquiredAt, "2026-09-28T00:00:00.000Z");
@@ -246,5 +258,49 @@ assert.equal(junkCraftMaxSide(hubWith({ perfectMaxSize: 20 })), 20);
   assert.equal(rec.origin, "crafted");
   assert.equal(rec.restoreState, "bypass");
 }
+
+// ---------------------------------------------------------------------------
+// Unrestored crafted circuit through display / sell / equip paths
+// ---------------------------------------------------------------------------
+{
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  const base = createInitialHangar(store);
+  const hub0 = normalizeHubSnapshot({
+    ...base.hub,
+    credits: 100,
+    inventory: { junk: 10 },
+    fleet: [{ instanceId: "owned_a", catalogId: "mech_gen1", status: "operational", durability: 100, durabilityMax: 100 }],
+  } as unknown as HubSnapshot);
+  const r = craftJunkCircuit(hub0, 2, { circuitId: "junk_craft_u" });
+  assert.equal(r.ok, true);
+  const rec = r.record!;
+  // Effect 0 (display + active effect), sells at 25c + 0, no perfect bonus.
+  assert.equal(circuitEffectValue(rec), 0);
+  assert.equal(circuitActiveEffect(rec), 0);
+  assert.equal(circuitSellPerfectSide(rec), null);
+  const brief = formatCircuitHubBrief(r.hub.circuits);
+  const line = brief.lines.find((l) => l.circuitId === "junk_craft_u")!;
+  assert.equal(line.outcomeJa, "未Restore");
+  assert.equal(line.effect, 0);
+  const hs = { ...base, hub: r.hub };
+  const creditsBefore = hs.hub.credits;
+  const sold = sellCircuit(hs, "junk_craft_u");
+  assert.equal(sold.hub.credits, creditsBefore + 25);
+  assert.ok(!sold.hub.circuits.some((c) => c.circuitId === "junk_craft_u"));
+  // Equip helper accepts it (effect stays 0 until Restore).
+  const eq = equipCircuit(r.hub, "junk_craft_u", "owned_a");
+  assert.equal(eq.ok, true);
+  assert.equal(eq.hub.circuits.find((c) => c.circuitId === "junk_craft_u")!.restoreState, "unrestored");
+}
+
+// ---------------------------------------------------------------------------
+// Confirm dialog: only when the credit cost is ≥ 100c (8×8 and up)
+// ---------------------------------------------------------------------------
+assert.equal(JUNK_CRAFT_CONFIRM_MIN_CREDITS, 100);
+assert.equal(junkCraftConfirmText(2), null);
+assert.equal(junkCraftConfirmText(7), null); // 68c
+assert.equal(junkCraftConfirmText(8), "回路を作成しますか？\n8×8\nジャンク 16個・103c");
+assert.ok(junkCraftConfirmText(20)!.includes("13301c"));
 
 console.log("trade junk-craft selftest: ok");
