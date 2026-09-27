@@ -21,7 +21,7 @@
 
 後片付け:
 
-- ~~壊れた `.github/workflows/gemini-playtest.yml` の扱いを決める~~ → 2026-09-28 に削除済み（別 PR）。Gemini の Actions 自動化は保留
+- ~~壊れた `.github/workflows/gemini-playtest.yml` の扱いを決める~~ → 2026-09-28 に削除済み（#144）。Gemini の Actions 自動化は保留
 
 バックログ:
 
@@ -45,4 +45,4 @@
 ## 既知の問題
 
 - ~~explore selftest が約 1 割の確率で失敗する~~ → **解消済み（2026-09-28, テスト側のみ）**。原因は、ランダムなカバー配置（`coverObjects.ts`）でコンテナ上の隊長がカバー中心へ吸着され回収半径から外れること（失敗 25/25 件で吸着範囲内にカバーあり）。`selftest.ts` で `Math.random` を固定シード（mulberry32）に差し替え、コンテナ上・直進テスト経路の近くのカバーをテスト内で除去（`clearCoverNear`）。本番コード・カバー挙動は無変更。同原因の潜在 flake（cargo 速度テスト）も同時に対処
-- ~~`.github/workflows/gemini-playtest.yml` の字下げ崩れで `main` への push のたびに失敗表示~~ → **解消（2026-09-28 に workflow ファイルを削除）**。Gemini の Actions 自動化は保留
+- ~~`.github/workflows/gemini-playtest.yml` の字下げ崩れで `main` への push のたびに失敗表示~~ → **解消（2026-09-28 に #144 で workflow ファイルを削除）**。Gemini の Actions 自動化は保留
