@@ -37,7 +37,6 @@ jobs:
                   text = text.replace(f"|{old}", f"|{new}")
                   text = text.replace(f"{old} |", f"{new} |")
               text = text.replace('food/material/energy', 'ammo/armor/power')
-              text = text.replace('food/material/energy', 'ammo/armor/power')
               text = text.replace('食料', '弾薬').replace('部品', '装甲パーツ')
               if text != original:
                   path.write_text(text)
@@ -102,22 +101,37 @@ jobs:
           path.write_text(text)
           PY
 
-      - name: Typecheck and selftest
+      - name: Validate migration
+        id: validate
+        shell: bash
         run: |
-          npm ci
-          npm run --workspace @estg/shared typecheck
-          npm run --workspace @estg/sort test
+          set +e
+          : > migration-validation.log
+          npm ci >> migration-validation.log 2>&1
+          npm run --workspace @estg/shared typecheck >> migration-validation.log 2>&1
+          shared_rc=$?
+          npm run --workspace @estg/sort typecheck >> migration-validation.log 2>&1
+          sort_typecheck_rc=$?
+          npm run --workspace @estg/sort selftest >> migration-validation.log 2>&1
+          sort_selftest_rc=$?
+          printf '\nRESULTS shared=%s sort_typecheck=%s sort_selftest=%s\n' "$shared_rc" "$sort_typecheck_rc" "$sort_selftest_rc" >> migration-validation.log
+          if [ "$shared_rc" -ne 0 ] || [ "$sort_typecheck_rc" -ne 0 ] || [ "$sort_selftest_rc" -ne 0 ]; then
+            exit 1
+          fi
 
-      - name: Commit migration
+      - name: Commit migration or validation report
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/sort/src packages/shared/src/sort-yield.ts
-          if git diff --cached --quiet; then
-            echo "No migration changes to commit"
-            exit 0
+          git add packages/sort/src packages/shared/src/sort-yield.ts migration-validation.log packages/sort/SORT_PIECE_KIND_MIGRATION_TRIGGER.md
+          if [ "${{ steps.validate.outcome }}" = "success" ]; then
+            rm -f migration-validation.log packages/sort/SORT_PIECE_KIND_MIGRATION_TRIGGER.md
+            git add -A
+            git commit -m "refactor(sort): use four-resource piece kinds internally"
+          else
+            git commit -m "test(sort): record four-resource migration validation failure"
           fi
-          git commit -m "refactor(sort): use four-resource piece kinds internally"
           git push origin HEAD:refactor/sort-piece-kinds-v4
