@@ -18,7 +18,8 @@
  * Non-listed YieldBag ids are not sellable via this path.
  */
 
-import type { YieldItemId } from "@estg/shared";
+/** Legacy rare ids are compatibility-only strings since #134 (four-resource YieldBag). */
+type YieldItemId = string;
 
 export type RareSellBalanceMark = "TBD";
 
