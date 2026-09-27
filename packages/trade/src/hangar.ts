@@ -1382,7 +1382,7 @@ export { UNOPENED_CONTAINER_PRICE_CREDITS };
  * Sell one HubSave circuit: price = {@link CIRCUIT_SELL_BASE_CREDITS} +
  * floor(effect) × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT} (仮 · 最低+出来栄え).
  * Removes from inventory, credits wallet, clears active selection if needed.
- * Effect 0 → +30c (最低額 only; still allowed).
+ * Effect 0 → +25c (最低額 only; still allowed).
  */
 export function sellCircuit(
   state: HangarState,

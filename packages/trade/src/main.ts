@@ -54,6 +54,8 @@ import {
   sellRareItem,
   sellCircuit,
   formatCircuitSellPriceJa,
+  CIRCUIT_SELL_BASE_CREDITS,
+  CIRCUIT_SELL_CREDITS_PER_EFFECT,
   isCircuitLocked,
   isCraftSignatureLocked,
   buildNextSortieReadiness,
@@ -543,7 +545,7 @@ function render() {
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">保有回路</h2>
-      <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">効果値は Restore/Trade 共通スコア（最小閉ループ）。売却 仮 = 最低30c + 出来栄え（有効値×3c）。効果0も +30c で売却可。</p>
+      <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">効果値は Restore/Trade 共通スコア（最小閉ループ）。売却 仮 = 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え（有効値×${CIRCUIT_SELL_CREDITS_PER_EFFECT}c）。効果0も +${CIRCUIT_SELL_BASE_CREDITS}c で売却可。</p>
       <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">検証ヒント: ${escapeHtml(VERIFY_TRUE_SOLUTION_HINT)}</p>
       ${circuitRows(state)}
     </div>

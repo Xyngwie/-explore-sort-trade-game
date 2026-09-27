@@ -723,15 +723,15 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 }
 
 
-// Circuit sell: price = 30 + floor(effect)×3; inventory removal + credit
+// Circuit sell: price = 25 + floor(effect)×3; inventory removal + credit
 {
-  assert.equal(CIRCUIT_SELL_BASE_CREDITS, 30);
+  assert.equal(CIRCUIT_SELL_BASE_CREDITS, 25);
   assert.equal(CIRCUIT_SELL_CREDITS_PER_EFFECT, 3);
-  assert.equal(circuitSellPriceCredits(0), 30);
-  assert.equal(circuitSellPriceCredits(1), 33);
-  assert.equal(circuitSellPriceCredits(8), 54);
-  assert.equal(circuitSellPriceCredits(8.9), 54);
-  assert.equal(circuitSellPriceCredits(-2), 30);
+  assert.equal(circuitSellPriceCredits(0), 25);
+  assert.equal(circuitSellPriceCredits(1), 28);
+  assert.equal(circuitSellPriceCredits(8), 49);
+  assert.equal(circuitSellPriceCredits(8.9), 49);
+  assert.equal(circuitSellPriceCredits(-2), 25);
 
   const store = memoryStorage();
   (globalThis as unknown as { localStorage: Storage }).localStorage = store;
@@ -744,7 +744,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   });
   assert.equal(br.effect, 8);
   const price = circuitSellPriceCredits(br.effect);
-  assert.equal(price, 54); // 30 + 8*3
+  assert.equal(price, 49); // 25 + 8*3
 
   const creditsBefore = hs.hub.credits;
   const countBefore = hs.hub.circuits.length;
@@ -755,9 +755,9 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   );
   assert.equal(hs.hub.circuits.length, countBefore - 1);
   assert.equal(hs.hub.credits, creditsBefore + price);
-  assert.ok(hs.notice.includes("+54c") || hs.notice.includes("54"));
+  assert.ok(hs.notice.includes("+49c") || hs.notice.includes("49"));
   assert.ok(hs.notice.includes("最低") && hs.notice.includes("出来栄え"));
-  assert.ok(hs.log.some((l) => l.includes("回路売却") && l.includes("+54c")));
+  assert.ok(hs.log.some((l) => l.includes("回路売却") && l.includes("+49c")));
 
   // Persist: HubSave no longer lists the sold circuit
   const raw = store.getItem(HUB_SAVE_STORAGE_KEY);
@@ -770,18 +770,18 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   );
   assert.equal(saved!.hub.credits, creditsBefore + price);
 
-  // Effect 0: allow sell at +30c (最低額; clears inventory)
+  // Effect 0: allow sell at +25c (最低額; clears inventory)
   hs = loadPlaytestSeed(hs, { storage: store, injectRate: 0, rng: () => 0 });
   const seedRec = hs.hub.circuits.find((c) => c.circuitId === SEED_CIRCUIT_ID);
   assert.ok(seedRec);
   const seedEffect = computeCircuitEffectForBoard(seedRec!.circuitBoard).effect;
   assert.equal(seedEffect, 0);
-  assert.equal(circuitSellPriceCredits(seedEffect), 30);
+  assert.equal(circuitSellPriceCredits(seedEffect), 25);
   const c0 = hs.hub.credits;
   hs = sellCircuit(hs, SEED_CIRCUIT_ID);
   assert.equal(hs.hub.circuits.some((c) => c.circuitId === SEED_CIRCUIT_ID), false);
-  assert.equal(hs.hub.credits, c0 + 30);
-  assert.ok(hs.notice.includes("+30c"));
+  assert.equal(hs.hub.credits, c0 + 25);
+  assert.ok(hs.notice.includes("+25c"));
   assert.ok(hs.notice.includes("最低") && hs.notice.includes("出来栄え"));
 
   // Missing id
