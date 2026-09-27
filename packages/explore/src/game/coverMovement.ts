@@ -30,13 +30,19 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
       state.coverId = null;
       return;
     }
-    const delta = { x: active.pos.x - unit.pos.x, y: active.pos.y - unit.pos.y };
+
+    // Any deliberate movement while covered is an explicit request to leave.
+    // The old outward-vector-only rule could immediately snap the unit back
+    // to the center when normal movement was processed in another direction.
     const moving = Math.hypot(moveInput.x, moveInput.y) > 0.01;
+    const targetLeavesCover = unit.moveTarget != null && dist(unit.moveTarget, active.pos) > 2;
+    const delta = { x: active.pos.x - unit.pos.x, y: active.pos.y - unit.pos.y };
     const outward = moving && dot(norm(moveInput), norm(delta)) < -0.2;
-    if (outward) {
+    if (moving || targetLeavesCover || outward) {
       unit.inCover = false;
       state.coverId = null;
       state.escapeT = COVER_ESCAPE_GRACE_SEC;
+      return;
     }
     return;
   }
@@ -54,9 +60,6 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
   }
   if (!nearest) return;
 
-  // Cover entry is a hard teleport, not an attraction animation. The extra
-  // margin makes the trigger reliable at the visible edge of the object even
-  // when the player crosses the boundary between simulation frames.
   const snapRadius = nearest.radius + unit.radius + COVER_SNAP_MARGIN;
   if (nearestDistance > snapRadius) return;
 
