@@ -4,6 +4,7 @@
 **性質:** 本書は決定事項を残すメモ。既存の V0／契約文書は **書き換えていない**。食い違いは §9「既存仕様との差分」に列挙する。実装はすべて別タスク（[`STATUS.md`](./STATUS.md)「次にやること」）。
 
 関連: [`EXPLORE_COMMAND_UNLOCK_V0.md`](./EXPLORE_COMMAND_UNLOCK_V0.md)、[`PRODUCT_VISION.md`](./PRODUCT_VISION.md)、[`INVADE_V0.md`](./INVADE_V0.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)、[`MECH_FLEET.md`](./MECH_FLEET.md)、[`EXPLORE_IO_V2.md`](./EXPLORE_IO_V2.md)、[`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md)、[`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md)
+- STATUS 項目1・2・14 の設計案（回路データモデル・保存契約 v3・受け渡し・移行。承認済み 2026-09-28）: [`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md)
 
 > 決定事項は §1〜§7。最初の決定は原文どおり。追加決定は「**追加決定（旧 §8.2-n／旧 §8.3-n／旧 §8.4-n／旧 §8.5-n）**」と付けて該当節に置き、追加決定で変わった原文は取り消し線で残す。本書に書いていない設計は決まっていない。曖昧なものは §8「未定」に置く。
 
