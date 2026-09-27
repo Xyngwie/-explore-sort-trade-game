@@ -17,7 +17,7 @@
 | 集計修理（`applyRepair`）と型付き修理（`EXAMPLE_TYPED_REPAIR_COST`） | 部位別修理・バランス本調整 |
 | 解体（`applyScrap`） | 見た目のアート |
 | レア YieldBag 売却（明示仮価格表 · TBD） | 本格ショップ / 経済バランス |
-| 保有回路の効果値表示 + 売却（最低25c + 有効値×3c 仮） | 回路マーケット / 相場 |
+| 保有回路の効果値表示 + 売却（最低25c + 有効値×3c 仮。完璧（Fully Awakened）は + 2^(N+1)c） | 回路マーケット / 相場 |
 | HubSave v2 永続化 + `inventory: YieldBag` + `circuits` | HubSave v3 版上げ |
 | sort→trade 取込（`importMaterials` + `yieldBag`） | |
 
@@ -120,7 +120,7 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 
 ## 3.4b. 回路売却（仮）
 
-保有回路一覧に **効果値**と**充足数字の内訳**（`formatCircuitEffectBreakdownJa` · 同一最小閉ループ採点）（Restore/Trade 共通 `computeCircuitEffect*` · 最小閉ループ）を表示し、**売却 仮 = 最低 25c + 出来栄え floor(effect) × 3c**（`$` 相当・既存 `c` 表記。2026-09-28 に最低額を 30c→25c に変更、`circuit-sell-prices.ts` `CIRCUIT_SELL_BASE_CREDITS`）。効果 0（Restore していない回路を含む）も +25c（最低額のみ）で売却可（在庫クリア）。確認ダイアログは解体と同系統（総額 + 最低/出来栄え内訳）。
+保有回路一覧に **効果値**と**充足数字の内訳**（`formatCircuitEffectBreakdownJa` · 同一最小閉ループ採点）（Restore/Trade 共通 `computeCircuitEffect*` · 最小閉ループ）を表示し、**売却 仮 = 最低 25c + 出来栄え floor(effect) × 3c**（`$` 相当・既存 `c` 表記。2026-09-28 に最低額を 30c→25c に変更、`circuit-sell-prices.ts` `CIRCUIT_SELL_BASE_CREDITS`）。効果 0（Restore していない回路を含む）も +25c（最低額のみ）で売却可（在庫クリア）。**完璧ボーナス（2026-09-28）:** パーフェクト（Fully Awakened）の回路だけ **+ 2^(N+1)c**（N＝盤の一辺＝`max(cols, rows)`。判定は `circuitBoard.perfect ?? locked` かつ outcome `fully_awakened`）。パーフェクトの売値＝25c＋効果値×3c＋2^(N+1)c。Bypass・Offline・未 Restore はボーナスなし。例: 2×2（効果 8）57c、6×6（効果 81 の盤）396c、8×8（効果 177 の盤）1068c。実装は `circuit-sell-prices.ts`（`perfectCircuitSellBonusCredits`・`circuitSellPerfectSide`）。確認ダイアログは解体と同系統（総額 + 最低/出来栄え[/完璧ボーナス]内訳）。
 
 ## 3.5. レア売却 仮価格表（TBD）
 
@@ -166,7 +166,7 @@ UI の「レア売却 仮価格表」と在庫の「売却 仮Nc」ボタン、�
 12. `?sectorX=&sectorY=&density=` 取込でセクターが表示され、`?circuitBoard=&circuitOutcome=` 取込で outcome が表示され **HubSave.circuits に残る**（リロード後も一覧から修復へ開ける）
 12b. 「次の出撃」をヒーローに（CTA 短縮: 戦線 / 探索 / 修復 / 仕分）: 探索/戦線/回路の帰還ワンライナー・回路効果値・配備予定/要修理。修理待ち0かつ出撃可なら配備 CTA を強調（HubSave キー追加なし）
 13. レア仮価格表が UI に見え、レア在庫の売却が表の単価でクレジット加算・HubSave に残る（非レアは売却不可）
-13b. 保有回路に効果値と「売却 仮Nc」があり、売却で HubSave.circuits から除去・credits += 最低25 + 有効値×3（効果0は +25c 可）
+13b. 保有回路に効果値と「売却 仮Nc」があり、売却で HubSave.circuits から除去・credits += 最低25 + 有効値×3（効果0は +25c 可）。完璧（Fully Awakened）の回路は + 2^(N+1)（N＝max(cols, rows)）
 
 ---
 

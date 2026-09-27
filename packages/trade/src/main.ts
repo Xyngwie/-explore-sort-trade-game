@@ -54,6 +54,7 @@ import {
   sellRareItem,
   sellCircuit,
   formatCircuitSellPriceJa,
+  circuitSellPerfectSide,
   CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
   isCircuitLocked,
@@ -254,7 +255,9 @@ function circuitRows(s: HangarState): string {
           const effectJa = line?.effectJa ?? `効果 ${effect}`;
           const effectBreakdownJa =
             line?.effectBreakdownJa ?? "内訳なし";
-          const priceBrk = formatCircuitSellPriceJa(effect);
+          const priceBrk = formatCircuitSellPriceJa(effect, {
+            perfectSide: circuitSellPerfectSide(c),
+          });
           const price = priceBrk.total;
           return `<tr>
             <td>
@@ -280,7 +283,7 @@ function circuitRows(s: HangarState): string {
               <div class="row" style="margin:0;justify-content:flex-end">
                 <button type="button" class="secondary" data-act="select-circuit" data-id="${escapeHtml(c.circuitId)}">選択</button>
                 <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">${locked ? CTA_COPY.view : CTA_COPY.toRestore}</a>
-                <button type="button" class="secondary sell-circuit" data-act="sell-circuit" data-id="${escapeHtml(c.circuitId)}" data-price="${price}" data-price-detail="${escapeHtml(priceBrk.detailJa)}" title="最低${priceBrk.base}c + 出来栄え（有効値×3c）で売却">${escapeHtml(priceBrk.buttonJa)}</button>
+                <button type="button" class="secondary sell-circuit" data-act="sell-circuit" data-id="${escapeHtml(c.circuitId)}" data-price="${price}" data-price-detail="${escapeHtml(priceBrk.detailJa)}" title="${escapeHtml(priceBrk.detailJa)} で売却">${escapeHtml(priceBrk.buttonJa)}</button>
               </div>
             </td>
           </tr>`;
@@ -545,7 +548,7 @@ function render() {
 
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">保有回路</h2>
-      <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">効果値は Restore/Trade 共通スコア（最小閉ループ）。売却 仮 = 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え（有効値×${CIRCUIT_SELL_CREDITS_PER_EFFECT}c）。効果0も +${CIRCUIT_SELL_BASE_CREDITS}c で売却可。</p>
+      <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">効果値は Restore/Trade 共通スコア（最小閉ループ）。売却 仮 = 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え（有効値×${CIRCUIT_SELL_CREDITS_PER_EFFECT}c）。効果0も +${CIRCUIT_SELL_BASE_CREDITS}c で売却可。完璧（Fully Awakened）の回路だけ ＋完璧ボーナス 2^(N+1)c（N＝盤の一辺）。</p>
       <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">検証ヒント: ${escapeHtml(VERIFY_TRUE_SOLUTION_HINT)}</p>
       ${circuitRows(state)}
     </div>

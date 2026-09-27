@@ -64,10 +64,15 @@
   - 現行の実装（#133 `packages/trade/src/junk-circuit-craft-ui.ts`）との差: 現行は **ジャンク 4 個・クレジット 0 で常に 4×4**（`JUNK_COST = 4`、`createEmptyCircuitBoard(4, 4, …)`）。新しいコストでは 4×4 はジャンク 8 個＋16c、ジャンク 4 個で作れるのは 2×2（＋4c）。実装は STATUS 項目14（コードの値は本書では変えない）。§9.2 C10。
 - ~~**追加決定（旧 §8.5-2）:** 回路の売値は **現行どおり 30c ＋ 評価値 × 3c**（変更なし）。~~（下の改定で置き換え）
 - **追加決定（旧 §8.5-2 の改定、2026-09-28・価格の変更として承認済み）:** 回路の売値は **25c ＋ 評価値 × 3c**。最低額を 30c から 25c に下げる（評価値1あたりの 3c は変えない）。**Restore していない回路も今までどおり売れる**（評価値0なら 25c）。
-  - 実装: `packages/trade/src/circuit-sell-prices.ts` の `CIRCUIT_SELL_BASE_CREDITS = 25`・`CIRCUIT_SELL_CREDITS_PER_EFFECT = 3`・`circuitSellPriceCredits(effect) = 25 + floor(effect) × 3`。売却処理は `packages/trade/src/hangar.ts` の `sellCircuit`（盤から `computeCircuitEffectForBoard` で評価値を出して価格を決める。成果状態は見ない）。文書は `TRADE_HANGAR_V0.md` §3.4b。定数は `hangar.selftest.ts` で 25 / 3 を検証している。
+  - 実装: `packages/trade/src/circuit-sell-prices.ts` の `CIRCUIT_SELL_BASE_CREDITS = 25`・`CIRCUIT_SELL_CREDITS_PER_EFFECT = 3`・`circuitSellPriceCredits(effect) = 25 + floor(effect) × 3`。売却処理は `packages/trade/src/hangar.ts` の `sellCircuit`（盤から `computeCircuitEffectForBoard` で評価値を出して価格を決める。基本の 25c＋評価値×3c は成果状態を見ない。完璧ボーナスは下の追加決定）。文書は `TRADE_HANGAR_V0.md` §3.4b。定数は `hangar.selftest.ts` で 25 / 3 を検証している。
   - 小さい回路を作って売る **薄利多売の稼ぎ方は意図して許す**。
   - 新コストの 2×2 の収支（ジャンクを買値 6c で買った場合、4個 24c＋4c＝**28c**）: そのまま（評価値0）売ると 25c で **−3c の赤字**。Restore して評価値1なら 28c で **収支0**、評価値2以上で **黒字**（評価値 k なら +3(k−1)c）。Sort で集めたジャンク（売値 5c）を使うなら 20c＋4c＝24c 相当で、評価値0でも +1c。
   - 項目14が入るまでは今の「ジャンク4個・0c で 4×4」（§9.2 C10）が残るので、ジャンクを 6c で4個（24c）買って作り、そのまま 25c で売る **+1c の循環** が残る。これは **許容する**（項目14で 2×2＝28c になれば −3c になり消える）。
+- **追加決定（完璧ボーナス、2026-09-28・価格の変更として承認済み）:** **パーフェクト（Fully Awakened）の回路だけ**、売値に **完璧ボーナス 2^(N+1) クレジット** を足す（N＝盤の一辺）。パーフェクトの売値は **25c ＋ 評価値 × 3c ＋ 2^(N+1)c**。Bypass・Offline・未 Restore は **25c ＋ 評価値 × 3c** のまま。数字 0 の数え方（パーフェクト時だけ各 4）は変えない。
+  - N の決め方: 保存されている盤の `cols`・`rows` の **大きい方**（`max(cols, rows)`）。作成回路は正方形なので N×N の N と同じ。puzzleId からは読まない。
+  - 「パーフェクト」の判定: 評価値の計算と同じフラグ（`circuitBoard.perfect ?? locked`）が立っていて、**かつ** 成果が `fully_awakened`。
+  - 例（コードで計算した値。評価値は盤ごとに違う）: 2×2（`verify-true-2`、評価値 8）＝ 25＋24＋8＝**57c**。6×6（selftest の盤、評価値 81）＝ 25＋243＋128＝**396c**。8×8（selftest の盤、評価値 177）＝ 25＋531＋512＝**1068c**。目安は 6×6 で約 400c、8×8 で約 1000c。
+  - 実装: `packages/trade/src/circuit-sell-prices.ts` の `perfectCircuitSellBonusCredits(N) = 2^(N+1)`・`circuitSellPerfectSide(rec)`・`circuitSellPriceCredits(effect, { perfectSide })`。`hangar.ts` `sellCircuit` と保有回路一覧の表示（内訳に「完璧ボーナス」）が使う。`hangar.selftest.ts` で 2×2／6×6／8×8 のパーフェクトと、同じ線の Bypass・空の Offline 盤（ボーナスなし）を検証。
 - 回路をお金で買うときの値段は未決（§8.1）。
 
 ## 3. 段位とプログレッション（ディアブロ3のグレーターリフト型）
@@ -241,7 +246,7 @@
 | C19 | **Restore 前の効果:** ジャンク作成の回路は `outcome: "offline"` で、現行の集計ボーナス（`aggregateCircuitBonuses`）は 0。評価値もマークなしなら 0 | §2.1「Restore を通すまで効果が出ない」と **結果的に一致**。追加決定（旧 §8.4-2）: 効果は Fully Awakened と Bypass で評価値、Offline は効果なし。現行の集計ボーナスは成果状態ごとの固定値で、評価値は使っていない（§9.1 #10） |
 | C20 | **小隊方針:** `explore/src/game/orders.ts` `applyOrderToAllWingmen` は生存僚機全員に適用。ロックは `wing_*` コマンド単位で一括 | §2 追加決定（旧 §8.3-3）: 解放済みの僚機にだけ適用、未解放は対象外と表示、全員未解放ならロック |
 | C21 | **【解消済み・STATUS 項目12】** 「Bypass を確定する」の案内に Bypass 時の効果値を出し、閉ループがないときは「閉ループがないため、今 Bypass で確定すると効果0になります（効果値 0）。…」と表示（`restore/src/puzzle.ts` `bypassGuideEffectJa`）。ボタンは押せるまま。以下は解消前の記述: ~~**Bypass 確定の画面（`restore/src/main.ts`）:** 効果値の表示と「成果プレビュー（効果値）」（ループなしなら「閉ループが無いため効果は 0」）は盤の下のカードに既にある。一方、上に出る「Bypass を確定する」の案内（不完全基板）は「部分充足のまま Bypass で…効果を残せます」と書かれていて評価値を出さず、Bypass はループなしでも数字が1つ満たされていれば押せる（`canBypass`）~~ | §2.1 追加決定（旧 §8.5-4 とその補足）: ループなしの Bypass は評価値 0 で効果なし。「Bypass を確定する」の案内に評価値を出し、ループがないときは「効果0になる」と明示する（案内の「効果を残せます」の文言もこれに合わせる）。ボタンは押せるまま（`canBypass` の条件は変えない）。STATUS 項目12 |
-| C22 | **回路の売値:** `trade/src/circuit-sell-prices.ts` 25c＋floor(効果値)×3c（2026-09-28 に 30c→25c）、`hangar.ts` `sellCircuit`。成果状態は見ないので未 Restore（Offline）の回路も売れる | §2.2 追加決定（旧 §8.5-2 の改定）: 25c＋評価値×3c、未 Restore も売れる → **一致** |
+| C22 | **回路の売値:** `trade/src/circuit-sell-prices.ts` 25c＋floor(効果値)×3c（2026-09-28 に 30c→25c）＋ パーフェクト（Fully Awakened）だけ完璧ボーナス 2^(N+1)c（N＝max(cols, rows)）、`hangar.ts` `sellCircuit`。未 Restore（Offline）の回路も売れる | §2.2 追加決定（旧 §8.5-2 の改定・完璧ボーナス）: 25c＋評価値×3c（パーフェクトは＋2^(N+1)c）、未 Restore も売れる → **一致** |
 
 ---
 
