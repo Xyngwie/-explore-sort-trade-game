@@ -49,6 +49,7 @@ import {
   setShortcutsOverlayHidden,
 } from "./game/keyboardOverlay";
 import { DEFAULT_EXPEDITION_LOADOUT } from "@estg/shared";
+import { getCoverObjects } from "./game/coverObjects";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
@@ -56,6 +57,41 @@ import {
   quirkForWingmanIndex,
   type Unit,
 } from "./game/types";
+
+// --- Determinism (test-only) ---
+// The explore sim uses Math.random for cover layout, patrol angles, hit rolls
+// and death drops. Seed it here so every selftest run sees the same sequence.
+// Production code is untouched: this only replaces Math.random inside the
+// selftest process.
+const SELFTEST_SEED = 0x5eed_e5c0;
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+Math.random = mulberry32(SELFTEST_SEED);
+
+/**
+ * Test-only fixed layout: drop any cover the unit at `pos` would snap into
+ * (cover radius + unit radius + snap margin, with slack). Mutates the cached
+ * layout array for this world only; cover rules themselves are unchanged.
+ * Root cause of the old ~10% flake: a random cover within snap range pulled
+ * the captain off the crate, out of salvage range.
+ */
+function clearCoverNear(world: ReturnType<typeof createWorld>, pos: { x: number; y: number }): void {
+  const covers = getCoverObjects(world);
+  const reach = (c: { radius: number }) => c.radius + world.leader.radius + 8 + 40;
+  for (let i = covers.length - 1; i >= 0; i--) {
+    const c = covers[i]!;
+    if (Math.hypot(c.pos.x - pos.x, c.pos.y - pos.y) <= reach(c)) covers.splice(i, 1);
+  }
+  assert.ok(covers.every((c) => Math.hypot(c.pos.x - pos.x, c.pos.y - pos.y) > reach(c)));
+}
 
 function wing(world: ReturnType<typeof createWorld>): Unit {
   const w = world.wingmen[0];
@@ -307,6 +343,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.ok(world.containers.every((c) => !c.discovered));
   // Place leader on a crate
   const crate = world.containers[0]!;
+  clearCoverNear(world, crate.pos);
   world.leader.pos = { ...crate.pos };
   tickWorld(world, 0.05, {
     move: { x: 0, y: 0 },
@@ -434,6 +471,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
   const crate = world.containers[0]!;
   crate.discovered = true;
   crate.taken = false;
+  clearCoverNear(world, crate.pos);
   world.leader.pos = { ...crate.pos };
   world.leader.salvagedCount = 0;
   const salvagedBefore = world.salvaged;
@@ -821,6 +859,9 @@ function advancePinned(
     e.hp = 0;
   }
   leader.salvagedCount = 0;
+  // Keep the straight test path free of cover so a snap can't skew distances.
+  clearCoverNear(world, { x: 400, y: 500 });
+  clearCoverNear(world, { x: 450, y: 500 });
   leader.pos = { x: 400, y: 500 };
   leader.moveTarget = null;
   const emptyStart = { ...leader.pos };
@@ -1032,6 +1073,7 @@ function advancePinned(
   const crate = world.containers[0]!;
   crate.discovered = true;
   crate.taken = false;
+  clearCoverNear(world, crate.pos);
   world.leader.pos = { ...crate.pos };
   world.leader.salvagedCount = BALANCE.cargoSpeedRefSlots + 3;
   world.salvaged = world.leader.salvagedCount;
