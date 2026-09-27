@@ -8,7 +8,11 @@ import {
   type MechId,
   emptyAmmoLoad,
 } from "./catalog";
-import { HUB_SAVE_STORAGE_KEY } from "./constants";
+import {
+  HUB_SAVE_CORRUPT_KEY_PREFIX,
+  HUB_SAVE_LEGACY_STORAGE_KEY,
+  HUB_SAVE_STORAGE_KEY,
+} from "./constants";
 import {
   createOwnedMech,
   normalizeFleet,
@@ -22,25 +26,48 @@ import {
 } from "./sort-yield";
 import {
   isCircuitLocked,
+  isCircuitOrigin,
   isCircuitOutcome,
+  isCircuitRestoreState,
   isPerfectCircuitClearance,
   normalizeCircuitBoard,
+  outcomeFromRestoreState,
   sanitizeEditorName,
   stampCircuitEditor,
   type CircuitBoardState,
+  type CircuitOrigin,
   type CircuitOutcome,
+  type CircuitRestoreState,
 } from "./circuit-board";
 
-export { HUB_SAVE_STORAGE_KEY };
+export { HUB_SAVE_STORAGE_KEY, HUB_SAVE_LEGACY_STORAGE_KEY, HUB_SAVE_CORRUPT_KEY_PREFIX };
+
+/** Current HubSave payload version (docs/HUB_SAVE_CONTRACT.md §12). */
+export const HUB_SAVE_VERSION = 3;
 
 /**
- * One circuit board known to the hub (Module 5 restore results).
- * Additive on HubSave v2 — missing → [].
+ * One circuit owned by the hub (HubSave v3; docs/CIRCUIT_DATA_MODEL_V0.md §2.1).
+ * Size = circuitBoard.cols (square). 評価値 is NOT stored — compute it from the
+ * board (`circuitEffectValue`).
  */
 export type HubCircuitRecord = {
   circuitId: string;
   circuitBoard: CircuitBoardState;
-  /** Last restore→trade outcome (also mirrored onto board.outcome). */
+  /** Restore state (source of truth). `unrestored` = not yet through Restore. */
+  restoreState: CircuitRestoreState;
+  /** Where the circuit came from. `crafted` = white board; others = used. */
+  origin: CircuitOrigin;
+  /** OwnedMech.instanceId it is equipped to; null = stash (倉庫). */
+  equippedTo: string | null;
+  /** ISO timestamp when the hub first got this circuit (optional). */
+  acquiredAt?: string;
+  /** Reserved: row key of the future circuit→command/stat table (unset for now). */
+  effectKey?: string;
+  /**
+   * @deprecated Legacy 3-value mirror of `restoreState` kept so existing callers
+   * keep working (`unrestored` → "offline"). Derived on normalize; do not set
+   * independently.
+   */
   outcome: CircuitOutcome;
   /** ISO timestamp of last upsert (optional). */
   updatedAt?: string;
@@ -57,6 +84,30 @@ export type HubCircuitRecord = {
 export type FrontCellCoord = {
   sx: number;
   sy: number;
+};
+
+export type FieldDropCause = "wreck_not_carried" | "left_behind" | "rescue_abort";
+
+export const FIELD_DROP_CAUSES: readonly FieldDropCause[] = [
+  "wreck_not_carried",
+  "left_behind",
+  "rescue_abort",
+] as const;
+
+/**
+ * A circuit whose ownership was lost on the battlefield (HubSave v3 `fieldDrops`).
+ * Recorded per invade front board (`frontSeed`) and cell — no in-Explore coords.
+ * `circuit` is the owned record as it was (equippedTo forced null) so recovery
+ * returns it unchanged (設計メモ §5 旧 §8.4-3). docs/CIRCUIT_DATA_MODEL_V0.md §5.
+ */
+export type FieldCircuitDrop = {
+  dropId: string;
+  frontSeed: number;
+  cell: FrontCellCoord;
+  circuit: HubCircuitRecord;
+  cause: FieldDropCause;
+  fromMechInstanceId?: string;
+  droppedAt: string;
 };
 
 /**
@@ -115,6 +166,15 @@ export type HubSnapshot = {
   unopenedContainers: number;
   selectedMechId: MechId;
   selectedAmmoId: AmmoId;
+  /**
+   * HubSave v3: largest side N restored Perfect (Fully Awakened + locked).
+   * 0 = none yet. Never decreases. Junk craft cap = max(2, N + 1).
+   */
+  perfectMaxSize: number;
+  /** HubSave v3: circuits lost on the battlefield (ownership lost). */
+  fieldDrops: FieldCircuitDrop[];
+  /** HubSave v3: recently applied Explore sortie ids (apply-once guard). */
+  appliedSortieIds?: string[];
 };
 
 /** @deprecated Prefer HubSaveV2 — kept for migration typing. */
@@ -133,14 +193,21 @@ export type HubSaveV1 = {
   };
 };
 
+/** @deprecated Legacy payload (HubSnapshot before v3 fields) — migration typing only. */
 export type HubSaveV2 = {
   v: 2;
+  savedAt: string;
+  hub: Record<string, unknown>;
+};
+
+export type HubSaveV3 = {
+  v: 3;
   savedAt: string;
   hub: HubSnapshot;
 };
 
 /** Current on-disk / in-memory save shape. */
-export type HubSave = HubSaveV2;
+export type HubSave = HubSaveV3;
 
 export const INITIAL_HUB: HubSnapshot = {
   credits: 500,
@@ -154,14 +221,26 @@ export const INITIAL_HUB: HubSnapshot = {
   unopenedContainers: 0,
   selectedMechId: "mech_gen1",
   selectedAmmoId: "ammo_standard",
+  perfectMaxSize: 0,
+  fieldDrops: [],
+  appliedSortieIds: [],
 };
 
 export const HUB_LIMITS = {
   maxMechs: 3,
   maxAmmo: 100,
   materialUnitPrice: 10,
-  /** Cap of persisted restore circuits (most recent kept). */
+  /**
+   * @deprecated HubSave v3 no longer truncates circuits (設計メモ §2 旧 §8.2-7).
+   * Kept only because trade junk craft still references it (removed in impl B).
+   */
   maxCircuits: 8,
+  /** Base circuit slots per mech (設計メモ §2). Common slot expansion is undecided → always this. */
+  mechBaseCircuitSlots: 1,
+  /** How many recent applied sortie ids to keep (apply-once guard). */
+  maxAppliedSortieIds: 20,
+  /** Largest board side accepted anywhere (normalizeCircuitBoard limit). */
+  maxCircuitSide: 64,
   /** Max opened/flagged cells stored in frontProgress (25×25 AOI). */
   maxFrontCells: 625,
 } as const;
@@ -188,77 +267,197 @@ function sanitizeCircuitId(raw: unknown, fallback = "circuit"): string {
   return t;
 }
 
+const EFFECT_KEY_RE = /^[a-zA-Z0-9_.:-]{1,64}$/;
+const MECH_INSTANCE_ID_MAX = 128;
+
+function sanitizeMechInstanceId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t || t.length > MECH_INSTANCE_ID_MAX) return null;
+  return t;
+}
+
+function sanitizeIso(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim().slice(0, 40);
+  return t || undefined;
+}
+
 /**
- * Normalize HubSnapshot.circuits (array or id→record map). Dedupes by circuitId;
- * most recent / first-seen wins order; capped at HUB_LIMITS.maxCircuits.
+ * Normalize one loose circuit record (v2 or v3 shape). Returns null when the
+ * board or state is unusable (the caller drops just that one entry).
+ * v2 records (no restoreState) map outcome → restoreState as-is (U2),
+ * origin → "legacy", equippedTo → null.
  */
-export function normalizeCircuits(
+export function normalizeCircuitRecord(
   raw: unknown,
-  fallback: HubCircuitRecord[] = [],
-  max = HUB_LIMITS.maxCircuits,
-): HubCircuitRecord[] {
-  let list: unknown[] = [];
-  if (Array.isArray(raw)) {
-    list = raw;
-  } else if (raw && typeof raw === "object") {
-    list = Object.entries(raw as Record<string, unknown>).map(([id, v]) => {
+  fallbackId = "circuit",
+): HubCircuitRecord | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const board = normalizeCircuitBoard(obj.circuitBoard ?? obj.board);
+  if (!board) return null;
+  let restoreState: CircuitRestoreState;
+  if (isCircuitRestoreState(obj.restoreState)) {
+    restoreState = obj.restoreState;
+  } else {
+    const outcomeRaw = obj.outcome ?? board.outcome;
+    if (!isCircuitOutcome(outcomeRaw)) return null;
+    restoreState = outcomeRaw;
+  }
+  const outcome = outcomeFromRestoreState(restoreState);
+  const circuitId = sanitizeCircuitId(obj.circuitId ?? board.puzzleId, fallbackId);
+
+  let boardFinal: CircuitBoardState = { ...board };
+  if (restoreState === "unrestored") delete boardFinal.outcome;
+  else boardFinal.outcome = outcome;
+  const editor =
+    sanitizeEditorName(obj.lastEditorName) ??
+    sanitizeEditorName(board.lastEditorName);
+  if (editor) boardFinal = { ...boardFinal, lastEditorName: editor };
+  const locked =
+    obj.locked === true ||
+    board.locked === true ||
+    isPerfectCircuitClearance({
+      outcome: restoreState === "unrestored" ? null : outcome,
+      perfect: board.perfect === true || obj.perfect === true,
+    });
+  if (locked) {
+    boardFinal = { ...boardFinal, locked: true, perfect: true };
+  }
+  const rec: HubCircuitRecord = {
+    circuitId,
+    circuitBoard: boardFinal,
+    restoreState,
+    origin: isCircuitOrigin(obj.origin) ? obj.origin : "legacy",
+    equippedTo: sanitizeMechInstanceId(obj.equippedTo),
+    outcome,
+  };
+  const acquiredAt = sanitizeIso(obj.acquiredAt);
+  if (acquiredAt) rec.acquiredAt = acquiredAt;
+  const updatedAt = sanitizeIso(obj.updatedAt);
+  if (updatedAt) rec.updatedAt = updatedAt;
+  if (editor) rec.lastEditorName = editor;
+  if (locked) rec.locked = true;
+  if (typeof obj.effectKey === "string" && EFFECT_KEY_RE.test(obj.effectKey)) {
+    rec.effectKey = obj.effectKey;
+  }
+  return rec;
+}
+
+function circuitListFromRaw(raw: unknown, fallback: unknown[]): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    return Object.entries(raw as Record<string, unknown>).map(([id, v]) => {
       if (v && typeof v === "object" && !Array.isArray(v)) {
         return { circuitId: id, ...(v as Record<string, unknown>) };
       }
       return null;
     });
-  } else if (raw == null) {
-    list = fallback;
-  } else {
-    list = fallback;
   }
+  return fallback;
+}
 
+/**
+ * Normalize HubSnapshot.circuits (array or id→record map). Dedupes by circuitId;
+ * first-seen wins (list is most recent first). HubSave v3: **no count cap** by
+ * default (maxCircuits truncation abolished); `max` is kept for callers/tests.
+ * Invalid entries are dropped one by one (the rest are kept).
+ */
+export function normalizeCircuits(
+  raw: unknown,
+  fallback: HubCircuitRecord[] = [],
+  max = Number.POSITIVE_INFINITY,
+): HubCircuitRecord[] {
+  return normalizeCircuitsWithReport(raw, fallback, max).circuits;
+}
+
+/** Same as normalizeCircuits, plus how many entries were dropped as unreadable / duplicate. */
+export function normalizeCircuitsWithReport(
+  raw: unknown,
+  fallback: HubCircuitRecord[] = [],
+  max = Number.POSITIVE_INFINITY,
+): { circuits: HubCircuitRecord[]; dropped: number } {
+  const list = circuitListFromRaw(raw, fallback);
   const out: HubCircuitRecord[] = [];
   const seen = new Set<string>();
+  let dropped = 0;
   for (const item of list) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-    const obj = item as Record<string, unknown>;
-    const board = normalizeCircuitBoard(obj.circuitBoard ?? obj.board);
-    if (!board) continue;
-    const outcomeRaw = obj.outcome ?? board.outcome;
-    if (!isCircuitOutcome(outcomeRaw)) continue;
-    const circuitId = sanitizeCircuitId(
-      obj.circuitId ?? board.puzzleId,
-      `circuit_${out.length}`,
-    );
-    if (seen.has(circuitId)) continue;
-    seen.add(circuitId);
-    const boardWithOutcome: CircuitBoardState = {
-      ...board,
-      outcome: outcomeRaw,
-    };
-    const editor =
-      sanitizeEditorName(obj.lastEditorName) ??
-      sanitizeEditorName(board.lastEditorName);
-    let boardFinal: CircuitBoardState = boardWithOutcome;
-    if (editor) boardFinal = { ...boardFinal, lastEditorName: editor };
-    const locked =
-      obj.locked === true ||
-      board.locked === true ||
-      isPerfectCircuitClearance({
-        outcome: outcomeRaw,
-        perfect: board.perfect === true || obj.perfect === true,
-      });
-    if (locked) {
-      boardFinal = { ...boardFinal, locked: true, perfect: true };
-    }
-    const rec: HubCircuitRecord = {
-      circuitId,
-      circuitBoard: boardFinal,
-      outcome: outcomeRaw,
-    };
-    if (typeof obj.updatedAt === "string" && obj.updatedAt.trim()) {
-      rec.updatedAt = obj.updatedAt.trim().slice(0, 40);
-    }
-    if (editor) rec.lastEditorName = editor;
-    if (locked) rec.locked = true;
-    out.push(rec);
     if (out.length >= max) break;
+    const rec = normalizeCircuitRecord(item, `circuit_${out.length}`);
+    if (!rec || seen.has(rec.circuitId)) {
+      dropped += 1;
+      continue;
+    }
+    seen.add(rec.circuitId);
+    out.push(rec);
+  }
+  return { circuits: out, dropped };
+}
+
+/** Board side used for size rules (square boards; non-square → min side, U13). */
+export function circuitSize(
+  rec: Pick<HubCircuitRecord, "circuitBoard">,
+): number {
+  return Math.max(0, Math.min(rec.circuitBoard.cols, rec.circuitBoard.rows));
+}
+
+/** Perfect (Fully Awakened + locked) → counts toward perfectMaxSize (U10). */
+export function isPerfectRestoredCircuit(
+  rec: Pick<HubCircuitRecord, "restoreState" | "locked" | "circuitBoard">,
+): boolean {
+  return (
+    rec.restoreState === "fully_awakened" &&
+    (rec.locked === true || rec.circuitBoard.locked === true)
+  );
+}
+
+/** Largest Perfect side among records (migration seed for perfectMaxSize, U11). */
+export function derivePerfectMaxSize(circuits: readonly HubCircuitRecord[]): number {
+  let max = 0;
+  for (const c of circuits) {
+    if (isPerfectRestoredCircuit(c)) max = Math.max(max, circuitSize(c));
+  }
+  return max;
+}
+
+/** Circuit slots of one mech. Common slot expansion is undecided (U4) → base only. */
+export function mechSlotCapacity(_mech?: Pick<OwnedMech, "instanceId"> | null): number {
+  return HUB_LIMITS.mechBaseCircuitSlots;
+}
+
+/**
+ * Equip integrity (§6.2): equippedTo pointing at a missing mech → stash;
+ * more equipped than a mech's slots → keep the newest (updatedAt, then list
+ * order), the rest go to stash. No squad-wide cap yet (U3).
+ */
+function enforceEquipIntegrity(
+  circuits: HubCircuitRecord[],
+  fleet: readonly OwnedMech[],
+): HubCircuitRecord[] {
+  const mechs = new Map(fleet.map((m) => [m.instanceId, m]));
+  const byMech = new Map<string, number[]>();
+  const out = circuits.map((c) => ({ ...c }));
+  out.forEach((c, i) => {
+    if (c.equippedTo == null) return;
+    if (!mechs.has(c.equippedTo)) {
+      c.equippedTo = null;
+      return;
+    }
+    const arr = byMech.get(c.equippedTo) ?? [];
+    arr.push(i);
+    byMech.set(c.equippedTo, arr);
+  });
+  for (const [mechId, idxs] of byMech) {
+    const cap = mechSlotCapacity(mechs.get(mechId));
+    if (idxs.length <= cap) continue;
+    const ranked = [...idxs].sort((a, b) => {
+      const ta = out[a]!.updatedAt ?? "";
+      const tb = out[b]!.updatedAt ?? "";
+      if (ta !== tb) return ta < tb ? 1 : -1;
+      return a - b;
+    });
+    for (const i of ranked.slice(cap)) out[i]!.equippedTo = null;
   }
   return out;
 }
@@ -362,6 +561,73 @@ export function normalizeFrontProgress(
   return out;
 }
 
+const DROP_ID_RE = /^[a-zA-Z0-9_.:-]{1,160}$/;
+const SORTIE_ID_RE = /^[a-zA-Z0-9_.:-]{1,64}$/;
+
+export function sanitizeSortieId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  return SORTIE_ID_RE.test(t) ? t : null;
+}
+
+function isFieldDropCause(x: unknown): x is FieldDropCause {
+  return typeof x === "string" && (FIELD_DROP_CAUSES as readonly string[]).includes(x);
+}
+
+/** Normalize one field drop; null when unusable (dropped individually). */
+export function normalizeFieldDrop(raw: unknown): FieldCircuitDrop | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.dropId !== "string" || !DROP_ID_RE.test(obj.dropId.trim())) return null;
+  const seedNum = typeof obj.frontSeed === "number" ? obj.frontSeed : Number(obj.frontSeed);
+  if (!Number.isFinite(seedNum)) return null;
+  const cell = normalizeFrontCoord(obj.cell);
+  if (!cell) return null;
+  const circuit = normalizeCircuitRecord(obj.circuit);
+  if (!circuit) return null;
+  const drop: FieldCircuitDrop = {
+    dropId: obj.dropId.trim(),
+    frontSeed: seedNum >>> 0,
+    cell,
+    circuit: { ...circuit, equippedTo: null },
+    cause: isFieldDropCause(obj.cause) ? obj.cause : "wreck_not_carried",
+    droppedAt: sanitizeIso(obj.droppedAt) ?? new Date(0).toISOString(),
+  };
+  const from = sanitizeMechInstanceId(obj.fromMechInstanceId);
+  if (from) drop.fromMechInstanceId = from;
+  return drop;
+}
+
+export function normalizeFieldDrops(raw: unknown): FieldCircuitDrop[] {
+  if (!Array.isArray(raw)) return [];
+  const out: FieldCircuitDrop[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const d = normalizeFieldDrop(item);
+    if (!d || seen.has(d.dropId)) continue;
+    seen.add(d.dropId);
+    out.push(d);
+  }
+  return out;
+}
+
+function normalizeAppliedSortieIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    const id = sanitizeSortieId(item);
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out.slice(-HUB_LIMITS.maxAppliedSortieIds);
+}
+
+function normalizePerfectMaxSize(raw: unknown, circuits: readonly HubCircuitRecord[]): number {
+  if (raw == null) return derivePerfectMaxSize(circuits);
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return derivePerfectMaxSize(circuits);
+  return Math.max(0, Math.min(HUB_LIMITS.maxCircuitSide, Math.floor(n)));
+}
+
 export function normalizeHubSnapshot(
   raw: Partial<HubSnapshot> | Record<string, unknown> | null | undefined,
   fallback: HubSnapshot = INITIAL_HUB,
@@ -402,12 +668,28 @@ export function normalizeHubSnapshot(
     fallback.inventory ?? emptyYieldBag(),
   );
 
-  const circuits = normalizeCircuits(
-    (raw as HubSnapshot | undefined)?.circuits,
-    fallback.circuits ?? [],
+  const circuits = enforceEquipIntegrity(
+    normalizeCircuits(
+      (raw as HubSnapshot | undefined)?.circuits,
+      fallback.circuits ?? [],
+    ),
+    fleet,
   );
 
   const rawRec = raw as Record<string, unknown> | null | undefined;
+  // Missing (v1/v2) → derived from Perfect circuits (U11); stored v3 value kept as-is.
+  const perfectMaxSize = normalizePerfectMaxSize(
+    rawRec && "perfectMaxSize" in rawRec
+      ? rawRec.perfectMaxSize
+      : rawRec == null
+        ? fallback.perfectMaxSize
+        : undefined,
+    circuits,
+  );
+  const fieldDrops = normalizeFieldDrops(rawRec?.fieldDrops ?? fallback.fieldDrops ?? []);
+  const appliedSortieIds = normalizeAppliedSortieIds(
+    rawRec?.appliedSortieIds ?? fallback.appliedSortieIds ?? [],
+  );
   const frontProgress = normalizeFrontProgress(
     rawRec?.frontProgress ?? rawRec?.invadeBoard,
     fallback.frontProgress ?? null,
@@ -439,46 +721,63 @@ export function normalizeHubSnapshot(
     ),
     selectedMechId,
     selectedAmmoId,
+    perfectMaxSize,
+    fieldDrops,
+    appliedSortieIds,
   };
 }
 
-export function createHubSave(hub: HubSnapshot, at = new Date()): HubSaveV2 {
+export function createHubSave(hub: HubSnapshot, at = new Date()): HubSaveV3 {
   return {
-    v: 2,
+    v: 3,
     savedAt: at.toISOString(),
     hub: normalizeHubSnapshot(hub),
   };
 }
 
-/** Convert a parsed v1 (or loose) hub blob into a v2 save. */
-export function migrateHubSaveV1ToV2(raw: HubSaveV1 | HubSaveV2 | {
+/**
+ * Convert a parsed v1 / v2 / v3 (or loose) hub blob into a v3 save.
+ * Idempotent: migrating the same input twice yields the same result (no id reassignment).
+ */
+export function migrateHubSaveToV3(raw: {
   v?: number;
   savedAt?: string;
   hub?: unknown;
-}): HubSaveV2 {
+}): HubSaveV3 {
   const savedAt =
     typeof raw.savedAt === "string" ? raw.savedAt : new Date(0).toISOString();
   const hub = normalizeHubSnapshot(
     (raw.hub ?? {}) as Partial<HubSnapshot>,
   );
-  return { v: 2, savedAt, hub };
+  return { v: 3, savedAt, hub };
 }
 
-export function parseHubSave(raw: unknown): HubSaveV2 | null {
-  if (!raw || typeof raw !== "object") return null;
+/** @deprecated Use migrateHubSaveToV3 (now always returns a v3 save). */
+export const migrateHubSaveV1ToV2 = migrateHubSaveToV3;
+
+/** Payload version of a raw blob, or null when it is not a HubSave-shaped object. */
+function rawSaveVersion(raw: unknown): number | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
-  if (obj.v !== 1 && obj.v !== 2) return null;
+  if (typeof obj.v !== "number" || !Number.isInteger(obj.v)) return null;
   if (!obj.hub || typeof obj.hub !== "object") return null;
-  return migrateHubSaveV1ToV2(
-    obj as { v: number; savedAt?: string; hub: unknown },
+  return obj.v;
+}
+
+/** Accepts v1 / v2 / v3 → normalized v3. Newer (v ≥ 4) or malformed → null. */
+export function parseHubSave(raw: unknown): HubSaveV3 | null {
+  const v = rawSaveVersion(raw);
+  if (v !== 1 && v !== 2 && v !== 3) return null;
+  return migrateHubSaveToV3(
+    raw as { v: number; savedAt?: string; hub: unknown },
   );
 }
 
-export function serializeHubSave(save: HubSaveV2): string {
+export function serializeHubSave(save: HubSaveV3): string {
   return JSON.stringify(save);
 }
 
-export function deserializeHubSave(json: string): HubSaveV2 | null {
+export function deserializeHubSave(json: string): HubSaveV3 | null {
   try {
     return parseHubSave(JSON.parse(json));
   } catch {
@@ -486,32 +785,184 @@ export function deserializeHubSave(json: string): HubSaveV2 | null {
   }
 }
 
-/** Browser helper — safe no-op outside window. */
-export function loadHubSaveFromLocalStorage(
-  storage?: Pick<Storage, "getItem"> | null,
-): HubSaveV2 | null {
-  const store =
-    storage ??
-    (typeof globalThis !== "undefined" && "localStorage" in globalThis
-      ? globalThis.localStorage
-      : null);
-  if (!store) return null;
-  const raw = store.getItem(HUB_SAVE_STORAGE_KEY);
-  if (!raw) return null;
-  return deserializeHubSave(raw);
+export type HubSaveLoadStatus =
+  /** Nothing stored under either key. */
+  | "empty"
+  /** Read from the v3 key. */
+  | "ok"
+  /** v3 key absent; read + migrated from the legacy key (legacy left untouched). */
+  | "migrated"
+  /** Stored text was unreadable; copied to `backupKey`, caller continues from INITIAL_HUB. */
+  | "corrupt_backed_up"
+  /** Stored save is a newer version; opened best-effort, saves are refused. */
+  | "newer_read_only";
+
+export type HubSaveLoadResult = {
+  status: HubSaveLoadStatus;
+  save: HubSaveV3 | null;
+  /** Storage key the save was read from (when any). */
+  sourceKey?: string;
+  /** Where unreadable text was copied (corrupt_backed_up). */
+  backupKey?: string;
+  /** Stored payload version (newer_read_only / migrated). */
+  storedVersion?: number;
+  /** Circuit entries dropped individually as unreadable / duplicate. */
+  droppedCircuits: number;
+};
+
+type LoadStorage = Pick<Storage, "getItem"> & Partial<Pick<Storage, "setItem">>;
+type SaveStorage = Pick<Storage, "setItem"> & Partial<Pick<Storage, "getItem">>;
+
+function defaultStorage(): Storage | null {
+  return typeof globalThis !== "undefined" && "localStorage" in globalThis
+    ? globalThis.localStorage
+    : null;
 }
 
-export function saveHubSaveToLocalStorage(
-  hub: HubSnapshot,
-  storage?: Pick<Storage, "setItem"> | null,
-): boolean {
-  const store =
-    storage ??
-    (typeof globalThis !== "undefined" && "localStorage" in globalThis
-      ? globalThis.localStorage
-      : null);
+const CORRUPT_LAST_KEY = `${HUB_SAVE_CORRUPT_KEY_PREFIX}lastKey`;
+
+/** Copy unreadable save text aside (deduped against the last backup). */
+function backupCorruptSave(store: LoadStorage, text: string, at: Date): string | undefined {
+  if (!store.setItem) return undefined;
+  try {
+    const lastKey = store.getItem(CORRUPT_LAST_KEY);
+    if (lastKey && store.getItem(lastKey) === text) return lastKey;
+    const key = `${HUB_SAVE_CORRUPT_KEY_PREFIX}${at.toISOString()}`;
+    store.setItem(key, text);
+    store.setItem(CORRUPT_LAST_KEY, key);
+    return key;
+  } catch {
+    return undefined;
+  }
+}
+
+function countDroppedCircuits(rawHub: unknown): number {
+  if (!rawHub || typeof rawHub !== "object") return 0;
+  return normalizeCircuitsWithReport((rawHub as Record<string, unknown>).circuits, []).dropped;
+}
+
+function loadFromKey(
+  store: LoadStorage,
+  key: string,
+  at: Date,
+): HubSaveLoadResult | null {
+  const text = store.getItem(key);
+  if (text == null || text === "") return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return {
+      status: "corrupt_backed_up",
+      save: null,
+      sourceKey: key,
+      backupKey: backupCorruptSave(store, text, at),
+      droppedCircuits: 0,
+    };
+  }
+  const v = rawSaveVersion(raw);
+  if (v != null && v > HUB_SAVE_VERSION) {
+    // Newer build's save: open best-effort (additive fields ignored), never write.
+    return {
+      status: "newer_read_only",
+      save: migrateHubSaveToV3(raw as { savedAt?: string; hub: unknown }),
+      sourceKey: key,
+      storedVersion: v,
+      droppedCircuits: countDroppedCircuits((raw as { hub: unknown }).hub),
+    };
+  }
+  const save = parseHubSave(raw);
+  if (!save) {
+    return {
+      status: "corrupt_backed_up",
+      save: null,
+      sourceKey: key,
+      backupKey: backupCorruptSave(store, text, at),
+      droppedCircuits: 0,
+    };
+  }
+  return {
+    status: key === HUB_SAVE_STORAGE_KEY ? "ok" : "migrated",
+    save,
+    sourceKey: key,
+    storedVersion: v ?? undefined,
+    droppedCircuits: countDroppedCircuits((raw as { hub: unknown }).hub),
+  };
+}
+
+/**
+ * Load order (docs/HUB_SAVE_CONTRACT.md §12): ① v3 key → ② else legacy key
+ * (v1/v2, migrated) → ③ write the migrated save to the v3 key (when the storage
+ * can write). The legacy key is never modified or removed. Unreadable text is
+ * backed up before any caller can overwrite it. A legacy save from a newer
+ * build or a corrupt legacy save is never copied to the v3 key.
+ */
+export function loadHubSaveWithStatus(
+  storage?: LoadStorage | null,
+  at = new Date(),
+): HubSaveLoadResult {
+  const store = storage ?? defaultStorage();
+  if (!store) return { status: "empty", save: null, droppedCircuits: 0 };
+  try {
+    const current = loadFromKey(store, HUB_SAVE_STORAGE_KEY, at);
+    if (current) return current;
+    const legacy = loadFromKey(store, HUB_SAVE_LEGACY_STORAGE_KEY, at);
+    if (legacy) {
+      // ③ Migrated → write the v3 key once (legacy key untouched, kept as backup).
+      // From here on, an old-build tab writing the legacy key cannot affect v3.
+      if (legacy.status === "migrated" && legacy.save && store.setItem) {
+        try {
+          store.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(legacy.save));
+        } catch {
+          // Quota / access failure: keep the in-memory migrated save.
+        }
+      }
+      return legacy;
+    }
+  } catch {
+    // Storage access failure → behave as empty (never throw into callers).
+  }
+  return { status: "empty", save: null, droppedCircuits: 0 };
+}
+
+/** True when the stored v3-key save is from a newer build (saves must not overwrite it). */
+export function isStoredHubSaveNewer(storage?: Pick<Storage, "getItem"> | null): boolean {
+  const store = storage ?? defaultStorage();
   if (!store) return false;
   try {
+    const text = store.getItem(HUB_SAVE_STORAGE_KEY);
+    if (!text) return false;
+    const v = rawSaveVersion(JSON.parse(text));
+    return v != null && v > HUB_SAVE_VERSION;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Browser helper — safe no-op outside window. Goes through the v3 load order
+ * (v3 key → legacy key migration). See loadHubSaveWithStatus for details.
+ */
+export function loadHubSaveFromLocalStorage(
+  storage?: LoadStorage | null,
+): HubSaveV3 | null {
+  return loadHubSaveWithStatus(storage).save;
+}
+
+/**
+ * Writes a v3 save to the v3 key. Refuses (returns false) when the stored
+ * v3-key save is from a newer build (read-only). Never touches the legacy key.
+ */
+export function saveHubSaveToLocalStorage(
+  hub: HubSnapshot,
+  storage?: SaveStorage | null,
+): boolean {
+  const store = storage ?? defaultStorage();
+  if (!store) return false;
+  try {
+    if (store.getItem && isStoredHubSaveNewer(store as Pick<Storage, "getItem">)) {
+      return false;
+    }
     store.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(createHubSave(hub)));
     return true;
   } catch {
@@ -519,15 +970,16 @@ export function saveHubSaveToLocalStorage(
   }
 }
 
+/**
+ * Explicit reset: removes both the v3 key and the legacy key (otherwise the
+ * next load would re-migrate from the legacy key). Corrupt backups are kept.
+ */
 export function clearHubSaveFromLocalStorage(
   storage?: Pick<Storage, "removeItem"> | null,
 ): void {
-  const store =
-    storage ??
-    (typeof globalThis !== "undefined" && "localStorage" in globalThis
-      ? globalThis.localStorage
-      : null);
+  const store = storage ?? defaultStorage();
   store?.removeItem(HUB_SAVE_STORAGE_KEY);
+  store?.removeItem(HUB_SAVE_LEGACY_STORAGE_KEY);
 }
 
 /** Apply Module 2 import onto a hub snapshot (materials += n). */
@@ -594,7 +1046,7 @@ export function spendUnopenedContainers(
 }
 
 
-/** Upsert a restore circuit into hub.circuits (most recent first; capped). */
+/** Upsert a restore circuit into hub.circuits (most recent first; no cap in v3). */
 export function upsertCircuitIntoHub(
   hub: HubSnapshot,
   input: {
@@ -608,6 +1060,8 @@ export function upsertCircuitIntoHub(
     digitRate?: number;
     loopClosed?: boolean;
     perfect?: boolean;
+    /** Origin for a NEW record (default "legacy"). Existing records keep theirs. */
+    origin?: CircuitOrigin;
   },
   at = new Date(),
 ): HubSnapshot {
@@ -654,17 +1108,25 @@ export function upsertCircuitIntoHub(
     typeof input.updatedAt === "string" && input.updatedAt.trim()
       ? input.updatedAt.trim().slice(0, 40)
       : at.toISOString();
+  // v3: a Restore result keeps the circuit's equip / origin / acquiredAt / effectKey.
   const nextRec: HubCircuitRecord = {
     circuitId,
     circuitBoard: boardFinal,
+    restoreState: input.outcome,
+    origin: existing?.origin ?? (isCircuitOrigin(input.origin) ? input.origin : "legacy"),
+    equippedTo: existing?.equippedTo ?? null,
     outcome: input.outcome,
     updatedAt,
+    acquiredAt: existing?.acquiredAt ?? updatedAt,
   };
+  if (existing?.effectKey) nextRec.effectKey = existing.effectKey;
   if (editor) nextRec.lastEditorName = editor;
   if (locked) nextRec.locked = true;
 
   const rest = (hub.circuits ?? []).filter((c) => c.circuitId !== circuitId);
   const circuits = normalizeCircuits([nextRec, ...rest]);
+  // perfectMaxSize is NOT raised here: the restore-import update is impl B
+  // (docs/CIRCUIT_DATA_MODEL_V0.md §7.1 / §8). Use recordPerfectSize().
   return normalizeHubSnapshot({ ...hub, circuits });
 }
 

@@ -55,6 +55,16 @@ URL（仮・既存クエリに加算）:
 
 `circuitBonuses` は HubSave.circuits の outcome 集計（[`RESTORE_V0.md`](./RESTORE_V0.md) §5.4.1）。explore は `dur` を帰還摩耗から差し引く。
 
+**加算（HubSave v3、[`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md) §4）:** 任意キー `mechCircuits`。出撃する機体ごとの装着回路（`TradeToExplorePayload.mechCircuits?: Record<instanceId, MechCircuitEntry[]>`、`MechCircuitEntry = { circuitId, restoreState, effect, effectKey? }`）。
+
+```text
+&mechCircuits=owned_a~junk_craft_x*fa*8;owned_b~c_2*by*3
+```
+
+- 形: `instanceId~circuitId*状態*評価値[*effectKey],…;instanceId~…`。状態は `fa`／`by`／`off`／`un`。区切り記号（`~ ; , *`）を含む ID は載せない。
+- builder（`buildTradeToExploreUrl`）は `deployedInstanceIds` に含まれる機体だけを載せ、空ならキーを付けない。parser は `encodeMechCircuitsCompact`／`parseMechCircuitsCompact`。
+- キーがない URL は今までと同じ（`mechCircuits` フィールド自体が付かない）。trade が載せ始めるのは実装 D、explore が使うのは実装 E。
+
 - `deployedInstanceIds` 省略時は v1 互換（件数のみ）。explore 最小実装は件数フォールバック可。
 - 送信側（hub）は **必ず `canDeploy` で濾した ID だけ**を載せる。
 

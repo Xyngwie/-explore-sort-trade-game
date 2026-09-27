@@ -1,4 +1,4 @@
-import { HUB_SAVE_STORAGE_KEY, normalizeHubSnapshot, type HubSnapshot } from "@estg/shared";
+import { loadHubSaveFromLocalStorage, saveHubSaveToLocalStorage, type HubSnapshot } from "@estg/shared";
 
 const PENDING_SORT_UNOPENED_KEY = "wreckline.pendingSortUnopenedBack.v1";
 const SORT_HANDOFF_KEYS = ["importMaterials", "craftMultiplier", "yieldBag", "depositUnopenedContainers"];
@@ -10,10 +10,8 @@ function readCount(raw: string | null): number {
 
 function readSavedHub(): HubSnapshot | null {
   try {
-    const raw = localStorage.getItem(HUB_SAVE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { hub?: Partial<HubSnapshot> } | null;
-    return parsed?.hub ? normalizeHubSnapshot(parsed.hub) : null;
+    // HubSave v3 load order (v3 key → legacy-key migration) via shared.
+    return loadHubSaveFromLocalStorage()?.hub ?? null;
   } catch {
     return null;
   }
@@ -25,10 +23,7 @@ function saveHubWithUnopened(unopenedContainers: number): void {
   const next = Math.max(0, Math.floor(unopenedContainers));
   if (hub.unopenedContainers >= next) return;
   try {
-    localStorage.setItem(
-      HUB_SAVE_STORAGE_KEY,
-      JSON.stringify({ v: 2, savedAt: new Date().toISOString(), hub: { ...hub, unopenedContainers: next } }),
-    );
+    saveHubSaveToLocalStorage({ ...hub, unopenedContainers: next });
   } catch {
     // Never block HUB navigation because a storage write failed.
   }

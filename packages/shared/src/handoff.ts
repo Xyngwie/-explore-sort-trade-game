@@ -22,6 +22,7 @@ import {
   sanitizeEditorName,
   type CircuitBoardState,
   type CircuitOutcome,
+  type CircuitRestoreState,
 } from "./circuit-board";
 import {
   encodeCircuitBonusesCompact,
@@ -84,7 +85,108 @@ export type TradeToExplorePayload = {
     AggregatedCircuitBonuses,
     "craftMultiplier" | "repairDiscount" | "durabilityBuffer"
   >;
+  /**
+   * Optional per-mech equipped circuits (HubSave v3, docs/CIRCUIT_DATA_MODEL_V0.md §4).
+   * Keys are deployedInstanceIds entries. Absent → explore behaves as before (no circuits).
+   */
+  mechCircuits?: Record<string, MechCircuitEntry[]>;
 };
+
+/** One equipped circuit sent to explore (facts only; conversion is explore-side). */
+export type MechCircuitEntry = {
+  circuitId: string;
+  /** Unrestored / Offline are sent too (display); only FA / Bypass take effect. */
+  restoreState: CircuitRestoreState;
+  /** 評価値 at deploy time (circuitEffectValue). Non-negative integer. */
+  effect: number;
+  /** Reserved (circuit→command/stat table key). */
+  effectKey?: string;
+};
+
+const MECH_CIRCUIT_STATE_CODE: Record<CircuitRestoreState, string> = {
+  fully_awakened: "fa",
+  bypass: "by",
+  offline: "off",
+  unrestored: "un",
+};
+
+const MECH_CIRCUIT_CODE_STATE: Record<string, CircuitRestoreState> = {
+  fa: "fully_awakened",
+  by: "bypass",
+  off: "offline",
+  un: "unrestored",
+};
+
+/** Separators used by the compact form; ids containing them are skipped. */
+const MECH_CIRCUIT_SEPARATORS = /[~;,*]/;
+const MECH_CIRCUIT_TOKEN_RE = /^[a-zA-Z0-9_.:-]{1,128}$/;
+
+function isMechCircuitToken(id: string): boolean {
+  return MECH_CIRCUIT_TOKEN_RE.test(id) && !MECH_CIRCUIT_SEPARATORS.test(id);
+}
+
+/**
+ * Compact form: `instanceId~circuitId*state*effect[*effectKey],…;instanceId~…`
+ * (state = fa / by / off / un). Mechs with no valid entries are omitted.
+ * When `onlyInstanceIds` is given, other mechs are dropped.
+ */
+export function encodeMechCircuitsCompact(
+  mechCircuits: Record<string, readonly MechCircuitEntry[]>,
+  onlyInstanceIds?: readonly string[],
+): string {
+  const allow = onlyInstanceIds ? new Set(onlyInstanceIds.map((id) => id.trim())) : null;
+  const groups: string[] = [];
+  for (const [rawId, entries] of Object.entries(mechCircuits)) {
+    const instanceId = rawId.trim();
+    if (!isMechCircuitToken(instanceId)) continue;
+    if (allow && !allow.has(instanceId)) continue;
+    const parts: string[] = [];
+    for (const e of entries ?? []) {
+      if (!e || !isMechCircuitToken(e.circuitId)) continue;
+      const code = MECH_CIRCUIT_STATE_CODE[e.restoreState];
+      if (!code) continue;
+      const effect = Number.isFinite(e.effect) ? Math.max(0, Math.floor(e.effect)) : 0;
+      let part = `${e.circuitId}*${code}*${effect}`;
+      if (e.effectKey && isMechCircuitToken(e.effectKey)) part += `*${e.effectKey}`;
+      parts.push(part);
+    }
+    if (parts.length > 0) groups.push(`${instanceId}~${parts.join(",")}`);
+  }
+  return groups.join(";");
+}
+
+/** Lenient parse of the compact form; malformed groups / entries are skipped. */
+export function parseMechCircuitsCompact(
+  raw: string | null | undefined,
+): Record<string, MechCircuitEntry[]> {
+  const out: Record<string, MechCircuitEntry[]> = {};
+  if (!raw) return out;
+  for (const group of raw.split(";")) {
+    const tilde = group.indexOf("~");
+    if (tilde <= 0) continue;
+    const instanceId = group.slice(0, tilde).trim();
+    if (!isMechCircuitToken(instanceId)) continue;
+    const entries: MechCircuitEntry[] = [];
+    for (const item of group.slice(tilde + 1).split(",")) {
+      const f = item.split("*");
+      if (f.length < 3 || f.length > 4) continue;
+      const [circuitId, code, effRaw, effectKey] = f as [string, string, string, string?];
+      if (!isMechCircuitToken(circuitId)) continue;
+      const restoreState = MECH_CIRCUIT_CODE_STATE[code];
+      if (!restoreState) continue;
+      if (!/^\d{1,9}$/.test(effRaw)) continue;
+      const e: MechCircuitEntry = {
+        circuitId,
+        restoreState,
+        effect: Number.parseInt(effRaw, 10),
+      };
+      if (effectKey && isMechCircuitToken(effectKey)) e.effectKey = effectKey;
+      entries.push(e);
+    }
+    if (entries.length > 0) out[instanceId] = [...(out[instanceId] ?? []), ...entries];
+  }
+  return out;
+}
 
 /** explore → hub wear return (salvage still goes explore → sort). */
 export type ExploreToHubWearPayload = {
@@ -418,6 +520,14 @@ export function buildTradeToExploreUrl(
     const enc = encodeCircuitBonusesCompact(payload.circuitBonuses);
     if (enc) u.searchParams.set("circuitBonuses", enc);
   }
+  if (payload.mechCircuits != null) {
+    // Only deployed mechs' circuits (§4.1). Empty → key omitted.
+    const enc = encodeMechCircuitsCompact(
+      payload.mechCircuits,
+      ids.length > 0 ? ids : undefined,
+    );
+    if (enc) u.searchParams.set("mechCircuits", enc);
+  }
   return u.toString();
 }
 
@@ -431,7 +541,8 @@ export function parseTradeToExploreSearch(
     !p.has("startingAmmo") &&
     !p.has("deployedInstanceIds") &&
     !p.has("mechDurability") &&
-    !p.has("circuitBonuses")
+    !p.has("circuitBonuses") &&
+    !p.has("mechCircuits")
   ) {
     return null;
   }
@@ -456,6 +567,9 @@ export function parseTradeToExploreSearch(
   }
   if (p.has("circuitBonuses")) {
     payload.circuitBonuses = parseCircuitBonusesCompact(p.get("circuitBonuses"));
+  }
+  if (p.has("mechCircuits")) {
+    payload.mechCircuits = parseMechCircuitsCompact(p.get("mechCircuits"));
   }
   return payload;
 }
