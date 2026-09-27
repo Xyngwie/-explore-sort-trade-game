@@ -576,7 +576,11 @@ assert.ok(
     celebrating: false,
     perfect: false,
   });
-  assert.equal(open, "");
+  // #101 (ffc907b): the first-play rule guide is always shown, even before a loop closes.
+  assert.ok(open.includes("restore-rule-guide"), "open loop still shows rule guide");
+  assert.ok(!open.includes("loop-celebrate-note"), "no celebrate note while open");
+  assert.ok(!open.includes("loop-live-hint"), "no live-scoring hint while open");
+  assert.ok(pnote.includes("restore-rule-guide") && note.includes("restore-rule-guide"), "guide also prefixed when closed");
   console.log("restore perfect loop celebrate ok");
 }
 
