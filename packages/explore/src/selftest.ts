@@ -1583,7 +1583,8 @@ import {
   EXPLORE_COMMANDS,
   isCommandUnlocked,
   isCommandUnlockedFor,
-  isWingmanAccompanyUnlocked,
+  isWingmanMobilityUnlocked,
+  isWingmanMobileFor,
   type CircuitCommandUnlockTable,
   type CommandUnlockMode,
   type ExploreCommandId,
@@ -1636,7 +1637,6 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(isCommandUnlocked("purge", ["test-circuit-camp", "test-circuit-squad"], { table: TEST_ONLY_TABLE }), true);
   assert.equal(isCommandUnlocked("camp_set", ["__proto__", "toString"], { table: TEST_ONLY_TABLE }), false);
   assert.equal(isCommandUnlockedFor({}, "camp_set"), true, "missing state → legacy all unlocked");
-  assert.equal(isWingmanAccompanyUnlocked([], { mode: "release" }), true, "wingman hook not enforced yet");
   console.log("explore command unlock pure check ok");
 }
 
@@ -1665,7 +1665,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const fresh = createWorld(bootstrapFromSearch(""));
   assert.equal(fresh.commandUnlock.mode, "all_unlocked", "new world in preview/test = all unlocked");
   assert.deepEqual(fresh.commandUnlock.equippedCircuits, [], "no circuit equip source yet");
-  assert.equal(fresh.wingmen.length, 2, "wingmen still deploy (no accompany gate)");
+  assert.equal(fresh.wingmen.length, 2, "wingmen still deploy in every mode");
   console.log("explore command unlock mode resolution ok");
 }
 
@@ -1779,4 +1779,143 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.ok(htmlRel.includes("🔒 僚機方針"), "squad row locked in release");
   assert.ok(!htmlRel.includes("🔒 移動") && !htmlRel.includes("🔒 射撃") && !htmlRel.includes("🔒 抽出要請"), "basic rows never locked");
   console.log("explore command unlock overlay ok");
+}
+
+// ---------------------------------------------------------------------------
+// wing_mobility: no-circuit wingmen in release mode stand still + self-defense.
+// ---------------------------------------------------------------------------
+{
+  const MOBILITY_TABLE: CircuitCommandUnlockTable = { "test-circuit-mobility": ["wing_mobility"] };
+  // Pure check (per-wingman id signature; same result for all wingmen today)
+  assert.equal(isWingmanMobilityUnlocked("wing-a", [], { mode: "release" }), false);
+  assert.equal(isWingmanMobilityUnlocked("wing-b", [], { mode: "release" }), false);
+  assert.equal(isWingmanMobilityUnlocked("wing-a", [], { mode: "all_unlocked" }), true);
+  assert.equal(isWingmanMobilityUnlocked("wing-a", ["test-circuit-mobility"], { mode: "release" }), false, "empty prod table");
+  assert.equal(isWingmanMobilityUnlocked("wing-a", ["test-circuit-mobility"], { mode: "release", table: MOBILITY_TABLE }), true);
+  assert.equal(isWingmanMobilityUnlocked("wing-b", ["test-circuit-mobility"], { mode: "release", table: MOBILITY_TABLE }), true);
+  assert.equal(isWingmanMobilityUnlocked("wing-a", ["test-circuit-camp"], { mode: "release", table: TEST_ONLY_TABLE }), false);
+  assert.equal(isWingmanMobileFor({}, "wing-a"), true, "missing state → mobile (legacy)");
+
+  const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: false };
+  const clearFoes = (w: ReturnType<typeof createWorld>) => { for (const e of w.enemies) { e.alive = false; e.hp = 0; } };
+
+  // all_unlocked: escort wingman follows the captain (unchanged behavior)
+  {
+    const w = unlockWorld("all_unlocked");
+    clearFoes(w);
+    const wa = w.wingmen[0]!;
+    const start = { ...wa.pos };
+    for (let i = 0; i < 20; i++) tickWorld(w, 0.05, { ...idle, move: { x: 1, y: 0 } });
+    assert.ok(Math.hypot(wa.pos.x - start.x, wa.pos.y - start.y) > 5, "mobile wingman follows in all_unlocked");
+  }
+
+  // release, no circuit: wingmen accompany but do not move / follow / collect
+  {
+    const w = unlockWorld("release");
+    assert.equal(w.wingmen.length, 2, "wingmen still accompany in release");
+    clearFoes(w);
+    const starts = w.wingmen.map((x) => ({ ...x.pos }));
+    for (let i = 0; i < 40; i++) tickWorld(w, 0.05, { ...idle, move: { x: 1, y: 0 } });
+    w.wingmen.forEach((x, i) => {
+      assert.deepEqual(x.pos, starts[i], `${x.id} stays at sortie start`);
+      assert.deepEqual(x.vel, { x: 0, y: 0 });
+    });
+    assert.ok(w.leader.pos.x > starts[0]!.x + 20, "captain still moves");
+    // stance forced to every value: still no movement
+    for (const st of ["escort", "patrol", "recover", "raid"] as const) {
+      const wa = w.wingmen[0]!;
+      wa.stance = st;
+      const intent = decideWingman(w, wa, 0.05);
+      assert.equal(intent.moveTarget, null, `${st}: no move target`);
+      assert.equal(intent.trySalvage, false, `${st}: no collect`);
+    }
+    // no collecting even with a discovered crate on top of it
+    const wa = w.wingmen[0]!;
+    wa.stance = "recover";
+    const crate = w.containers[1]!;
+    crate.discovered = true; crate.taken = false; crate.pos = { ...wa.pos };
+    for (let t = 0; t < w.balance.salvageSeconds + 0.5; t += 0.05) tickWorld(w, 0.05, idle);
+    assert.equal(crate.taken, false, "immobile wingman does not collect");
+    assert.equal(wa.salvagedCount, 0);
+  }
+
+  // release, no circuit: self-defense — shoots in-range enemy, never chases
+  {
+    const w = unlockWorld("release");
+    clearFoes(w);
+    const wa = w.wingmen[0]!;
+    w.leader.pos = { x: wa.pos.x + 600, y: wa.pos.y }; // keep captain out of it
+    const foe = w.enemies[0]!;
+    foe.alive = true; foe.hp = foe.maxHp;
+    foe.pos = { x: wa.pos.x + w.balance.weaponRange * 0.6, y: wa.pos.y };
+    wa.cooldown = 0;
+    const start = { ...wa.pos };
+    const ammo0 = w.ammo;
+    const intent = decideWingman(w, wa, 0.05);
+    assert.equal(intent.fireAt?.id, foe.id, "targets in-range enemy");
+    tickWorld(w, 0.02, idle);
+    assert.ok(w.ammo < ammo0, "immobile wingman fires in self-defense");
+    assert.ok(w.bullets.some((b) => b.ownerId === wa.id) || w.ammo < ammo0);
+    assert.deepEqual(wa.pos, start, "fires from where it stands");
+    // enemy beyond weapon range (but within hunt vision): no fire, no chase
+    foe.pos = { x: wa.pos.x + w.balance.weaponRange * 1.6, y: wa.pos.y };
+    const far = decideWingman(w, wa, 0.05);
+    assert.equal(far.fireAt, null, "no fire beyond weapon range");
+    assert.equal(far.moveTarget, null, "no chase");
+    const mobileWorld = unlockWorld("all_unlocked");
+    const mw = mobileWorld.wingmen[0]!;
+    mw.stance = "raid";
+    clearFoes(mobileWorld);
+    const mfoe = mobileWorld.enemies[0]!;
+    mfoe.alive = true; mfoe.hp = mfoe.maxHp;
+    mfoe.pos = { x: mw.pos.x + mobileWorld.balance.weaponRange * 1.6, y: mw.pos.y };
+    assert.ok(decideWingman(mobileWorld, mw, 0.05).moveTarget != null, "mobile raid wingman does chase (unchanged)");
+  }
+
+  // provisional test-only circuit unlocks mobility in release
+  {
+    const w = unlockWorld("release", ["test-circuit-mobility"], MOBILITY_TABLE);
+    clearFoes(w);
+    const wa = w.wingmen[0]!;
+    const start = { ...wa.pos };
+    for (let i = 0; i < 20; i++) tickWorld(w, 0.05, { ...idle, move: { x: 1, y: 0 } });
+    assert.ok(Math.hypot(wa.pos.x - start.x, wa.pos.y - start.y) > 5, "test circuit unlocks wingman movement");
+    assert.equal(executeExploreCommand(w, { id: "wing_patrol" }).status, "locked", "stance commands remain separately locked");
+  }
+
+  // mid-sortie mode switch applies immediately; release aborts an in-progress salvage
+  {
+    const w = unlockWorld("all_unlocked");
+    clearFoes(w);
+    const wa = w.wingmen[0]!;
+    wa.salvageId = w.containers[2]!.id;
+    wa.salvageT = 0.5;
+    w.commandUnlock.mode = "release";
+    const start = { ...wa.pos };
+    tickWorld(w, 0.05, { ...idle, move: { x: 1, y: 0 } });
+    assert.equal(wa.salvageId, null, "switch to release aborts salvage channel");
+    assert.deepEqual(wa.pos, start, "stops immediately");
+    w.commandUnlock.mode = "all_unlocked";
+    for (let i = 0; i < 20; i++) tickWorld(w, 0.05, { ...idle, move: { x: 1, y: 0 } });
+    assert.ok(Math.hypot(wa.pos.x - start.x, wa.pos.y - start.y) > 5, "switch back → moves again");
+  }
+
+  // Extraction under EXISTING rules: immobile wingmen outside the circle are left behind;
+  // outputs keep their shape (flat returnKind wear for every deployed id).
+  {
+    const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30"));
+    startSortie(w);
+    w.commandUnlock = { mode: "release", equippedCircuits: [] };
+    clearFoes(w);
+    w.leader.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+    assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 1 && w.phase === "sortie"; t += 0.1) tickWorld(w, 0.1, idle);
+    assert.equal(w.phase, "result");
+    assert.equal(w.extracted, true, "captain extracts");
+    assert.ok(w.logs.some((l) => l.text.startsWith("置き去り：")), "wingmen left behind by existing rule");
+    const outcome = buildSortieOutcome(w)!;
+    assert.deepEqual(outcome.mechWear.map((m) => m.instanceId), ["m1", "m2", "m3"], "wear shape unchanged");
+    assert.ok(hubWearHandoffUrl(w)!.includes("returnKind=extract"));
+  }
+  console.log("explore wing_mobility gate ok");
 }

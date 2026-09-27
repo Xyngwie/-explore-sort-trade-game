@@ -23,7 +23,9 @@ export type CircuitCommandId =
   | "wing_escort"
   | "wing_patrol"
   | "wing_recover"
-  | "wing_raid";
+  | "wing_raid"
+  /** Ability (not a player command): wingman may move (follow / stance movement / collect). */
+  | "wing_mobility";
 
 export type ExploreCommandId = BasicCommandId | CircuitCommandId;
 
@@ -55,6 +57,7 @@ export const EXPLORE_COMMANDS: readonly ExploreCommandDef[] = [
   { id: "wing_patrol", tier: "circuit", label: "僚機 哨戒", keys: ["2"] },
   { id: "wing_recover", tier: "circuit", label: "僚機 回収", keys: ["3"] },
   { id: "wing_raid", tier: "circuit", label: "僚機 遊撃", keys: ["4"] },
+  { id: "wing_mobility", tier: "circuit", label: "僚機 移動", keys: [] },
 ];
 
 const DEF_BY_ID: ReadonlyMap<ExploreCommandId, ExploreCommandDef> = new Map(
@@ -167,15 +170,30 @@ export function lockedCommandMessage(commandId: ExploreCommandId): string {
 }
 
 /**
- * Future hook shape (NOT enforced anywhere yet): wingman accompaniment will
- * need a wingman circuit. Kept separate from command ids so current sorties
- * keep deploying wingmen exactly as before. Always true in all_unlocked.
+ * Wingman mobility (`wing_mobility`). Without it (release mode, no unlocking
+ * circuit) a wingman still sorties but stands still and only fights in
+ * self-defense (see brain.ts). Takes a wingman id so per-wingman circuits can be
+ * supported later; today every wingman shares the sortie's equipped circuits.
  */
-export const WINGMAN_ACCOMPANY_HOOK_KEY = "wingman_accompany";
-export function isWingmanAccompanyUnlocked(
-  _equippedCircuits: readonly string[] | null | undefined,
-  _opts: CommandUnlockOptions = {},
+export function isWingmanMobilityUnlocked(
+  _wingmanId: string,
+  equippedCircuits: readonly string[] | null | undefined,
+  opts: CommandUnlockOptions = {},
 ): boolean {
-  // Hook only: returns true until the wingman-circuit task defines the rule.
-  return true;
+  return isCommandUnlocked("wing_mobility", equippedCircuits, opts);
 }
+
+/** World-level mobility check (missing unlock state → mobile, legacy behavior). */
+export function isWingmanMobileFor(
+  holder: { commandUnlock?: CommandUnlockState | null },
+  wingmanId: string,
+): boolean {
+  const st = holder.commandUnlock;
+  if (!st) return true;
+  return isWingmanMobilityUnlocked(wingmanId, st.equippedCircuits, {
+    mode: st.mode,
+    table: st.table,
+  });
+}
+
+export const WINGMAN_IMMOBILE_LABEL = "回路なし：自衛のみ";

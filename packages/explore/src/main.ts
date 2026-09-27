@@ -53,7 +53,11 @@ import {
   isExploreCommandAvailable,
   type ExploreCommandOutcome,
 } from "./game/commands";
-import type { ExploreCommandId } from "./game/commandUnlock";
+import {
+  WINGMAN_IMMOBILE_LABEL,
+  isWingmanMobileFor,
+  type ExploreCommandId,
+} from "./game/commandUnlock";
 import {
   COMMAND_UNLOCK_MODE_LABEL,
   isDebugUnlockToggleVisible,
@@ -378,6 +382,9 @@ function wingCombatStatus(w: (typeof world.wingmen)[number]): {
   if (off) {
     return { cardClass: "offscreen", badgeClass: "warn", badgeText: "画面外" };
   }
+  if (!isWingmanMobileFor(world, w.id)) {
+    return { cardClass: "immobile", badgeClass: "warn", badgeText: "自衛のみ" };
+  }
   return { cardClass: "", badgeClass: "", badgeText: STANCE_LABEL[w.stance] };
 }
 
@@ -398,6 +405,10 @@ function wingPanelHtml(): string {
           ? ` · 癖:${QUIRK_LABEL[w.quirk]}`
           : "";
       const cover = w.inCover ? " · カバー" : "";
+      const immobile =
+        w.alive && !isWingmanMobileFor(world, w.id)
+          ? `<div class="wing-immobile" title="移動は回路で解放（未装備）。その場で射程内の敵だけ撃つ。">🔒 ${WINGMAN_IMMOBILE_LABEL}</div>`
+          : "";
       const status = wingCombatStatus(w);
       const hpPct = w.maxHp > 0 ? Math.max(0, Math.min(100, (w.hp / w.maxHp) * 100)) : 0;
       const hpPulse = w.hitWarnT > 0 ? " pulse" : w.engageWarnT > 0 ? " engage-pulse" : "";
@@ -410,6 +421,7 @@ function wingPanelHtml(): string {
           <div class="wing-hp-fill" style="width:${hpPct.toFixed(1)}%"></div>
         </div>
         <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}${quirk}${cover}</div>
+        ${immobile}
         <div class="row wing-order-row">
           ${(() => {
             const d = lockDeco("wing_escort");
