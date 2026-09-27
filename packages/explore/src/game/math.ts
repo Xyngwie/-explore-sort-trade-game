@@ -30,3 +30,8 @@ export function lerp(a: number, b: number, t: number): number {
 export function angleOf(from: Vec2, to: Vec2): number {
   return Math.atan2(to.y - from.y, to.x - from.x);
 }
+
+/** Dot product used by cover movement geometry. */
+export function dot(a: Vec2, b: Vec2): number {
+  return a.x * b.x + a.y * b.y;
+}
