@@ -3,6 +3,7 @@ import { getCoverObjects } from "./coverObjects";
 import type { Unit, World } from "./types";
 
 const COVER_ESCAPE_GRACE_SEC = 0.35;
+const COVER_SNAP_MARGIN = 8;
 
 type CoverState = { coverId: string | null; escapeT: number };
 const states = new WeakMap<Unit, CoverState>();
@@ -21,29 +22,17 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
   const state = stateFor(unit);
   state.escapeT = Math.max(0, state.escapeT - dt);
 
-  let nearest: ReturnType<typeof getCoverObjects>[number] | null = null;
-  let nearestDistance = Infinity;
-  for (const cover of getCoverObjects(world)) {
-    const d = dist(unit.pos, cover.pos);
-    if (d < nearestDistance) {
-      nearestDistance = d;
-      nearest = cover;
-    }
-  }
-  if (!nearest) {
-    unit.inCover = false;
-    state.coverId = null;
-    return;
-  }
-
-  const delta = { x: nearest.pos.x - unit.pos.x, y: nearest.pos.y - unit.pos.y };
-  const centerDistance = Math.hypot(delta.x, delta.y);
-  const moving = Math.hypot(moveInput.x, moveInput.y) > 0.01;
-  const outward = moving && dot(norm(moveInput), norm(delta)) < -0.2;
-
-  // Escape behavior is intentionally unchanged: while in cover, an outward
-  // movement input immediately releases the unit and starts the re-attach grace.
+  const covers = getCoverObjects(world);
   if (unit.inCover) {
+    const active = covers.find((cover) => cover.id === state.coverId);
+    if (!active) {
+      unit.inCover = false;
+      state.coverId = null;
+      return;
+    }
+    const delta = { x: active.pos.x - unit.pos.x, y: active.pos.y - unit.pos.y };
+    const moving = Math.hypot(moveInput.x, moveInput.y) > 0.01;
+    const outward = moving && dot(norm(moveInput), norm(delta)) < -0.2;
     if (outward) {
       unit.inCover = false;
       state.coverId = null;
@@ -52,12 +41,27 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
     return;
   }
 
-  // Entry behavior is intentionally simple: once the unit enters the cover
-  // circle, snap it directly to the center. No movement-input direction or
-  // speed threshold is required to enter cover.
-  if (state.escapeT > 0 || centerDistance > nearest.radius) return;
+  if (state.escapeT > 0) return;
+
+  let nearest: ReturnType<typeof getCoverObjects>[number] | null = null;
+  let nearestDistance = Infinity;
+  for (const cover of covers) {
+    const d = dist(unit.pos, cover.pos);
+    if (d < nearestDistance) {
+      nearestDistance = d;
+      nearest = cover;
+    }
+  }
+  if (!nearest) return;
+
+  // Cover entry is a hard teleport, not an attraction animation. The extra
+  // margin makes the trigger reliable at the visible edge of the object even
+  // when the player crosses the boundary between simulation frames.
+  const snapRadius = nearest.radius + unit.radius + COVER_SNAP_MARGIN;
+  if (nearestDistance > snapRadius) return;
 
   unit.pos = { x: nearest.pos.x, y: nearest.pos.y };
+  unit.vel = { x: 0, y: 0 };
   unit.moveTarget = { x: nearest.pos.x, y: nearest.pos.y };
   unit.inCover = true;
   state.coverId = nearest.id;
