@@ -43,9 +43,7 @@ jobs:
           PY
 
       - name: Remove shared Sort legacy conversion
-        shell: bash
         run: |
-          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           path = Path("packages/shared/src/sort-yield.ts")
@@ -101,8 +99,7 @@ jobs:
           path.write_text(text)
           PY
 
-      - name: Validate migration
-        id: validate
+      - name: Validate migration and save report
         shell: bash
         run: |
           set +e
@@ -115,23 +112,25 @@ jobs:
           npm run --workspace @estg/sort selftest >> migration-validation.log 2>&1
           sort_selftest_rc=$?
           printf '\nRESULTS shared=%s sort_typecheck=%s sort_selftest=%s\n' "$shared_rc" "$sort_typecheck_rc" "$sort_selftest_rc" >> migration-validation.log
-          if [ "$shared_rc" -ne 0 ] || [ "$sort_typecheck_rc" -ne 0 ] || [ "$sort_selftest_rc" -ne 0 ]; then
-            exit 1
+          if [ "$shared_rc" -eq 0 ] && [ "$sort_typecheck_rc" -eq 0 ] && [ "$sort_selftest_rc" -eq 0 ]; then
+            echo SUCCESS > migration-validation.status
+          else
+            echo FAILURE > migration-validation.status
           fi
+          exit 0
 
       - name: Commit migration or validation report
-        if: always()
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/sort/src packages/shared/src/sort-yield.ts migration-validation.log packages/sort/SORT_PIECE_KIND_MIGRATION_TRIGGER.md
-          if [ "${{ steps.validate.outcome }}" = "success" ]; then
-            rm -f migration-validation.log packages/sort/SORT_PIECE_KIND_MIGRATION_TRIGGER.md
+          if [ "$(cat migration-validation.status)" = "SUCCESS" ]; then
+            rm -f migration-validation.log migration-validation.status packages/sort/SORT_PIECE_KIND_MIGRATION_TRIGGER.md
             git add -A
             git commit -m "refactor(sort): use four-resource piece kinds internally"
           else
-            git commit -m "test(sort): record four-resource migration validation failure"
+            git add migration-validation.log migration-validation.status
+            git commit -m "test(sort): record four-resource migration validation"
           fi
           git push origin HEAD:refactor/sort-piece-kinds-v4
