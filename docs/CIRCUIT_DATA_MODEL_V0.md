@@ -1,12 +1,12 @@
-# 回路データモデル・保存契約・受け渡し 設計案 v0
+# 回路データモデル・保存契約・受け渡し 設計 v0
 
-**ステータス:** 設計案 / **未承認・未実装**（2026-09-28、Cursor（Grok Bot）起草）。契約変更（`HUB_SAVE_CONTRACT` の版上げ、URL キーの追加）を含むので、レビュー担当の確認とオーナーの承認を経てから実装する。  
+**ステータス:** **承認済み（2026-09-28、神宮）** / 未実装。起草は Cursor（Grok Bot）。契約変更（`HUB_SAVE_CONTRACT` の版上げ、URL キーの追加）を含む。実装は §8 の A〜G の順。§9 の U1〜U19 はすべて決定済み（U7 は神宮の決定、ほかは起草時の推奨どおり）。  
 **対象:** [`STATUS.md`](./STATUS.md)「回路・部隊設計 v0 由来の仕様変更」の **項目1**（回路のデータモデル）・**項目2**（モジュール間の受け渡し形式の変更）・**項目14**（パーフェクト最大サイズの記録とジャンク作成サイズ上限）をまとめて設計する。  
-**性質:** 本書は設計案。決定事項の正本は [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md)（以下「設計メモ」）で、本書はそれを **変えない**。既存の契約文書・コードは本書では書き換えていない。仕様にない設計が必要なところは §9「未決事項」に案を並べるだけにしてある。
+**性質:** 本書は承認済みの設計。ゲームの決定事項の正本は [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md)（以下「設計メモ」）で、本書はそれを **変えない**。既存の契約文書・コードは本書では書き換えていない（各実装 PR で直す）。起草時に未決だった点は §9 で決定済み。
 
 関連: [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md)、[`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md)、[`MECH_FLEET.md`](./MECH_FLEET.md) §8、[`EXPLORE_COMMAND_UNLOCK_V0.md`](./EXPLORE_COMMAND_UNLOCK_V0.md) §3.1・§4、[`EXPLORE_IO_V2.md`](./EXPLORE_IO_V2.md) §3、[`HANDOFF_M45_V0.md`](./HANDOFF_M45_V0.md)、[`TRADE_HANGAR_V0.md`](./TRADE_HANGAR_V0.md) §3・§3.4b、[`RESTORE_V0.md`](./RESTORE_V0.md) §5.4・§5.6、[`INVADE_V0.md`](./INVADE_V0.md) §8.7〜§8.9
 
-> 表記: 「**確認済み**」はこの PR 作成時点（`main` = `1889cc5`）のコード・文書を読んで確かめたこと。「**推測**」は読んだ範囲からの見立てで、実装前に再確認が要るもの。「**案**」は本書の提案。
+> 表記: 「**確認済み**」はこの PR 作成時点（`main` = `1889cc5`）のコード・文書を読んで確かめたこと。「**推測**」は読んだ範囲からの見立てで、実装前に再確認が要るもの。「**案**」は起草時の提案で、承認により本書の設計として確定したもの。
 
 ---
 
@@ -15,7 +15,7 @@
 - 回路は **1 枚ずつのレコード** として HubSave に持ち、**どの機体に付いているか（または倉庫か）**、**入手元（白／中古）**、**成果状態（未 Restore を含む 4 値）** を持たせる。サイズは盤の `cols`（＝`rows`）、評価値は盤から **毎回計算** する（保存しない）。
 - HubSave は **`v: 3` に上げ、保存キーも `wreckline.hubSave.v3` に分ける**。旧キー（中身 v1/v2）は読み込み元として使い、消さずにバックアップとして残す。
 - trade→explore に **機体ごとの装備回路** を渡す任意キー `mechCircuits` を足す。既存キーは変えない。
-- 落とし物（置き去り僚機の回路を含む）は HubSave の **`fieldDrops`**（Invade の盤のマスに紐づく）に記録する。Explore は結果確定時に「失った機体・回収した落とし物」を HubSave に反映する（案。経路は §9 U9）。
+- 落とし物（置き去り僚機の回路を含む）は HubSave の **`fieldDrops`**（Invade の盤のマスに紐づく）に記録する。Explore は結果確定時に「失った機体・回収した落とし物」を HubSave に反映する（§9 U9 で決定）。
 - パーフェクト最大サイズは HubSave の **`perfectMaxSize`** に持ち、ジャンク作成は **2×2〜`max(2, perfectMaxSize+1)`** の正方形から選ぶ。
 
 ---
@@ -63,7 +63,7 @@
 
 ---
 
-## 2. 回路データモデル（案）
+## 2. 回路データモデル
 
 ### 2.1 回路レコード
 
@@ -185,13 +185,13 @@ type HubSaveV3 = { v: 3; savedAt: string; hub: HubSnapshotV3 };
 - 既存ヘルパの扱い: `upsertCircuitIntoHub` は引数の形を保ち、既存レコードの `equippedTo`・`origin`・`acquiredAt` を **引き継ぐ**（restore→trade の取込で装着が外れないように）。新規レコードは `origin` を引数で受け、既定は `legacy`（案）。`removeCircuitFromHub` はそのまま。
 - 追加するヘルパ（shared、案）: `equipCircuit`／`unequipCircuit`、`circuitEffectValue`／`circuitActiveEffect`、`circuitSize`、`recordPerfectSize`、`craftMaxSize`、`addFieldDrops`／`recoverFieldDrops`、`applySortieReport`（§5.4）。
 
-### 3.4 これから先の加算ルール（案）
+### 3.4 これから先の加算ルール
 
 v3 以降に回路へ属性を足すときは、v2 と同じく **任意フィールド＋欠落時の既定値** で加算し、版は上げない。版を上げるのは、古いビルドが読むとデータを失う変更（必須化・意味の変更・切り詰め規則の変更）のときだけにする。
 
 ---
 
-## 4. trade → explore：装備回路の受け渡し（案）
+## 4. trade → explore：装備回路の受け渡し
 
 `EXPLORE_COMMAND_UNLOCK_V0.md` §4 で保留になっている「装備回路の受け渡しフィールド」を、機体ごとの形で設計する。
 
@@ -234,7 +234,7 @@ type TradeToExplorePayload = 既存 & {
 
 ---
 
-## 5. invade → explore：落とし物の記録（案）
+## 5. invade → explore：落とし物の記録
 
 ### 5.1 何を記録するか
 
@@ -271,13 +271,14 @@ type FieldCircuitDrop = {
 
 | 場面 | 誰が | 何をする |
 |---|---|---|
-| 出撃前 | invade | 今までどおり `sectorX`・`sectorY`（出撃するマス）を explore に渡す。**新しい URL キーは足さない**（案。別案は §9 U19）。落とし物の中身は HubSave にあり、explore は `fieldDrops` を `frontSeed`＝現在の `frontProgress.seed` かつ `cell`＝出撃マスで絞って出す |
+| 出撃前 | invade | 今までどおり `sectorX`・`sectorY`（出撃するマス）を explore に渡す。**新しい URL キーは足さない**（§9 U19 で決定）。落とし物の中身は HubSave にあり、explore は `fieldDrops` を `frontSeed`＝現在の `frontProgress.seed` かつ `cell`＝出撃マスで絞って出す |
 | 出撃中 | explore | 落とし物を拾ったら「回収した `dropId`」を覚える。背負えなかった大破機・置き去りの僚機・救助撤退で失う機体の `instanceId` を覚える（どの場合に失うかは項目4・5・6 が決める） |
 | 結果確定 | explore | §5.4 の出撃報告を作って HubSave に反映する |
 | 反映 | shared の純関数 | 失った機体を `fleet` から外し、その機体に `equippedTo` していた回路を `circuits` から外して `fieldDrops` に入れる（`cell` は出撃マス）。回収した `dropId` の回路は `equippedTo: null` で `circuits` に戻す（倉庫。自動では装着しない、案） |
 | HUB | trade | 反映結果を表示する（失った機体・落とした回路・回収した回路） |
 | 前線 | invade | 盤で落とし物のあるマスに印を出す（UI の加算。`frontProgress` の形は変えない） |
 
+- Invade を通らない出撃（`cell` が null）で落ちた回路は **記録せずに失う**。救済はなく、結果画面で失ったことを明示する（§9 U7）。
 - 置き去り: `LeftBehindEntry` に所有機の `instanceId` を足す（今はユニット ID だけ）。これで §5.4 の報告の `lostMechInstanceIds` に入れられる。`EXPLORE_COMMAND_UNLOCK_V0.md` §3.1 の「Hub への出力には含めない」は、項目6の実装時にこの設計へ置き換わる（契約変更点）。
 - 敵ドロップ・拾った回路（中古）も同じ報告に `acquiredCircuits`（新しいレコード。`origin` は `enemy_drop`／`picked_up`、`restoreState` は `unrestored`、初期マークは項目13）として載せられる。頻度とサイズは経済タスク送り（設計メモ §8.1）で、本書では決めない。
 
@@ -286,7 +287,7 @@ type FieldCircuitDrop = {
 ```ts
 type SortieCircuitReport = {
   sortieId: string;                  // explore が出撃ごとに作る
-  cell: { sx: number; sy: number } | null; // 出撃マス。invade を通らない出撃では null（§9 U7）
+  cell: { sx: number; sy: number } | null; // 出撃マス。invade を通らない出撃では null → 落ちた回路は失う（§9 U7）
   frontSeed: number | null;
   lostMechInstanceIds: string[];
   lostCause: Record<string, FieldCircuitDrop["cause"]>;
@@ -296,20 +297,20 @@ type SortieCircuitReport = {
 applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds に sortieId があれば何もしない
 ```
 
-- **推奨は「explore が結果確定時に HubSave へ直接反映する」**（案 B）。理由: 摩耗 URL は「格納庫へ」を押したときしか届かず（§1.3）、「Sort へ」や「再出撃」を選ぶと機体の喪失・回路の落下が記録されない。喪失が記録されないと「負けたら Sort へ逃げる」で喪失を避けられてしまう。explore が HubSave を直接書く前例は既にある（`explore/src/game/forcedBackWipe.ts`）。
+- **決定: explore が結果確定時に HubSave へ直接反映する**（案 B、§9 U9）。理由: 摩耗 URL は「格納庫へ」を押したときしか届かず（§1.3）、「Sort へ」や「再出撃」を選ぶと機体の喪失・回路の落下が記録されない。喪失が記録されないと「負けたら Sort へ逃げる」で喪失を避けられてしまう。explore が HubSave を直接書く前例は既にある（`explore/src/game/forcedBackWipe.ts`）。
 - 1 回だけ反映するために `appliedSortieIds`（直近 N 件）で重複を防ぐ。
 - 注意（確認済み）: ローカル開発では explore（:5173）と trade（:5175）が別オリジンで `localStorage` を共有しない（`LOCAL_DEV_MODULE_URLS`）。`forcedBackWipe.ts` と同じ制約で、ローカルでは HUB に反映されない。
-- 別案（案 A）: 摩耗 URL に `lostMechs`・`recoveredDrops`・`sectorX/Y` を足して trade が反映する。既存の URL 方式に揃うが、上の「ボタンの選び方で記録が消える」問題が残る。どちらにするかは §9 U9。
+- 別案（案 A）: 摩耗 URL に `lostMechs`・`recoveredDrops`・`sectorX/Y` を足して trade が反映する。既存の URL 方式に揃うが、上の「ボタンの選び方で記録が消える」問題が残るので採らない（§9 U9）。
 
 ---
 
-## 6. 旧セーブからの移行（案）
+## 6. 旧セーブからの移行
 
 ### 6.1 変換表（v1/v2 → v3）
 
 | 旧データ | v3 での扱い |
 |---|---|
-| `circuits[]`（最大 8 件） | 全件を移す。`restoreState` は旧 `outcome` をそのまま（`fully_awakened`／`bypass`／`offline`）。旧 `offline` を `unrestored` に読み替えるかは §9 U2（案: 推測で変えず `offline` のまま。ルール上はどちらも効果なしで違いは表示だけ） |
+| `circuits[]`（最大 8 件） | 全件を移す。`restoreState` は旧 `outcome` をそのまま（`fully_awakened`／`bypass`／`offline`）。旧 `offline` は `unrestored` に読み替えず `offline` のまま（§9 U2 で決定。ルール上はどちらも効果なしで違いは表示だけ） |
 | 　`origin` | `legacy`（入手元が記録されていない） |
 | 　装着 | **全件 `equippedTo: null`（倉庫）**。v2 には装着の概念がない |
 | 　`locked`／`lastEditorName`／盤 | そのまま |
@@ -358,7 +359,7 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 | 作る回路 | `createEmptyCircuitBoard(N, N, circuitId)`（白回路・初期マークなし）、`restoreState: "unrestored"`、`origin: "crafted"`、`equippedTo: null` |
 | 置き換える現行 | `trade/src/junk-circuit-craft-ui.ts`（`JUNK_COST = 4`・クレジット消費なし・常に 4×4・`outcome: "offline"`・`maxCircuits` で切り詰め） |
 | コスト式の置き場所 | trade（売値の `circuit-sell-prices.ts` と同じく trade の定数）。`craftMaxSize` は HubSave に依存するので shared |
-| 上の天井 | §9 U12（案: Restore が扱える最大サイズで頭打ち。値は項目12） |
+| 上の天井 | Restore が扱える最大サイズで頭打ち（§9 U12）。項目12（#150）で真盤の生成は 2〜16 辺（`SIZED_TRUE_MIN_SIDE`／`SIZED_TRUE_MAX_SIDE`、`shared/src/perfect-circuit-sized.ts`）、selftest の保証は 2×2〜8×8。具体値は実装 B で決める |
 
 - Restore は Hub から渡された盤をその盤のサイズで開く（設計メモ §9.2 C16）ので、2×2・3×3 の作成は項目12（新規生成の盤サイズ可変化。別の作業が進行中）を待たずに動くはず（推測。2×2・3×3 での手がかり生成が動くことは設計メモ C16 で確認済み）。
 
@@ -370,7 +371,7 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 
 | # | PR | 触るパッケージ | STATUS 項目 | 内容 | 前提 |
 |---|---|---|---|---|---|
-| A | 保存契約 v3 と受け渡しキー | `shared`（＋`docs/HUB_SAVE_CONTRACT.md`・`HANDOFF` 系の追記） | 1・2・14 | `HubSaveV3`・新キーと読み込み順・v1/v2→v3 移行・壊れたセーブの退避・切り詰め廃止（`maxCircuits` は deprecated で残す）・§2〜§5・§7 の純関数・`mechCircuits` の build/parse・`HANDOFF_QUERY_KEYS` 追加・selftest | 本書の承認 |
+| A | 保存契約 v3 と受け渡しキー | `shared`（＋`docs/HUB_SAVE_CONTRACT.md`・`HANDOFF` 系の追記） | 1・2・14 | `HubSaveV3`・新キーと読み込み順・v1/v2→v3 移行・壊れたセーブの退避・切り詰め廃止（`maxCircuits` は deprecated で残す）・§2〜§5・§7 の純関数・`mechCircuits` の build/parse・`HANDOFF_QUERY_KEYS` 追加・selftest | 本書の承認（済） |
 | B | ジャンク作成サイズとコスト | `trade` | 14 | サイズ選択（2×2〜`craftMaxSize`）、コスト 2N＋2^N、`unrestored`／`crafted`、restore 取込で `perfectMaxSize` 更新、`maxCircuits` 参照の削除 | A |
 | C | 倉庫と付け替え | `trade` | 1（＋7 の付け替え） | 倉庫一覧・機体ごとの装着 UI（HUB のみ・無料）、装着中の回路の売却・Restore の扱い（U14）、`circuitBonuses` の集計対象（U5）、移行の案内 | A |
 | D | 出撃 URL に装着回路 | `trade` | 2 | `buildDeployUrl` に `mechCircuits` を載せる | A（C があると実データが入る） |
@@ -380,33 +381,35 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 
 - 担当: どれも実装は Cursor レーン、PR の切り方・順番と STATUS の更新はオーケストレーター（Codex）、契約（A）のマージ判断は神宮（`ORCHESTRATION.md` §1.3）。A はほかの PR と同時に `hub-save.ts` を触るもの（例: 項目12・13 の作業）がないことを確かめてから着手する。
 - 順番: A → B・C・D・E（並行可）→ F → G。
-- 並行作業との関係: 項目12（Restore の盤面サイズ可変化）は別の worktree で進行中（`feat/restore-board-size`）。手がかり生成（`generateFlawedClues`）を変える場合は既存回路の評価値が変わるので、U17 の互換テストを先に置く。
+- 並行作業との関係: 項目12（Restore の盤面サイズ可変化）は #150 で完了済み（`resolveCluesForCircuitBoard` が sized true 盤の手がかりも引くようになった）。今後、手がかり生成（`generateFlawedClues` など）を変える PR は既存回路の評価値を変えないこと（U17 の互換テストを A で置く）。
 - 各 PR の確認: ルートの `npm test` と全パッケージのビルド（shared を変える A では trade・explore・invade・restore・sort のビルドまで。#137 の再発防止）。
 
 ---
 
-## 9. 未決事項（決める必要があるもの）と推奨案
+## 9. 決定事項（起草時の未決事項。2026-09-28 に神宮が承認）
 
-| # | 未決事項 | 案 | 推奨 |
+U7 は神宮の決定。ほかは起草時の推奨どおりに決定。
+
+| # | 事項 | 決定 | 理由 |
 |---|---|---|---|
-| U1 | 保存キーを分けるか | (a) 新キー `wreckline.hubSave.v3`、旧キーは残す (b) 同じキーで `v: 3` | **(a)**。(b) は古いタブがセーブ全体を初期値で上書きしうる（§3.2） |
-| U2 | 旧 `offline` 回路を移行時に `unrestored` と見なすか | (a) `offline` のまま (b) 全部 `unrestored` (c) 線が 1 本もなく刻印もないものだけ `unrestored` | **(a)**。推測で状態を変えない。どちらも効果なしで違いは表示だけ |
-| U3 | 部隊の回路上限（装着数）を項目3（段位）・項目8（開始 0）が入るまでどうするか | (a) 部隊上限は判定せず、機体ごとの枠（基本 1）だけで判定 (b) 暫定の固定値を置く (c) すぐ開始 0 にする | **(a)**。(b) は仕様にない数値、(c) は項目3 がない間は装着できなくなる |
-| U4 | コモンの枠拡張・レアリティの持ち方 | 対応表と一緒に決める。データは `effectKey` の予約だけ置き、枠は常に 1 | **予約だけ**（決まったら任意フィールドとして加算） |
-| U5 | 旧来の `circuitBonuses`（成果状態ごとの固定ボーナス）を換算が決まるまでどうするか | (a) 装着中の回路だけ今の表で集計して続ける (b) 送らない（ボーナス 0） (c) 所持集計のまま | **(a)**。装着制に沿い、今のボーナスの形も残る。換算が決まったら差し替え |
-| U6 | 未 Restore の中古回路の初期マークが偶然閉ループを作ると、評価値（＝売値）が上がる | (a) 初期マークの生成（項目13）で閉ループを作らない (b) 売値の評価値を未 Restore なら 0 にする | **(a)**。売値の規則（25c＋評価値×3c、成果状態を見ない）を変えずに済む |
-| U7 | invade を通らない出撃（trade から直接・`focus = null` の quick-battle）で落ちた回路 | (a) 記録先がないので失う（結果画面で明示） (b) HQ マス（0,0）に記録 | **(a)**。設計メモ §5「持ち帰れないものは持ち帰れない」に沿う。ただし仕様にない判断なのでオーナー決定 |
-| U8 | 前線の盤が変わったとき（「盤を再生成」、段位で盤が変わる）の落とし物 | (a) 盤（`frontSeed`）に紐づけ、盤が変わったら消える（再生成の確認文に明記） (b) 次の盤の同じ座標へ持ち越す | **(a)**。段位（項目3）の設計で盤の扱いが決まったら見直す |
-| U9 | 喪失・落下・回収の反映経路 | (a) explore が結果確定時に HubSave へ直接反映（`sortieId` で 1 回だけ） (b) 摩耗 URL にキーを足して trade が反映 | **(a)**。(b) はボタンの選び方で記録が消える（§5.4）。ローカル開発で反映されない制約は `forcedBackWipe.ts` と同じ |
-| U10 | パーフェクト最大サイズの更新条件 | (a) `fully_awakened` かつパーフェクト（`locked`） (b) `fully_awakened` だけ | **(a)**。通常プレイでは同じ。デバッグの成果上書きで上がるのを防ぐ |
-| U11 | 移行時の `perfectMaxSize` の初期値 | (a) 既存のパーフェクト回路の最大サイズ (b) 0 から | **(a)**。既に達成した人が後退しない。検証用の「既に完璧」盤（2×2）を受け取っていると 2 になる点は許容 |
-| U12 | 作成サイズの天井 | (a) Restore が扱える最大サイズで頭打ち（値は項目12） (b) 天井なし | **(a)** |
-| U13 | 非正方形の既存盤のサイズ | (a) `min(cols, rows)` (b) 対象外 | **(a)**。今の生成経路は正方形のみなので実害は小さい |
-| U14 | 装着中の回路を売る・Restore に出す | 売却: 自動で外して売る（確認あり）／Restore: 装着したまま可 | 推奨どおり。どちらも HUB 内の操作 |
-| U15 | 隊長機の指定 | (a) 今どおり `deployedInstanceIds` の先頭 (b) HUB で選ぶ UI | **(a)** のまま。選ぶ UI は項目7で検討 |
-| U16 | 機体を解体したときの装着回路 | 倉庫へ戻す | 推奨どおり（HUB 内の操作なので落とし物にはしない） |
-| U17 | 評価値を保存するか | (a) 毎回計算（手がかり生成の互換テストを置く） (b) Restore 時点の値も保存 | **(a)**。ただし手がかり生成を変える PR は既存 `puzzleId` の手がかりを変えないことをテストで固定する |
-| U18 | 回収した落とし物を自動で装着し直すか | (a) 倉庫に戻す (b) 元の機体へ | **(a)**。元の機体は失われている |
-| U19 | invade→explore で落とし物をどう渡すか | (a) URL キーは足さず、explore が HubSave の `fieldDrops` を出撃マスで絞って読む (b) invade→explore に `cellDrops=dropId,…` キーを足す | **(a)**。回収時に元の状態で戻すには結局 HubSave のレコードが要り、URL に載せても二重になる。(b) はローカル開発（別オリジン）で表示だけ確認したいときに役立つ |
+| U1 | 保存キーを分けるか | 新キー `wreckline.hubSave.v3` に分け、旧キーは残す | 同じキーで `v: 3` を書くと、古いタブがセーブ全体を初期値で上書きしうる（§3.2） |
+| U2 | 旧 `offline` 回路を移行時に `unrestored` と見なすか | 見なさない。`offline` のまま | 推測で状態を変えない。どちらも効果なしで違いは表示だけ |
+| U3 | 部隊の回路上限（装着数）を項目3（段位）・項目8（開始 0）が入るまでどうするか | 部隊上限は判定せず、機体ごとの枠（基本 1）だけで判定 | 暫定の固定値は仕様にない数値。すぐ開始 0 にすると項目3 がない間は装着できなくなる |
+| U4 | コモンの枠拡張・レアリティの持ち方 | データは `effectKey` の予約だけ置き、枠は常に 1。対応表が決まったら任意フィールドとして加算 | 対応表と一緒に決めるため |
+| U5 | 旧来の `circuitBonuses`（成果状態ごとの固定ボーナス）を換算が決まるまでどうするか | 装着中の回路だけを今の表で集計して続ける | 装着制に沿い、今のボーナスの形も残る。換算が決まったら差し替え |
+| U6 | 未 Restore の中古回路の初期マークが偶然閉ループを作ると、評価値（＝売値）が上がる | 初期マークの生成（項目13）で閉ループを作らない | 売値の規則（25c＋評価値×3c、成果状態を見ない）を変えずに済む |
+| U7 | Invade を通らない出撃（trade から直接・`focus = null` の quick-battle）で落ちた回路 | **失う。救済はない。結果画面で失ったことを明示する** | 神宮の理由: Invade を通らない出撃はスタート地点に敵が出ない安全地帯なので、そこから先で失うのは自己責任。設計メモ §5「持ち帰れないものは持ち帰れない」とも一致 |
+| U8 | 前線の盤が変わったとき（「盤を再生成」、段位で盤が変わる）の落とし物 | 盤（`frontSeed`）に紐づけ、盤が変わったら消える（再生成の確認文に明記） | 段位（項目3）の設計で盤の扱いが決まったら見直す |
+| U9 | 喪失・落下・回収の反映経路 | explore が結果確定時に HubSave へ直接反映（`sortieId` で 1 回だけ） | 摩耗 URL 方式はボタンの選び方で記録が消える（§5.4）。ローカル開発で反映されない制約は `forcedBackWipe.ts` と同じ |
+| U10 | パーフェクト最大サイズの更新条件 | `fully_awakened` かつパーフェクト（`locked`） | 通常プレイでは同じ。デバッグの成果上書きで上がるのを防ぐ |
+| U11 | 移行時の `perfectMaxSize` の初期値 | 既存のパーフェクト回路の最大サイズ | 既に達成した人が後退しない。検証用の「既に完璧」盤（2×2）を受け取っていると 2 になる点は許容 |
+| U12 | 作成サイズの天井 | Restore が扱える最大サイズで頭打ち | 具体値は実装 B（項目12 の対応範囲に合わせる） |
+| U13 | 非正方形の既存盤のサイズ | `min(cols, rows)` | 今の生成経路は正方形のみなので実害は小さい |
+| U14 | 装着中の回路を売る・Restore に出す | 売却は自動で外して売る（確認あり）。Restore は装着したまま可 | どちらも HUB 内の操作 |
+| U15 | 隊長機の指定 | 今どおり `deployedInstanceIds` の先頭 | 選ぶ UI は項目7で検討 |
+| U16 | 機体を解体したときの装着回路 | 倉庫へ戻す | HUB 内の操作なので落とし物にはしない |
+| U17 | 評価値を保存するか | 保存せず毎回計算。手がかり生成の互換テストを置く | 手がかり生成を変える PR は既存 `puzzleId` の手がかり（＝既存回路の評価値）を変えないことをテストで固定する |
+| U18 | 回収した落とし物を自動で装着し直すか | 倉庫に戻す | 元の機体は失われている |
+| U19 | invade→explore で落とし物をどう渡すか | URL キーは足さず、explore が HubSave の `fieldDrops` を出撃マスで絞って読む | 回収時に元の状態で戻すには結局 HubSave のレコードが要り、URL に載せても二重になる |
 
 本書で決めないもの（既存の未決のまま・別タスク）: 評価値の換算と回路→コマンドの対応表・レアリティ（設計メモ §8.1）、回路の買値、敵ドロップ・拾う回路の頻度とサイズ（経済タスク）、落とし物の出し方（マス内の印）、誰が背負えるか、段位の上がり方。
