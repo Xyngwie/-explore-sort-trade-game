@@ -125,9 +125,9 @@ repairMaterials = 30
 
 | | 内容 |
 |---|---|
-| ペイロード | **`HubSaveV2`（`v: 2`）** が現行。`createHubSave` は常に v2 を書く |
-| ストレージキー | 当面 **`wreckline.hubSave.v1` のまま**（キー名は互換。中身の `v` で判別） |
-| 読込 | `parseHubSave` は **`v: 1` と `v: 2` を受け付け**、正規化後は常に `HubSaveV2` |
+| ペイロード | **`HubSaveV3`（`v: 3`）** が現行（2026-09-28〜）。`createHubSave` は常に v3 を書く。v2 の間は `HubSaveV2` |
+| ストレージキー | **`wreckline.hubSave.v3`**。v2 までの `wreckline.hubSave.v1` は読み込み元（移行元）として残し、書き換えない（[`HUB_SAVE_CONTRACT.md`](HUB_SAVE_CONTRACT.md) §12） |
+| 読込 | `parseHubSave` は **`v: 1`・`v: 2`・`v: 3` を受け付け**、正規化後は常に `HubSaveV3`。`OwnedMech` の形は v3 でも変えない（回路の装着は回路側の `equippedTo`） |
 
 ### 8.2 v1 → v2 マイグレーション
 

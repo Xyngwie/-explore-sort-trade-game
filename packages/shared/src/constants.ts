@@ -61,7 +61,22 @@ export const PIECES_PER_CONTAINER = 25;
 /** Hub purchase price for one 未開封コンテナ (provisional / 仮). */
 export const UNOPENED_CONTAINER_PRICE_CREDITS = 15;
 
-export const HUB_SAVE_STORAGE_KEY = "wreckline.hubSave.v1";
+/**
+ * HubSave storage key (HubSave v3 payload). Split from the legacy key so an
+ * old build tab (which only knows v1/v2) never overwrites a v3 save.
+ * See docs/HUB_SAVE_CONTRACT.md §12 / docs/CIRCUIT_DATA_MODEL_V0.md §3.2.
+ */
+export const HUB_SAVE_STORAGE_KEY = "wreckline.hubSave.v3";
+
+/**
+ * Legacy HubSave key (payload v1 / v2). Read-only fallback when the v3 key is
+ * absent; never written or deleted by v3 code (kept as a backup), except by
+ * the explicit reset (`clearHubSaveFromLocalStorage`).
+ */
+export const HUB_SAVE_LEGACY_STORAGE_KEY = "wreckline.hubSave.v1";
+
+/** Unreadable save text is copied to `<prefix><ISO>` before anything can overwrite it. */
+export const HUB_SAVE_CORRUPT_KEY_PREFIX = "wreckline.hubSave.corrupt.";
 
 /** Hangar craft signature (署名) — engraved as circuit lastEditorName. */
 export const CRAFT_SIGNATURE_STORAGE_KEY = "wreckline.craftSignature.v0";
@@ -75,6 +90,8 @@ export const HANDOFF_QUERY_KEYS = {
     "deployedInstanceIds",
     "mechDurability",
     "circuitBonuses",
+    /** Optional (HubSave v3 / CIRCUIT_DATA_MODEL_V0 §4): per-mech equipped circuits. */
+    "mechCircuits",
   ] as const,
   exploreToHubWear: ["returnKind", "mechWear"] as const,
   /** Module 4: hub → invade (minimal context; invade optional). */

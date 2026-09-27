@@ -38,6 +38,10 @@ function craftCircuit(): void {
   const record: HubCircuitRecord = {
     circuitId,
     circuitBoard: board,
+    // HubSave v3 required fields; behavior unchanged (white board → unrestored is impl B).
+    restoreState: "offline",
+    origin: "crafted",
+    equippedTo: null,
     outcome: "offline",
     updatedAt: new Date().toISOString(),
   };

@@ -1,12 +1,12 @@
-const HUB_SAVE_STORAGE_KEY = "wreckline.hubSave.v1";
+import { loadHubSaveFromLocalStorage, saveHubSaveToLocalStorage } from "@estg/shared";
+
+// HubSave v3: read/write through the shared contract (v3 key, legacy-key migration,
+// newer-version read-only guard). docs/HUB_SAVE_CONTRACT.md §12.
 const PIECES_PER_CONTAINER = 25;
 
 function readHubUnopenedContainers(): number {
   try {
-    const raw = localStorage.getItem(HUB_SAVE_STORAGE_KEY);
-    if (!raw) return 0;
-    const parsed = JSON.parse(raw) as { hub?: { unopenedContainers?: unknown } };
-    const n = Number(parsed.hub?.unopenedContainers ?? 0);
+    const n = Number(loadHubSaveFromLocalStorage()?.hub.unopenedContainers ?? 0);
     return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
   } catch {
     return 0;
@@ -16,20 +16,11 @@ function readHubUnopenedContainers(): number {
 function spendHubContainers(count: number): boolean {
   if (count < 1) return false;
   try {
-    const raw = localStorage.getItem(HUB_SAVE_STORAGE_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as {
-      v?: number;
-      savedAt?: string;
-      hub?: { unopenedContainers?: unknown } & Record<string, unknown>;
-    };
-    if (!parsed.hub) return false;
-    const have = Number(parsed.hub.unopenedContainers ?? 0);
+    const hub = loadHubSaveFromLocalStorage()?.hub;
+    if (!hub) return false;
+    const have = Number(hub.unopenedContainers ?? 0);
     if (!Number.isFinite(have) || have < count) return false;
-    parsed.hub.unopenedContainers = Math.floor(have) - count;
-    parsed.savedAt = new Date().toISOString();
-    localStorage.setItem(HUB_SAVE_STORAGE_KEY, JSON.stringify(parsed));
-    return true;
+    return saveHubSaveToLocalStorage({ ...hub, unopenedContainers: Math.floor(have) - count });
   } catch {
     return false;
   }
