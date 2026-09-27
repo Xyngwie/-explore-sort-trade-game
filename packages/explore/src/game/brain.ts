@@ -1,9 +1,11 @@
 import { BALANCE } from "./balance";
 import { dist, dist2, type Vec2 } from "./math";
 import {
+  abortSalvage,
   containerNearWaypoint,
   recoverClaimedContainerIds,
 } from "./orders";
+import { isWingmanMobileFor } from "./commandUnlock";
 import type { Container, Unit, WingmanIntent, World } from "./types";
 
 function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number): Unit | null {
@@ -77,6 +79,17 @@ export function nextPatrolOrbitTarget(
 export function decideWingman(world: World, self: Unit, dt: number): WingmanIntent {
   const b = world.balance;
   const leader = world.leader;
+  // No wing_mobility (release mode, no unlocking circuit): stand still and only
+  // shoot enemies already within weapon range. No follow / chase / collect.
+  if (!isWingmanMobileFor(world, self.id)) {
+    if (self.salvageId) abortSalvage(self);
+    return {
+      moveTarget: null,
+      fireAt: nearestAliveEnemy(self.pos, world.enemies, b.weaponRange),
+      trySalvage: false,
+    };
+  }
+
   const enemy = nearestAliveEnemy(self.pos, world.enemies, b.visionRange * b.visionHuntMul);
   const enemyDist = enemy ? dist(self.pos, enemy.pos) : Infinity;
 

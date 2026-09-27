@@ -552,3 +552,7 @@ button.cmd-locked:disabled {
 }
 .debug-unlock-bar.mode-release .debug-tag { background: #f59e0b; }
 .debug-unlock-bar .debug-unlock-toggle { padding: 0.15rem 0.5rem; font-size: 0.78rem; }
+
+/* wing_mobility locked: wingman stands still, self-defense only */
+.wing-immobile { margin-top: 0.2rem; font-size: 0.78rem; color: #f59e0b; }
+.wing-card.immobile { border-style: dashed; }

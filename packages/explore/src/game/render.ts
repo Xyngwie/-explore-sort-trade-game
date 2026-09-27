@@ -1,6 +1,7 @@
 import { extractionProgressPct } from "../extractProgress";
 import { getCoverObjects } from "./coverObjects";
 import { STANCE_LABEL, type World } from "./types";
+import { isWingmanMobileFor } from "./commandUnlock";
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -228,7 +229,8 @@ export function renderWorld(
     ctx.font = "11px sans-serif";
     const quirkTag = w.quirk ? `·${quirkShort(w.quirk)}` : "";
     const coverTag = w.inCover ? "·カバー" : "";
-    ctx.fillText(`${w.name}·${STANCE_LABEL[w.stance]}${quirkTag}${coverTag}`, tx(w.pos.x) - 28, ty(w.pos.y) - w.radius * sy - 8);
+    const stanceTag = isWingmanMobileFor(world, w.id) ? STANCE_LABEL[w.stance] : "自衛のみ";
+    ctx.fillText(`${w.name}·${stanceTag}${quirkTag}${coverTag}`, tx(w.pos.x) - 28, ty(w.pos.y) - w.radius * sy - 8);
     if (w.stance === "patrol" && w.waypoint) {
       ctx.strokeStyle = "#f0b42955";
       ctx.beginPath();
