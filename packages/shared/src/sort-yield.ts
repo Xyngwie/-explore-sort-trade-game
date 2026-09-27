@@ -22,6 +22,21 @@ export const RESOURCE_LABEL_JA: Record<ResourceId, string> = {
   junk: "ジャンク",
 };
 
+/** Compatibility aliases for older UI callers. They contain only the new four resources. */
+export type BasicMaterialId = ResourceId;
+export type PartId = ResourceId;
+export const BASIC_MATERIAL_LABEL_JA: Record<ResourceId, string> = RESOURCE_LABEL_JA;
+export const PART_LABEL_JA: Record<ResourceId, string> = RESOURCE_LABEL_JA;
+export function isBasicMaterialId(value: string): value is ResourceId {
+  return (RESOURCE_IDS as readonly string[]).includes(value);
+}
+export function isPartId(value: string): value is ResourceId {
+  return (RESOURCE_IDS as readonly string[]).includes(value);
+}
+export function isYieldItemId(value: string): value is ResourceId {
+  return (RESOURCE_IDS as readonly string[]).includes(value);
+}
+
 function nonNegInt(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.floor(n));
