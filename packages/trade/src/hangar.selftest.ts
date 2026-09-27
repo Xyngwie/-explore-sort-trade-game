@@ -15,6 +15,11 @@ import {
   deserializeHubSave,
   toExploreToHubWearPayload,
   computeCircuitEffectForBoard,
+  buildSizedTruePuzzleId,
+  resolveSizedTruePuzzle,
+  encodeEdgeState,
+  upsertCircuitIntoHub,
+  type CircuitOutcome,
 } from "@estg/shared";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
@@ -76,6 +81,9 @@ import {
   launchSortFromUnopened,
   buildSortFromUnopenedUrl,
   UNOPENED_CONTAINER_PRICE_CREDITS,
+  circuitSellPerfectSide,
+  perfectCircuitSellBonusCredits,
+  formatCircuitSellPriceJa,
 } from "./hangar";
 import { PIECES_PER_CONTAINER } from "@estg/shared";
 
@@ -743,8 +751,11 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     perfect: perf!.circuitBoard.perfect ?? perf!.locked,
   });
   assert.equal(br.effect, 8);
-  const price = circuitSellPriceCredits(br.effect);
-  assert.equal(price, 49); // 25 + 8*3
+  assert.equal(circuitSellPriceCredits(br.effect), 49); // 25 + 8*3 (no bonus)
+  // Perfect (Fully Awakened) 2×2 → + 完璧ボーナス 2^(2+1) = 8 → 57c.
+  assert.equal(circuitSellPerfectSide(perf!), 2);
+  const price = circuitSellPriceCredits(br.effect, { perfectSide: 2 });
+  assert.equal(price, 57); // 25 + 8*3 + 2^3
 
   const creditsBefore = hs.hub.credits;
   const countBefore = hs.hub.circuits.length;
@@ -755,9 +766,10 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   );
   assert.equal(hs.hub.circuits.length, countBefore - 1);
   assert.equal(hs.hub.credits, creditsBefore + price);
-  assert.ok(hs.notice.includes("+49c") || hs.notice.includes("49"));
+  assert.ok(hs.notice.includes("+57c"));
   assert.ok(hs.notice.includes("最低") && hs.notice.includes("出来栄え"));
-  assert.ok(hs.log.some((l) => l.includes("回路売却") && l.includes("+49c")));
+  assert.ok(hs.notice.includes("完璧ボーナス 8c"));
+  assert.ok(hs.log.some((l) => l.includes("回路売却") && l.includes("+57c")));
 
   // Persist: HubSave no longer lists the sold circuit
   const raw = store.getItem(HUB_SAVE_STORAGE_KEY);
@@ -787,6 +799,114 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   // Missing id
   const missing = sellCircuit(hs, "no_such_circuit");
   assert.equal(missing.notice, "回路なし");
+}
+
+// Perfect-only 完璧ボーナス 2^(N+1): sized Perfect boards 6×6 / 8×8, and
+// Bypass / Offline / un-Restored / non-awakened get no bonus.
+{
+  assert.equal(perfectCircuitSellBonusCredits(2), 8);
+  assert.equal(perfectCircuitSellBonusCredits(6), 128);
+  assert.equal(perfectCircuitSellBonusCredits(8), 512);
+  assert.equal(perfectCircuitSellBonusCredits(null), 0);
+  assert.equal(perfectCircuitSellBonusCredits(0), 0);
+  assert.equal(circuitSellPriceCredits(0, { perfectSide: null }), 25);
+  const brkJa = formatCircuitSellPriceJa(8, { perfectSide: 2 });
+  assert.equal(brkJa.total, 57);
+  assert.equal(brkJa.perfectBonus, 8);
+  assert.ok(brkJa.detailJa.includes("完璧ボーナス 8c"));
+  assert.equal(formatCircuitSellPriceJa(8).detailJa.includes("完璧"), false);
+
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  const addBoard = (
+    state: ReturnType<typeof resetHangar>,
+    id: string,
+    size: number,
+    outcome: CircuitOutcome,
+    perfect: boolean,
+  ) => {
+    const puzzleId = buildSizedTruePuzzleId(`sell-${id}`, size, size);
+    const sized = resolveSizedTruePuzzle(puzzleId)!;
+    const board = {
+      v: 1 as const,
+      cols: size,
+      rows: size,
+      edgeState: encodeEdgeState(sized.solution),
+      puzzleId,
+      outcome,
+      ...(perfect ? { perfect: true, locked: true } : {}),
+    };
+    const hub = upsertCircuitIntoHub(state.hub, {
+      circuitId: id,
+      circuitBoard: board,
+      outcome,
+      ...(perfect ? { perfect: true, digitRate: 1, loopClosed: true } : {}),
+    });
+    return { ...state, hub };
+  };
+  const sellAndGain = (
+    state: ReturnType<typeof resetHangar>,
+    id: string,
+  ): { gained: number; effect: number; next: ReturnType<typeof resetHangar> } => {
+    const rec = state.hub.circuits.find((c) => c.circuitId === id)!;
+    const effect = computeCircuitEffectForBoard(rec.circuitBoard, {
+      perfect: rec.circuitBoard.perfect ?? rec.locked,
+    }).effect;
+    const before = state.hub.credits;
+    const next = sellCircuit(state, id);
+    return { gained: next.hub.credits - before, effect, next };
+  };
+
+  for (const size of [2, 6, 8]) {
+    let hs = resetHangar(store);
+    hs = addBoard(hs, `perf${size}`, size, "fully_awakened", true);
+    const rec = hs.hub.circuits.find((c) => c.circuitId === `perf${size}`)!;
+    assert.equal(circuitSellPerfectSide(rec), size);
+    const r = sellAndGain(hs, `perf${size}`);
+    assert.equal(r.gained, 25 + r.effect * 3 + 2 ** (size + 1));
+    console.log(
+      `trade perfect sell ${size}x${size}: effect ${r.effect} → ${r.gained}c`,
+    );
+
+    // Same lines as Bypass (not Perfect) → no bonus.
+    hs = resetHangar(store);
+    hs = addBoard(hs, `byp${size}`, size, "bypass", false);
+    const b = sellAndGain(hs, `byp${size}`);
+    assert.equal(b.gained, 25 + b.effect * 3);
+  }
+
+  // Un-Restored / Offline empty board → 25c, no bonus.
+  {
+    let hs = resetHangar(store);
+    hs = {
+      ...hs,
+      hub: upsertCircuitIntoHub(hs.hub, {
+        circuitId: "raw6",
+        circuitBoard: createEmptyCircuitBoard(6, 6, "raw6"),
+        outcome: "offline",
+      }),
+    };
+    const rec = hs.hub.circuits.find((c) => c.circuitId === "raw6")!;
+    assert.equal(circuitSellPerfectSide(rec), null);
+    const r = sellAndGain(hs, "raw6");
+    assert.equal(r.gained, 25);
+  }
+  // Perfect flag without Fully Awakened outcome → no bonus.
+  assert.equal(
+    circuitSellPerfectSide({
+      circuitBoard: { v: 1, cols: 6, rows: 6, edgeState: "", perfect: true, outcome: "bypass" },
+      outcome: "bypass",
+    }),
+    null,
+  );
+  // Non-square boards: N = max(cols, rows).
+  assert.equal(
+    circuitSellPerfectSide({
+      circuitBoard: { v: 1, cols: 4, rows: 6, edgeState: "", perfect: true, outcome: "fully_awakened" },
+      outcome: "fully_awakened",
+    }),
+    6,
+  );
 }
 
 // --- unopened containers: buy / launch / skip deposit ingest ---

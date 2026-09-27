@@ -94,6 +94,8 @@ import {
   CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
   circuitSellPriceCredits,
+  circuitSellPerfectSide,
+  perfectCircuitSellBonusCredits,
   formatCircuitSellPriceJa,
 } from "./circuit-sell-prices";
 
@@ -113,6 +115,8 @@ export {
   CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
   circuitSellPriceCredits,
+  circuitSellPerfectSide,
+  perfectCircuitSellBonusCredits,
   formatCircuitSellPriceJa,
 } from "./circuit-sell-prices";
 
@@ -1380,7 +1384,9 @@ export { UNOPENED_CONTAINER_PRICE_CREDITS };
 
 /**
  * Sell one HubSave circuit: price = {@link CIRCUIT_SELL_BASE_CREDITS} +
- * floor(effect) × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT} (仮 · 最低+出来栄え).
+ * floor(effect) × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT} (仮 · 最低+出来栄え)
+ * + 完璧ボーナス 2^(N+1) only for Perfect (Fully Awakened) circuits
+ * (N = max(cols, rows); see {@link circuitSellPerfectSide}).
  * Removes from inventory, credits wallet, clears active selection if needed.
  * Effect 0 → +25c (最低額 only; still allowed).
  */
@@ -1401,7 +1407,9 @@ export function sellCircuit(
   } catch {
     effect = 0;
   }
-  const gained = circuitSellPriceCredits(effect);
+  const perfectSide = circuitSellPerfectSide(rec);
+  const brk = formatCircuitSellPriceJa(effect, { perfectSide });
+  const gained = circuitSellPriceCredits(effect, { perfectSide });
   const without = removeCircuitFromHub(state.hub, rec.circuitId);
   const hub = normalizeHubSnapshot({
     ...without,
@@ -1422,12 +1430,13 @@ export function sellCircuit(
     lastCircuit,
     log: pushLog(
       state.log,
-      `回路売却 ${rec.circuitId} · 効果 ${effect} → +${gained}c（仮 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え ${effect}*${CIRCUIT_SELL_CREDITS_PER_EFFECT}c）`,
+      `回路売却 ${rec.circuitId} · 効果 ${effect} → +${gained}c（仮 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え ${effect}*${CIRCUIT_SELL_CREDITS_PER_EFFECT}c${
+        brk.perfectBonus > 0
+          ? ` + 完璧ボーナス 2^(${brk.perfectSide}+1)=${brk.perfectBonus}c`
+          : ""
+      }）`,
     ),
-    notice: (() => {
-      const brk = formatCircuitSellPriceJa(effect);
-      return `回路売却 +${gained}c（最低 ${brk.base}c + 出来栄え ${brk.craft}c）`;
-    })(),
+    notice: `回路売却 +${gained}c（${brk.detailJa}）`,
   };
   return persistHangar(next);
 }
