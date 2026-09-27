@@ -48,5 +48,5 @@ export function formatCircuitSellPriceJa(effectValue: number): {
   };
 }
 
-// Module 3 UI side effect: replace the legacy typed-material inventory card.
-import "./trade-resource-ui";
+// Module 3 UI side effect: load the four-resource trade window directly from the HUB entry graph.
+import "./four-resource-trade-ui";
