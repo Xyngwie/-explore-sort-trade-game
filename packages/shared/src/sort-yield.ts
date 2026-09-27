@@ -2,6 +2,8 @@
 
 export const SORT_PIECE_TYPES = ["ammo", "armor", "power"] as const;
 export type SortPieceType = (typeof SORT_PIECE_TYPES)[number];
+
+/** Temporary board-input compatibility: the current Sort engine still emits these names. */
 export type LegacySortPieceType = "food" | "material" | "energy";
 export type ClearedPieceCounts =
   | Record<SortPieceType, number>
@@ -10,24 +12,7 @@ export type ClearedPieceCounts =
 /** The only resources produced and stored by the new model. */
 export const RESOURCE_IDS = ["ammo", "armor", "power", "junk"] as const;
 export type ResourceId = (typeof RESOURCE_IDS)[number];
-
-/** Deprecated compatibility ids retained so old Hub/repair code can compile and old saves can be read. */
-export type BasicMaterialId =
-  | ResourceId
-  | "mat_scrap"
-  | "mat_polymer"
-  | "mat_circuit"
-  | "mat_ration"
-  | "mat_coolant";
-export type PartId =
-  | ResourceId
-  | "part_actuator"
-  | "part_armor_plate"
-  | "part_power_cell"
-  | "part_sensor_array"
-  | "part_hydraulic_line";
-export type LegacyYieldItemId = Exclude<BasicMaterialId, ResourceId> | Exclude<PartId, ResourceId>;
-export type YieldItemId = ResourceId | LegacyYieldItemId;
+export type YieldItemId = ResourceId;
 export type YieldBag = Partial<Record<YieldItemId, number>>;
 
 export const RESOURCE_LABEL_JA: Record<ResourceId, string> = {
@@ -37,34 +22,16 @@ export const RESOURCE_LABEL_JA: Record<ResourceId, string> = {
   junk: "ジャンク",
 };
 
-export const BASIC_MATERIAL_LABEL_JA: Record<BasicMaterialId, string> = {
-  ammo: "弾薬",
-  armor: "装甲パーツ",
-  power: "電力パーツ",
-  junk: "ジャンク",
-  mat_scrap: "旧・スクラップ鋼",
-  mat_polymer: "旧・ポリマー",
-  mat_circuit: "旧・回路素体",
-  mat_ration: "旧・糧食パック",
-  mat_coolant: "旧・冷却剤",
-};
-export const PART_LABEL_JA: Record<PartId, string> = {
-  ammo: "弾薬",
-  armor: "装甲パーツ",
-  power: "電力パーツ",
-  junk: "ジャンク",
-  part_actuator: "旧・アクチュエータ",
-  part_armor_plate: "旧・装甲板",
-  part_power_cell: "旧・電力セル",
-  part_sensor_array: "旧・センサーアレイ",
-  part_hydraulic_line: "旧・油圧ライン",
-};
-
-export function isBasicMaterialId(value: string): value is BasicMaterialId {
-  return (Object.keys(BASIC_MATERIAL_LABEL_JA) as string[]).includes(value);
+/** Compatibility aliases for older UI callers. They contain only the new four resources. */
+export type BasicMaterialId = ResourceId;
+export type PartId = ResourceId;
+export const BASIC_MATERIAL_LABEL_JA: Record<ResourceId, string> = RESOURCE_LABEL_JA;
+export const PART_LABEL_JA: Record<ResourceId, string> = RESOURCE_LABEL_JA;
+export function isBasicMaterialId(value: string): value is ResourceId {
+  return (RESOURCE_IDS as readonly string[]).includes(value);
 }
-export function isPartId(value: string): value is PartId {
-  return (Object.keys(PART_LABEL_JA) as string[]).includes(value);
+export function isPartId(value: string): value is ResourceId {
+  return (RESOURCE_IDS as readonly string[]).includes(value);
 }
 export function isYieldItemId(value: string): value is ResourceId {
   return (RESOURCE_IDS as readonly string[]).includes(value);
@@ -83,10 +50,15 @@ export function compactYieldBag(bag: YieldBag): YieldBag {
   }
   return out;
 }
-export function emptyYieldBag(): YieldBag { return {}; }
+
+export function emptyYieldBag(): YieldBag {
+  return {};
+}
+
 export function yieldBagTotal(bag: YieldBag): number {
   return RESOURCE_IDS.reduce((sum, id) => sum + nonNegInt(bag[id] ?? 0), 0);
 }
+
 export function mergeYieldBags(...bags: readonly YieldBag[]): YieldBag {
   const out: YieldBag = {};
   for (const bag of bags) {
@@ -97,6 +69,7 @@ export function mergeYieldBags(...bags: readonly YieldBag[]): YieldBag {
   }
   return compactYieldBag(out);
 }
+
 export function scaleYieldBag(bag: YieldBag, multiplier: number): YieldBag {
   const m = Number.isFinite(multiplier) ? Math.max(0, multiplier) : 0;
   const out: YieldBag = {};
@@ -106,12 +79,17 @@ export function scaleYieldBag(bag: YieldBag, multiplier: number): YieldBag {
   }
   return out;
 }
+
 export function applyYieldBagToInventory(inventory: YieldBag, bag: YieldBag): YieldBag {
   return mergeYieldBags(inventory, bag);
 }
+
 export function canAffordYieldCost(inventory: YieldBag, cost: YieldBag): boolean {
-  return RESOURCE_IDS.every((id) => nonNegInt(inventory[id] ?? 0) >= nonNegInt(cost[id] ?? 0));
+  return RESOURCE_IDS.every(
+    (id) => nonNegInt(inventory[id] ?? 0) >= nonNegInt(cost[id] ?? 0),
+  );
 }
+
 export function spendYieldBag(inventory: YieldBag, cost: YieldBag): YieldBag | null {
   if (!canAffordYieldCost(inventory, cost)) return null;
   const out = { ...compactYieldBag(inventory) };
@@ -132,13 +110,15 @@ export function yieldBagFromClearedCounts(cleared: ClearedPieceCounts): YieldBag
       power: cleared.power,
     });
   }
-  // Migration path for the current Sort engine: food→ammo, material→armor, energy→power.
+
+  // Temporary migration path until the Sort board input itself is renamed.
   return compactYieldBag({
     ammo: cleared.food,
     armor: cleared.material,
     power: cleared.energy,
   });
 }
+
 export function yieldBagFromClearedWithMultiplier(
   cleared: ClearedPieceCounts,
   craftMultiplier: number,
@@ -152,6 +132,7 @@ export function encodeYieldBagCompact(bag: YieldBag): string {
     .map((id) => `${id}:${nonNegInt(bag[id] ?? 0)}`)
     .join(";");
 }
+
 export function parseYieldBagCompact(raw: string | null | undefined): YieldBag {
   if (raw == null || raw.trim() === "") return {};
   const out: YieldBag = {};
@@ -160,26 +141,9 @@ export function parseYieldBagCompact(raw: string | null | undefined): YieldBag {
     if (colon <= 0) continue;
     const id = part.slice(0, colon).trim();
     const n = Number.parseInt(part.slice(colon + 1), 10);
-    if (!isYieldItemId(id) || !Number.isFinite(n)) continue;
+    if (!RESOURCE_IDS.includes(id as ResourceId) || !Number.isFinite(n)) continue;
     const v = nonNegInt(n);
-    if (v > 0) out[id] = nonNegInt(out[id] ?? 0) + v;
+    if (v > 0) out[id as ResourceId] = nonNegInt(out[id as ResourceId] ?? 0) + v;
   }
   return compactYieldBag(out);
 }
-
-/** Legacy repair type retained so existing fleet code compiles during migration. */
-export type TypedRepairCost = {
-  credits: number;
-  basicMaterials: Partial<Record<Exclude<BasicMaterialId, ResourceId>, number>>;
-  parts: Partial<Record<Exclude<PartId, ResourceId>, number>>;
-};
-export function yieldBagFromTypedRepairCost(cost: TypedRepairCost): YieldBag {
-  const basic = Object.values(cost.basicMaterials).reduce((s, n) => s + nonNegInt(n ?? 0), 0);
-  const parts = Object.values(cost.parts).reduce((s, n) => s + nonNegInt(n ?? 0), 0);
-  return basic + parts > 0 ? { armor: basic + parts } : {};
-}
-export const EXAMPLE_TYPED_REPAIR_COST: TypedRepairCost = {
-  credits: 50,
-  basicMaterials: {},
-  parts: { part_armor_plate: 1 },
-};
