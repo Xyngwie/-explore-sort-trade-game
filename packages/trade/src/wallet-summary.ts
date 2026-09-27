@@ -38,7 +38,6 @@ function captureSortYieldFromHandoff() {
     const bag = parseYieldBagCompact(params.get("yieldBag"));
     localStorage.setItem(LAST_SORT_YIELD_TOTAL_KEY, String(yieldBagTotal(bag)));
   } else if (params.has("importMaterials")) {
-    // A skip / empty handoff produced no new resources.
     localStorage.setItem(LAST_SORT_YIELD_TOTAL_KEY, "0");
   }
 
@@ -60,11 +59,14 @@ function readLastSortYieldTotal(): number {
 
 function setStatValue(el: HTMLElement, label: string, value: number | string) {
   const key = el.querySelector<HTMLElement>(".stat-k");
-  if (key) key.textContent = label;
+  if (key && key.textContent !== label) key.textContent = label;
   const textNode = Array.from(el.childNodes).find(
     (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
   );
-  if (textNode) textNode.textContent = ` ${value}`;
+  const nextText = ` ${value}`;
+  if (textNode && textNode.textContent !== nextText) {
+    textNode.textContent = nextText;
+  }
 }
 
 function ensureUnopenedHandoffApplied(hub: ReturnType<typeof readHub>) {
@@ -82,89 +84,94 @@ function ensureUnopenedHandoffApplied(hub: ReturnType<typeof readHub>) {
 }
 
 let updating = false;
+let observer: MutationObserver | null = null;
 
 function updateWalletSummary() {
   if (updating) return;
   const pills = document.querySelector<HTMLElement>(".wallet-card .stat-pills");
   if (!pills) return;
+
   updating = true;
+  observer?.disconnect();
+  try {
+    const children = Array.from(pills.children).filter(
+      (node): node is HTMLElement => node instanceof HTMLElement,
+    );
+    if (children.length < 6) return;
 
-  const children = Array.from(pills.children).filter(
-    (node): node is HTMLElement => node instanceof HTMLElement,
-  );
-  if (children.length < 6) {
+    const keyByLabel: Record<string, string> = {
+      Cr: "credits",
+      クレジット: "credits",
+      資材: "materials",
+      弾薬: "ammo",
+      艦隊: "fleet",
+      未開封: "unopened",
+      搬入: "imported",
+    };
+    for (const child of children) {
+      const key = child.querySelector<HTMLElement>(".stat-k")?.textContent?.trim();
+      if (key && keyByLabel[key] && child.dataset.walletKey !== keyByLabel[key]) {
+        child.dataset.walletKey = keyByLabel[key];
+      }
+    }
+
+    const byKey = new Map(
+      Array.from(pills.children)
+        .filter((node): node is HTMLElement => node instanceof HTMLElement)
+        .map((node) => [node.dataset.walletKey, node] as const),
+    );
+    const orderedKeys = [
+      "credits",
+      "fleet",
+      "ammo",
+      "unopened",
+      "imported",
+      "materials",
+    ];
+    for (const key of orderedKeys) {
+      const child = byKey.get(key);
+      if (child && child.parentElement === pills && pills.lastElementChild !== child) {
+        pills.appendChild(child);
+      }
+    }
+
+    const hub = readHub();
+    if (!hub) return;
+    ensureUnopenedHandoffApplied(hub);
+    const refreshedHub = readHub() ?? hub;
+
+    const resourceTotal = RESOURCE_IDS.reduce(
+      (sum, id) => sum + Math.max(0, Math.floor(refreshedHub.inventory?.[id] ?? 0)),
+      0,
+    );
+    const ammoTotal = Object.values(refreshedHub.ammoLoad ?? {}).reduce(
+      (sum, value) => sum + Math.max(0, Math.floor(Number(value) || 0)),
+      0,
+    );
+    const fleetTotal = refreshedHub.fleet?.length ?? 0;
+    const unopened = Math.max(0, Math.floor(refreshedHub.unopenedContainers ?? 0));
+
+    const reordered = Array.from(pills.children) as HTMLElement[];
+    setStatValue(reordered[0], "クレジット", Math.floor(refreshedHub.credits ?? 0));
+    setStatValue(reordered[1], "艦隊", `${fleetTotal}/3`);
+    setStatValue(reordered[2], "弾薬", ammoTotal);
+    setStatValue(reordered[3], "未開封", unopened);
+    setStatValue(reordered[4], "搬入", readLastSortYieldTotal());
+    setStatValue(reordered[5], "資材", resourceTotal);
+
+    if (pills.style.display !== "grid") pills.style.display = "grid";
+    if (pills.style.gridTemplateColumns !== "repeat(3, minmax(0, 1fr))") {
+      pills.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
+    }
+    if (pills.style.gap !== "0.4rem") pills.style.gap = "0.4rem";
+  } finally {
     updating = false;
-    return;
+    observer?.observe(document.documentElement, { childList: true, subtree: true });
   }
-
-  const keyByLabel: Record<string, string> = {
-    Cr: "credits",
-    クレジット: "credits",
-    資材: "materials",
-    弾薬: "ammo",
-    艦隊: "fleet",
-    未開封: "unopened",
-    搬入: "imported",
-  };
-  for (const child of children) {
-    const key = child.querySelector<HTMLElement>(".stat-k")?.textContent?.trim();
-    if (key && keyByLabel[key]) child.dataset.walletKey = keyByLabel[key];
-  }
-
-  const byKey = new Map(
-    Array.from(pills.children)
-      .filter((node): node is HTMLElement => node instanceof HTMLElement)
-      .map((node) => [node.dataset.walletKey, node] as const),
-  );
-  const orderedKeys = [
-    "credits",
-    "fleet",
-    "ammo",
-    "unopened",
-    "imported",
-    "materials",
-  ];
-  for (const key of orderedKeys) {
-    const child = byKey.get(key);
-    if (child && child.parentElement === pills) pills.appendChild(child);
-  }
-
-  const hub = readHub();
-  if (!hub) {
-    updating = false;
-    return;
-  }
-  ensureUnopenedHandoffApplied(hub);
-  const refreshedHub = readHub() ?? hub;
-
-  const resourceTotal = RESOURCE_IDS.reduce(
-    (sum, id) => sum + Math.max(0, Math.floor(refreshedHub.inventory?.[id] ?? 0)),
-    0,
-  );
-  const ammoTotal = Object.values(refreshedHub.ammoLoad ?? {}).reduce(
-    (sum, value) => sum + Math.max(0, Math.floor(Number(value) || 0)),
-    0,
-  );
-  const fleetTotal = refreshedHub.fleet?.length ?? 0;
-  const unopened = Math.max(0, Math.floor(refreshedHub.unopenedContainers ?? 0));
-
-  const reordered = Array.from(pills.children) as HTMLElement[];
-  setStatValue(reordered[0], "クレジット", Math.floor(refreshedHub.credits ?? 0));
-  setStatValue(reordered[1], "艦隊", `${fleetTotal}/3`);
-  setStatValue(reordered[2], "弾薬", ammoTotal);
-  setStatValue(reordered[3], "未開封", unopened);
-  setStatValue(reordered[4], "搬入", readLastSortYieldTotal());
-  setStatValue(reordered[5], "資材", resourceTotal);
-
-  pills.style.display = "grid";
-  pills.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
-  pills.style.gap = "0.4rem";
-  updating = false;
 }
 
 captureSortYieldFromHandoff();
-
-const observer = new MutationObserver(() => updateWalletSummary());
+observer = new MutationObserver(() => updateWalletSummary());
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
 if (document.readyState === "loading") {
