@@ -59,6 +59,7 @@ import {
   buildNextLocalBoardHref,
   buildReturnToTradeUrl,
   readLocalSeedFromSearch,
+  slowPerfectBoardSide,
   stripInboundSearchFromLocation,
 } from "./session";
 
@@ -746,6 +747,66 @@ assert.ok(
     assert.ok(bypassGuideEffectJa(pv2.bypass).includes(`効果値 ${pv2.bypass.effect}`));
   }
   console.log("restore variable board size (2..8) + sized perfect + bypass guide ok");
+}
+
+// --- Restore max 20×20 (U12): sizes 9..20 generate + judge; >20 clamps to
+//     20 (never 2×2); oversize stored boards open clamped with empty marks;
+//     「生成中…」 only for large v2 Perfect boards. ---
+{
+  for (let size = 9; size <= 20; size++) {
+    const flawed = generatePuzzle(`big-${size}`, size, size);
+    assert.equal(flawed.cols, size);
+    assert.equal(flawed.rows, size);
+    assert.equal(flawed.clues.length, size);
+    const empty = freshMarks(size, size);
+    assert.equal(classifyPlayResult(flawed.clues, empty, size, size).outcome, "offline");
+    const t = generatePuzzle(`big-${size}-true`, size, size, { forceKind: "true" });
+    assert.equal(t.injectedTrue, true);
+    assert.equal(t.cols, size);
+    assert.equal(t.puzzleId, buildSizedTruePuzzleIdV2(`big-${size}-true`, size, size));
+    const solution = resolveSizedTruePuzzle(t.puzzleId)!.solution;
+    assert.equal(loopTouchesAllOuterSides(solution, size, size), true);
+    const res = classifyPlayResult(t.clues, solution, size, size);
+    assert.equal(res.outcome, "fully_awakened");
+    assert.equal(res.perfectClearance, true);
+  }
+  // Above 20 → 20 for both kinds.
+  const f30 = generatePuzzle("clamp-30", 30, 30);
+  assert.deepEqual([f30.cols, f30.rows, f30.clues.length, f30.clues[0]!.length], [20, 20, 20, 20]);
+  const t25 = generatePuzzle("clamp-25", 25, 21, { forceKind: "true" });
+  assert.deepEqual([t25.cols, t25.rows, t25.injectedTrue], [20, 20, true]);
+  assert.equal(t25.puzzleId, buildSizedTruePuzzleIdV2("clamp-25", 20, 20));
+  // Stored 30×30 board (older save; decode tolerates ≤ 64) opens as 20×20.
+  const b30 = createEmptyCircuitBoard(30, 30, "stored-30");
+  const m30 = decodeEdgeState(b30.edgeState, edgeCount(30, 30));
+  m30[0] = 1;
+  b30.edgeState = encodeEdgeState(m30);
+  const s30 = bootstrapFromSearch(
+    new URL(buildTradeToRestoreUrl({ circuitId: "c30", circuitBoard: b30 })).search,
+  );
+  assert.deepEqual([s30.puzzle.cols, s30.puzzle.rows], [20, 20]);
+  assert.equal(s30.marks.length, edgeCount(20, 20));
+  assert.ok(s30.marks.every((m) => m === 0), "old-geometry marks dropped");
+  // A v2 18×18 id handed from trade opens as that Perfect board (was flawed
+  // while the sized max was 16).
+  const id18 = buildSizedTruePuzzleIdV2("hand-18", 18, 18);
+  const s18 = bootstrapFromSearch(
+    new URL(buildTradeToRestoreUrl({ circuitId: "c18", circuitBoard: createEmptyCircuitBoard(18, 18, id18) })).search,
+  );
+  assert.deepEqual([s18.puzzle.cols, s18.injectedTrue, s18.rarity], [18, true, "perfect_rare"]);
+  // 「生成中…」 notice: v2 Perfect id with side ≥ 15 only.
+  const urlFor = (id: string, n: number) =>
+    new URL(buildTradeToRestoreUrl({ circuitId: "x", circuitBoard: createEmptyCircuitBoard(n, n, id) })).search;
+  assert.equal(slowPerfectBoardSide(urlFor(id18, 18)), 18);
+  assert.equal(slowPerfectBoardSide(urlFor(buildSizedTruePuzzleIdV2("s", 15, 15), 15)), 15);
+  assert.equal(slowPerfectBoardSide(urlFor(buildSizedTruePuzzleIdV2("s", 14, 14), 14)), null);
+  assert.equal(slowPerfectBoardSide(urlFor(buildSizedTruePuzzleIdV2("s", 20, 8), 20)), 20);
+  assert.equal(slowPerfectBoardSide(urlFor("flawed-20", 20)), null);
+  assert.equal(slowPerfectBoardSide(urlFor("perfect-true-20x20-abc", 20)), null, "v1 is instant");
+  assert.equal(slowPerfectBoardSide(`?seed=${buildSizedTruePuzzleIdV2("s", 16, 16)}`), 16);
+  assert.equal(slowPerfectBoardSide("?circuitId=" + buildSizedTruePuzzleIdV2("s", 17, 17)), 17);
+  assert.equal(slowPerfectBoardSide(""), null);
+  console.log("restore max 20×20 (9..20, clamp >20, oversize stored board, 生成中 notice) ok");
 }
 
 console.log("restore circuit.selftest ok");

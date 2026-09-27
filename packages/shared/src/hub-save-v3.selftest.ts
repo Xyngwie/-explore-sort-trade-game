@@ -323,6 +323,29 @@ const v2Text = JSON.stringify(v2Save);
   assert.equal(recordPerfectSize(p5, { restoreState: "fully_awakened", locked: true, circuitBoard: board(3, "p3") }).perfectMaxSize, 5, "never lowers");
   assert.equal(recordPerfectSize(INITIAL_HUB, { restoreState: "bypass", locked: false, circuitBoard: board(6, "b6") }).perfectMaxSize, 0, "U10");
   assert.equal(recordPerfectSize(INITIAL_HUB, { restoreState: "fully_awakened", locked: false, circuitBoard: board(6, "b6") }).perfectMaxSize, 0, "U10 needs locked");
+
+  // U12: Restore max side 20 is the craft ceiling and the perfectMaxSize cap.
+  assert.equal(HUB_LIMITS.maxRestoreSide, 20);
+  assert.equal(craftMaxSize({ perfectMaxSize: 18 }), 19);
+  assert.equal(craftMaxSize({ perfectMaxSize: 19 }), 20);
+  assert.equal(craftMaxSize({ perfectMaxSize: 20 }), 20, "min(best+1, 20)");
+  assert.equal(craftMaxSize({ perfectMaxSize: 40 }), 20);
+  assert.equal(craftMaxSize({ perfectMaxSize: 40 }, Number.POSITIVE_INFINITY), 41, "explicit no-clamp");
+  assert.equal(
+    recordPerfectSize(INITIAL_HUB, { restoreState: "fully_awakened", locked: true, circuitBoard: board(24, "p24") }).perfectMaxSize,
+    20,
+    "recorded size capped at Restore max",
+  );
+  assert.equal(normalizeHubSnapshot({ ...INITIAL_HUB, perfectMaxSize: 33 }).perfectMaxSize, 20);
+  // Save side stays tolerant: an older save holding a board above 20 (≤ 64)
+  // keeps the circuit (Restore clamps it when opened).
+  assert.equal(HUB_LIMITS.maxCircuitSide, 64);
+  const big = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    circuits: [{ circuitId: "big30", circuitBoard: board(30, "big30"), outcome: "offline" }],
+  } as unknown as HubSnapshot);
+  assert.equal(big.circuits.length, 1);
+  assert.equal(big.circuits[0]!.circuitBoard.cols, 30);
 }
 
 // ---------------------------------------------------------------------------

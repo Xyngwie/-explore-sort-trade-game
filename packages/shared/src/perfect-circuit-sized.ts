@@ -18,13 +18,20 @@
  *   all 4 outer sides, the full-clue board is checked to be uniquely solvable,
  *   then clues are hidden (null) one by one in seeded order while the puzzle
  *   stays uniquely solvable, up to {@link sizedTrueHiddenFraction}(N).
+ *
+ * Sides are 2..{@link RESTORE_MAX_SIDE} (20). Hiding is bounded by step
+ * (DFS node) budgets only — never wall-clock — so a puzzleId always rebuilds
+ * the same board.
  */
-import type { EdgeMark } from "./circuit-board";
+import { RESTORE_MAX_SIDE, type EdgeMark } from "./circuit-board";
 import {
   circuitCellEdgeIndices,
   isCircuitSingleLoopClosed,
 } from "./circuit-effect";
-import { isCircuitUniquelySolvable } from "./circuit-solver";
+import {
+  countCircuitLoopSolutions,
+  isCircuitUniquelySolvable,
+} from "./circuit-solver";
 
 /** puzzleId prefix for sized true boards: `perfect-true-{cols}x{rows}-{hash}`. */
 export const SIZED_TRUE_PUZZLE_PREFIX = "perfect-true-";
@@ -36,9 +43,12 @@ export const SIZED_TRUE_V2_PUZZLE_PREFIX = "perfect-true-v2-";
 
 const SIZED_TRUE_V2_ID_RE = /^perfect-true-v2-(\d+)x(\d+)-([0-9a-z]+)$/;
 
-/** Smallest / largest board side supported by the sized true generator. */
+/**
+ * Smallest / largest board side supported by the sized true generator.
+ * The max is Restore's max side ({@link RESTORE_MAX_SIDE} = 20).
+ */
 export const SIZED_TRUE_MIN_SIDE = 2;
-export const SIZED_TRUE_MAX_SIDE = 16;
+export const SIZED_TRUE_MAX_SIDE = RESTORE_MAX_SIDE;
 
 function fnv1a(s: string): number {
   let h = 2166136261;
@@ -209,13 +219,15 @@ export function sizedTrueCluesFromMarks(
 
 /**
  * Target hidden-clue fraction for v2 boards of side N = max(cols, rows):
- * `min(0.6, 0.1 + 0.05 × N)` → 3:25%, 4:30%, 5:35%, 6:40%, 7:45%, 8:50%,
- * ≥10: 60%. Hiding stops earlier if no further clue can be hidden while the
- * puzzle stays uniquely solvable.
+ * `min(0.5, 0.1 + 0.05 × N)` → 3:25%, 4:30%, 5:35%, 6:40%, 7:45%, ≥8: 50%.
+ * Hiding stops earlier if no further clue can be proven hideable within the
+ * step budgets while the puzzle stays uniquely solvable.
+ * (The 50% cap keeps 20×20 fast: the last 10% toward 60% cost most of the
+ * search on big boards.)
  */
 export function sizedTrueHiddenFraction(side: number): number {
   const n = Math.max(0, Math.floor(side));
-  return Math.min(0.6, 0.1 + 0.05 * n);
+  return Math.min(0.5, 0.1 + 0.05 * n);
 }
 
 /** True when the loop has at least one edge on each of the 4 outer sides. */
@@ -342,7 +354,13 @@ type SizedTruePuzzle = {
 
 const V2_MAX_ATTEMPTS = 12;
 /** DFS node budget per uniqueness check while hiding clues. */
-const HIDE_NODE_BUDGET = 5_000;
+export const SIZED_TRUE_HIDE_NODE_BUDGET = 5_000;
+/**
+ * Total DFS node budget for the whole hide phase of one board. When spent,
+ * hiding stops (remaining clues stay shown). Step-based → deterministic.
+ * ~10× the average a 20×20 board needs.
+ */
+export const SIZED_TRUE_HIDE_TOTAL_NODE_BUDGET = 150_000;
 const sizedCache = new Map<string, SizedTruePuzzle>();
 const SIZED_CACHE_MAX = 256;
 
@@ -362,7 +380,12 @@ function buildV2(seed: number, cols: number, rows: number): {
   const edges = (rows + 1) * cols + rows * (cols + 1);
   let solution: EdgeMark[] | null = null;
   let full: (number | null)[][] | null = null;
-  for (let a = 0; a < V2_MAX_ATTEMPTS && solution == null; a++) {
+  // 2×2: the only loops touching all 4 sides are the 4 L-trominoes (their
+  // full clue grids are pairwise ambiguous → never unique) and the whole
+  // perimeter, which growth never reaches. Every attempt would fail, so go
+  // straight to the perimeter fallback (same result, no wasted work).
+  const attempts = cols === 2 && rows === 2 ? 0 : V2_MAX_ATTEMPTS;
+  for (let a = 0; a < attempts && solution == null; a++) {
     const m = buildSizedTrueSolutionMarksV2Attempt(seed, a, cols, rows);
     if (!m) continue;
     const c = sizedTrueCluesFromMarks(m, cols, rows);
@@ -393,15 +416,24 @@ function buildV2(seed: number, cols: number, rows: number): {
     order[j] = t;
   }
   let hidden = 0;
+  let spent = 0;
   for (const cell of order) {
     if (hidden >= target) break;
+    const left = SIZED_TRUE_HIDE_TOTAL_NODE_BUDGET - spent;
+    if (left <= 0) break;
     const x = cell % cols;
     const y = Math.floor(cell / cols);
     const keep = clues[y]![x]!;
     clues[y]![x] = null;
-    // Per-check node budget keeps big boards fast; an exhausted search counts
-    // as "not proven unique" → the clue stays (deterministic, not time-based).
-    if (isCircuitUniquelySolvable(clues, cols, rows, { nodeBudget: HIDE_NODE_BUDGET })) hidden++;
+    // Per-check and total node budgets keep big boards fast; an exhausted
+    // search counts as "not proven unique" → the clue stays (deterministic,
+    // not time-based).
+    const r = countCircuitLoopSolutions(clues, cols, rows, {
+      limit: 2,
+      nodeBudget: Math.min(SIZED_TRUE_HIDE_NODE_BUDGET, left),
+    });
+    spent += r.nodes;
+    if (!r.aborted && r.count === 1) hidden++;
     else clues[y]![x] = keep;
   }
   return { clues, solution, hiddenCount: hidden };

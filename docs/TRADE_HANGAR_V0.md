@@ -120,7 +120,7 @@ Pages / Android で毎回「機体を受領」「デモ資材バッグ」しな�
 
 ## 3.4b. 回路売却（仮）
 
-保有回路一覧に **効果値**と**充足数字の内訳**（`formatCircuitEffectBreakdownJa` · 同一最小閉ループ採点）（Restore/Trade 共通 `computeCircuitEffect*` · 最小閉ループ）を表示し、**売却 仮 = 最低 25c + 出来栄え floor(effect) × 3c**（`$` 相当・既存 `c` 表記。2026-09-28 に最低額を 30c→25c に変更、`circuit-sell-prices.ts` `CIRCUIT_SELL_BASE_CREDITS`）。効果 0（Restore していない回路を含む）も +25c（最低額のみ）で売却可（在庫クリア）。**完璧ボーナス（2026-09-28）:** パーフェクト（Fully Awakened）の回路だけ **+ 2^(N+1)c**（N＝盤の一辺＝`max(cols, rows)`。判定は `circuitBoard.perfect ?? locked` かつ outcome `fully_awakened`）。パーフェクトの売値＝25c＋効果値×3c＋2^(N+1)c。Bypass・Offline・未 Restore はボーナスなし。例: 2×2（`verify-true-2`、効果 8）57c。数字を隠す新しい盤（v2）では 6×6 で約 294〜312c、8×8 で約 726〜780c（盤ごとに違う。数字隠しの導入（#154）より前に出た盤は数字が全部見えていて、これより高くなりうる）。実装は `circuit-sell-prices.ts`（`perfectCircuitSellBonusCredits`・`circuitSellPerfectSide`）。確認ダイアログは解体と同系統（総額 + 最低/出来栄え[/完璧ボーナス]内訳）。
+保有回路一覧に **効果値**と**充足数字の内訳**（`formatCircuitEffectBreakdownJa` · 同一最小閉ループ採点）（Restore/Trade 共通 `computeCircuitEffect*` · 最小閉ループ）を表示し、**売却 仮 = 最低 25c + 出来栄え floor(effect) × 3c**（`$` 相当・既存 `c` 表記。2026-09-28 に最低額を 30c→25c に変更、`circuit-sell-prices.ts` `CIRCUIT_SELL_BASE_CREDITS`）。効果 0（Restore していない回路を含む）も +25c（最低額のみ）で売却可（在庫クリア）。**完璧ボーナス（2026-09-28）:** パーフェクト（Fully Awakened）の回路だけ **+ 2^(N+1)c**（N＝盤の一辺＝`max(cols, rows)`。判定は `circuitBoard.perfect ?? locked` かつ outcome `fully_awakened`）。パーフェクトの売値＝25c＋効果値×3c＋2^(N+1)c。Bypass・Offline・未 Restore はボーナスなし。例: 2×2（`verify-true-2`、効果 8）57c。数字を隠す新しい盤（v2）では 6×6 で約 270〜350c、8×8 で約 730〜800c（各 48 盤の実測 270〜348c／729〜804c。盤ごとに違う。数字隠しの導入（#154）より前に出た盤は数字が全部見えていて、これより高くなりうる）。実装は `circuit-sell-prices.ts`（`perfectCircuitSellBonusCredits`・`circuitSellPerfectSide`）。確認ダイアログは解体と同系統（総額 + 最低/出来栄え[/完璧ボーナス]内訳）。
 
 ## 3.5. レア売却 仮価格表（TBD）
 

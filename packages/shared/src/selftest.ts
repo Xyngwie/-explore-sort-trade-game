@@ -813,11 +813,12 @@ import { countCircuitLoopSolutions } from "./circuit-solver";
     }
   }
   {
-    const big = resolveSizedTruePuzzle(buildSizedTruePuzzleId("sz-big", 16, 16))!;
-    assert.equal(isCircuitSingleLoopClosed(big.solution, 16, 16), true);
+    const big = resolveSizedTruePuzzle(buildSizedTruePuzzleId("sz-big", 20, 20))!;
+    assert.equal(isCircuitSingleLoopClosed(big.solution, 20, 20), true);
   }
   assert.equal(isSizedTruePuzzleId("perfect-true-1x1-abc"), false);
-  assert.equal(isSizedTruePuzzleId("perfect-true-17x17-abc"), false);
+  assert.equal(isSizedTruePuzzleId("perfect-true-20x20-abc"), true);
+  assert.equal(isSizedTruePuzzleId("perfect-true-21x21-abc"), false);
   assert.equal(isSizedTruePuzzleId("restore-stub-6"), false);
   assert.equal(isSizedTruePuzzleId(VERIFY_TRUE_PUZZLE_ID), false);
   // Geometry mismatch → not treated as the sized true board.
@@ -965,7 +966,7 @@ import { countCircuitLoopSolutions } from "./circuit-solver";
     // Hidden fraction grows with N (target; generation may stop earlier).
     assert.equal(sizedTrueHiddenFraction(3), 0.25);
     assert.equal(sizedTrueHiddenFraction(8), 0.5);
-    assert.equal(sizedTrueHiddenFraction(12), 0.6);
+    assert.equal(sizedTrueHiddenFraction(12), 0.5);
     // Solver sanity: a closed 2×2 with all 2s vs an unconstrained board.
     assert.equal(countCircuitLoopSolutions([[null, null], [null, null]], 2, 2).count, 2);
     assert.equal(countCircuitLoopSolutions([[4, 4], [4, 4]], 2, 2).count, 0);

@@ -25,6 +25,8 @@ import {
   type YieldBag,
 } from "./sort-yield";
 import {
+  CIRCUIT_BOARD_DECODE_MAX_SIDE,
+  RESTORE_MAX_SIDE,
   isCircuitLocked,
   isCircuitOrigin,
   isCircuitOutcome,
@@ -239,8 +241,14 @@ export const HUB_LIMITS = {
   mechBaseCircuitSlots: 1,
   /** How many recent applied sortie ids to keep (apply-once guard). */
   maxAppliedSortieIds: 20,
-  /** Largest board side accepted anywhere (normalizeCircuitBoard limit). */
-  maxCircuitSide: 64,
+  /**
+   * Largest board side accepted when decoding saves (normalizeCircuitBoard
+   * limit, = CIRCUIT_BOARD_DECODE_MAX_SIDE). Kept at 64 so older saves with a
+   * bigger board are not dropped; Restore/craft use `maxRestoreSide`.
+   */
+  maxCircuitSide: CIRCUIT_BOARD_DECODE_MAX_SIDE,
+  /** Largest side Restore generates/plays and the junk-craft ceiling (U12): 20. */
+  maxRestoreSide: RESTORE_MAX_SIDE,
   /** Max opened/flagged cells stored in frontProgress (25×25 AOI). */
   maxFrontCells: 625,
 } as const;
@@ -418,7 +426,7 @@ export function derivePerfectMaxSize(circuits: readonly HubCircuitRecord[]): num
   for (const c of circuits) {
     if (isPerfectRestoredCircuit(c)) max = Math.max(max, circuitSize(c));
   }
-  return max;
+  return Math.min(HUB_LIMITS.maxRestoreSide, max);
 }
 
 /** Circuit slots of one mech. Common slot expansion is undecided (U4) → base only. */
@@ -625,7 +633,7 @@ function normalizePerfectMaxSize(raw: unknown, circuits: readonly HubCircuitReco
   if (raw == null) return derivePerfectMaxSize(circuits);
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(n)) return derivePerfectMaxSize(circuits);
-  return Math.max(0, Math.min(HUB_LIMITS.maxCircuitSide, Math.floor(n)));
+  return Math.max(0, Math.min(HUB_LIMITS.maxRestoreSide, Math.floor(n)));
 }
 
 export function normalizeHubSnapshot(
