@@ -85,7 +85,7 @@ import {
   perfectCircuitSellBonusCredits,
   formatCircuitSellPriceJa,
 } from "./hangar";
-import { PIECES_PER_CONTAINER } from "@estg/shared";
+import { PIECES_PER_CONTAINER, circuitCraftCreditCost } from "@estg/shared";
 
 /** Minimal in-memory Storage for HubSave. */
 function memoryStorage(): Storage {
@@ -752,10 +752,10 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   });
   assert.equal(br.effect, 8);
   assert.equal(circuitSellPriceCredits(br.effect), 49); // 25 + 8*3 (no bonus)
-  // Perfect (Fully Awakened) 2×2 → + 完璧ボーナス 2^(2+1) = 8 → 57c.
+  // Perfect (Fully Awakened) 2×2 → + 完璧ボーナス 2×round(4×1.5^2) = 18 → 67c.
   assert.equal(circuitSellPerfectSide(perf!), 2);
   const price = circuitSellPriceCredits(br.effect, { perfectSide: 2 });
-  assert.equal(price, 57); // 25 + 8*3 + 2^3
+  assert.equal(price, 67); // 25 + 8*3 + 18
 
   const creditsBefore = hs.hub.credits;
   const countBefore = hs.hub.circuits.length;
@@ -766,10 +766,10 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   );
   assert.equal(hs.hub.circuits.length, countBefore - 1);
   assert.equal(hs.hub.credits, creditsBefore + price);
-  assert.ok(hs.notice.includes("+57c"));
+  assert.ok(hs.notice.includes("+67c"));
   assert.ok(hs.notice.includes("最低") && hs.notice.includes("出来栄え"));
-  assert.ok(hs.notice.includes("完璧ボーナス 8c"));
-  assert.ok(hs.log.some((l) => l.includes("回路売却") && l.includes("+57c")));
+  assert.ok(hs.notice.includes("完璧ボーナス 18c"));
+  assert.ok(hs.log.some((l) => l.includes("回路売却") && l.includes("+67c")));
 
   // Persist: HubSave no longer lists the sold circuit
   const raw = store.getItem(HUB_SAVE_STORAGE_KEY);
@@ -801,19 +801,27 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(missing.notice, "回路なし");
 }
 
-// Perfect-only 完璧ボーナス 2^(N+1): sized Perfect boards 6×6 / 8×8, and
-// Bypass / Offline / un-Restored / non-awakened get no bonus.
+// Perfect-only 完璧ボーナス 2 × round(4 × 1.5^N) (= 2 × junk craft credit cost,
+// shared single source): sized Perfect boards 2×2 / 6×6 / 8×8 (+ 20×20 table),
+// and Bypass / Offline / un-Restored / non-awakened get no bonus.
 {
-  assert.equal(perfectCircuitSellBonusCredits(2), 8);
-  assert.equal(perfectCircuitSellBonusCredits(6), 128);
-  assert.equal(perfectCircuitSellBonusCredits(8), 512);
+  assert.equal(perfectCircuitSellBonusCredits(2), 18);
+  assert.equal(perfectCircuitSellBonusCredits(4), 40);
+  assert.equal(perfectCircuitSellBonusCredits(6), 92);
+  assert.equal(perfectCircuitSellBonusCredits(8), 206);
+  assert.equal(perfectCircuitSellBonusCredits(10), 462);
+  assert.equal(perfectCircuitSellBonusCredits(20), 26602);
+  for (const n of [2, 4, 6, 8, 10, 20]) {
+    assert.equal(perfectCircuitSellBonusCredits(n), 2 * circuitCraftCreditCost(n));
+  }
   assert.equal(perfectCircuitSellBonusCredits(null), 0);
   assert.equal(perfectCircuitSellBonusCredits(0), 0);
   assert.equal(circuitSellPriceCredits(0, { perfectSide: null }), 25);
+  assert.equal(circuitSellPriceCredits(0, { perfectSide: 20 }), 25 + 26602);
   const brkJa = formatCircuitSellPriceJa(8, { perfectSide: 2 });
-  assert.equal(brkJa.total, 57);
-  assert.equal(brkJa.perfectBonus, 8);
-  assert.ok(brkJa.detailJa.includes("完璧ボーナス 8c"));
+  assert.equal(brkJa.total, 67);
+  assert.equal(brkJa.perfectBonus, 18);
+  assert.ok(brkJa.detailJa.includes("完璧ボーナス 18c"));
   assert.equal(formatCircuitSellPriceJa(8).detailJa.includes("完璧"), false);
 
   const store = memoryStorage();
@@ -863,7 +871,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     const rec = hs.hub.circuits.find((c) => c.circuitId === `perf${size}`)!;
     assert.equal(circuitSellPerfectSide(rec), size);
     const r = sellAndGain(hs, `perf${size}`);
-    assert.equal(r.gained, 25 + r.effect * 3 + 2 ** (size + 1));
+    assert.equal(r.gained, 25 + r.effect * 3 + 2 * circuitCraftCreditCost(size));
     console.log(
       `trade perfect sell ${size}x${size}: effect ${r.effect} → ${r.gained}c`,
     );

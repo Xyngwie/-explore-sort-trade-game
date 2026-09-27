@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "selftest": "tsx src/selftest.ts && tsx src/hub-save-v3.selftest.ts && tsx src/circuit-max20.selftest.ts",
+    "selftest": "tsx src/selftest.ts && tsx src/hub-save-v3.selftest.ts && tsx src/circuit-max20.selftest.ts && tsx src/circuit-craft-cost.selftest.ts",
     "test": "npm run typecheck && npm run selftest"
   },
   "devDependencies": {
