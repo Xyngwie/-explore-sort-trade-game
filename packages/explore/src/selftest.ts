@@ -29,6 +29,7 @@ import {
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import {
   boardingCargoEta,
+  boardingElapsed,
   boardingLiftOffEta,
   boardingRequirementsHud,
   isInsideBoarding,
@@ -50,6 +51,7 @@ import {
 } from "./game/keyboardOverlay";
 import { DEFAULT_EXPEDITION_LOADOUT } from "@estg/shared";
 import { getCoverObjects } from "./game/coverObjects";
+import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
@@ -1960,4 +1962,111 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.ok(hubWearHandoffUrl(w)!.includes("returnKind=extract"));
   }
   console.log("explore wing_mobility gate ok");
+}
+
+// ---------------------------------------------------------------------------
+// Left-behind wingmen: one result-screen line each (display only).
+// No rescue / wreck recovery; handoff + Hub outputs keep their shape.
+// ---------------------------------------------------------------------------
+{
+  const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: false };
+  const QS = "?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30";
+  const MOBILITY_TABLE: CircuitCommandUnlockTable = { "test-circuit-mobility": ["wing_mobility"] };
+  const setup = (mode: "release" | "all_unlocked", circuits: string[] = [], table?: CircuitCommandUnlockTable) => {
+    const w = createWorld(bootstrapFromSearch(QS));
+    startSortie(w);
+    w.commandUnlock = { mode, equippedCircuits: circuits, ...(table ? { table } : {}) };
+    for (const e of w.enemies) { e.alive = false; e.hp = 0; }
+    return w;
+  };
+  /** Run the existing extract flow; `beforeLiftOff` runs on the last tick before lift-off. */
+  const extract = (w: ReturnType<typeof createWorld>, beforeLiftOff?: () => void) => {
+    assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+    const dt = 0.1;
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 1 && w.phase === "sortie"; t += dt) {
+      if (beforeLiftOff && w.balance.boardingLiftOffDelaySec - boardingElapsed(w) <= dt * 1.5) {
+        beforeLiftOff();
+        beforeLiftOff = undefined;
+      }
+      tickWorld(w, dt, idle);
+    }
+    assert.equal(w.phase, "result");
+  };
+  const noLeak = (w: ReturnType<typeof createWorld>) => {
+    const res = JSON.stringify(toExploreResult(w));
+    const out = JSON.stringify(buildSortieOutcome(w));
+    for (const blob of [res, out, hubWearHandoffUrl(w) ?? "", sortHandoffUrl(w)]) {
+      assert.ok(!blob.includes("leftBehind") && !blob.includes("置き去り") && !blob.includes("no_circuit"), "left-behind stays explore-internal");
+    }
+    assert.deepEqual(buildSortieOutcome(w)!.mechWear.map((m) => m.instanceId), ["m1", "m2", "m3"], "wear shape unchanged");
+  };
+
+  // (1) release, no circuit: immobile wingmen outside the circle → "回路なし" lines
+  {
+    const w = setup("release");
+    w.leader.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+    extract(w);
+    assert.equal(w.extracted, true);
+    assert.deepEqual(w.leftBehind, [
+      { id: w.wingmen[0]!.id, name: "僚機A", reason: "no_circuit" },
+      { id: w.wingmen[1]!.id, name: "僚機B", reason: "no_circuit" },
+    ]);
+    assert.deepEqual(leftBehindResultLines(w), [
+      "僚機Aを置き去り（回路なし・搭乗円の外）",
+      "僚機Bを置き去り（回路なし・搭乗円の外）",
+    ]);
+    const html = leftBehindResultHtml(w);
+    assert.ok(html.includes('id="result-left-behind"') && (html.match(/<li>/g) ?? []).length === 2);
+    noLeak(w);
+  }
+
+  // (1b) release, no circuit, but one immobile wingman happens to be inside → only the other listed
+  {
+    const w = setup("release");
+    w.leader.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+    w.wingmen[1]!.pos = { x: w.leader.pos.x + 20, y: w.leader.pos.y };
+    extract(w);
+    assert.deepEqual(leftBehindResultLines(w), ["僚機Aを置き去り（回路なし・搭乗円の外）"]);
+  }
+
+  // (2) circuit present (mobile), but outside the circle at lift-off → plain "搭乗円の外"
+  for (const [label, w] of [
+    ["release+test circuit", setup("release", ["test-circuit-mobility"], MOBILITY_TABLE)],
+    ["all_unlocked", setup("all_unlocked")],
+  ] as const) {
+    const wa = w.wingmen[0]!;
+    extract(w, () => { wa.pos = { x: w.leader.pos.x + 600, y: w.leader.pos.y }; });
+    assert.equal(w.extracted, true, label);
+    assert.deepEqual(w.leftBehind, [{ id: wa.id, name: "僚機A", reason: "outside_circle" }], label);
+    const lines = leftBehindResultLines(w);
+    assert.deepEqual(lines, ["僚機Aを置き去り（搭乗円の外）"], label);
+    assert.ok(!lines[0]!.includes("回路なし"), `${label}: distinguished from no-circuit`);
+    noLeak(w);
+  }
+
+  // (3) nobody left behind → no line, no fragment
+  {
+    const w = setup("all_unlocked");
+    extract(w);
+    assert.equal(w.extracted, true);
+    assert.deepEqual(w.leftBehind, []);
+    assert.deepEqual(leftBehindResultLines(w), []);
+    assert.equal(leftBehindResultHtml(w), "");
+    noLeak(w);
+    // a new sortie clears any previous record
+    w.leftBehind = [{ id: "x", name: "僚機A", reason: "no_circuit" }];
+    startSortie(w);
+    assert.deepEqual(w.leftBehind, []);
+  }
+
+  // (4) abort (existing rule, not a lift-off) → no line
+  {
+    const w = setup("release");
+    w.leader.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+    assert.equal(executeExploreCommand(w, { id: "abort" }).status, "done");
+    assert.equal(w.phase, "result");
+    assert.deepEqual(leftBehindResultLines(w), []);
+    assert.equal(leftBehindResultHtml({}), "", "missing field → no line");
+  }
+  console.log("explore left-behind result line ok");
 }

@@ -58,6 +58,7 @@ import {
   isWingmanMobileFor,
   type ExploreCommandId,
 } from "./game/commandUnlock";
+import { leftBehindResultHtml } from "./game/leftBehind";
 import {
   COMMAND_UNLOCK_MODE_LABEL,
   isDebugUnlockToggleVisible,
@@ -541,6 +542,7 @@ function renderDom(): void {
         <p class="${result.isExtracted ? "ok" : "warn"}">${
           result.isExtracted ? "生還" : `失敗（${world.failReason ?? "abort"}）`
         }</p>
+        ${leftBehindResultHtml(world)}
         <table>
           <tr><td>returnKind</td><td>${returnKindFromWorld(world)}</td></tr>
           <tr><td>isExtracted</td><td>${String(result.isExtracted)}</td></tr>

@@ -409,6 +409,7 @@ export function startSortie(world: World): void {
   world.camp = null;
   world.logs = [];
   world.combatHitsTaken = 0;
+  world.leftBehind = [];
   for (const c of world.containers) {
     c.taken = false;
     c.discovered = false;
