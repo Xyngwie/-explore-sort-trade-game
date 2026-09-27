@@ -4,14 +4,19 @@ import type { Unit, World } from "./types";
 
 const COVER_ESCAPE_GRACE_SEC = 0.35;
 const COVER_SNAP_MARGIN = 8;
+const COVER_REENTRY_DISTANCE = 100;
 
-type CoverState = { coverId: string | null; escapeT: number };
+type CoverState = {
+  coverId: string | null;
+  blockedCoverId: string | null;
+  escapeT: number;
+};
 const states = new WeakMap<Unit, CoverState>();
 
 function stateFor(unit: Unit): CoverState {
   let state = states.get(unit);
   if (!state) {
-    state = { coverId: null, escapeT: 0 };
+    state = { coverId: null, blockedCoverId: null, escapeT: 0 };
     states.set(unit, state);
   }
   return state;
@@ -32,8 +37,6 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
     }
 
     // Any deliberate movement while covered is an explicit request to leave.
-    // The old outward-vector-only rule could immediately snap the unit back
-    // to the center when normal movement was processed in another direction.
     const moving = Math.hypot(moveInput.x, moveInput.y) > 0.01;
     const targetLeavesCover = unit.moveTarget != null && dist(unit.moveTarget, active.pos) > 2;
     const delta = { x: active.pos.x - unit.pos.x, y: active.pos.y - unit.pos.y };
@@ -41,6 +44,8 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
     if (moving || targetLeavesCover || outward) {
       unit.inCover = false;
       state.coverId = null;
+      // Do not allow the same cover to immediately reclaim the unit.
+      state.blockedCoverId = active.id;
       state.escapeT = COVER_ESCAPE_GRACE_SEC;
       return;
     }
@@ -49,10 +54,20 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
 
   if (state.escapeT > 0) return;
 
+  // The cover just left remains disabled until another cover is entered or
+  // the unit deliberately moves at least 100px away from it.
+  if (state.blockedCoverId) {
+    const blocked = covers.find((cover) => cover.id === state.blockedCoverId);
+    if (!blocked || dist(unit.pos, blocked.pos) >= COVER_REENTRY_DISTANCE) {
+      state.blockedCoverId = null;
+    }
+  }
+
   let nearest: ReturnType<typeof getCoverObjects>[number] | null = null;
   let nearestDistance = Infinity;
   for (const cover of covers) {
     const d = dist(unit.pos, cover.pos);
+    if (cover.id === state.blockedCoverId && d < COVER_REENTRY_DISTANCE) continue;
     if (d < nearestDistance) {
       nearestDistance = d;
       nearest = cover;
@@ -68,5 +83,7 @@ export function updateCoverMovement(world: World, unit: Unit, moveInput: Vec2, d
   unit.moveTarget = { x: nearest.pos.x, y: nearest.pos.y };
   unit.inCover = true;
   state.coverId = nearest.id;
+  // Entering a different cover clears the previous cover lockout.
+  state.blockedCoverId = null;
   state.escapeT = 0;
 }
