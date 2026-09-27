@@ -3,6 +3,8 @@
 **ステータス:** 基盤のみ実装（2026-09-28）。回路→コマンドの対応表・レア度は **未決定**（別タスク / Phase 3）。  
 **正本コード:** `packages/explore/src/game/commandUnlock.ts`（判定）、`game/commands.ts`（実行側ゲート）、`game/unlockMode.ts`（モード切替）
 
+**関連する設計決定（回路・部隊 v0、本書との差分つき）:** [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md)
+
 ## 1. 目的
 
 隊長機は初期状態では意図的に制限され、回路を入手・装備・強化するほど Explore の行動が広がる。本書はその **共通基盤** だけを定める。
