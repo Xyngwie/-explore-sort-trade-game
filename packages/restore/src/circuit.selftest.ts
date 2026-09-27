@@ -21,6 +21,10 @@ import {
   PERFECT_CIRCUIT_DEV_RATE,
   PERFECT_CIRCUIT_PROD_RATE,
   resolvePerfectCircuitInjectRate,
+  buildSizedTruePuzzleId,
+  resolveSizedTruePuzzle,
+  computeCircuitEffectForBoard,
+  computeCircuitEffectValue,
   type EdgeMark,
 } from "@estg/shared";
 import {
@@ -42,8 +46,13 @@ import {
   lineEdgeCount,
   sampleGeneratorRatios,
   FLAWED_HAZARD_WEIGHTS,
+  boardFromMarks,
+  bypassGuideEffectJa,
+  freshMarks,
 } from "./puzzle";
 import {
+  DEFAULT_COLS,
+  DEFAULT_ROWS,
   bootstrapFromSearch,
   buildNextLocalBoardHref,
   buildReturnToTradeUrl,
@@ -417,16 +426,21 @@ assert.ok(
     PERFECT_CIRCUIT_PROD_RATE,
   );
 
+  // Injection honors the requested size (STATUS 項目12): 6×6 true board.
   const trueBoard = generatePuzzle("roll-me", 6, 6, { forceKind: "true" });
   assert.equal(trueBoard.injectedTrue, true);
   assert.equal(trueBoard.rarity, "perfect_rare");
   assert.equal(trueBoard.hazard, "none");
-  assert.equal(trueBoard.puzzleId, VERIFY_TRUE_PUZZLE_ID);
-  assert.equal(trueBoard.cols, 2);
-  assert.deepEqual(trueBoard.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
-  const sol = buildVerifyTrueSolutionMarks();
-  assert.equal(isLoopClosed(sol, 2, 2), true);
-  assert.equal(digitSatisfaction(trueBoard.clues, sol, 2, 2).rate, 1);
+  assert.equal(trueBoard.puzzleId, buildSizedTruePuzzleId("roll-me", 6, 6));
+  assert.equal(trueBoard.cols, 6);
+  assert.equal(trueBoard.rows, 6);
+  const sol = resolveSizedTruePuzzle(trueBoard.puzzleId)!.solution;
+  assert.equal(isLoopClosed(sol, 6, 6), true);
+  assert.equal(digitSatisfaction(trueBoard.clues, sol, 6, 6).rate, 1);
+  // 2×2 request still yields the fixed verify-true board.
+  const true2 = generatePuzzle("roll-me", 2, 2, { forceKind: "true" });
+  assert.equal(true2.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.deepEqual(true2.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
 
   const flawed = generatePuzzle("flaw-path", 6, 6, { forceKind: "flawed" });
   assert.equal(flawed.injectedTrue, false);
@@ -445,12 +459,17 @@ assert.ok(
   const always = generatePuzzle("r1", 6, 6, { injectRate: 1, rng: () => 0.99 });
   assert.equal(always.injectedTrue, true);
   assert.equal(always.rarity, "perfect_rare");
-  assert.equal(always.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(always.puzzleId, buildSizedTruePuzzleId("r1", 6, 6));
+  assert.equal(always.cols, 6);
 
   // bootstrap with explicit DEV rate + rng-forced inject via injectRate 1
   const injectedSession = bootstrapFromSearch("", { injectRate: 1 });
   assert.equal(injectedSession.injectedTrue, true);
-  assert.equal(injectedSession.puzzle.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.equal(
+    injectedSession.puzzle.puzzleId,
+    buildSizedTruePuzzleId("restore-stub-6", 6, 6),
+  );
+  assert.equal(injectedSession.puzzle.cols, 6);
   assert.equal(injectedSession.rarity, "perfect_rare");
   assert.ok(injectedSession.note.includes("Perfect rare") || injectedSession.note.includes("真盤"));
 
@@ -582,6 +601,138 @@ assert.ok(
   assert.ok(!open.includes("loop-live-hint"), "no live-scoring hint while open");
   assert.ok(pnote.includes("restore-rule-guide") && note.includes("restore-rule-guide"), "guide also prefixed when closed");
   console.log("restore perfect loop celebrate ok");
+}
+
+// --- STATUS 項目12: variable N×N boards (2..8), sized Perfect injection,
+//     HUB round-trip, default 6×6 kept, Bypass guide text. All seeded. ---
+{
+  assert.equal(DEFAULT_COLS, 6);
+  assert.equal(DEFAULT_ROWS, 6);
+
+  for (let size = 2; size <= 8; size++) {
+    for (const seed of ["n-a", "n-b", "n-c"]) {
+      // Flawed generation at N×N: deterministic, right shape, empty = Offline / 0.
+      const flawed = generatePuzzle(`${seed}-${size}`, size, size);
+      assert.equal(flawed.cols, size);
+      assert.equal(flawed.rows, size);
+      assert.equal(flawed.rarity, "flawed_majority");
+      assert.equal(flawed.clues.length, size);
+      assert.ok(flawed.clues.every((row) => row.length === size));
+      assert.deepEqual(generatePuzzle(`${seed}-${size}`, size, size).clues, flawed.clues);
+      const empty = freshMarks(size, size);
+      assert.equal(empty.length, edgeCount(size, size));
+      const emptyRes = classifyPlayResult(flawed.clues, empty, size, size);
+      assert.equal(emptyRes.outcome, "offline");
+      assert.equal(emptyRes.effect.effect, 0);
+      assert.equal(emptyRes.perfectClearance, false);
+
+      // Perfect injection at the requested size; its known solution is Perfect.
+      const t = generatePuzzle(`${seed}-true`, size, size, { forceKind: "true" });
+      assert.equal(t.injectedTrue, true);
+      assert.equal(t.rarity, "perfect_rare");
+      assert.equal(t.cols, size);
+      assert.equal(t.rows, size);
+      const solution =
+        size === 2
+          ? buildVerifyTrueSolutionMarks()
+          : resolveSizedTruePuzzle(t.puzzleId)!.solution;
+      if (size === 2) assert.equal(t.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+      else assert.equal(t.puzzleId, buildSizedTruePuzzleId(`${seed}-true`, size, size));
+      assert.equal(isLoopClosed(solution, size, size), true);
+      assert.equal(digitSatisfaction(t.clues, solution, size, size).rate, 1);
+      const perfectRes = classifyPlayResult(t.clues, solution, size, size);
+      assert.equal(perfectRes.outcome, "fully_awakened");
+      assert.equal(perfectRes.perfectClearance, true);
+      assert.ok(perfectRes.effect.effect > 0);
+      assert.equal(
+        perfectRes.effect.effect,
+        computeCircuitEffectValue({
+          clues: t.clues,
+          marks: solution,
+          cols: size,
+          rows: size,
+          perfect: true,
+          outcome: "fully_awakened",
+        }).effect,
+      );
+      // Bypass on the same lines: not Perfect (0-digits do not get +4).
+      const bypassRes = classifyPlayResult(t.clues, solution, size, size, "bypass");
+      assert.equal(bypassRes.outcome, "bypass");
+      assert.equal(bypassRes.perfectClearance, false);
+      assert.ok(bypassRes.effect.effect <= perfectRes.effect.effect);
+
+      // HUB round-trip: an unsolved board with this puzzleId opens at N×N
+      // with the same clues; trade scoring regenerates the same effect.
+      const unsolved = createEmptyCircuitBoard(size, size, t.puzzleId);
+      const url = buildTradeToRestoreUrl({
+        circuitId: `hub-${seed}-${size}`,
+        circuitBoard: unsolved,
+      });
+      const sess = bootstrapFromSearch(new URL(url).search);
+      assert.equal(sess.source, "handoff-board");
+      assert.equal(sess.puzzle.cols, size);
+      assert.equal(sess.puzzle.rows, size);
+      assert.equal(sess.rarity, "perfect_rare");
+      assert.deepEqual(sess.puzzle.clues, t.clues);
+      const solvedBoard = {
+        ...boardFromMarks(size, size, solution, t.puzzleId, "fully_awakened"),
+        perfect: true,
+      };
+      assert.equal(
+        computeCircuitEffectForBoard(solvedBoard, { perfect: true }).effect,
+        perfectRes.effect.effect,
+      );
+    }
+  }
+
+  // HUB-passed flawed boards keep opening at their own size (e.g. junk craft 4×4).
+  {
+    const junk = createEmptyCircuitBoard(4, 4, "junk-circuit-selftest");
+    const url = buildTradeToRestoreUrl({ circuitId: "junk-circuit-selftest", circuitBoard: junk });
+    const sess = bootstrapFromSearch(new URL(url).search);
+    assert.equal(sess.puzzle.cols, 4);
+    assert.equal(sess.puzzle.rows, 4);
+    assert.equal(sess.rarity, "flawed_majority");
+  }
+  // Fresh boards (no HUB board) stay 6×6.
+  {
+    const demo = bootstrapFromSearch("", { injectRate: 0 });
+    assert.equal(demo.puzzle.cols, 6);
+    const injected = bootstrapFromSearch("", { injectRate: 1 });
+    assert.equal(injected.puzzle.cols, 6);
+    assert.equal(injected.puzzle.rows, 6);
+    const idOnly = bootstrapFromSearch(
+      new URL(buildTradeToRestoreUrl({ circuitId: "id-only-x" })).search,
+      { injectRate: 1 },
+    );
+    assert.equal(idOnly.puzzle.cols, 6);
+  }
+
+  // Bypass guide text branches.
+  {
+    const noLoop = bypassGuideEffectJa({ effect: 0, hasLoop: false });
+    assert.ok(noLoop.includes("効果0になります"));
+    assert.ok(noLoop.includes("閉ループがない"));
+    const withLoop = bypassGuideEffectJa({ effect: 5, hasLoop: true });
+    assert.ok(withLoop.includes("効果値 5"));
+    assert.ok(!withLoop.includes("効果0"));
+    assert.ok(bypassGuideEffectJa({ effect: 0, hasLoop: true }).includes("効果値 0"));
+
+    // Real board: a lone line (no loop) → preview has no loop → 「効果0」.
+    const t = generatePuzzle("guide-true", 4, 4, { forceKind: "true" });
+    const solution = resolveSizedTruePuzzle(t.puzzleId)!.solution;
+    const partial = freshMarks(4, 4);
+    const firstLine = solution.findIndex((m) => m === 1);
+    partial[firstLine] = 1;
+    const pv = previewOutcomeEffects(t.clues, partial, 4, 4);
+    assert.equal(pv.bypass.hasLoop, false);
+    assert.ok(bypassGuideEffectJa(pv.bypass).includes("効果0になります"));
+    // Closed loop → shows the Bypass effect value.
+    const pv2 = previewOutcomeEffects(t.clues, solution, 4, 4);
+    assert.equal(pv2.bypass.hasLoop, true);
+    assert.ok(bypassGuideEffectJa(pv2.bypass).includes(`効果値 ${pv2.bypass.effect}`));
+  }
+  console.log("restore variable board size (2..8) + sized perfect + bypass guide ok");
 }
 
 console.log("restore circuit.selftest ok");

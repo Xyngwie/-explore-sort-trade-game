@@ -18,6 +18,7 @@ import {
   isCellDigitActivated,
   outcomeLabel,
   previewOutcomeEffects,
+  bypassGuideEffectJa,
   rarityLabel,
   saveMarksToStorage,
   hEdgeIndex,
@@ -420,7 +421,8 @@ function render(): void {
       !locked && session.rarity === "flawed_majority" && status !== "fully_awakened"
         ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
       <p class="bypass-hero-title">不完全基板 — Bypass で確定</p>
-      <p class="bypass-hero-body">全解は期待しない盤です。部分充足のまま <strong>Bypass</strong> で拠点へ戻して効果を残せます。</p>
+      <p class="bypass-hero-body">全解は期待しない盤です。部分充足のまま <strong>Bypass</strong> で拠点へ戻せます。</p>
+      <p class="bypass-hero-body bypass-hero-effect"><strong>${escapeHtml(bypassGuideEffectJa(preview.bypass))}</strong></p>
       <button type="button" class="btn bypass-confirm" id="btn-bypass-hero" ${canBypass ? "" : "disabled"}>
         Bypass を確定する
       </button>
@@ -428,7 +430,8 @@ function render(): void {
         : !locked && status === "bypass"
           ? `<div class="card bypass-hero" role="region" aria-label="Bypass confirm">
       <p class="bypass-hero-title">Bypass 準備完了</p>
-      <p class="bypass-hero-body">部分修復として確定できます。迷わず Bypass へ。</p>
+      <p class="bypass-hero-body">部分修復として確定できます。</p>
+      <p class="bypass-hero-body bypass-hero-effect"><strong>${escapeHtml(bypassGuideEffectJa(preview.bypass))}</strong></p>
       <button type="button" class="btn bypass-confirm" id="btn-bypass-hero">
         Bypass を確定する
       </button>

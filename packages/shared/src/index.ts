@@ -10,6 +10,7 @@ export * from "./sector-density";
 export * from "./circuit-board";
 export * from "./circuit-bonuses";
 export * from "./perfect-circuit-seed";
+export * from "./perfect-circuit-sized";
 export * from "./circuit-effect";
 export * from "./circuit-clues";
 export * from "./cta-copy";

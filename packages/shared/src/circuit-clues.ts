@@ -8,7 +8,10 @@ import {
   edgeCount,
   type CircuitBoardState,
 } from "./circuit-board";
-import { resolveVerifyTrueClues } from "./perfect-circuit-seed";
+import {
+  VERIFY_TRUE_PUZZLE_ID,
+  resolveTrueBoardClues,
+} from "./perfect-circuit-seed";
 import {
   computeCircuitEffectValue,
   type CircuitClueGrid,
@@ -163,18 +166,20 @@ export function generateFlawedClues(
 
 /**
  * Resolve clue grid for a stored circuit board (hub / scoring).
- * Verify-true boards use the fixed solvable clues; others regenerate
+ * Verify-true / sized true boards use their solvable clues; others regenerate
  * deterministic flawed clues from puzzleId + size.
  */
 export function resolveCluesForCircuitBoard(
   board: Pick<CircuitBoardState, "cols" | "rows" | "puzzleId">,
 ): CircuitClueGrid {
-  const fixed = resolveVerifyTrueClues(
-    board.puzzleId,
-    board.cols,
-    board.rows,
-  );
-  if (fixed) {
+  const fixed = resolveTrueBoardClues(board.puzzleId);
+  // Verify-true keeps its legacy behavior (fixed 2×2 clues). Sized true ids
+  // only apply when the stored geometry matches the id.
+  if (
+    fixed &&
+    (fixed.puzzleId === VERIFY_TRUE_PUZZLE_ID ||
+      (fixed.cols === board.cols && fixed.rows === board.rows))
+  ) {
     return fixed.clues.map((row) => [...row]);
   }
   const seed =
