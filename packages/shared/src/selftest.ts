@@ -573,7 +573,13 @@ import {
   isPerfectCircuitDebugContext,
   buildTruePuzzleFromSolution,
   buildInjectedOrFlawedPuzzle,
+  resolveTrueBoardClues,
 } from "./perfect-circuit-seed";
+import {
+  buildSizedTruePuzzleId,
+  isSizedTruePuzzleId,
+  resolveSizedTruePuzzle,
+} from "./perfect-circuit-sized";
 import {
   boardHasClosedLoop,
   circuitDigitEffectContribution,
@@ -584,6 +590,7 @@ import {
   formatCircuitEffectBreakdownJa,
   groupCircuitEffectContributions,
   isCircuitSingleLoopClosed,
+  countLineEdgesAroundCell,
   listCircuitClosedLoops,
   selectSmallestClosedLoop,
   previewBypassVsAwakenedEffect,
@@ -752,8 +759,82 @@ import {
     generateFlawed: () => [[1]],
   });
   assert.equal(injected.injectedTrue, true);
-  assert.equal(injected.puzzleId, VERIFY_TRUE_PUZZLE_ID);
-  assert.equal(injected.cols, 2);
+  // Injection now honors the requested size (STATUS 項目12).
+  assert.equal(injected.puzzleId, buildSizedTruePuzzleId("any-seed", 6, 6));
+  assert.equal(injected.cols, 6);
+  assert.equal(injected.rows, 6);
+  // 2×2 request keeps the fixed verify-true board.
+  const injected2 = buildInjectedOrFlawedPuzzle({
+    seed: "any-seed",
+    cols: 2,
+    rows: 2,
+    rate: 1,
+    rng: () => 0,
+    forceKind: "true",
+    generateFlawed: () => [[1]],
+  });
+  assert.equal(injected2.puzzleId, VERIFY_TRUE_PUZZLE_ID);
+  assert.deepEqual(injected2.clues, VERIFY_TRUE_CLUES.map((r) => [...r]));
+
+  // Sized true boards 2..8 (and 16): the generating loop is one closed loop
+  // that satisfies every digit → a Perfect solution exists. Deterministic.
+  for (let n = 2; n <= 8; n++) {
+    for (const seed of ["sz-a", "sz-b", "sz-c", "sz-d", "sz-e"]) {
+      const id = buildSizedTruePuzzleId(seed, n, n);
+      assert.ok(id.length <= 64 && !id.includes("|"));
+      assert.equal(isSizedTruePuzzleId(id), true);
+      const p1 = resolveSizedTruePuzzle(id)!;
+      const p2 = resolveSizedTruePuzzle(id)!;
+      assert.deepEqual(p1.clues, p2.clues);
+      assert.equal(p1.cols, n);
+      assert.equal(p1.rows, n);
+      assert.equal(isCircuitSingleLoopClosed(p1.solution, n, n), true);
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          assert.equal(
+            p1.clues[y]![x],
+            countLineEdgesAroundCell(p1.solution, n, n, x, y),
+          );
+        }
+      }
+      // Hub scoring regenerates the same clues from puzzleId + size.
+      assert.deepEqual(
+        resolveCluesForCircuitBoard({ cols: n, rows: n, puzzleId: id }),
+        p1.clues,
+      );
+      const byTrue = resolveTrueBoardClues(id)!;
+      assert.deepEqual(byTrue.clues, p1.clues);
+    }
+  }
+  {
+    const big = resolveSizedTruePuzzle(buildSizedTruePuzzleId("sz-big", 16, 16))!;
+    assert.equal(isCircuitSingleLoopClosed(big.solution, 16, 16), true);
+  }
+  assert.equal(isSizedTruePuzzleId("perfect-true-1x1-abc"), false);
+  assert.equal(isSizedTruePuzzleId("perfect-true-17x17-abc"), false);
+  assert.equal(isSizedTruePuzzleId("restore-stub-6"), false);
+  assert.equal(isSizedTruePuzzleId(VERIFY_TRUE_PUZZLE_ID), false);
+  // Geometry mismatch → not treated as the sized true board.
+  {
+    const id = buildSizedTruePuzzleId("sz-a", 5, 5);
+    const c = resolveCluesForCircuitBoard({ cols: 4, rows: 4, puzzleId: id });
+    assert.equal(c.length, 4);
+  }
+  // Explicit sized id as seed → that true board, no roll.
+  {
+    const id = buildSizedTruePuzzleId("sz-seed", 5, 5);
+    const again = buildInjectedOrFlawedPuzzle({
+      seed: id,
+      cols: 9,
+      rows: 9,
+      rate: 0,
+      rng: () => 0.99,
+      generateFlawed: () => [[1]],
+    });
+    assert.equal(again.injectedTrue, true);
+    assert.equal(again.puzzleId, id);
+    assert.equal(again.cols, 5);
+  }
 
   const flawed = buildInjectedOrFlawedPuzzle({
     seed: "flaw-seed",

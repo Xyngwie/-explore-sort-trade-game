@@ -23,7 +23,7 @@ import {
   isPerfectCircuitClearance,
   mulberry32,
   previewBypassVsAwakenedEffect,
-  resolveVerifyTrueClues,
+  resolveTrueBoardClues,
   FLAWED_HAZARD_WEIGHTS as SHARED_FLAWED_HAZARD_WEIGHTS,
   type CircuitBoardState,
   type CircuitEffectBreakdown,
@@ -199,6 +199,22 @@ export function previewOutcomeEffects(
   };
 }
 
+/**
+ * Text for the 「Bypass を確定する」 guide: shows the Bypass effect value
+ * (効果値 = 評価値). With no closed loop, states plainly that committing now
+ * yields effect 0 (the button stays enabled — Bypass is not forbidden).
+ */
+export function bypassGuideEffectJa(bypass: {
+  effect: number;
+  hasLoop: boolean;
+}): string {
+  if (!bypass.hasLoop) {
+    return "閉ループがないため、今 Bypass で確定すると効果0になります（効果値 0）。線を閉じると効果値が付きます。";
+  }
+  const v = Math.max(0, Math.floor(bypass.effect));
+  return `今 Bypass で確定すると効果値 ${v}。この値が回路の効果になります。`;
+}
+
 /** Clue density in [0,1] (digits / cells). */
 export function clueDensity(clues: ClueGrid): number {
   const rows = clues.length;
@@ -214,8 +230,9 @@ export function clueDensity(clues: ClueGrid): number {
 }
 
 /**
- * Generate a small clue grid from puzzleSeed.
- * With `injectRate`, may inject a seeded true board (generate-from-solution);
+ * Generate a clue grid from puzzleSeed at cols×rows (default 6×6; any size
+ * 2..16 per side works). With `injectRate`, may inject a seeded true board
+ * (generate-from-solution) at the requested size (2×2 → fixed verify-true);
  * otherwise flawed/hazardous as majority. Never relies on natural random digits for Perfect.
  */
 export function generatePuzzle(
@@ -224,7 +241,8 @@ export function generatePuzzle(
   rows = 6,
   opts?: GeneratePuzzleOptions,
 ): RestorePuzzle {
-  const fixed = resolveVerifyTrueClues(puzzleSeed, cols, rows);
+  // verify-true (2×2) or sized true id (`perfect-true-{c}x{r}-…`): fixed size.
+  const fixed = resolveTrueBoardClues(puzzleSeed);
   if (fixed) {
     return {
       cols: fixed.cols,
