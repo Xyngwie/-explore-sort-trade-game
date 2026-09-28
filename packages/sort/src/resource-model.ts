@@ -1,9 +1,8 @@
 /**
  * Canonical resource model for the Sort puzzle engine.
  *
- * The engine is being migrated incrementally from the legacy names
- * food/material/energy. Nothing outside this module should need to know the
- * legacy vocabulary once the migration is complete.
+ * Legacy food/material/energy names are retained only at this adapter boundary.
+ * All public Sort state uses the four canonical resources.
  */
 import {
   SORT_RESOURCE_IDS,
@@ -25,8 +24,7 @@ export const SORT_PIECE_LABEL_JA = {
   junk: "ジャンク",
 } as const satisfies Record<SortPieceKind, string>;
 
-/** Canonical counts. The index signature is a temporary type bridge for legacy HUD callers. */
-export type SortClearedCounts = Record<SortValidPieceKind, number> & Record<string, number>;
+export type SortClearedCounts = Record<SortValidPieceKind, number>;
 
 /** Legacy vocabulary retained only at the migration boundary. */
 export type LegacySortPieceKind = "food" | "material" | "energy" | "junk";
@@ -79,22 +77,19 @@ export function fromLegacyCleared(cleared: LegacyClearedCounts): SortClearedCoun
     ammo: cleared.food,
     armor: cleared.material,
     power: cleared.energy,
-    food: cleared.food,
-    material: cleared.material,
-    energy: cleared.energy,
   };
 }
 
 export function toLegacyCleared(cleared: SortClearedCounts): LegacyClearedCounts {
   return {
-    food: Number.isFinite(cleared.ammo) ? cleared.ammo : cleared.food,
-    material: Number.isFinite(cleared.armor) ? cleared.armor : cleared.material,
-    energy: Number.isFinite(cleared.power) ? cleared.power : cleared.energy,
+    food: cleared.ammo,
+    material: cleared.armor,
+    energy: cleared.power,
   };
 }
 
 export function emptySortCleared(): SortClearedCounts {
-  return { ammo: 0, armor: 0, power: 0, food: 0, material: 0, energy: 0 };
+  return { ammo: 0, armor: 0, power: 0 };
 }
 
 export function addSortCleared(a: SortClearedCounts, b: SortClearedCounts): SortClearedCounts {
@@ -102,9 +97,6 @@ export function addSortCleared(a: SortClearedCounts, b: SortClearedCounts): Sort
     ammo: a.ammo + b.ammo,
     armor: a.armor + b.armor,
     power: a.power + b.power,
-    food: a.ammo + b.ammo,
-    material: a.armor + b.armor,
-    energy: a.power + b.power,
   };
 }
 
