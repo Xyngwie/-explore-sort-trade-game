@@ -1,0 +1,5 @@
+/* Large boards need a trailing gutter so the rightmost edges have the same
+   visual and touch clearance as the left side while horizontally scrolling. */
+.board-scroll.large {
+  padding-right: 24px;
+}
