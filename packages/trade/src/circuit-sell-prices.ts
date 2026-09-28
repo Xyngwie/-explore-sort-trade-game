@@ -120,3 +120,4 @@ export function formatCircuitSellPriceJa(
 // Module 3 UI side effects: trade window + junk→circuit crafting.
 import "./four-resource-trade-ui";
 import "./junk-circuit-craft-ui";
+import "./circuit-equip-ui";
