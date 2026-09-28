@@ -1,0 +1,37 @@
+name: Split Sort Engine
+
+on:
+  push:
+    branches:
+      - refactor/sort-four-resources
+    paths:
+      - packages/sort/src/refine-legacy.ts
+      - scripts/split-sort-engine.mjs
+      - .github/workflows/split-sort-engine.yml
+
+permissions:
+  contents: write
+
+jobs:
+  split:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/sort-four-resources
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/split-sort-engine.mjs
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/sort/src/refine-legacy.ts packages/sort/src/refine-types.ts
+          if git diff --cached --quiet; then
+            echo 'No split changes needed.'
+            exit 0
+          fi
+          git commit -m 'refactor(sort): split legacy engine types'
+          git push origin HEAD:refactor/sort-four-resources
