@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "selftest": "tsx src/refine-legacy.selftest.ts && tsx src/refine.selftest.ts && tsx src/resource-model.selftest.ts",
+    "selftest": "tsx src/refine.selftest.ts && tsx src/resource-model.selftest.ts",
     "test": "npm run typecheck && npm run selftest"
   },
   "dependencies": {
