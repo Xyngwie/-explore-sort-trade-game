@@ -1479,14 +1479,14 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(waveFb.includes("hud-flash-yield"), "wave yield flash");
   assert(waveFb.includes('data-mode="wave"'), "wave toggle mode");
   assert(waveFb.includes(">今回<"), "wave toggle label JA");
-  assert(waveFb.includes("食3"), "wave shows clear delta pieces");
+  assert(waveFb.includes("弾3"), "wave shows clear delta pieces");
   assert(waveFb.includes("+3"), "wave chip from delta");
 
   const sessionFb = buildTopFeedbackHtml(s, { yieldMode: "session" });
   assert(sessionFb.includes('data-mode="session"'), "session toggle mode");
   assert(sessionFb.includes(">累積<"), "session toggle label JA");
-  assert(sessionFb.includes("食5"), "session shows cumulative ammo");
-  assert(sessionFb.includes("部2"), "session cumulative armor");
+  assert(sessionFb.includes("弾5"), "session shows cumulative ammo");
+  assert(sessionFb.includes("装2"), "session cumulative armor");
   assert(sessionFb.includes("電1"), "session cumulative power");
 
   const tensionFb = buildTopFeedbackHtml(s, {
