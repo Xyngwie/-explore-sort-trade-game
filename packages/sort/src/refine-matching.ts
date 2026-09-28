@@ -1,4 +1,4 @@
-import { type Cell, type PieceKind, applyGravity, refillFromAbove, takeFromBag } from "./refine-board";
+import { type Cell, type PieceKind, applyGravity, refillFromAbove } from "./refine-board";
 
 export type ClearedCounts = {
   food: number;
