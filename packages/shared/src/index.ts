@@ -18,3 +18,4 @@ export * from "./circuit-clues";
 export * from "./cta-copy";
 export * from "./circuit-inventory";
 export * from "./circuit-craft-cost";
+export * from "./circuit-outcome";
