@@ -1,4 +1,6 @@
-export type PieceKind = "food" | "material" | "energy" | "junk";
+import type { SortPieceKind } from "./resource-model";
+
+export type PieceKind = SortPieceKind;
 export type Cell = PieceKind | null;
 
 export function emptyBoard(cols: number, rows: number): Cell[] {
