@@ -56,7 +56,7 @@ export function buildYieldPreviewFromDelta(
   craftMultiplier: number,
 ): YieldBag {
   if (delta == null) return {};
-  const total = delta.food + delta.material + delta.energy;
+  const total = delta.ammo + delta.armor + delta.power;
   if (total <= 0) return {};
   return yieldBagFromClearedWithMultiplier(delta, craftMultiplier);
 }
@@ -156,7 +156,6 @@ export function buildTopFeedbackHtml(
   const craft = resolveCraftMultiplier(s.inbound);
   const yieldMode: YieldPreviewMode = opts?.yieldMode ?? "wave";
 
-  // Bag difficulty (briefly at session start) — scale + how far until junk.
   if (opts?.showBagIntro) {
     const g = validSupplyGaugeState(s);
     const untilJunk = g.remaining;
@@ -169,7 +168,6 @@ export function buildTopFeedbackHtml(
     `);
   }
 
-  // Short junk-tension telegraph (gauge already shifted) — not a persistent banner.
   if (opts?.showJunkTension) {
     const g = validSupplyGaugeState(s);
     if (g.level === "tension") {
@@ -183,7 +181,6 @@ export function buildTopFeedbackHtml(
     }
   }
 
-  // Active chain / simultaneous clear visualization (top, not center).
   if (s.playMode === "clearing" || s.playMode === "settling") {
     const modeLabel = s.playMode === "clearing" ? "同時消去" : "落下連鎖";
     const n = Math.max(1, s.chainCount);
@@ -209,7 +206,6 @@ export function buildTopFeedbackHtml(
     `);
   }
 
-  // Yield chips: per-clear wave and/or session cumulative (toggle).
   const waveDelta = s.lastClearDelta;
   const sessionCounts = s.cleared;
   const sourceCounts: ClearedCounts | null =
@@ -219,16 +215,16 @@ export function buildTopFeedbackHtml(
   const yieldBag = buildYieldPreviewFromDelta(sourceCounts, craft);
   const { chips, extra } = formatYieldPreviewChips(yieldBag);
   const sessionTotal =
-    sessionCounts.food + sessionCounts.material + sessionCounts.energy;
+    sessionCounts.ammo + sessionCounts.armor + sessionCounts.power;
   const showYield =
     chips.length > 0 &&
     (yieldMode === "session" ? sessionTotal > 0 : waveDelta != null);
   if (showYield) {
     const delta = sourceCounts!;
     const pieceBits = [
-      delta.food > 0 ? `食${delta.food}` : "",
-      delta.material > 0 ? `部${delta.material}` : "",
-      delta.energy > 0 ? `電${delta.energy}` : "",
+      delta.ammo > 0 ? `弾${delta.ammo}` : "",
+      delta.armor > 0 ? `装${delta.armor}` : "",
+      delta.power > 0 ? `電${delta.power}` : "",
     ]
       .filter(Boolean)
       .join("·");
@@ -256,7 +252,6 @@ export function buildTopFeedbackHtml(
     `);
   }
 
-  // Compact status (top) — replaces below-board field-status mid-play.
   if (
     s.statusMsg &&
     !(s.playMode === "clearing" || s.playMode === "settling") &&
@@ -281,19 +276,18 @@ export function buildPlayHudHtml(s: RefineLive, opts?: PlayHudOpts): string {
       : s.lastChain > 0
         ? `前回×${s.lastChain}`
         : "—";
-  // Bag length equals remaining valid (junk never queued in bag).
   const bagLeft = remainingValidInBag(s.bag);
   return `
     <div class="hud-rail" aria-label="プレイ HUD">
       <div class="hud-stats">
         <div class="hud-stat"><span class="hud-k">手数</span><span class="hud-v">${s.movesLeft}</span></div>
         <div class="hud-stat"><span class="hud-k">袋</span><span class="hud-v">${bagLeft}</span></div>
-        <div class="hud-stat"><span class="hud-k">消</span><span class="hud-v">${s.cleared.food}/${s.cleared.material}/${s.cleared.energy}</span></div>
+        <div class="hud-stat"><span class="hud-k">消</span><span class="hud-v">${s.cleared.ammo}/${s.cleared.armor}/${s.cleared.power}</span></div>
         <div class="hud-stat"><span class="hud-k">連鎖</span><span class="hud-v">${escapeHtml(chain)}</span></div>
         <div class="legend hud-legend" aria-hidden="true">
-          <span class="swatch food">食</span>
-          <span class="swatch material">部</span>
-          <span class="swatch energy">電</span>
+          <span class="swatch ammo">弾</span>
+          <span class="swatch armor">装</span>
+          <span class="swatch power">電</span>
           <span class="swatch junk">ジャ</span>
         </div>
       </div>
