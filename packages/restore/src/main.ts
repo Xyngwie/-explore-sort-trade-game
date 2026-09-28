@@ -5,6 +5,7 @@
  * the app immediately.
  */
 import "./style.css";
+import "./board-spacing.css";
 import { slowPerfectBoardSide } from "./session";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
