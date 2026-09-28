@@ -1,8 +1,15 @@
 # Agent declarations
 
 ## Stone
-- **Agent:** Stone
-- **Role:** implementation agent
-- **Current objective:** add independent Sort four-resource contract tests and legacy-vocabulary guardrails while another agent splits `refine-legacy.ts`.
-- **Purpose:** verify the canonical `ammo` / `armor` / `power` / `junk` contract without modifying the legacy engine being split by another agent.
-- **Working rule:** only touch test/guardrail files in this branch; do not edit `refine-legacy.ts` or the files being split by another agent.
+- **Agent:** Codex (ChatGPT) / Stone
+- **Role:** HUB implementation agent
+- **Current objective:** Implement and maintain HUB circuit functions, including circuit equip/unequip, purchase and related HUB-side circuit management.
+- **Purpose:** Provide the HUB-side implementation while keeping the Sort engine and shared data-contract work isolated from this agent.
+- **Owns:** HUB implementation (`packages/hub/**` or the repository's equivalent HUB module).
+- **Does not own:** `packages/sort/**`; shared circuit/data contracts under `packages/shared/**`.
+- **Boundary rule:** If a new shared contract is required, request it from Spear rather than changing shared contracts independently.
+
+## Parallel-agent boundary
+- Execution Captain owns `packages/sort/**`, especially `refine-legacy` splitting, selftest fixes, and Sort build recovery.
+- Spear owns `packages/shared/**` and the circuit/data contracts between modules.
+- Other agents should add their own declaration here rather than editing another agent's section.
