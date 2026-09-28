@@ -1,6 +1,4 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
 const srcDir = new URL(".", import.meta.url);
 const files = readdirSync(srcDir).filter(
   (name) => name.endsWith(".ts") && !name.endsWith(".selftest.ts") && name !== "refine-legacy.ts" && name !== "resource-model.ts",
