@@ -1,25 +1,9 @@
 import type { CraftingPuzzleResult } from "@estg/shared";
 import * as legacy from "./refine-legacy";
-import {
-  applyGravity as boardApplyGravity,
-  boardNeedsSettle as boardNeedsSettleCore,
-  indexOf as boardIndexOf,
-  refillFromAbove as boardRefillFromAbove,
-  settleMotionIndices as boardSettleMotionIndices,
-  spawnTopFromBag as boardSpawnTopFromBag,
-  stepGravityOnce as boardStepGravityOnce,
-  fromLegacyBoard,
-  fromLegacyBag,
-  fromLegacyCleared,
-  toLegacyBoard,
-  toLegacyBag,
-  toLegacyCleared,
-  type SortClearedCounts,
-  type SortPieceKind,
-} from "./resource-model";
+import { fromLegacyBoard, fromLegacyBag, fromLegacyCleared, toLegacyBoard, toLegacyBag, toLegacyCleared, type SortClearedCounts, type SortPieceKind } from "./resource-model";
 import {
   applyGravity as boardApplyGravityCore,
-  boardNeedsSettle as boardNeedsSettleCore2,
+  boardNeedsSettle as boardNeedsSettleCore,
   indexOf as boardIndexOfCore,
   refillFromAbove as boardRefillFromAboveCore,
   settleMotionIndices as boardSettleMotionIndicesCore,
@@ -69,7 +53,7 @@ export function buildSupplyBag(validPieceBudget: number, invalidPieceCount = 0, 
 export function applyGravity(board: Cell[], cols: number, rows: number): Cell[] { return fromLegacyBoard(boardApplyGravityCore(fromLegacyBoard(toLegacyBoard(board)), cols, rows)); }
 export function stepGravityOnce(board: Cell[], cols: number, rows: number) { const r = boardStepGravityOnceCore(fromLegacyBoard(toLegacyBoard(board)), cols, rows); return { board: fromLegacyBoard(r.board), moved: r.moved }; }
 export function spawnTopFromBag(board: Cell[], bag: SortPieceKind[], cols: number, rows: number) { const r = boardSpawnTopFromBagCore(fromLegacyBoard(toLegacyBoard(board)), fromLegacyBag(toLegacyBag(bag)), cols, rows); return { board: fromLegacyBoard(r.board), bag: fromLegacyBag(r.bag), spawned: r.spawned }; }
-export function boardNeedsSettle(board: Cell[], bag: SortPieceKind[], cols: number, rows: number) { return boardNeedsSettleCore2(fromLegacyBoard(toLegacyBoard(board)), fromLegacyBag(toLegacyBag(bag)), cols, rows); }
+export function boardNeedsSettle(board: Cell[], bag: SortPieceKind[], cols: number, rows: number) { return boardNeedsSettleCore(fromLegacyBoard(toLegacyBoard(board)), fromLegacyBag(toLegacyBag(bag)), cols, rows); }
 export function refillFromAbove(board: Cell[], bag: SortPieceKind[], cols: number, rows: number, junkWhenEmpty = false) { const r = boardRefillFromAboveCore(fromLegacyBoard(toLegacyBoard(board)), fromLegacyBag(toLegacyBag(bag)), cols, rows, junkWhenEmpty); return { board: fromLegacyBoard(r.board), bag: fromLegacyBag(r.bag) }; }
 export function findLineMatches(board: Cell[], cols: number, rows: number, minLen = SORT_V0_RULES.minClearLine) { return matchingFindLineMatches(fromLegacyBoard(toLegacyBoard(board)), cols, rows, minLen); }
 export function clearMatches(board: Cell[], matches: Set<number> | number[]) { const r = matchingClearMatches(fromLegacyBoard(toLegacyBoard(board)), matches); return { board: fromLegacyBoard(r.board), cleared: fromLegacyCleared(r.cleared) }; }
