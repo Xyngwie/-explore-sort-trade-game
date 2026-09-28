@@ -1,0 +1,5 @@
+/* Canonical Sort resource colors. Keep legacy selectors in style.css during migration. */
+.swatch.ammo, .cell.ammo { background: #3d6b2f; border-color: #56d364; color: #d4f5c8; }
+.swatch.armor, .cell.armor { background: #5a4a1e; border-color: #d4a72c; color: #ffe8a3; }
+.swatch.power, .cell.power { background: #1f4d6b; border-color: #58a6ff; color: #c8e1ff; }
+.swatch.junk, .cell.junk { background: #3a3a3a; border-color: #6e7681; color: #c9d1d9; }
