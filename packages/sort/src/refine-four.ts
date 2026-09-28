@@ -1,5 +1,5 @@
 import type { CraftingPuzzleResult } from "@estg/shared";
-import * as legacy from "./refine";
+import * as legacy from "./refine-legacy";
 import { fromLegacyBoard, fromLegacyBag, fromLegacyCleared, toLegacyBoard, toLegacyBag, toLegacyCleared, type SortClearedCounts, type SortPieceKind } from "./resource-model";
 
 export const SORT_V0_RULES = legacy.SORT_V0_RULES;
