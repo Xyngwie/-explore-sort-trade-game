@@ -1,10 +1,7 @@
 import { type Cell, type PieceKind, applyGravity, refillFromAbove } from "./refine-board";
+import type { SortClearedCounts } from "./resource-model";
 
-export type ClearedCounts = {
-  food: number;
-  material: number;
-  energy: number;
-};
+export type ClearedCounts = SortClearedCounts;
 
 const LINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [0, 1],
@@ -54,10 +51,10 @@ export function clearMatches(
   matches: Set<number> | number[],
 ): { board: Cell[]; cleared: ClearedCounts } {
   const next = [...board];
-  const cleared: ClearedCounts = { food: 0, material: 0, energy: 0 };
+  const cleared: ClearedCounts = { ammo: 0, armor: 0, power: 0 };
   for (const i of matches) {
     const kind = next[i];
-    if (kind === "food" || kind === "material" || kind === "energy") {
+    if (kind === "ammo" || kind === "armor" || kind === "power") {
       cleared[kind]++;
     }
     next[i] = null;
@@ -75,7 +72,7 @@ export function resolveChains(
 ): { board: Cell[]; cleared: ClearedCounts; chain: number; bag: PieceKind[] } {
   let current = board;
   let rest = [...bag];
-  const total: ClearedCounts = { food: 0, material: 0, energy: 0 };
+  const total: ClearedCounts = { ammo: 0, armor: 0, power: 0 };
   let chain = 0;
   const maxChains = 64;
   while (chain < maxChains) {
@@ -83,9 +80,9 @@ export function resolveChains(
     if (matches.size === 0) break;
     chain++;
     const cleared = clearMatches(current, matches);
-    total.food += cleared.cleared.food;
-    total.material += cleared.cleared.material;
-    total.energy += cleared.cleared.energy;
+    total.ammo += cleared.cleared.ammo;
+    total.armor += cleared.cleared.armor;
+    total.power += cleared.cleared.power;
     current = applyGravity(cleared.board, cols, rows);
     if (rest.length > 0 || junkWhenEmpty) {
       const filled = refillFromAbove(current, rest, cols, rows, junkWhenEmpty);
@@ -99,7 +96,7 @@ export function resolveChains(
 export function countOnBoard(
   board: Cell[],
 ): ClearedCounts & { junk: number; empty: number } {
-  const out = { food: 0, material: 0, energy: 0, junk: 0, empty: 0 };
+  const out = { ammo: 0, armor: 0, power: 0, junk: 0, empty: 0 };
   for (const cell of board) {
     if (cell == null) out.empty++;
     else out[cell]++;
