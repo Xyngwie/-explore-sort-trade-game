@@ -1,0 +1,50 @@
+name: PR Build Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/explore/**"
+      - "packages/sort/**"
+      - "packages/trade/**"
+      - "packages/invade/**"
+      - "packages/restore/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.*"
+      - ".github/workflows/pr-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build trade
+        run: npm run build:trade
+
+      - name: Build explore
+        run: npm run build:explore
+
+      - name: Build sort
+        run: npm run build:sort
+
+      - name: Build invade
+        run: npm run build:invade
+
+      - name: Build restore
+        run: npm run build:restore
