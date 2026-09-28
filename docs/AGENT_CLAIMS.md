@@ -4,11 +4,11 @@
 
 ## 現在の宣言
 
-### Codex（ChatGPT）— 実行隊長
+### Codex（ChatGPT）の一員・実行隊長
 - **役割:** 実行隊長
 - **担当:** 小〜中規模の実装、CI/ビルド障害の修正、既存タスクの分割、PR作成、Actions確認、マージ後Deploy確認。
 - **現在の目的:** Sort の `refine-legacy` 周辺が巨大化して並行開発の障害になっているため、既存挙動を変えずに責務ごとの小さなモジュールへ分割する。
-- **現在の作業:** `refactor/sort-refine-board` ブランチで盤面・重力・補充系ロジックを `refine-board.ts` へ分離中。
+- **現在の作業:** `refactor/sort-refine-board` ブランチで盤面・重力・補充系を `refine-board.ts`、マッチ・クリア・カスケード系を `refine-matching.ts` へ分離中。
 - **触らない範囲:** Exploreの回路ハンドオフ、Sortの資源4分類そのもの、他エージェントが宣言済みの作業。
 - **完了条件:** 分割後も既存テスト／selftest／Buildが通り、変更範囲をPRとして独立してレビュー・マージできる状態にする。
 
