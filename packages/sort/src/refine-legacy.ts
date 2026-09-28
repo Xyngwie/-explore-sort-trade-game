@@ -94,72 +94,17 @@ export const SORT_V0_RULES = {
   craftMultiplier: 1,
 } as const;
 
-export type PieceKind = "food" | "material" | "energy" | "junk";
+import {
+  type PieceKind,
+  type ClearedCounts,
+  type RefinePhase,
+  type Cell,
+  type PlayMode,
+  type RefineLive,
+  VALID_KINDS,
+  PIECE_LABEL_JA,
+} from "./refine-types";
 
-export const VALID_KINDS: readonly Exclude<PieceKind, "junk">[] = [
-  "food",
-  "material",
-  "energy",
-];
-
-export const PIECE_LABEL_JA: Record<PieceKind, string> = {
-  food: "食料",
-  material: "部品",
-  energy: "電力",
-  junk: "ジャンク",
-};
-
-export type ClearedCounts = {
-  food: number;
-  material: number;
-  energy: number;
-};
-
-export type RefinePhase = "blocked" | "briefing" | "play" | "result";
-
-export type Cell = PieceKind | null;
-
-/**
- * idle = waiting for swap;
- * clearing = short blink before erase;
- * settling = slow gravity/refill (active-chain skill window — swaps free).
- */
-export type PlayMode = "idle" | "clearing" | "settling";
-
-export type RefineLive = {
-  phase: RefinePhase;
-  inbound: ExploreToSortPayload;
-  note: string;
-  blockReason: string | null;
-  validPieceBudget: number;
-  invalidPieceCount: number;
-  bag: PieceKind[];
-  board: Cell[];
-  cols: number;
-  rows: number;
-  movesLeft: number;
-  cleared: ClearedCounts;
-  /** Indices marked to clear when the chain window commits. */
-  pendingClear: number[];
-  playMode: PlayMode;
-  /** Current chain wave count (0 when idle). */
-  chainCount: number;
-  /** Last finished chain length (for UI flash). */
-  lastChain: number;
-  /**
-   * Remaining blink ms while clearing (informational; UI owns the timer).
-   * Engine extends this when mid-blink swaps add matches.
-   * During settling, UI uses SORT_V0_RULES.settleStepMs instead.
-   */
-  chainWindowMsLeft: number;
-  /** Selected cell index for tap-tap swap (cursor-style). */
-  selected: number | null;
-  statusMsg: string | null;
-  /**
-   * Cleared counts from the most recent commitClearStep (one blink wave).
-   * UI shows a brief top yield preview from this; cleared on return to idle.
-   */
-  lastClearDelta: ClearedCounts | null;
 };
 
 function mulberry32(seed: number): () => number {
