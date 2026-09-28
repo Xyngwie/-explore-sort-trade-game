@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 const srcDir = new URL(".", import.meta.url);
 const files = readdirSync(srcDir).filter(
-  (name) => name.endsWith(".ts") && !name.endsWith(".selftest.ts") && name !== "refine-legacy.ts" && name !== "resource-model.ts",
+  (name) => name.endsWith(".ts") && !name.endsWith(".selftest.ts") && name !== "refine-legacy.ts" && name !== "resource-model.ts" && name !== "legacy-vocabulary.guard.ts",
 );
 
 // Keep the legacy vocabulary confined to the explicit migration boundary until
