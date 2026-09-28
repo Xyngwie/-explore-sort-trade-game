@@ -148,7 +148,7 @@ export function canSkipWithCargo(
 
 /**
  * Zero-yield sort→trade URL that deposits inbound container count into Hub
- * `unopenedContainers` via `depositUnopenedContainers` (no material import).
+ * `unopenedContainers` via `depositUnopenedContainers` (no resource import).
  */
 export function buildCargoSkipToHubUrl(
   s: Pick<RefineLive, "inbound">,
