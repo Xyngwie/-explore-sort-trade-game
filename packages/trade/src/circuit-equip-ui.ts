@@ -6,14 +6,16 @@
 import {
   equipCircuit,
   unequipCircuit,
-  loadHubSaveFromLocalStorage,
+  loadHubSaveWithStatus,
   mechSlotCapacity,
   saveHubSaveToLocalStorage,
   type HubCircuitRecord,
   type HubSnapshot,
 } from "@estg/shared";
+import { saveMigrationNotice } from "./save-migration-notice";
 
 const CARD_ID = "circuit-equip-panel";
+const SAVE_NOTICE_ID = "save-migration-notice";
 
 function esc(value: string): string {
   return value
@@ -33,10 +35,33 @@ function stateLabel(c: HubCircuitRecord): string {
 }
 
 function loadHub(): HubSnapshot | null {
-  return loadHubSaveFromLocalStorage()?.hub ?? null;
+  return loadHubSaveWithStatus()?.save?.hub ?? null;
+}
+
+function renderSaveNotice(): void {
+  const existing = document.getElementById(SAVE_NOTICE_ID);
+  if (existing instanceof HTMLElement) existing.remove();
+
+  const result = loadHubSaveWithStatus();
+  const message = saveMigrationNotice(result);
+  if (!message) return;
+
+  const anchor = Array.from(document.querySelectorAll("h2")).find(
+    (el) => el.textContent?.trim() === "保有回路",
+  );
+  const anchorCard = anchor?.closest(".card");
+  if (!(anchorCard instanceof HTMLElement)) return;
+
+  const card = document.createElement("div");
+  card.id = SAVE_NOTICE_ID;
+  card.className = "card";
+  card.innerHTML = `<p style="margin:0">${esc(message)}</p>`;
+  anchorCard.insertAdjacentElement("beforebegin", card);
 }
 
 function render(): void {
+  renderSaveNotice();
+
   const existing = document.getElementById(CARD_ID);
   if (existing instanceof HTMLElement && existing.isConnected) return;
 
