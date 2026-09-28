@@ -643,7 +643,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   board[idx(cols, 5, 0)] = "power";
   board[idx(cols, 5, 1)] = "power";
   board[idx(cols, 5, 2)] = "power";
-  // Staggered foods — become a horizontal match only after power clears
+  // Staggered ammo pieces — become a horizontal match only after power clears
   board[idx(cols, 3, 0)] = "ammo";
   board[idx(cols, 2, 1)] = "ammo";
   board[idx(cols, 4, 2)] = "ammo";
@@ -1413,7 +1413,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(!isEmptyCargoEntry(hasCargo), "cargo > 0 hides empty-skip path");
 }
 
-// Cargo skip-with-deposit (briefing) — deposits N unopened, zero materials
+// Cargo skip-with-deposit (briefing) — deposits N unopened, zero armor pieces
 {
   const cargo = createRefineFromLocationSearch(
     "?salvagedContainers=3&totalStockPieces=75&isExtracted=1",
@@ -1435,7 +1435,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   );
   assert(
     emptyUrl.searchParams.get("importMaterials") === "0",
-    "empty skip still zero materials",
+    "empty skip still zero armor pieces",
   );
 
   const skipUrl = buildCargoSkipToHubUrl(cargo, "http://localhost:5175/");
