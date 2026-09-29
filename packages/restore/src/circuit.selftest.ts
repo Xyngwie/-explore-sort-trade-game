@@ -283,10 +283,13 @@ assert.ok(
     none.hazards.contradiction + none.hazards.overdigit + none.hazards.dense_noise,
     80,
   );
-  // Hazard mix should hit each bucket at least once across 80 draws.
-  assert.ok(none.hazards.contradiction > 0);
-  assert.ok(none.hazards.overdigit > 0);
-  assert.ok(none.hazards.dense_noise > 0);
+  // v3 majority generation no longer selects legacy hazard buckets.
+  // generateFlawedClues returns the compatibility hazard tag "contradiction"
+  // for all v3-generated flawed boards; verify that the aggregate matches
+  // the current generator contract instead of the removed legacy distribution.
+  assert.equal(none.hazards.contradiction, 80);
+  assert.equal(none.hazards.overdigit, 0);
+  assert.equal(none.hazards.dense_noise, 0);
 
   const always = sampleGeneratorRatios(40, { injectRate: 1, seedPrefix: "r1" });
   assert.equal(always.perfect, 40);
