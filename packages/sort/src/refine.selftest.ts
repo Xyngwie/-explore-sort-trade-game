@@ -175,7 +175,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(m.size === 0, "junk lines do not match");
 }
 
-// Horizontal food line of 3 clears; junk beside stays
+// Horizontal ammo line of 3 clears; junk beside stays
 {
   const cols = 6;
   const rows = 8;
@@ -183,12 +183,12 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, rows - 1, 0)] = "food";
-  board[idx(cols, rows - 1, 1)] = "food";
-  board[idx(cols, rows - 1, 2)] = "food";
+  board[idx(cols, rows - 1, 0)] = "ammo";
+  board[idx(cols, rows - 1, 1)] = "ammo";
+  board[idx(cols, rows - 1, 2)] = "ammo";
   board[idx(cols, rows - 1, 3)] = "junk";
   const resolved = resolveChains(board, cols, rows);
-  assert(resolved.cleared.food === 3, "cleared food += 3");
+  assert(resolved.cleared.ammo === 3, "cleared ammo += 3");
   assert(resolved.chain === 1, "one clear wave");
   assert(
     resolved.board[idx(cols, rows - 1, 3)] === "junk",
@@ -204,11 +204,11 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, 3, 0)] = "food";
-  board[idx(cols, 4, 0)] = "food";
-  board[idx(cols, 5, 0)] = "food";
+  board[idx(cols, 3, 0)] = "ammo";
+  board[idx(cols, 4, 0)] = "ammo";
+  board[idx(cols, 5, 0)] = "ammo";
   const resolved = resolveChains(board, cols, rows);
-  assert(resolved.cleared.food === 3, "vertical clear");
+  assert(resolved.cleared.ammo === 3, "vertical clear");
   assert(resolved.board.every((c) => c == null), "board empty after");
 }
 
@@ -220,9 +220,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, 1, 0)] = "energy";
-  board[idx(cols, 2, 1)] = "energy";
-  board[idx(cols, 3, 2)] = "energy";
+  board[idx(cols, 1, 0)] = "power";
+  board[idx(cols, 2, 1)] = "power";
+  board[idx(cols, 3, 2)] = "power";
   const m = findLineMatches(board, cols, rows);
   assert(m.size === 0, "diagonal does not match");
 }
@@ -233,7 +233,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     "?salvagedContainers=1&totalStockPieces=30&isExtracted=1",
   );
   s = startRefine(s, 1);
-  // Build a controlled board: two food adjacent + one food to swap in
+  // Build a controlled board: two ammo adjacent + one ammo to swap in
   const cols = s.cols;
   const rows = s.rows;
   const board: RefineLive["board"] = Array.from(
@@ -241,20 +241,20 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "material";
-  board[idx(cols, r, 3)] = "food";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "armor";
+  board[idx(cols, r, 3)] = "ammo";
   s = {
     ...s,
     board,
-    bag: ["energy", "energy", "energy", "energy", "energy", "energy"],
+    bag: ["power", "power", "power", "power", "power", "power"],
     movesLeft: 10,
     pendingClear: [],
     playMode: "idle",
   };
   const movesBefore = s.movesLeft;
-  // Swap material(2) with food(3) → food food food
+  // Swap armor(2) with ammo(3) → ammo ammo ammo
   s = swapPanels(s, idx(cols, r, 2), idx(cols, r, 3));
   assert(s.playMode === "clearing", "enters clearing");
   assert(s.pendingClear.length >= 3, "pending clear set");
@@ -262,7 +262,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.chainCount === 1, "chain starts at 1");
 
   s = commitClearStep(s);
-  assert(s.cleared.food >= 3, "food cleared on commit");
+  assert(s.cleared.ammo >= 3, "ammo cleared on commit");
   assert(s.playMode === "settling", "commit enters slow settle (not snap fill)");
   assert(isActiveChain(s), "settling is active chain");
   s = settleUntilQuiet(s);
@@ -282,16 +282,16 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  // Pending clear: food food food at 0,1,2
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "food";
-  // Setup for mid-chain: energy energy | material | energy → swap to match
-  board[idx(cols, r, 3)] = "energy";
-  board[idx(cols, r, 4)] = "energy";
-  board[idx(cols, r, 5)] = "material";
-  // Put spare energy above material to swap down? Better: put energy at row-2 col5 and swap vertically
-  board[idx(cols, r - 1, 5)] = "energy";
+  // Pending clear: ammo ammo ammo at 0,1,2
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "ammo";
+  // Setup for mid-chain: power power | armor | power → swap to match
+  board[idx(cols, r, 3)] = "power";
+  board[idx(cols, r, 4)] = "power";
+  board[idx(cols, r, 5)] = "armor";
+  // Put spare power above armor to swap down? Better: put power at row-2 col5 and swap vertically
+  board[idx(cols, r - 1, 5)] = "power";
 
   s = {
     ...s,
@@ -303,14 +303,14 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     chainWindowMsLeft: SORT_V0_RULES.chainWindowMs,
   };
   const movesBefore = s.movesLeft;
-  // Vertical swap material <-> energy above → energy energy energy on bottom
+  // Vertical swap armor <-> power above → power power power on bottom
   s = swapPanels(s, idx(cols, r, 5), idx(cols, r - 1, 5));
   assert(s.movesLeft === movesBefore, "active-chain swap is free");
   assert(s.playMode === "clearing", "still clearing");
   assert(
     s.pendingClear.includes(idx(cols, r, 3)) ||
       s.pendingClear.length > 3,
-    "new energy match merged into pending",
+    "new power match merged into pending",
   );
 }
 
@@ -339,11 +339,11 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  // food food | material  on bottom; food above material → vertical swap
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "material";
-  board[idx(cols, r - 1, 2)] = "food";
+  // ammo ammo | armor  on bottom; ammo above armor → vertical swap
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "armor";
+  board[idx(cols, r - 1, 2)] = "ammo";
   s = {
     ...s,
     board,
@@ -357,7 +357,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.playMode === "clearing", "vertical swap enters clearing");
   assert(s.movesLeft === movesBefore - 1, "vertical idle swap costs a move");
   assert(s.pendingClear.length >= 3, "vertical swap pending clear");
-  assert(s.board[idx(cols, r, 2)] === "food", "food swapped down");
+  assert(s.board[idx(cols, r, 2)] === "ammo", "ammo swapped down");
 }
 
 // tapCell vertical neighbors swap
@@ -373,14 +373,14 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "material";
-  board[idx(cols, r - 1, 0)] = "energy";
+  board[idx(cols, r, 0)] = "armor";
+  board[idx(cols, r - 1, 0)] = "power";
   s = { ...s, board, playMode: "idle", pendingClear: [], selected: null };
   s = tapCell(s, idx(cols, r, 0));
   assert(s.selected === idx(cols, r, 0), "selected bottom");
   s = tapCell(s, idx(cols, r - 1, 0));
-  assert(s.board[idx(cols, r, 0)] === "energy", "tap vertical swap a");
-  assert(s.board[idx(cols, r - 1, 0)] === "material", "tap vertical swap b");
+  assert(s.board[idx(cols, r, 0)] === "power", "tap vertical swap a");
+  assert(s.board[idx(cols, r - 1, 0)] === "armor", "tap vertical swap b");
   assert(s.phase === "result", "idle no-match tap-tap finishes refine");
 }
 
@@ -397,8 +397,8 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r - 1, 1)] = "food";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r - 1, 1)] = "ammo";
   s = { ...s, board, playMode: "idle", pendingClear: [], selected: null, movesLeft: 5 };
   const before = s.board.slice();
   s = swapPanels(s, idx(cols, r, 0), idx(cols, r - 1, 1));
@@ -415,11 +415,11 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, rows - 1, 0)] = "food";
-  board[idx(cols, rows - 1, 1)] = "material";
+  board[idx(cols, rows - 1, 0)] = "ammo";
+  board[idx(cols, rows - 1, 1)] = "armor";
   const holes = cols * rows - 2;
   const bag: RefineLive["bag"] = Array.from({ length: holes }, (_, i) =>
-    (["energy", "food", "material", "junk"] as const)[i % 4]!,
+    (["power", "ammo", "armor", "junk"] as const)[i % 4]!,
   );
   const filled = refillFromAbove(board, bag, cols, rows);
   assert(filled.board.filter((c) => c != null).length === cols * rows, "board full");
@@ -440,22 +440,22 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "food";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "ammo";
   s = {
     ...s,
     board,
-    bag: ["energy", "energy", "energy", "material", "material", "material"],
+    bag: ["power", "power", "power", "armor", "armor", "armor"],
     pendingClear: [idx(cols, r, 0), idx(cols, r, 1), idx(cols, r, 2)],
     playMode: "clearing",
     chainCount: 1,
     chainWindowMsLeft: 500,
-    cleared: { food: 0, material: 0, energy: 0 },
+    cleared: { ammo: 0, armor: 0, power: 0 },
   };
   const bagBefore = s.bag.length;
   s = commitClearStep(s);
-  assert(s.cleared.food === 3, "food cleared");
+  assert(s.cleared.ammo === 3, "ammo cleared");
   assert(s.playMode === "settling", "enters settle after clear");
   // Immediately after clear, holes exist and bag not yet drained (slow refill)
   assert(s.bag.length === bagBefore, "no snap refill on commit");
@@ -466,7 +466,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   const onBoard = s.board.filter((c) => c != null).length;
   assert(onBoard === cols * rows, "after valid bag drains, junk packs full board");
   const fromBag = s.board.filter(
-    (c) => c === "energy" || c === "material",
+    (c) => c === "power" || c === "armor",
   ).length;
   assert(fromBag === bagBefore, "all six bag pieces dropped in");
   assert(
@@ -483,15 +483,15 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, 0, 0)] = "food";
-  board[idx(cols, 0, 1)] = "material";
+  board[idx(cols, 0, 0)] = "ammo";
+  board[idx(cols, 0, 1)] = "armor";
   const fell = stepGravityOnce(board, cols, rows);
   assert(fell.moved, "gravity step moved");
-  assert(fell.board[idx(cols, 1, 0)] === "food", "food fell one row");
+  assert(fell.board[idx(cols, 1, 0)] === "ammo", "ammo fell one row");
   assert(fell.board[idx(cols, 0, 0)] == null, "top vacated");
-  const spawned = spawnTopFromBag(fell.board, ["energy", "junk"], cols, rows);
+  const spawned = spawnTopFromBag(fell.board, ["power", "junk"], cols, rows);
   assert(spawned.spawned, "spawned into empty tops");
-  assert(spawned.board[idx(cols, 0, 0)] === "energy", "top spawn");
+  assert(spawned.board[idx(cols, 0, 0)] === "power", "top spawn");
   assert(boardNeedsSettle(spawned.board, spawned.bag, cols, rows), "still needs settle");
 }
 
@@ -508,16 +508,16 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   // Leave a hole under a panel so settle continues for several ticks
-  board[idx(cols, rows - 1, 0)] = "food";
-  board[idx(cols, rows - 3, 0)] = "material"; // floating — will fall
-  board[idx(cols, rows - 1, 1)] = "energy";
+  board[idx(cols, rows - 1, 0)] = "ammo";
+  board[idx(cols, rows - 3, 0)] = "armor"; // floating — will fall
+  board[idx(cols, rows - 1, 1)] = "power";
   board[idx(cols, rows - 1, 2)] = "junk";
-  board[idx(cols, rows - 1, 3)] = "food";
-  board[idx(cols, rows - 1, 4)] = "material";
+  board[idx(cols, rows - 1, 3)] = "ammo";
+  board[idx(cols, rows - 1, 4)] = "armor";
   s = {
     ...s,
     board,
-    bag: ["energy", "energy", "energy", "food", "food", "food"],
+    bag: ["power", "power", "power", "ammo", "ammo", "ammo"],
     pendingClear: [],
     playMode: "settling",
     chainCount: 1,
@@ -533,7 +533,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.movesLeft === movesBefore, "settle swap is free (active chain)");
   assert(s.playMode === "settling", "stays settling after swap");
   assert(s.board[idx(cols, rows - 1, 1)] === "junk", "swapped during settle a");
-  assert(s.board[idx(cols, rows - 1, 2)] === "energy", "swapped during settle b");
+  assert(s.board[idx(cols, rows - 1, 2)] === "power", "swapped during settle b");
 }
 
 // tapCell select then swap
@@ -549,14 +549,14 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "material";
-  board[idx(cols, r, 1)] = "energy";
+  board[idx(cols, r, 0)] = "armor";
+  board[idx(cols, r, 1)] = "power";
   s = { ...s, board, playMode: "idle", pendingClear: [], selected: null };
   s = tapCell(s, idx(cols, r, 0));
   assert(s.selected === idx(cols, r, 0), "selected");
   s = tapCell(s, idx(cols, r, 1));
-  assert(s.board[idx(cols, r, 0)] === "energy", "swapped via tap-tap");
-  assert(s.board[idx(cols, r, 1)] === "material", "swapped via tap-tap b");
+  assert(s.board[idx(cols, r, 0)] === "power", "swapped via tap-tap");
+  assert(s.board[idx(cols, r, 1)] === "armor", "swapped via tap-tap b");
   assert(s.phase === "result", "idle no-match tap-tap finishes refine");
 }
 
@@ -569,7 +569,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   s = {
     ...s,
     phase: "result",
-    cleared: { food: 5, material: 10, energy: 0 },
+    cleared: { ammo: 5, armor: 10, power: 0 },
     playMode: "idle",
     pendingClear: [],
   };
@@ -579,13 +579,13 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(result.yieldEnergy === 0, "yieldEnergy");
   assert(result.yieldBag != null, "yieldBag present");
   const expected = yieldBagFromClearedCounts({
-    food: 5,
-    material: 10,
-    energy: 0,
+    ammo: 5,
+    armor: 10,
+    power: 0,
   });
-  // Four-resource model (#115): food→ammo, material→armor, 1 piece = 1 resource.
-  assert(result.yieldBag!.ammo === expected.ammo && expected.ammo === 5, "ammo from food");
-  assert(result.yieldBag!.armor === expected.armor && expected.armor === 10, "armor from material");
+  // Four-resource model (#115): ammo→ammo, armor→armor, 1 piece = 1 resource.
+  assert(result.yieldBag!.ammo === expected.ammo && expected.ammo === 5, "ammo from ammo");
+  assert(result.yieldBag!.armor === expected.armor && expected.armor === 10, "armor from armor");
   assert(result.craftMultiplier === 1, "default craftMultiplier 1");
 }
 
@@ -602,19 +602,19 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   s = {
     ...s,
     phase: "result",
-    cleared: { food: 10, material: 0, energy: 0 },
+    cleared: { ammo: 10, armor: 0, power: 0 },
     playMode: "idle",
     pendingClear: [],
   };
   const result = toCraftingResult(s);
   assert(Math.abs(result.craftMultiplier - 1.1) < 0.001, "result craft");
   const unscaled = yieldBagFromClearedCounts({
-    food: 10,
-    material: 0,
-    energy: 0,
+    ammo: 10,
+    armor: 0,
+    power: 0,
   });
   const ammo = unscaled.ammo ?? 0;
-  assert(ammo === 10, "unscaled ammo from food");
+  assert(ammo === 10, "unscaled ammo from ammo");
   assert(
     result.yieldBag!.ammo === Math.floor(ammo * 1.1),
     "yieldBag scaled by craftMultiplier",
@@ -640,16 +640,16 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, 5, 0)] = "energy";
-  board[idx(cols, 5, 1)] = "energy";
-  board[idx(cols, 5, 2)] = "energy";
-  // Staggered foods — become a horizontal match only after energy clears
-  board[idx(cols, 3, 0)] = "food";
-  board[idx(cols, 2, 1)] = "food";
-  board[idx(cols, 4, 2)] = "food";
+  board[idx(cols, 5, 0)] = "power";
+  board[idx(cols, 5, 1)] = "power";
+  board[idx(cols, 5, 2)] = "power";
+  // Staggered ammo pieces — become a horizontal match only after power clears
+  board[idx(cols, 3, 0)] = "ammo";
+  board[idx(cols, 2, 1)] = "ammo";
+  board[idx(cols, 4, 2)] = "ammo";
   const resolved = resolveChains(board, cols, rows);
-  assert(resolved.cleared.energy === 3, "energy wave");
-  assert(resolved.cleared.food === 3, "food chain after gravity");
+  assert(resolved.cleared.power === 3, "power wave");
+  assert(resolved.cleared.ammo === 3, "ammo chain after gravity");
   assert(resolved.chain === 2, "two-wave chain");
 }
 
@@ -665,14 +665,14 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  // Bottom energy energy energy (pending)
-  board[idx(cols, rows - 1, 0)] = "energy";
-  board[idx(cols, rows - 1, 1)] = "energy";
-  board[idx(cols, rows - 1, 2)] = "energy";
-  // Floating food that drops into a row of 3 after energy clears
-  board[idx(cols, rows - 3, 0)] = "food";
-  board[idx(cols, rows - 4, 1)] = "food";
-  board[idx(cols, rows - 2, 2)] = "food";
+  // Bottom power power power (pending)
+  board[idx(cols, rows - 1, 0)] = "power";
+  board[idx(cols, rows - 1, 1)] = "power";
+  board[idx(cols, rows - 1, 2)] = "power";
+  // Floating ammo that drops into a row of 3 after power clears
+  board[idx(cols, rows - 3, 0)] = "ammo";
+  board[idx(cols, rows - 4, 1)] = "ammo";
+  board[idx(cols, rows - 2, 2)] = "ammo";
   s = {
     ...s,
     board,
@@ -685,19 +685,19 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     playMode: "clearing",
     chainCount: 1,
     chainWindowMsLeft: 500,
-    cleared: { food: 0, material: 0, energy: 0 },
+    cleared: { ammo: 0, armor: 0, power: 0 },
   };
   s = commitClearStep(s);
-  assert(s.cleared.energy === 3, "first wave energy");
+  assert(s.cleared.power === 3, "first wave power");
   assert(s.playMode === "settling", "slow settle after clear");
   s = settleUntilQuiet(s);
   assert(s.playMode === "clearing", "still in chain after gravity match");
   assert(s.chainCount === 2, "chain incremented");
-  assert(s.pendingClear.length >= 3, "food pending");
+  assert(s.pendingClear.length >= 3, "ammo pending");
   s = commitClearStep(s);
   assert(s.playMode === "settling", "second settle");
   s = settleUntilQuiet(s);
-  assert(s.cleared.food === 3, "second wave food");
+  assert(s.cleared.ammo === 3, "second wave ammo");
   assert(s.playMode === "idle", "chain ended");
   assert(s.lastChain === 2, "lastChain recorded");
 }
@@ -710,7 +710,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, rows - 1, 0)] = "food";
+  board[idx(cols, rows - 1, 0)] = "ammo";
   const spawned = spawnTopFromBag(board, [], cols, rows);
   assert(spawned.spawned, "spawned with empty bag");
   assert(spawned.board[idx(cols, 0, 0)] === "junk", "empty bag → junk spawn");
@@ -731,9 +731,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "food";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "ammo";
   s = {
     ...s,
     board,
@@ -742,10 +742,10 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     playMode: "clearing",
     chainCount: 1,
     chainWindowMsLeft: 500,
-    cleared: { food: 0, material: 0, energy: 0 },
+    cleared: { ammo: 0, armor: 0, power: 0 },
   };
   s = commitClearStep(s);
-  assert(s.cleared.food === 3, "yields still count after valid-only bag");
+  assert(s.cleared.ammo === 3, "yields still count after valid-only bag");
   assert(s.playMode === "settling", "settle after clear");
   s = settleUntilQuiet(s);
   assert(
@@ -774,7 +774,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     playMode: "idle",
     pendingClear: [],
     movesLeft: 5,
-    cleared: { food: 2, material: 0, energy: 0 },
+    cleared: { ammo: 2, armor: 0, power: 0 },
   };
   assert(isJunkOnlyStalemate(s), "junk-only stalemate detected");
   // One idle swap path triggers maybeFinish via tickSettle completing;
@@ -817,18 +817,18 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  // Floater keeps settle alive (column 0 hole under floating material).
+  // Floater keeps settle alive (column 0 hole under floating armor).
   board[idx(cols, rows - 1, 0)] = "junk";
-  board[idx(cols, rows - 3, 0)] = "material";
-  // Settled bottom row setup: food food | material | food → swap → match
-  board[idx(cols, rows - 1, 1)] = "food";
-  board[idx(cols, rows - 1, 2)] = "food";
-  board[idx(cols, rows - 1, 3)] = "material";
-  board[idx(cols, rows - 1, 4)] = "food";
+  board[idx(cols, rows - 3, 0)] = "armor";
+  // Settled bottom row setup: ammo ammo | armor | ammo → swap → match
+  board[idx(cols, rows - 1, 1)] = "ammo";
+  board[idx(cols, rows - 1, 2)] = "ammo";
+  board[idx(cols, rows - 1, 3)] = "armor";
+  board[idx(cols, rows - 1, 4)] = "ammo";
   s = {
     ...s,
     board,
-    bag: ["energy", "energy", "energy", "energy"],
+    bag: ["power", "power", "power", "power"],
     pendingClear: [],
     playMode: "settling",
     chainCount: 1,
@@ -839,13 +839,13 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(isActiveChain(s), "settling active before landed swap");
   assert(boardNeedsSettle(s.board, s.bag, cols, rows), "floater keeps settle open");
   const movesBefore = s.movesLeft;
-  // Swap settled material with food → food food food on bottom
+  // Swap settled armor with ammo → ammo ammo ammo on bottom
   s = swapPanels(s, idx(cols, rows - 1, 3), idx(cols, rows - 1, 4));
   assert(s.movesLeft === movesBefore, "landed settle-match swap is free");
   assert(s.playMode === "clearing", "match interrupts settle into blink");
   assert(s.chainCount === 2, "landed settle match increments chain");
   assert(s.pendingClear.length >= 3, "pending clear from landed match");
-  assert(s.board[idx(cols, rows - 1, 4)] === "material", "swapped pieces placed");
+  assert(s.board[idx(cols, rows - 1, 4)] === "armor", "swapped pieces placed");
 }
 
 // Idle no-match swap → finishRefine (yields locked; no endless leftover shuffle)
@@ -861,17 +861,17 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "material";
-  board[idx(cols, r, 2)] = "energy";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "armor";
+  board[idx(cols, r, 2)] = "power";
   s = {
     ...s,
     board,
-    bag: ["food", "food"],
+    bag: ["ammo", "ammo"],
     playMode: "idle",
     pendingClear: [],
     movesLeft: 8,
-    cleared: { food: 3, material: 1, energy: 0 },
+    cleared: { ammo: 3, armor: 1, power: 0 },
     selected: null,
   };
   s = swapPanels(s, idx(cols, r, 0), idx(cols, r, 1));
@@ -882,11 +882,11 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     "idle no-match status message",
   );
   const result = toCraftingResult(s);
-  assert(result.yieldFood === 3, "yield locked food");
-  assert(result.yieldMaterial === 1, "yield locked material");
+  assert(result.yieldFood === 3, "yield locked ammo");
+  assert(result.yieldMaterial === 1, "yield locked armor");
   assert(result.yieldBag != null, "yieldBag locked");
-  assert(s.board[idx(cols, r, 0)] === "material", "swap kept on board for scrap");
-  assert(s.board[idx(cols, r, 1)] === "food", "swap kept on board for scrap b");
+  assert(s.board[idx(cols, r, 0)] === "armor", "swap kept on board for scrap");
+  assert(s.board[idx(cols, r, 1)] === "ammo", "swap kept on board for scrap b");
 }
 
 // Mid-settle non-matching swap does NOT finish (active-chain setup stays free)
@@ -901,20 +901,20 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     { length: cols * rows },
     () => null,
   );
-  board[idx(cols, rows - 1, 0)] = "food";
-  board[idx(cols, rows - 3, 0)] = "material"; // floater keeps settle open
-  board[idx(cols, rows - 1, 1)] = "energy";
+  board[idx(cols, rows - 1, 0)] = "ammo";
+  board[idx(cols, rows - 3, 0)] = "armor"; // floater keeps settle open
+  board[idx(cols, rows - 1, 1)] = "power";
   board[idx(cols, rows - 1, 2)] = "junk";
   s = {
     ...s,
     board,
-    bag: ["food", "food", "food"],
+    bag: ["ammo", "ammo", "ammo"],
     pendingClear: [],
     playMode: "settling",
     chainCount: 2,
     chainWindowMsLeft: 0,
     movesLeft: 6,
-    cleared: { food: 2, material: 0, energy: 0 },
+    cleared: { ammo: 2, armor: 0, power: 0 },
     selected: null,
   };
   assert(isActiveChain(s), "settle is active chain");
@@ -924,7 +924,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.playMode === "settling", "stays settling after no-match setup swap");
   assert(s.movesLeft === movesBefore, "settle no-match swap is free");
   assert(s.board[idx(cols, rows - 1, 1)] === "junk", "settle setup swap applied");
-  assert(s.board[idx(cols, rows - 1, 2)] === "energy", "settle setup swap applied b");
+  assert(s.board[idx(cols, rows - 1, 2)] === "power", "settle setup swap applied b");
 }
 
 // Mid-clearing (blink) non-matching swap does NOT finish
@@ -940,11 +940,11 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "food";
-  board[idx(cols, r, 3)] = "energy";
-  board[idx(cols, r, 4)] = "material";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "ammo";
+  board[idx(cols, r, 3)] = "power";
+  board[idx(cols, r, 4)] = "armor";
   s = {
     ...s,
     board,
@@ -960,8 +960,8 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(s.phase === "play", "blink no-match does not finish");
   assert(s.playMode === "clearing", "stays clearing after no-match blink swap");
   assert(s.movesLeft === movesBefore, "blink no-match swap is free");
-  assert(s.board[idx(cols, r, 3)] === "material", "blink setup swap applied");
-  assert(s.board[idx(cols, r, 4)] === "energy", "blink setup swap applied b");
+  assert(s.board[idx(cols, r, 3)] === "armor", "blink setup swap applied");
+  assert(s.board[idx(cols, r, 4)] === "power", "blink setup swap applied b");
 }
 
 // Matching idle swap still starts clear/chain (regression)
@@ -977,18 +977,18 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "energy";
-  board[idx(cols, r, 1)] = "energy";
-  board[idx(cols, r, 2)] = "food";
-  board[idx(cols, r, 3)] = "energy";
+  board[idx(cols, r, 0)] = "power";
+  board[idx(cols, r, 1)] = "power";
+  board[idx(cols, r, 2)] = "ammo";
+  board[idx(cols, r, 3)] = "power";
   s = {
     ...s,
     board,
-    bag: ["material", "material"],
+    bag: ["armor", "armor"],
     playMode: "idle",
     pendingClear: [],
     movesLeft: 7,
-    cleared: { food: 0, material: 0, energy: 0 },
+    cleared: { ammo: 0, armor: 0, power: 0 },
     selected: null,
   };
   const movesBefore = s.movesLeft;
@@ -1067,12 +1067,12 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   const cols = 3;
   const rows = 3;
   const before: RefineLive["board"] = Array.from({ length: cols * rows }, () => null);
-  before[idx(cols, 0, 0)] = "food";
-  before[idx(cols, 1, 1)] = "energy";
+  before[idx(cols, 0, 0)] = "ammo";
+  before[idx(cols, 1, 1)] = "power";
   const stepped = stepGravityOnce(before, cols, rows);
   const moved = settleMotionIndices(before, stepped.board);
-  assert(moved.includes(idx(cols, 1, 0)), "food fall destination marked");
-  assert(moved.includes(idx(cols, 2, 1)), "energy fall destination marked");
+  assert(moved.includes(idx(cols, 1, 0)), "ammo fall destination marked");
+  assert(moved.includes(idx(cols, 2, 1)), "power fall destination marked");
   assert(!moved.includes(idx(cols, 0, 0)), "vacated cell not marked (empty)");
 }
 
@@ -1101,9 +1101,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     lastChain: 5,
   });
   assert(compact.includes("result-yield-compact"), "compact yield class");
-  assert(compact.includes("食 2"), "compact food");
-  assert(compact.includes("部 4"), "compact material");
-  assert(compact.includes("電 1"), "compact energy");
+  assert(compact.includes("食 2"), "compact ammo");
+  assert(compact.includes("部 4"), "compact armor");
+  assert(compact.includes("電 1"), "compact power");
   assert(compact.includes("craft 1.100"), "compact craft");
 
   assert(toStagePhase("briefing") === "briefing", "stage briefing");
@@ -1133,7 +1133,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
 // Valid-supply gauge state (bag leftover vs budget) — visualization, not a banner
 {
   const full = validSupplyGaugeState({
-    bag: ["food", "material", "energy"],
+    bag: ["ammo", "armor", "power"],
     validPieceBudget: 10,
   });
   assert(full.remaining === 3, "gauge remaining from bag");
@@ -1144,7 +1144,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(full.level === "tension", "absolute remaining overrides ratio for tension");
 
   const ok = validSupplyGaugeState({
-    bag: Array.from({ length: 40 }, () => "food" as PieceKind),
+    bag: Array.from({ length: 40 }, () => "ammo" as PieceKind),
     validPieceBudget: 100,
   });
   assert(ok.level === "ok", "0.4 ratio + remaining>6 → ok");
@@ -1159,7 +1159,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(zeroBudget.level === "depleted", "zero budget level");
 
   // junk never counts as supply in the bag filter
-  const mixed: PieceKind[] = ["junk", "food", "junk"];
+  const mixed: PieceKind[] = ["junk", "ammo", "junk"];
   const junky = validSupplyGaugeState({
     bag: mixed,
     validPieceBudget: 2,
@@ -1169,14 +1169,14 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(junky.level === "tension", "absolute remaining triggers tension");
 
   const low = validSupplyGaugeState({
-    bag: Array.from({ length: 15 }, () => "food" as PieceKind),
+    bag: Array.from({ length: 15 }, () => "ammo" as PieceKind),
     validPieceBudget: 100,
   });
   assert(Math.abs(low.ratio - 0.15) < 1e-9, "low ratio 0.15");
   assert(low.level === "low", "0.15 is low (≤0.2, >0.08, >6 abs)");
 
   const tensionRatio = validSupplyGaugeState({
-    bag: Array.from({ length: 7 }, () => "food" as PieceKind),
+    bag: Array.from({ length: 7 }, () => "ammo" as PieceKind),
     validPieceBudget: 100,
   });
   assert(tensionRatio.level === "tension", "0.07 ratio → tension");
@@ -1208,7 +1208,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(depletedHud.includes('data-level="depleted"'), "depleted data-level");
 
   const tensionHud = buildValidSupplyGaugeHtml({
-    bag: ["food", "food", "food"],
+    bag: ["ammo", "ammo", "ammo"],
     validPieceBudget: 50,
   });
   assert(tensionHud.includes(" tension"), "tension class near junk");
@@ -1232,26 +1232,26 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "food";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "ammo";
   s = {
     ...s,
     board,
-    bag: ["energy", "energy", "energy", "energy", "energy", "energy"],
+    bag: ["power", "power", "power", "power", "power", "power"],
     pendingClear: [idx(cols, r, 0), idx(cols, r, 1), idx(cols, r, 2)],
     playMode: "clearing",
     chainCount: 1,
     chainWindowMsLeft: 280,
-    cleared: { food: 0, material: 0, energy: 0 },
+    cleared: { ammo: 0, armor: 0, power: 0 },
     lastClearDelta: null,
   };
   s = commitClearStep(s);
   assert(s.lastClearDelta != null, "commit sets lastClearDelta");
-  assert(s.lastClearDelta!.food === 3, "delta food 3");
-  assert(s.lastClearDelta!.material === 0, "delta material 0");
+  assert(s.lastClearDelta!.ammo === 3, "delta ammo 3");
+  assert(s.lastClearDelta!.armor === 0, "delta armor 0");
   const preview = buildYieldPreviewFromDelta(s.lastClearDelta, 1);
-  assert((preview.ammo ?? 0) === 3, "yield preview ammo from food clear");
+  assert((preview.ammo ?? 0) === 3, "yield preview ammo from ammo clear");
   const chips = formatYieldPreviewChips(preview);
   assert(chips.chips.includes("弾薬"), "yield chip label ja");
   assert(chips.chips.includes("+3"), "yield chip count");
@@ -1278,19 +1278,19 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  // food food | material | food → swap material with food makes match
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "material";
-  board[idx(cols, r, 3)] = "food";
-  board[idx(cols, r, 4)] = "energy";
+  // ammo ammo | armor | ammo → swap armor with ammo makes match
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "armor";
+  board[idx(cols, r, 3)] = "ammo";
+  board[idx(cols, r, 4)] = "power";
   board[idx(cols, r, 5)] = "junk";
   const hint = findHintSwap(board, cols, rows);
   assert(hint != null, "hint finds a matching swap");
   assert(
     (hint!.a === idx(cols, r, 2) && hint!.b === idx(cols, r, 3)) ||
       (hint!.a === idx(cols, r, 3) && hint!.b === idx(cols, r, 2)),
-    "hint points at the food-completing swap",
+    "hint points at the ammo-completing swap",
   );
   assert(countMatchingSwaps(board, cols, rows) >= 1, "at least one matching swap");
 
@@ -1308,7 +1308,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   s = {
     ...s,
     board,
-    bag: ["food"],
+    bag: ["ammo"],
     playMode: "idle",
     pendingClear: [],
     movesLeft: 2,
@@ -1413,7 +1413,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(!isEmptyCargoEntry(hasCargo), "cargo > 0 hides empty-skip path");
 }
 
-// Cargo skip-with-deposit (briefing) — deposits N unopened, zero materials
+// Cargo skip-with-deposit (briefing) — deposits N unopened, zero armor pieces
 {
   const cargo = createRefineFromLocationSearch(
     "?salvagedContainers=3&totalStockPieces=75&isExtracted=1",
@@ -1435,14 +1435,14 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   );
   assert(
     emptyUrl.searchParams.get("importMaterials") === "0",
-    "empty skip still zero materials",
+    "empty skip still zero armor pieces",
   );
 
   const skipUrl = buildCargoSkipToHubUrl(cargo, "http://localhost:5175/");
   const parsed = parseSortToTradeSearch(new URL(skipUrl).search);
   assert(parsed != null, "cargo skip parses as sort→trade");
   assert(parsed!.depositUnopenedContainers === 3, "deposit N cans");
-  assert(parsed!.importMaterials === 0, "no material import");
+  assert(parsed!.importMaterials === 0, "no armor import");
   assert(
     parsed!.yieldBag == null || Object.keys(parsed!.yieldBag).length === 0,
     "no yieldBag import",
@@ -1467,9 +1467,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   s = startRefine(s, 41);
   s = {
     ...s,
-    bag: ["food", "food", "food", "food"],
-    cleared: { food: 5, material: 2, energy: 1 },
-    lastClearDelta: { food: 3, material: 0, energy: 0 },
+    bag: ["ammo", "ammo", "ammo", "ammo"],
+    cleared: { ammo: 5, armor: 2, power: 1 },
+    lastClearDelta: { ammo: 3, armor: 0, power: 0 },
     playMode: "settling",
     chainCount: 1,
     statusMsg: null,
@@ -1479,15 +1479,15 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(waveFb.includes("hud-flash-yield"), "wave yield flash");
   assert(waveFb.includes('data-mode="wave"'), "wave toggle mode");
   assert(waveFb.includes(">今回<"), "wave toggle label JA");
-  assert(waveFb.includes("食3"), "wave shows clear delta pieces");
+  assert(waveFb.includes("弾3"), "wave shows clear delta pieces");
   assert(waveFb.includes("+3"), "wave chip from delta");
 
   const sessionFb = buildTopFeedbackHtml(s, { yieldMode: "session" });
   assert(sessionFb.includes('data-mode="session"'), "session toggle mode");
   assert(sessionFb.includes(">累積<"), "session toggle label JA");
-  assert(sessionFb.includes("食5"), "session shows cumulative food");
-  assert(sessionFb.includes("部2"), "session cumulative material");
-  assert(sessionFb.includes("電1"), "session cumulative energy");
+  assert(sessionFb.includes("弾5"), "session shows cumulative ammo");
+  assert(sessionFb.includes("装2"), "session cumulative armor");
+  assert(sessionFb.includes("電1"), "session cumulative power");
 
   const tensionFb = buildTopFeedbackHtml(s, {
     showJunkTension: true,
@@ -1532,9 +1532,9 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     () => null,
   );
   const r = rows - 1;
-  board[idx(cols, r, 0)] = "food";
-  board[idx(cols, r, 1)] = "food";
-  board[idx(cols, r, 2)] = "food";
+  board[idx(cols, r, 0)] = "ammo";
+  board[idx(cols, r, 1)] = "ammo";
+  board[idx(cols, r, 2)] = "ammo";
   s = {
     ...s,
     board,

@@ -22,7 +22,7 @@ export const computeBudgets = legacy.computeBudgets;
 export const canStartRefine = legacy.canStartRefine;
 export const moveBudgetFor = legacy.moveBudgetFor;
 export const indexOf = legacy.indexOf;
-export const isActiveChain = legacy.isActiveChain;
+export function isActiveChain(s: RefineLive): boolean { return legacy.isActiveChain(toLegacyState(s)); }
 export const areAdjacent = legacy.areAdjacent;
 export const areHorizontalAdjacent = legacy.areHorizontalAdjacent;
 export const canSwapAdjacent = legacy.canSwapAdjacent;

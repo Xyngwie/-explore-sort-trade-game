@@ -102,7 +102,7 @@ export function isEmptyCargoEntry(
 /**
  * Same sort→trade URL contract as a normal post-sort handoff with zero yield
  * (`importMaterials=0`, `craftMultiplier`, no `yieldBag`). Preserves HubSave
- * apply path on trade (no-op materials / bag).
+ * apply path on trade (no-op resource / bag).
  */
 export function buildEmptySkipToHubUrl(
   s: Pick<RefineLive, "inbound">,
@@ -148,7 +148,7 @@ export function canSkipWithCargo(
 
 /**
  * Zero-yield sort→trade URL that deposits inbound container count into Hub
- * `unopenedContainers` via `depositUnopenedContainers` (no material import).
+ * `unopenedContainers` via `depositUnopenedContainers` (no resource import).
  */
 export function buildCargoSkipToHubUrl(
   s: Pick<RefineLive, "inbound">,
