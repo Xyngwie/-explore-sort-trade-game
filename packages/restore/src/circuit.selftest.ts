@@ -470,6 +470,19 @@ assert.ok(
 
 // --- Perfect Circuit injection rates on generatePuzzle ---
 {
+  // Failure-only probe: keep the 1% contract assertion strict while exposing
+  // the runtime export if CI reports a mismatch.
+  if (PERFECT_CIRCUIT_PROD_RATE !== 0.01) {
+    console.error(
+      "RESTORE_PROD_RATE_DIAGNOSTIC",
+      JSON.stringify({
+        prodRate: PERFECT_CIRCUIT_PROD_RATE,
+        prodRateType: typeof PERFECT_CIRCUIT_PROD_RATE,
+        devRate: PERFECT_CIRCUIT_DEV_RATE,
+        resolvedProdRate: resolvePerfectCircuitInjectRate({ hostname: "cdn.example" }),
+      }),
+    );
+  }
   assert.equal(PERFECT_CIRCUIT_PROD_RATE, 0.01);
   assert.equal(PERFECT_CIRCUIT_DEV_RATE, 0.33);
   assert.equal(
