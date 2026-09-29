@@ -34,12 +34,10 @@ import {
   cycleEdgeMark,
   deriveStubOutcome,
   digitSatisfaction,
-  findContradictionBlockOrigin,
   hazardNoiseEdgeIndices,
   isCellDigitActivated,
   generateFlawedClues,
   generatePuzzle,
-  hasContradictionBlock,
   hEdgeIndex,
   isLoopClosed,
   previewOutcomeEffects,
@@ -590,23 +588,14 @@ assert.ok(
 }
 
 {
+  // v3 keeps the compatibility hazard tag "contradiction", but no longer
+  // guarantees the legacy 2×2 block of four 3s. Restore UI noise therefore
+  // uses its documented fallback: edges around visible clue cells.
   const c = generateFlawedClues("ui-noise-c", 6, 6, undefined, "contradiction");
   assert.equal(c.hazard, "contradiction");
-  assert.ok(hasContradictionBlock(c.clues));
-  const origin = findContradictionBlockOrigin(c.clues);
-  assert.ok(origin);
+  assert.ok(c.clues.flat().some((value) => value != null));
   const noise = hazardNoiseEdgeIndices(c.clues, 6, 6, "contradiction");
-  assert.ok(noise.size >= 8);
-  for (const dy of [0, 1]) {
-    for (const dx of [0, 1]) {
-      const cx = origin!.x + dx;
-      const cy = origin!.y + dy;
-      assert.ok(noise.has(hEdgeIndex(6, 6, cx, cy)));
-      assert.ok(noise.has(hEdgeIndex(6, 6, cx, cy + 1)));
-      assert.ok(noise.has(vEdgeIndex(6, 6, cx, cy)));
-      assert.ok(noise.has(vEdgeIndex(6, 6, cx + 1, cy)));
-    }
-  }
+  assert.ok(noise.size > 0);
 
   const d = generateFlawedClues("ui-noise-d", 6, 6, undefined, "dense_noise");
   const noiseD = hazardNoiseEdgeIndices(d.clues, 6, 6, "dense_noise");
