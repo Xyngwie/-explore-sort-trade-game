@@ -31,7 +31,6 @@ import {
 } from "@estg/shared";
 import {
   classifyPlayResult,
-  clueDensity,
   cycleEdgeMark,
   deriveStubOutcome,
   digitSatisfaction,
@@ -195,25 +194,27 @@ assert.equal(deriveStubOutcome(false, 0.5, 1), "bypass");
   assert.equal(forced.perfectClearance, false);
 }
 
-// --- flawed hazard generators ---
+// --- v3 majority substrate contract ---
 {
-  const c = generateFlawedClues("haz-c", 6, 6, undefined, "contradiction");
-  assert.equal(c.hazard, "contradiction");
-  assert.equal(hasContradictionBlock(c.clues), true);
+  // New Restore boards use the v3 Slitherlink substrate. The old
+  // contradiction / overdigit / dense-noise grids were a legacy generator;
+  // their exact hazard shapes are no longer part of the v3 Restore contract.
+  const c = generateFlawedClues("v3-junk", 6, 6);
+  assert.equal(c.clues.length, 6);
+  assert.ok(c.clues.every((row) => row.length === 6));
+  assert.ok(
+    c.clues.flat().every(
+      (value) =>
+        value == null ||
+        (Number.isInteger(value) && value >= 0 && value <= 3),
+    ),
+  );
+  assert.ok(c.clues.flat().some((value) => value != null));
 
-  const o = generateFlawedClues("haz-o", 6, 6, undefined, "overdigit");
-  assert.equal(o.hazard, "overdigit");
-  assert.ok(clueDensity(o.clues) >= 0.55);
-
-  const d = generateFlawedClues("haz-d", 6, 6, undefined, "dense_noise");
-  assert.equal(d.hazard, "dense_noise");
-  assert.ok(clueDensity(d.clues) > 0);
-  assert.ok(clueDensity(d.clues) < 1);
-
-  const forced = generatePuzzle("force-c", 6, 6, { forceHazard: "contradiction" });
-  assert.equal(forced.rarity, "flawed_majority");
-  assert.equal(forced.hazard, "contradiction");
-  assert.equal(hasContradictionBlock(forced.clues), true);
+  // Generation remains deterministic for Restore → Trade regeneration.
+  const again = generateFlawedClues("v3-junk", 6, 6);
+  assert.deepEqual(again.clues, c.clues);
+  assert.equal(again.hazard, c.hazard);
 }
 
 assert.ok(
