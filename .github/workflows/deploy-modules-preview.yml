@@ -28,6 +28,8 @@ on:
       - "packages/invade/**"
       - "packages/restore/**"
       - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/deploy-modules-preview.yml"
   workflow_dispatch:
 
