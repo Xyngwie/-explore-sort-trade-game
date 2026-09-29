@@ -182,27 +182,55 @@ assert.equal(deriveStubOutcome(false, 0.5, 1), "bypass");
   assert.equal(full.loopClosed, true);
   assert.equal(full.effect.hasLoop, true);
   assert.equal(full.effect.effect, 8); // four satisfied 2s
-  if (full.effect.perfect !== true) {
-    console.error("RESTORE_PERFECT_DIAGNOSTIC", JSON.stringify({
-      puzzle: { cols, rows, clueRows: clues.length, clueCols: clues[0]?.length ?? 0 },
-      solutionMarks: sol,
+  // Failure-only boundary probe. This does not alter the production/shared path:
+  // recompute the exact shared call independently so CI can distinguish
+  // classifier state, shared return value, and later mutation.
+  const diagnosticInput = {
+    clues,
+    marks: sol,
+    cols,
+    rows,
+    perfect: full.perfectClearance,
+    outcome: full.outcome,
+  } as const;
+  const diagnosticCompute = computeCircuitEffectValue(diagnosticInput);
+  const diagnosticComputeForcedPerfect = computeCircuitEffectValue({
+    ...diagnosticInput,
+    perfect: true,
+  });
+  const diagnostic = {
+    puzzle: {
+      cols,
+      rows,
+      clueRows: clues.length,
+      clueCols: clues[0]?.length ?? 0,
+      puzzleId: VERIFY_TRUE_PUZZLE_ID,
+    },
+    solutionMarks: sol,
+    full: {
       outcome: full.outcome,
       perfectClearance: full.perfectClearance,
       digits: full.digits,
       loopClosed: full.loopClosed,
       lineCount: full.lineCount,
       effect: full.effect,
-      expectedComputeInput: {
-        clues,
-        marks: sol,
-        cols,
-        rows,
-        perfect: full.perfectClearance,
-        outcome: full.outcome,
-      },
-    }));
-  }
-  assert.equal(full.effect.perfect, true);
+    },
+    compute: {
+      input: diagnosticInput,
+      returnValue: diagnosticCompute,
+      forcedPerfectReturnValue: diagnosticComputeForcedPerfect,
+    },
+    sameEffectObjectValues: {
+      perfect: full.effect.perfect,
+      computedPerfect: diagnosticCompute.perfect,
+      computedForcedPerfect: diagnosticComputeForcedPerfect.perfect,
+    },
+  };
+  assert.equal(
+    full.effect.perfect,
+    true,
+    `RESTORE_PERFECT_DIAGNOSTIC ${JSON.stringify(diagnostic)}`,
+  );
 
   const offlineEffect = classifyPlayResult(clues, empty, cols, rows);
   assert.equal(offlineEffect.effect.effect, 0);
