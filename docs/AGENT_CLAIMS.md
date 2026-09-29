@@ -7,10 +7,11 @@
 ### Codex（ChatGPT）の一員・実行隊長
 - **役割:** 実行隊長
 - **担当:** 小〜中規模の実装、CI/ビルド障害の修正、既存タスクの分割、PR作成、Actions確認、マージ後Deploy確認。
-- **現在の目的:** Sort の `refine-legacy` 周辺が巨大化して並行開発の障害になっているため、既存挙動を変えずに責務ごとの小さなモジュールへ分割する。
-- **現在の作業:** `refactor/sort-refine-board-v3` ブランチで公開ヘルパーを `refine-board.ts` / `refine-matching.ts` へ移行し、`refine-legacy.ts` への依存を減らしている。
+- **現在の目的:** Sort の `refine-legacy` 周辺が巨大化して並行開発の障害になっていたため、既存挙動を変えずに責務ごとの小さなモジュールへ分割する。
+- **現在の作業:** **完了（PR #191 merged）**。公開ヘルパーを `refine-board.ts` / `refine-matching.ts` へ移行し、`refine-legacy.ts` への依存を減らした。
+- **完了PR:** #191 / merge commit `4d7fcf867535a50b6877f22681b7f8f5e773549f`
 - **触らない範囲:** `packages/shared/**` の契約変更、HUB実装、他エージェントが宣言済みの作業。
-- **完了条件:** 分割後も既存テスト／selftest／Buildが通り、変更範囲をPRとして独立してレビュー・マージできる状態にする。
+- **次:** 実装Eの担当宣言が確定するまで着手しない。
 
 ## 並行作業の原則
 - 各エージェントは作業開始前に、このファイルまたはGitHub上のPR本文・Issueで自身の役割、目的、変更範囲を宣言する。
