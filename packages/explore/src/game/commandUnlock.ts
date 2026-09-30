@@ -1,3 +1,4 @@
+import { circuitsForUnit, type EquippedByUnit } from "./circuitJudgement";
 /**
  * Circuit-based Explore command unlock — FOUNDATION ONLY.
  *
@@ -135,30 +136,57 @@ export function isCommandUnlocked(
 /** Explore-local per-sortie unlock context stored on World (not a save contract). */
 export type CommandUnlockState = {
   mode: CommandUnlockMode;
-  /**
-   * Equipped circuit keys for this sortie. No source feeds this yet
-   * (HubSave has no "equipped" concept; wiring it needs an approved
-   * optional handoff field) → always [] in the live game.
-   */
-  equippedCircuits: string[];
+  /** Active circuit ids grouped by Explore unit id (leader / wing-a / wing-b). */
+  equippedByUnit: EquippedByUnit;
   /** Test-only / provisional table override. Omit in production. */
   table?: CircuitCommandUnlockTable;
 };
 
 export function defaultCommandUnlockState(
   mode: CommandUnlockMode = "all_unlocked",
+  equippedByUnit: EquippedByUnit = {},
 ): CommandUnlockState {
-  return { mode, equippedCircuits: [] };
+  return { mode, equippedByUnit };
 }
 
-/** Unlock check against an explore World-ish holder (missing state → all_unlocked, legacy behavior). */
+function isWingCommand(commandId: ExploreCommandId): commandId is CircuitCommandId {
+  return (
+    commandId === "wing_escort" ||
+    commandId === "wing_patrol" ||
+    commandId === "wing_recover" ||
+    commandId === "wing_raid" ||
+    commandId === "wing_mobility"
+  );
+}
+
+/**
+ * Unlock check against an Explore World-ish holder.
+ * - Captain commands use the leader's circuit list.
+ * - Wing commands with a target use that wing's list.
+ * - Squad-level wing commands are available when at least one live-target
+ *   circuit list unlocks them; execution filters locked wingmen separately.
+ * Missing command state preserves the legacy all-unlocked behavior.
+ */
 export function isCommandUnlockedFor(
   holder: { commandUnlock?: CommandUnlockState | null },
   commandId: ExploreCommandId,
+  unitId?: string,
 ): boolean {
   const st = holder.commandUnlock;
   if (!st) return true;
-  return isCommandUnlocked(commandId, st.equippedCircuits, {
+  if (st.mode === "all_unlocked") return true;
+  if (isWingCommand(commandId)) {
+    if (unitId != null) {
+      return isCommandUnlocked(commandId, circuitsForUnit(st.equippedByUnit, unitId), {
+        mode: st.mode,
+        table: st.table,
+      });
+    }
+    return Object.values(st.equippedByUnit).some((circuits) =>
+      isCommandUnlocked(commandId, circuits, { mode: st.mode, table: st.table }),
+    );
+  }
+  return isCommandUnlocked(commandId, circuitsForUnit(st.equippedByUnit, "leader"), {
     mode: st.mode,
     table: st.table,
   });
@@ -190,7 +218,8 @@ export function isWingmanMobileFor(
 ): boolean {
   const st = holder.commandUnlock;
   if (!st) return true;
-  return isWingmanMobilityUnlocked(wingmanId, st.equippedCircuits, {
+  if (st.mode === "all_unlocked") return true;
+  return isWingmanMobilityUnlocked(wingmanId, circuitsForUnit(st.equippedByUnit, wingmanId), {
     mode: st.mode,
     table: st.table,
   });
