@@ -182,9 +182,11 @@ export function isCommandUnlockedFor(
         table: st.table,
       });
     }
-    return Object.values(st.equippedByUnit).some((circuits) =>
-      isCommandUnlocked(commandId, circuits, { mode: st.mode, table: st.table }),
-    );
+    return Object.entries(st.equippedByUnit)
+      .filter(([id]) => id.startsWith("wing-"))
+      .some(([, circuits]) =>
+        isCommandUnlocked(commandId, circuits, { mode: st.mode, table: st.table }),
+      );
   }
   return isCommandUnlocked(commandId, circuitsForUnit(st.equippedByUnit, "leader"), {
     mode: st.mode,
@@ -201,7 +203,7 @@ export function lockedCommandMessage(commandId: ExploreCommandId): string {
  * Wingman mobility (`wing_mobility`). Without it (release mode, no unlocking
  * circuit) a wingman still sorties but stands still and only fights in
  * self-defense (see brain.ts). Takes a wingman id so per-wingman circuits can be
- * supported later; today every wingman shares the sortie's equipped circuits.
+ * supported per wingman through equippedByUnit.
  */
 export function isWingmanMobilityUnlocked(
   _wingmanId: string,
