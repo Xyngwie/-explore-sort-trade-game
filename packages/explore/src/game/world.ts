@@ -15,6 +15,7 @@ import type { Container, InvadeSectorContext, Unit, World } from "./types";
 import { quirkForWingmanIndex } from "./types";
 import { vec } from "./math";
 import { defaultCommandUnlockState } from "./commandUnlock";
+import { buildEquippedByUnit, type EquippedByUnit } from "./circuitJudgement";
 import { resolveCommandUnlockMode } from "./unlockMode";
 
 function makeUnit(
@@ -180,6 +181,8 @@ export type SortieBootstrap = {
   circuitDurabilityBuffer: number;
   /** Hub circuit craft multiplier from circuitBonuses (default 1). */
   circuitCraftMultiplier: number;
+  /** Active circuit ids grouped by Explore unit id. */
+  equippedByUnit: EquippedByUnit;
   /** Parsed invade→explore sector; null when keys absent. */
   invadeSector: InvadeSectorContext | null;
 };
@@ -275,6 +278,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     note,
     deployedInstanceIds,
     deployedDurability,
+    equippedByUnit: buildEquippedByUnit(deployedInstanceIds, inbound?.mechCircuits),
     circuitDurabilityBuffer,
     circuitCraftMultiplier,
     invadeSector,
@@ -392,8 +396,10 @@ export function createWorld(boot: SortieBootstrap): World {
     densityThreat: { ...threat },
     camera: { x: 0, y: 200, w: 720, h: 420 },
     combatHitsTaken: 0,
-    // Mode from the single build flag / debug toggle; no circuit equip source yet → [].
-    commandUnlock: defaultCommandUnlockState(resolveCommandUnlockMode()),
+    commandUnlock: defaultCommandUnlockState(
+      resolveCommandUnlockMode(),
+      boot.equippedByUnit,
+    ),
   };
 }
 
