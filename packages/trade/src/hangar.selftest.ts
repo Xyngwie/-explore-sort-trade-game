@@ -197,7 +197,12 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const entry = handoff!.mechCircuits![equippedId]![0]!;
   assert.equal(entry.circuitId, equipped!.circuitId);
   assert.equal(entry.restoreState, equipped!.restoreState);
-  assert.equal(entry.effect, equipped!.effect);
+  assert.equal(
+    entry.effect,
+    computeCircuitEffectForBoard(equipped!.circuitBoard, {
+      perfect: equipped!.circuitBoard.perfect ?? equipped!.locked,
+    }).effect,
+  );
   assert.equal(entry.effectKey, equipped!.effectKey);
 }
 
