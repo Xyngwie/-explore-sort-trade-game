@@ -258,7 +258,16 @@ export function purgeCargo(world: World): "purged" | "denied" {
   pushLog(world, `パージ（小隊全機）：${parts.join(" · ")}。`); return "purged";
 }
 
-export function applyOrderToAllWingmen(world: World, stance: Stance, opts?: { waypoint?: { x: number; y: number } | null }): number {
-  let n = 0; for (const w of world.wingmen) { if (!w.alive) continue; if (applyOrder(world, w, stance, opts) === "applied") n += 1; }
+export function applyOrderToAllWingmen(
+  world: World,
+  stance: Stance,
+  opts?: { waypoint?: { x: number; y: number } | null; allowedWingmanIds?: ReadonlySet<string> },
+): number {
+  let n = 0;
+  for (const w of world.wingmen) {
+    if (!w.alive) continue;
+    if (opts?.allowedWingmanIds && !opts.allowedWingmanIds.has(w.id)) continue;
+    if (applyOrder(world, w, stance, opts) === "applied") n += 1;
+  }
   return n;
 }
