@@ -9,6 +9,7 @@ import {
   MECH_FLEET_RULES,
   buildExploreToHubWearUrl,
   buildInvadeToTradeUrl,
+  parseTradeToExploreSearch,
   buildRestoreToTradeUrl,
   createEmptyCircuitBoard,
   parseHubSave,
@@ -124,6 +125,11 @@ const deployUrl = buildDeployUrl(state);
 assert.ok(deployUrl);
 assert.ok(deployUrl!.includes("deployedInstanceIds="));
 assert.ok(deployUrl!.includes("mechDurability="));
+assert.equal(
+  new URL(deployUrl!).searchParams.has("mechCircuits"),
+  false,
+  "circuit-less fleet must preserve the legacy handoff shape",
+);
 
 const ids = state.selectedDeployIds;
 assert.ok(ids.length > 0);
@@ -166,6 +172,41 @@ assert.ok(
     worn.status === "operational",
 );
 assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
+
+// Trade → Explore mechCircuits handoff: instanceId is the map key and the
+// existing restoreState/effect/effectKey fields are forwarded unchanged.
+{
+  const handoffSeed = loadPlaytestSeed(resetHangar());
+  const equipped = handoffSeed.hub.circuits[0];
+  assert.ok(equipped, "seed must provide a circuit record for handoff coverage");
+  const equippedId = handoffSeed.selectedDeployIds[0]!;
+  const handoffState = {
+    ...handoffSeed,
+    hub: {
+      ...handoffSeed.hub,
+      circuits: handoffSeed.hub.circuits.map((c) =>
+        c.circuitId === equipped!.circuitId ? { ...c, equippedTo: equippedId } : c,
+      ),
+    },
+    selectedDeployIds: [equippedId],
+  };
+  const handoffUrl = buildDeployUrl(handoffState);
+  assert.ok(handoffUrl);
+  const handoff = parseTradeToExploreSearch(new URL(handoffUrl!).search);
+  assert.ok(handoff?.mechCircuits);
+  assert.deepEqual(Object.keys(handoff!.mechCircuits!), [equippedId]);
+  assert.deepEqual(handoff!.deployedInstanceIds, [equippedId]);
+  const entry = handoff!.mechCircuits![equippedId]![0]!;
+  assert.equal(entry.circuitId, equipped!.circuitId);
+  assert.equal(entry.restoreState, equipped!.restoreState);
+  assert.equal(
+    entry.effect,
+    computeCircuitEffectForBoard(equipped!.circuitBoard, {
+      perfect: equipped!.circuitBoard.perfect ?? equipped!.locked,
+    }).effect,
+  );
+  assert.equal(entry.effectKey, equipped!.effectKey);
+}
 
 
 // Playtest seed: mixed fleet + wallet + YieldBag + ammo, persists via HubSave

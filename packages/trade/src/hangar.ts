@@ -15,6 +15,7 @@ import {
   applyScrap,
   applyWearReportsToFleet,
   buildTradeToExplorePayloadFromFleet,
+  buildMechCircuitsForDeploy,
   buildTradeToExploreUrl,
   buildTradeToInvadeUrl,
   buildTradeToRestoreUrl,
@@ -912,6 +913,10 @@ export function buildDeployUrl(state: HangarState): string | null {
     ammo,
     ids,
   );
+  const mechCircuits = buildMechCircuitsForDeploy(state.hub, ids);
+  if (Object.keys(mechCircuits).length > 0) {
+    payload.mechCircuits = mechCircuits;
+  }
   const bonuses = hubCircuitBonuses(state.hub);
   if (
     bonuses.durabilityBuffer > 0 ||
