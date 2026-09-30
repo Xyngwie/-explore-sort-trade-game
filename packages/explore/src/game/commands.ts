@@ -75,8 +75,12 @@ export function abortSortie(world: World): "aborted" {
   return "aborted";
 }
 
-export function isExploreCommandAvailable(world: World, id: ExploreCommandId): boolean {
-  return isCommandUnlockedFor(world, id);
+export function isExploreCommandAvailable(
+  world: World,
+  id: ExploreCommandId,
+  wingId?: string,
+): boolean {
+  return isCommandUnlockedFor(world, id, wingId);
 }
 
 function denyLocked(world: World, id: ExploreCommandId): ExploreCommandOutcome {
@@ -91,7 +95,9 @@ export function executeExploreCommand(
   req: ExploreCommandRequest,
 ): ExploreCommandOutcome {
   const id = req.id;
-  if (!isCommandUnlockedFor(world, id)) return denyLocked(world, id);
+  if (!isCommandUnlockedFor(world, id, "wingId" in req ? req.wingId : undefined)) {
+    return denyLocked(world, id);
+  }
   switch (req.id) {
     case "extract":
       return { status: "done", id, result: requestExtract(world) };
@@ -113,7 +119,16 @@ export function executeExploreCommand(
     case "wing_raid": {
       const stance = STANCE_FOR_WING_COMMAND[req.id];
       if (req.wingId == null) {
-        return { status: "done", id, result: applyOrderToAllWingmen(world, stance) };
+        const allowedWingmanIds = new Set(
+          world.wingmen
+            .filter((wing) => isCommandUnlockedFor(world, id, wing.id))
+            .map((wing) => wing.id),
+        );
+        return {
+          status: "done",
+          id,
+          result: applyOrderToAllWingmen(world, stance, { allowedWingmanIds }),
+        };
       }
       const wing = world.wingmen.find((w) => w.id === req.wingId);
       if (!wing) return { status: "done", id, result: "denied" };
