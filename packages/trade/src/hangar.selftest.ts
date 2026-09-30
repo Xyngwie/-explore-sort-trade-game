@@ -176,24 +176,26 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 // Trade → Explore mechCircuits handoff: instanceId is the map key and the
 // existing restoreState/effect/effectKey fields are forwarded unchanged.
 {
-  const equipped = reloaded.hub.circuits[0];
+  const handoffSeed = loadPlaytestSeed(resetHangar());
+  const equipped = handoffSeed.hub.circuits[0];
   assert.ok(equipped, "seed must provide a circuit record for handoff coverage");
-  const equippedId = ids[0]!;
+  const equippedId = handoffSeed.selectedDeployIds[0]!;
   const handoffState = {
-    ...reloaded,
+    ...handoffSeed,
     hub: {
-      ...reloaded.hub,
-      circuits: reloaded.hub.circuits.map((c) =>
+      ...handoffSeed.hub,
+      circuits: handoffSeed.hub.circuits.map((c) =>
         c.circuitId === equipped!.circuitId ? { ...c, equippedTo: equippedId } : c,
       ),
     },
-    selectedDeployIds: ids,
+    selectedDeployIds: [equippedId],
   };
   const handoffUrl = buildDeployUrl(handoffState);
   assert.ok(handoffUrl);
   const handoff = parseTradeToExploreSearch(new URL(handoffUrl!).search);
   assert.ok(handoff?.mechCircuits);
   assert.deepEqual(Object.keys(handoff!.mechCircuits!), [equippedId]);
+  assert.deepEqual(handoff!.deployedInstanceIds, [equippedId]);
   const entry = handoff!.mechCircuits![equippedId]![0]!;
   assert.equal(entry.circuitId, equipped!.circuitId);
   assert.equal(entry.restoreState, equipped!.restoreState);
