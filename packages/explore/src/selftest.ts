@@ -1657,7 +1657,12 @@ const CIRCUIT_IDS = EXPLORE_COMMANDS.filter((d) => d.tier === "circuit").map((d)
 function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: CircuitCommandUnlockTable) {
   const w = createWorld(bootstrapFromSearch(""));
   startSortie(w);
-  w.commandUnlock = { mode, equippedCircuits: equipped, ...(table ? { table } : {}) };
+  const equippedByUnit = {
+    leader: [...equipped],
+    "wing-a": [...equipped],
+    "wing-b": [...equipped],
+  };
+  w.commandUnlock = { mode, equippedByUnit, ...(table ? { table } : {}) };
   return w;
 }
 
@@ -1708,7 +1713,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store: null }), "all_unlocked");
   const fresh = createWorld(bootstrapFromSearch(""));
   assert.equal(fresh.commandUnlock.mode, "all_unlocked", "new world in preview/test = all unlocked");
-  assert.deepEqual(fresh.commandUnlock.equippedCircuits, [], "no circuit equip source yet");
+  assert.deepEqual(fresh.commandUnlock.equippedByUnit, {}, "no circuit equip source yet");
   assert.equal(fresh.wingmen.length, 2, "wingmen still deploy in every mode");
   console.log("explore command unlock mode resolution ok");
 }
@@ -1800,7 +1805,9 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(executeExploreCommand(w, { id: "camp_unload" }).status, "done");
   assert.equal(executeExploreCommand(w, { id: "purge" }).status, "locked", "purge still locked (not in row)");
   assert.equal(dispatchExploreKey(w, "3")?.status, "locked");
-  w.commandUnlock.equippedCircuits.push("test-circuit-squad");
+  for (const unitId of ["leader", "wing-a", "wing-b"] as const) {
+    w.commandUnlock.equippedByUnit[unitId]!.push("test-circuit-squad");
+  }
   assert.equal(dispatchExploreKey(w, "4")?.status, "done");
   assert.ok(w.wingmen.every((x) => x.stance === "raid"), "squad key unlocked by second test circuit");
   assert.equal(executeExploreCommand(w, { id: "scatter_search" }).status, "done");
@@ -1823,6 +1830,65 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.ok(htmlRel.includes("🔒 僚機方針"), "squad row locked in release");
   assert.ok(!htmlRel.includes("🔒 移動") && !htmlRel.includes("🔒 射撃") && !htmlRel.includes("🔒 抽出要請"), "basic rows never locked");
   console.log("explore command unlock overlay ok");
+}
+
+// ---------------------------------------------------------------------------
+// Implementation E: handoff → per-unit circuit judgement.
+// ---------------------------------------------------------------------------
+{
+  const boot = bootstrapFromSearch(
+    "?deployedInstanceIds=cap,wingA,wingB&mechCircuits=cap~cap-fa*fa*8,cap-off*off*9;wingA~wingA-by*by*3,wingA-un*un*7;wingB~wingB-un*un*5",
+  );
+  assert.deepEqual(boot.equippedByUnit, {
+    leader: ["cap-fa"],
+    "wing-a": ["wingA-by"],
+  }, "only FA / Bypass circuits become active per unit");
+  const w = createWorld(boot);
+  startSortie(w);
+  const table: CircuitCommandUnlockTable = {
+    "cap-fa": ["camp_set"],
+    "wingA-by": ["wing_patrol", "wing_mobility"],
+    "wingB-un": ["wing_raid"],
+  };
+  w.commandUnlock = {
+    mode: "release",
+    equippedByUnit: boot.equippedByUnit,
+    table,
+  };
+
+  assert.equal(executeExploreCommand(w, { id: "camp_set" }).status, "done", "captain uses captain circuit");
+  assert.equal(executeExploreCommand(w, { id: "purge" }).status, "locked", "captain cannot use wing-only circuit");
+  const wingA = w.wingmen[0]!;
+  const wingB = w.wingmen[1]!;
+  wingA.stance = "escort";
+  wingB.stance = "escort";
+  assert.equal(
+    executeExploreCommand(w, { id: "wing_patrol", wingId: wingA.id }).status,
+    "done",
+    "wing A uses its own Bypass circuit",
+  );
+  assert.equal(
+    executeExploreCommand(w, { id: "wing_patrol", wingId: wingB.id }).status,
+    "locked",
+    "wing B cannot use wing A circuit",
+  );
+  assert.equal(executeExploreCommand(w, { id: "wing_patrol" }).status, "done", "squad policy runs for an unlocked wing");
+  assert.equal(wingA.stance, "patrol");
+  assert.equal(wingB.stance, "escort", "unlocked squad policy excludes locked wing");
+  assert.equal(isWingmanMobileFor(w, wingA.id), true);
+  assert.equal(isWingmanMobileFor(w, wingB.id), false, "unrestored/offline are inactive");
+  assert.equal(isCommandUnlockedFor(w, "wing_raid"), false, "inactive wing circuit does not unlock policy");
+  console.log("explore implementation E per-unit circuit judgement ok");
+}
+
+// ---------------------------------------------------------------------------
+// mechCircuits omitted: preserve the existing no-handoff behavior.
+// ---------------------------------------------------------------------------
+{
+  const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=cap,wingA,wingB"));
+  assert.deepEqual(w.commandUnlock.equippedByUnit, {});
+  assert.equal(isCommandUnlockedFor(w, "camp_set"), true, "preview legacy URL remains unlocked");
+  assert.equal(isWingmanMobileFor(w, "wing-a"), true, "legacy URL keeps wing mobility behavior");
 }
 
 // ---------------------------------------------------------------------------
@@ -1949,7 +2015,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   {
     const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30"));
     startSortie(w);
-    w.commandUnlock = { mode: "release", equippedCircuits: [] };
+    w.commandUnlock = { mode: "release", equippedByUnit: {} };
     clearFoes(w);
     w.leader.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
     assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
@@ -1975,7 +2041,15 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const setup = (mode: "release" | "all_unlocked", circuits: string[] = [], table?: CircuitCommandUnlockTable) => {
     const w = createWorld(bootstrapFromSearch(QS));
     startSortie(w);
-    w.commandUnlock = { mode, equippedCircuits: circuits, ...(table ? { table } : {}) };
+    w.commandUnlock = {
+      mode,
+      equippedByUnit: {
+        leader: [...circuits],
+        "wing-a": [...circuits],
+        "wing-b": [...circuits],
+      },
+      ...(table ? { table } : {}),
+    };
     for (const e of w.enemies) { e.alive = false; e.hp = 0; }
     return w;
   };
@@ -2070,3 +2144,4 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   }
   console.log("explore left-behind result line ok");
 }
+
