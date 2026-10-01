@@ -103,6 +103,22 @@ export function sortHandoffUrl(world: World): string {
   );
 }
 
+function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
+  const source = JSON.stringify({
+    ids: world.deployedInstanceIds,
+    kind,
+    elapsed: Math.round(world.elapsed * 1000),
+    salvaged: world.salvaged,
+    ammo: world.ammo,
+  });
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `explore_${(hash >>> 0).toString(16)}`;
+}
+
 export function hubWearHandoffUrl(world: World): string | null {
   const outcome = buildSortieOutcome(world);
   if (!outcome) return null;
@@ -115,7 +131,7 @@ export function hubWearHandoffUrl(world: World): string | null {
       instanceId: w.instanceId,
       durabilityAfter: w.durabilityAfter,
     })),
-    { wreckedMechInstanceIds },
+    { sortieId: sortieIdForWorld(world, outcome.returnKind), wreckedMechInstanceIds },
   );
   return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));
 }
