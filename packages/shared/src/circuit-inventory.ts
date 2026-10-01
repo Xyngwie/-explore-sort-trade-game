@@ -12,15 +12,19 @@ import {
   mechSlotCapacity,
   normalizeCircuitRecord,
   normalizeFieldDrop,
+  normalizeInventoryFieldDrops,
   normalizeHubSnapshot,
   sanitizeSortieId,
   type FieldCircuitDrop,
   type FieldDropCause,
+  type FieldInventoryDrop,
   type FrontCellCoord,
   type HubCircuitRecord,
   type HubSnapshot,
 } from "./hub-save";
 import type { MechCircuitEntry } from "./handoff";
+import { syncMechStatus } from "./mech-fleet";
+import { mergeYieldBags } from "./sort-yield";
 
 // ---------------------------------------------------------------------------
 // §2.2 effect (never stored — U17)
@@ -214,6 +218,10 @@ export type SortieCircuitReport = {
   lostCause: Record<string, FieldDropCause>;
   recoveredDropIds: string[];
   acquiredCircuits: HubCircuitRecord[];
+  inventoryDrops: FieldInventoryDrop[];
+  recoveredInventoryDropIds: string[];
+  wreckedMechInstanceIds: string[];
+
 };
 
 export type ApplySortieResult = {
@@ -228,6 +236,8 @@ export type ApplySortieResult = {
   recovered: string[];
   /** Acquired circuitIds added to the stash. */
   acquired: string[];
+  droppedInventoryToField: FieldInventoryDrop[];
+  recoveredInventory: string[];
 };
 
 /**
@@ -248,12 +258,17 @@ export function applySortieReport(
     lostForever: [],
     recovered: [],
     acquired: [],
+    droppedInventoryToField: [],
+    recoveredInventory: [],
   };
   const sortieId = sanitizeSortieId(report.sortieId);
   if (!sortieId) return none;
   if ((hub.appliedSortieIds ?? []).includes(sortieId)) return none;
 
   const lost = new Set(report.lostMechInstanceIds);
+  const wrecked = new Set(
+    report.wreckedMechInstanceIds.filter((id) => !lost.has(id)),
+  );
   const droppedAt = at.toISOString();
   const droppedToField: FieldCircuitDrop[] = [];
   const lostForever: HubCircuitRecord[] = [];
@@ -282,12 +297,59 @@ export function applySortieReport(
 
   let next: HubSnapshot = {
     ...hub,
-    fleet: hub.fleet.filter((m) => !lost.has(m.instanceId)),
+    fleet: hub.fleet
+      .filter((m) => !lost.has(m.instanceId))
+      .map((m) =>
+        wrecked.has(m.instanceId)
+          ? syncMechStatus({ ...m, durability: 0, status: "destroyed" })
+          : m,
+      ),
     circuits: keep,
   };
   next = addFieldDrops(next, droppedToField);
+
+  const inventoryDrops = normalizeInventoryFieldDrops(report.inventoryDrops);
+  const existingInventoryDropIds = new Set(
+    next.inventoryFieldDrops.map((d) => d.dropId),
+  );
+  const droppedInventoryToField: FieldInventoryDrop[] = [];
+  for (const drop of inventoryDrops) {
+    if (existingInventoryDropIds.has(drop.dropId)) continue;
+    existingInventoryDropIds.add(drop.dropId);
+    droppedInventoryToField.push(drop);
+  }
+  if (droppedInventoryToField.length > 0) {
+    next = {
+      ...next,
+      inventoryFieldDrops: [
+        ...next.inventoryFieldDrops,
+        ...droppedInventoryToField,
+      ],
+    };
+  }
+
   const rec = recoverFieldDrops(next, report.recoveredDropIds);
   next = rec.hub;
+
+  const recoveredInventoryIds = new Set(report.recoveredInventoryDropIds);
+  const recoveredInventory: string[] = [];
+  const remainingInventoryDrops: FieldInventoryDrop[] = [];
+  let recoveredBag = next.inventory;
+  for (const drop of next.inventoryFieldDrops) {
+    if (!recoveredInventoryIds.has(drop.dropId)) {
+      remainingInventoryDrops.push(drop);
+      continue;
+    }
+    recoveredBag = mergeYieldBags(recoveredBag, drop.inventory);
+    recoveredInventory.push(drop.dropId);
+  }
+  if (recoveredInventory.length > 0) {
+    next = {
+      ...next,
+      inventory: recoveredBag,
+      inventoryFieldDrops: remainingInventoryDrops,
+    };
+  }
 
   const owned = new Set(next.circuits.map((c) => c.circuitId));
   const acquired: HubCircuitRecord[] = [];
@@ -312,6 +374,8 @@ export function applySortieReport(
     lostForever,
     recovered: rec.recovered,
     acquired: acquired.map((c) => c.circuitId),
+    droppedInventoryToField,
+    recoveredInventory,
   };
 }
 
