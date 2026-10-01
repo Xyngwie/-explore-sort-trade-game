@@ -106,12 +106,16 @@ export function sortHandoffUrl(world: World): string {
 export function hubWearHandoffUrl(world: World): string | null {
   const outcome = buildSortieOutcome(world);
   if (!outcome) return null;
+  const wreckedMechInstanceIds = outcome.mechWear
+    .filter((w) => w.durabilityAfter <= 0)
+    .map((w) => w.instanceId);
   const payload = toExploreToHubWearPayload(
     outcome.returnKind,
     outcome.mechWear.map((w) => ({
       instanceId: w.instanceId,
       durabilityAfter: w.durabilityAfter,
     })),
+    { wreckedMechInstanceIds },
   );
   return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));
 }
