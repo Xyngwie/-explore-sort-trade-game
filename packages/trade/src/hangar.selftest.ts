@@ -6,6 +6,7 @@ import {
 } from "./resourceHistory";
 import {
   HUB_SAVE_STORAGE_KEY,
+  applySortieReport,
   MECH_FLEET_RULES,
   buildExploreToHubWearUrl,
   buildInvadeToTradeUrl,
@@ -1163,6 +1164,51 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const empty = buildResourceHistoryHtml(["セーブ読込 (x)", "デモ初期化"]);
   assert.ok(empty.includes("res-history empty") || empty.includes("まだありません"), "empty state");
   console.log("trade resource history viz ok");
+}
+
+// --- SortieReport: wreck is retained, true loss is removed, overlap cannot cause retention ---
+{
+  const state = grantStarterFleet(resetHangar(memoryStorage()));
+  const wreckId = state.hub.fleet[0]!.instanceId;
+  const lostId = state.hub.fleet[1]!.instanceId;
+  const wrecked = applySortieReport(state.hub, {
+    sortieId: "sortie_wreck_unit",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: [wreckId],
+  });
+  assert.equal(wrecked.applied, true);
+  assert.ok(wrecked.hub.fleet.some((m) => m.instanceId === wreckId));
+  assert.equal(wrecked.hub.fleet.find((m) => m.instanceId === wreckId)!.status, "destroyed");
+
+  const lost = applySortieReport(state.hub, {
+    sortieId: "sortie_lost_unit",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [lostId],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: [],
+  });
+  assert.equal(lost.applied, true);
+  assert.equal(lost.hub.fleet.some((m) => m.instanceId === lostId), false);
+
+  const overlap = applySortieReport(state.hub, {
+    sortieId: "sortie_overlap_unit",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [wreckId],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: [wreckId],
+  });
+  assert.equal(overlap.hub.fleet.some((m) => m.instanceId === wreckId), false);
 }
 
 // --- Explore return state: general inventory drops, recovery, wreck retention, idempotency ---
