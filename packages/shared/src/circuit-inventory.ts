@@ -218,9 +218,9 @@ export type SortieCircuitReport = {
   lostCause: Record<string, FieldDropCause>;
   recoveredDropIds: string[];
   acquiredCircuits: HubCircuitRecord[];
-  inventoryDrops: FieldInventoryDrop[];
-  recoveredInventoryDropIds: string[];
-  wreckedMechInstanceIds: string[];
+  inventoryDrops?: FieldInventoryDrop[];
+  recoveredInventoryDropIds?: string[];
+  wreckedMechInstanceIds?: string[];
 
 };
 
@@ -267,7 +267,7 @@ export function applySortieReport(
 
   const lost = new Set(report.lostMechInstanceIds);
   const wrecked = new Set(
-    report.wreckedMechInstanceIds.filter((id) => !lost.has(id)),
+    (report.wreckedMechInstanceIds ?? []).filter((id) => !lost.has(id)),
   );
   const droppedAt = at.toISOString();
   const droppedToField: FieldCircuitDrop[] = [];
@@ -308,7 +308,7 @@ export function applySortieReport(
   };
   next = addFieldDrops(next, droppedToField);
 
-  const inventoryDrops = normalizeInventoryFieldDrops(report.inventoryDrops);
+  const inventoryDrops = normalizeInventoryFieldDrops(report.inventoryDrops ?? []);
   const existingInventoryDropIds = new Set(
     next.inventoryFieldDrops.map((d) => d.dropId),
   );
@@ -331,7 +331,7 @@ export function applySortieReport(
   const rec = recoverFieldDrops(next, report.recoveredDropIds);
   next = rec.hub;
 
-  const recoveredInventoryIds = new Set(report.recoveredInventoryDropIds);
+  const recoveredInventoryIds = new Set(report.recoveredInventoryDropIds ?? []);
   const recoveredInventory: string[] = [];
   const remainingInventoryDrops: FieldInventoryDrop[] = [];
   let recoveredBag = next.inventory;
