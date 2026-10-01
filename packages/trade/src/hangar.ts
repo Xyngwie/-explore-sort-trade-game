@@ -66,6 +66,7 @@ import {
   applyRepairDiscountToCost,
   applyDurabilityBufferToWear,
   buildWearReportsForSortie,
+  applySortieReport,
   formatCircuitBonusesJa,
   computeCircuitEffectForBoard,
   formatCircuitEffectJa,
@@ -470,6 +471,42 @@ export function ingestLocationSearch(
 
   const wear = parseExploreToHubWearSearch(search);
   if (wear) {
+    if (wear.sortieId) {
+      const apply = applySortieReport(hub, {
+        sortieId: wear.sortieId,
+        cell: null,
+        frontSeed: null,
+        lostMechInstanceIds: [],
+        lostCause: {},
+        recoveredDropIds: [],
+        acquiredCircuits: [],
+        inventoryDrops: wear.inventoryDrops ?? [],
+        recoveredInventoryDropIds: wear.recoveredInventoryDropIds ?? [],
+        wreckedMechInstanceIds: wear.wreckedMechInstanceIds ?? [],
+      });
+      if (!apply.applied) {
+        log = pushLog(log, `帰還 sortieId=${wear.sortieId} は既適用のため無視`);
+        notices.push("探索帰還は既に適用済み");
+        consumed = true;
+        return {
+          state: persistHangar({
+            ...state,
+            hub: normalizeHubSnapshot(apply.hub),
+            log,
+            lastExploreReturn,
+            craftSignature: state.craftSignature || loadCraftSignature(),
+            selectedDeployIds: filterToDeployableIds(
+              apply.hub.fleet,
+              state.selectedDeployIds,
+            ),
+            notice: notices.join(" / "),
+          }),
+          consumed: true,
+        };
+      }
+      hub = apply.hub;
+    }
+
     const beforeById = new Map(hub.fleet.map((m) => [m.instanceId, m.durability]));
     hub = {
       ...hub,
