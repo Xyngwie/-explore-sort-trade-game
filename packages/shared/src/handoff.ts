@@ -193,6 +193,8 @@ export function parseMechCircuitsCompact(
 export type ExploreToHubWearPayload = {
   returnKind: SortieReturnKind;
   mechWear: Array<{ instanceId: string; durabilityAfter: number }>;
+  /** Stable id for one generated return handoff; used by HubSave.appliedSortieIds. */
+  sortieId?: string;
   inventoryDrops?: FieldInventoryDrop[];
   recoveredInventoryDropIds?: string[];
   wreckedMechInstanceIds?: string[];
@@ -578,6 +580,10 @@ export function parseTradeToExploreSearch(
   return payload;
 }
 
+function encodeSortieId(id: string | undefined): string {
+  return typeof id === "string" && /^[a-zA-Z0-9_.:-]{1,64}$/.test(id.trim()) ? id.trim() : "";
+}
+
 function encodeInventoryDrops(drops: readonly FieldInventoryDrop[] | undefined): string {
   return drops && drops.length > 0 ? JSON.stringify(drops) : "";
 }
@@ -607,6 +613,8 @@ export function buildExploreToHubWearUrl(
   const u = new URL(baseUrl);
   u.searchParams.set("returnKind", payload.returnKind);
   u.searchParams.set("mechWear", encodeMechWearCompact(payload.mechWear));
+  const sortieId = encodeSortieId(payload.sortieId);
+  if (sortieId) u.searchParams.set("sortieId", sortieId);
   const inventoryDrops = encodeInventoryDrops(payload.inventoryDrops);
   if (inventoryDrops) u.searchParams.set("inventoryDrops", inventoryDrops);
   const recovered = encodeDropIds(payload.recoveredInventoryDropIds);
@@ -627,6 +635,9 @@ export function parseExploreToHubWearSearch(
   return {
     returnKind: kindRaw,
     mechWear: parseMechWearCompact(p.get("mechWear")),
+    ...(encodeSortieId(p.get("sortieId") ?? undefined)
+      ? { sortieId: encodeSortieId(p.get("sortieId") ?? undefined) }
+      : {}),
     inventoryDrops: parseInventoryDrops(p.get("inventoryDrops")),
     recoveredInventoryDropIds: parseInstanceIds(p.get("recoveredInventoryDropIds")),
     wreckedMechInstanceIds: parseInstanceIds(p.get("wreckedMechInstanceIds")),
@@ -639,7 +650,7 @@ export function toExploreToHubWearPayload(
   mechWear: readonly { instanceId: string; durabilityAfter: number }[],
   opts?: Pick<
     ExploreToHubWearPayload,
-    "inventoryDrops" | "recoveredInventoryDropIds" | "wreckedMechInstanceIds"
+    "sortieId" | "inventoryDrops" | "recoveredInventoryDropIds" | "wreckedMechInstanceIds"
   >,
 ): ExploreToHubWearPayload {
   return {
@@ -648,6 +659,7 @@ export function toExploreToHubWearPayload(
       instanceId: w.instanceId,
       durabilityAfter: Math.max(0, Math.floor(w.durabilityAfter)),
     })),
+    ...(opts?.sortieId ? { sortieId: opts.sortieId } : {}),
     ...(opts?.inventoryDrops?.length ? { inventoryDrops: opts.inventoryDrops } : {}),
     ...(opts?.recoveredInventoryDropIds?.length
       ? { recoveredInventoryDropIds: opts.recoveredInventoryDropIds }
