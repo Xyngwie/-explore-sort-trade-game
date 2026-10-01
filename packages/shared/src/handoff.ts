@@ -24,6 +24,7 @@ import {
   type CircuitOutcome,
   type CircuitRestoreState,
 } from "./circuit-board";
+import type { FieldInventoryDrop } from "./hub-save";
 import {
   encodeCircuitBonusesCompact,
   parseCircuitBonusesCompact,
@@ -192,6 +193,9 @@ export function parseMechCircuitsCompact(
 export type ExploreToHubWearPayload = {
   returnKind: SortieReturnKind;
   mechWear: Array<{ instanceId: string; durabilityAfter: number }>;
+  inventoryDrops?: FieldInventoryDrop[];
+  recoveredInventoryDropIds?: string[];
+  wreckedMechInstanceIds?: string[];
 };
 
 const SORTIE_RETURN_KINDS: readonly SortieReturnKind[] = [
@@ -574,6 +578,28 @@ export function parseTradeToExploreSearch(
   return payload;
 }
 
+function encodeInventoryDrops(drops: readonly FieldInventoryDrop[] | undefined): string {
+  return drops && drops.length > 0 ? JSON.stringify(drops) : "";
+}
+
+function parseInventoryDrops(raw: string | null): FieldInventoryDrop[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as FieldInventoryDrop[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function encodeDropIds(ids: readonly string[] | undefined): string {
+  return (ids ?? []).map((id) => id.trim()).filter(Boolean).join(",");
+}
+
+function encodeInstanceIdsCompact(ids: readonly string[] | undefined): string {
+  return (ids ?? []).map((id) => id.trim()).filter(Boolean).join(",");
+}
+
 export function buildExploreToHubWearUrl(
   payload: ExploreToHubWearPayload,
   baseUrl: string = resolveModuleBaseUrl("trade"),
@@ -581,6 +607,12 @@ export function buildExploreToHubWearUrl(
   const u = new URL(baseUrl);
   u.searchParams.set("returnKind", payload.returnKind);
   u.searchParams.set("mechWear", encodeMechWearCompact(payload.mechWear));
+  const inventoryDrops = encodeInventoryDrops(payload.inventoryDrops);
+  if (inventoryDrops) u.searchParams.set("inventoryDrops", inventoryDrops);
+  const recovered = encodeDropIds(payload.recoveredInventoryDropIds);
+  if (recovered) u.searchParams.set("recoveredInventoryDropIds", recovered);
+  const wrecked = encodeInstanceIdsCompact(payload.wreckedMechInstanceIds);
+  if (wrecked) u.searchParams.set("wreckedMechInstanceIds", wrecked);
   return u.toString();
 }
 
@@ -595,6 +627,9 @@ export function parseExploreToHubWearSearch(
   return {
     returnKind: kindRaw,
     mechWear: parseMechWearCompact(p.get("mechWear")),
+    inventoryDrops: parseInventoryDrops(p.get("inventoryDrops")),
+    recoveredInventoryDropIds: parseInstanceIds(p.get("recoveredInventoryDropIds")),
+    wreckedMechInstanceIds: parseInstanceIds(p.get("wreckedMechInstanceIds")),
   };
 }
 
@@ -602,6 +637,10 @@ export function parseExploreToHubWearSearch(
 export function toExploreToHubWearPayload(
   returnKind: SortieReturnKind,
   mechWear: readonly { instanceId: string; durabilityAfter: number }[],
+  opts?: Pick<
+    ExploreToHubWearPayload,
+    "inventoryDrops" | "recoveredInventoryDropIds" | "wreckedMechInstanceIds"
+  >,
 ): ExploreToHubWearPayload {
   return {
     returnKind,
@@ -609,6 +648,13 @@ export function toExploreToHubWearPayload(
       instanceId: w.instanceId,
       durabilityAfter: Math.max(0, Math.floor(w.durabilityAfter)),
     })),
+    ...(opts?.inventoryDrops?.length ? { inventoryDrops: opts.inventoryDrops } : {}),
+    ...(opts?.recoveredInventoryDropIds?.length
+      ? { recoveredInventoryDropIds: opts.recoveredInventoryDropIds }
+      : {}),
+    ...(opts?.wreckedMechInstanceIds?.length
+      ? { wreckedMechInstanceIds: opts.wreckedMechInstanceIds }
+      : {}),
   };
 }
 
