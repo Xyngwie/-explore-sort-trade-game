@@ -15,6 +15,7 @@ import {
   createEmptyCircuitBoard,
   parseHubSave,
   deserializeHubSave,
+  normalizeHubSnapshot,
   toExploreToHubWearPayload,
   computeCircuitEffectForBoard,
   buildSizedTruePuzzleId,
