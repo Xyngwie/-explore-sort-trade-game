@@ -112,6 +112,16 @@ export type FieldCircuitDrop = {
   droppedAt: string;
 };
 
+/** General inventory dropped in the field; intentionally separate from Circuit fieldDrops. */
+export type FieldInventoryDrop = {
+  dropId: string;
+  frontSeed: number;
+  cell: FrontCellCoord;
+  inventory: YieldBag;
+  cause: FieldDropCause;
+  droppedAt: string;
+};
+
 /**
  * Invade front minesweeper progress (Module 4).
  * Additive on HubSave v2 — missing / invalid → null.
@@ -175,6 +185,8 @@ export type HubSnapshot = {
   perfectMaxSize: number;
   /** HubSave v3: circuits lost on the battlefield (ownership lost). */
   fieldDrops: FieldCircuitDrop[];
+  /** General inventory lost on the battlefield; separate from Circuit fieldDrops. */
+  inventoryFieldDrops: FieldInventoryDrop[];
   /** HubSave v3: recently applied Explore sortie ids (apply-once guard). */
   appliedSortieIds?: string[];
 };
@@ -225,6 +237,7 @@ export const INITIAL_HUB: HubSnapshot = {
   selectedAmmoId: "ammo_standard",
   perfectMaxSize: 0,
   fieldDrops: [],
+  inventoryFieldDrops: [],
   appliedSortieIds: [],
 };
 
@@ -606,6 +619,39 @@ export function normalizeFieldDrop(raw: unknown): FieldCircuitDrop | null {
   return drop;
 }
 
+function normalizeFieldInventoryDrop(raw: unknown): FieldInventoryDrop | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.dropId !== "string" || !DROP_ID_RE.test(obj.dropId.trim())) return null;
+  const seedNum = typeof obj.frontSeed === "number" ? obj.frontSeed : Number(obj.frontSeed);
+  if (!Number.isFinite(seedNum)) return null;
+  const cell = normalizeFrontCoord(obj.cell);
+  if (!cell) return null;
+  const inventory = normalizeInventory(obj.inventory);
+  const cause = isFieldDropCause(obj.cause) ? obj.cause : "wreck_not_carried";
+  return {
+    dropId: obj.dropId.trim(),
+    frontSeed: seedNum >>> 0,
+    cell,
+    inventory,
+    cause,
+    droppedAt: sanitizeIso(obj.droppedAt) ?? new Date(0).toISOString(),
+  };
+}
+
+export function normalizeInventoryFieldDrops(raw: unknown): FieldInventoryDrop[] {
+  if (!Array.isArray(raw)) return [];
+  const out: FieldInventoryDrop[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const d = normalizeFieldInventoryDrop(item);
+    if (!d || seen.has(d.dropId)) continue;
+    seen.add(d.dropId);
+    out.push(d);
+  }
+  return out;
+}
+
 export function normalizeFieldDrops(raw: unknown): FieldCircuitDrop[] {
   if (!Array.isArray(raw)) return [];
   const out: FieldCircuitDrop[] = [];
@@ -695,6 +741,9 @@ export function normalizeHubSnapshot(
     circuits,
   );
   const fieldDrops = normalizeFieldDrops(rawRec?.fieldDrops ?? fallback.fieldDrops ?? []);
+  const inventoryFieldDrops = normalizeInventoryFieldDrops(
+    rawRec?.inventoryFieldDrops ?? fallback.inventoryFieldDrops ?? [],
+  );
   const appliedSortieIds = normalizeAppliedSortieIds(
     rawRec?.appliedSortieIds ?? fallback.appliedSortieIds ?? [],
   );
@@ -731,6 +780,7 @@ export function normalizeHubSnapshot(
     selectedAmmoId,
     perfectMaxSize,
     fieldDrops,
+    inventoryFieldDrops,
     appliedSortieIds,
   };
 }
