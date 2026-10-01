@@ -34,6 +34,7 @@ import {
   buildSeedYieldBagForTypedRepair,
   canAffordYieldCost,
   createInitialHangar,
+  normalizeHubSnapshot,
   describeTypedRepairShortfall,
   grantStarterFleet,
   ingestLocationSearch,
