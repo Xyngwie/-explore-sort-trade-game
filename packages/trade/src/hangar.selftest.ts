@@ -6,6 +6,7 @@ import {
 } from "./resourceHistory";
 import {
   HUB_SAVE_STORAGE_KEY,
+  applySortieReport,
   MECH_FLEET_RULES,
   buildExploreToHubWearUrl,
   buildInvadeToTradeUrl,
@@ -14,6 +15,7 @@ import {
   createEmptyCircuitBoard,
   parseHubSave,
   deserializeHubSave,
+  normalizeHubSnapshot,
   toExploreToHubWearPayload,
   computeCircuitEffectForBoard,
   buildSizedTruePuzzleId,
@@ -1162,6 +1164,127 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const empty = buildResourceHistoryHtml(["セーブ読込 (x)", "デモ初期化"]);
   assert.ok(empty.includes("res-history empty") || empty.includes("まだありません"), "empty state");
   console.log("trade resource history viz ok");
+}
+
+// --- SortieReport: wreck is retained, true loss is removed, overlap cannot cause retention ---
+{
+  const state = grantStarterFleet(resetHangar(memoryStorage()));
+  const wreckId = state.hub.fleet[0]!.instanceId;
+  const lostId = state.hub.fleet[1]!.instanceId;
+  const wrecked = applySortieReport(state.hub, {
+    sortieId: "sortie_wreck_unit",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: [wreckId],
+  });
+  assert.equal(wrecked.applied, true);
+  assert.ok(wrecked.hub.fleet.some((m) => m.instanceId === wreckId));
+  assert.equal(wrecked.hub.fleet.find((m) => m.instanceId === wreckId)!.status, "destroyed");
+
+  const lost = applySortieReport(state.hub, {
+    sortieId: "sortie_lost_unit",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [lostId],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: [],
+  });
+  assert.equal(lost.applied, true);
+  assert.equal(lost.hub.fleet.some((m) => m.instanceId === lostId), false);
+
+  const overlap = applySortieReport(state.hub, {
+    sortieId: "sortie_overlap_unit",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [wreckId],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: [wreckId],
+  });
+  assert.equal(overlap.hub.fleet.some((m) => m.instanceId === wreckId), false);
+}
+
+// --- Explore return state: general inventory drops, recovery, wreck retention, idempotency ---
+{
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  let hs = resetHangar(store);
+  hs = grantStarterFleet(hs);
+  const wreckId = hs.hub.fleet[0]!.instanceId;
+  const drop = {
+    dropId: "invdrop_sortie_1",
+    frontSeed: 123,
+    cell: { sx: 2, sy: -1 },
+    inventory: { ammo: 3, armor: 2 },
+    cause: "wreck_not_carried" as const,
+    droppedAt: "2026-10-02T00:00:00.000Z",
+  };
+  const payload = toExploreToHubWearPayload(
+    "fail",
+    [{ instanceId: wreckId, durabilityAfter: 0 }],
+    {
+      sortieId: "sortie_inventory_1",
+      inventoryDrops: [drop],
+      wreckedMechInstanceIds: [wreckId],
+    },
+  );
+  const url = buildExploreToHubWearUrl(payload);
+  const applied = ingestLocationSearch(hs, new URL(url).search);
+  assert.equal(applied.consumed, true);
+  assert.equal(applied.state.hub.inventoryFieldDrops.length, 1);
+  assert.equal(applied.state.hub.inventoryFieldDrops[0]!.dropId, drop.dropId);
+  assert.deepEqual(applied.state.hub.inventory, {});
+  const wreck = applied.state.hub.fleet.find((m) => m.instanceId === wreckId);
+  assert.ok(wreck);
+  assert.equal(wreck!.status, "destroyed");
+  assert.equal(wreck!.durability, 0);
+  assert.equal(applied.state.selectedDeployIds.includes(wreckId), false);
+  assert.equal(applied.state.hub.appliedSortieIds.includes("sortie_inventory_1"), true);
+
+  const duplicate = ingestLocationSearch(applied.state, new URL(url).search);
+  assert.equal(duplicate.consumed, true);
+  assert.equal(duplicate.state.hub.inventoryFieldDrops.length, 1);
+  assert.equal(duplicate.state.hub.appliedSortieIds.filter((id) => id === "sortie_inventory_1").length, 1);
+
+  const recoveryPayload = toExploreToHubWearPayload(
+    "extract",
+    [],
+    {
+      sortieId: "sortie_inventory_2",
+      recoveredInventoryDropIds: [drop.dropId],
+    },
+  );
+  const recovered = ingestLocationSearch(
+    duplicate.state,
+    new URL(buildExploreToHubWearUrl(recoveryPayload)).search,
+  );
+  assert.deepEqual(recovered.state.hub.inventory, { ammo: 3, armor: 2 });
+  assert.equal(recovered.state.hub.inventoryFieldDrops.length, 0);
+  assert.equal(recovered.state.hub.appliedSortieIds.includes("sortie_inventory_2"), true);
+
+  const legacy = normalizeHubSnapshot({
+    credits: 1,
+    materials: 1,
+    fleet: [],
+    ammoLoad: { standard: 0, ap: 0, emp: 0 },
+    inventory: {},
+    circuits: [],
+    frontProgress: null,
+    importedMaterials: 0,
+    unopenedContainers: 0,
+    selectedMechId: "mech_gen1",
+    selectedAmmoId: "ammo_standard",
+    perfectMaxSize: 0,
+    fieldDrops: [],
+  });
+  assert.deepEqual(legacy.inventoryFieldDrops, []);
 }
 
 console.log("trade hangar selftest: ok");

@@ -1470,6 +1470,22 @@ function advancePinned(
   console.log("explore keyboard shortcuts overlay ok");
 }
 
+// --- return SortieReport: severe damage is a retained, non-deployable wreck ---
+{
+  const world = createWorld(
+    bootstrapFromSearch(
+      "?deployedInstanceIds=owned_wreck&startingAmmo=10&mechDurability=owned_wreck:20",
+    ),
+  );
+  startSortie(world);
+  world.phase = "result";
+  world.extracted = false;
+  world.failReason = "timeout";
+  const url = hubWearHandoffUrl(world)!;
+  assert.ok(url.includes("sortieId="));
+  assert.ok(url.includes("wreckedMechInstanceIds="));
+}
+
 console.log("explore selftest: ok");
 
 // --- forced engage browser-back wipe helper ---
