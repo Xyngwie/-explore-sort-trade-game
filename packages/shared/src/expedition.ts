@@ -94,6 +94,8 @@ export type ExploreSortieOutcome = ExploreResult & {
   returnKind: SortieReturnKind;
   deployedInstanceIds: string[];
   mechWear: MechWearReport[];
+  /** Canonical per-instance carried ammo snapshot. */
+  mechCurrentAmmo: Array<{ instanceId: string; currentAmmo: number }>;
 };
 
 export function createExploreSortieOutcome(args: {
@@ -103,6 +105,15 @@ export function createExploreSortieOutcome(args: {
   deployedInstanceIds: readonly string[];
 }): ExploreSortieOutcome {
   const deployedInstanceIds = [...args.deployedInstanceIds];
+  const byId = new Map(args.fleet.map((mech) => [mech.instanceId, mech]));
+  const mechCurrentAmmo = deployedInstanceIds
+    .map((instanceId) => {
+      const mech = byId.get(instanceId);
+      return mech
+        ? { instanceId, currentAmmo: mech.currentAmmo }
+        : null;
+    })
+    .filter((row): row is { instanceId: string; currentAmmo: number } => row != null);
   return {
     ...args.result,
     returnKind: args.returnKind,
@@ -112,6 +123,7 @@ export function createExploreSortieOutcome(args: {
       deployedInstanceIds,
       args.returnKind,
     ),
+    mechCurrentAmmo,
   };
 }
 
