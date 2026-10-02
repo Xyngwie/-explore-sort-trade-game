@@ -12,6 +12,8 @@ import {
 import {
   filterToDeployableIds,
   selectDeployableInstanceIds,
+  MECH_AMMO_BASE_CAPACITY,
+  normalizeCurrentAmmo,
   type OwnedMech,
   type SortieReturnKind,
 } from "./mech-fleet";
@@ -641,7 +643,7 @@ function encodeMechCurrentAmmoCompact(
       const id = row.instanceId.trim();
       if (!id || (allow && !allow.has(id)) || seen.has(id)) return "";
       seen.add(id);
-      return id + ":" + Math.max(0, Math.min(28, Math.floor(row.currentAmmo)));
+      return id + ":" + normalizeCurrentAmmo(row.currentAmmo);
     })
     .filter(Boolean)
     .join(";");
@@ -658,7 +660,7 @@ function parseMechCurrentAmmoCompact(raw: string | null): MechCurrentAmmoRow[] {
     const currentAmmo = Number.parseInt(part.slice(colon + 1), 10);
     if (!instanceId || !Number.isFinite(currentAmmo) || seen.has(instanceId)) continue;
     seen.add(instanceId);
-    out.push({ instanceId, currentAmmo: Math.max(0, Math.min(28, currentAmmo)) });
+    out.push({ instanceId, currentAmmo: normalizeCurrentAmmo(currentAmmo) });
   }
   return out;
 }
