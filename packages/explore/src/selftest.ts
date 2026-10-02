@@ -1238,7 +1238,7 @@ function advancePinned(
 
 // --- operation timeout: lock move/cargo, no auto-fail, combat continues ---
 {
-  const world = createWorld(bootstrapFromSearch("?startingAmmo=40"));
+  const world = createWorld(bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:40&startingAmmo=999"));
   startSortie(world);
   // Keep one enemy alive near captain for combat; park others far.
   for (const e of world.enemies) {
@@ -1250,7 +1250,6 @@ function advancePinned(
   foe.hp = foe.maxHp;
   world.leader.pos = { x: 400, y: 400 };
   foe.pos = { x: 410, y: 400 }; // in weapon range
-  world.ammo = 40;
   world.leader.cooldown = 0;
 
   // Near-exhaust the clock then step over zero.
@@ -1300,7 +1299,7 @@ function advancePinned(
   assert.equal(requestExtract(world), false);
 
   // Combat tick still runs (enemy may fire / bullets update / cooldowns tick)
-  const ammoBefore = world.ammo;
+  const ammoBefore = world.currentAmmo.owned_a;
   const foeHpBefore = foe.hp;
   world.leader.cooldown = 0;
   foe.cooldown = 0;
@@ -1314,7 +1313,7 @@ function advancePinned(
   }
   assert.equal(world.phase, "sortie");
   assert.ok(
-    world.ammo < ammoBefore || foe.hp < foeHpBefore || world.bullets.length > 0 ||
+    world.currentAmmo.owned_a! < ammoBefore! || foe.hp < foeHpBefore || world.bullets.length > 0 ||
       world.combatHitsTaken > 0 ||
       !foe.alive,
     "combat must still progress after timeout",
