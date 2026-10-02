@@ -303,7 +303,7 @@ export function buildTradeToExplorePayloadFromFleet(
     deployedDurability,
     mechCurrentAmmo: deployedInstanceIds.map((id) => ({
       instanceId: id,
-      currentAmmo: byId.get(id)!.currentAmmo,
+      currentAmmo: normalizeCurrentAmmo(byId.get(id)!.currentAmmo ?? 0),
     })),
   };
 }
