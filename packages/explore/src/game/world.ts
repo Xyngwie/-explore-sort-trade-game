@@ -181,6 +181,8 @@ export type SortieBootstrap = {
   circuitDurabilityBuffer: number;
   /** Hub circuit craft multiplier from circuitBonuses (default 1). */
   circuitCraftMultiplier: number;
+  /** Canonical carried ammo snapshot grouped by OwnedMech.instanceId. */
+  mechCurrentAmmo: Array<{ instanceId: string; currentAmmo: number }>;
   /** Active circuit ids grouped by Explore unit id. */
   equippedByUnit: EquippedByUnit;
   /** Parsed invade→explore sector; null when keys absent. */
@@ -278,6 +280,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     note,
     deployedInstanceIds,
     deployedDurability,
+    mechCurrentAmmo: inbound?.mechCurrentAmmo ? inbound.mechCurrentAmmo.map((row) => ({ instanceId: row.instanceId, currentAmmo: row.currentAmmo })) : [],
     equippedByUnit: buildEquippedByUnit(deployedInstanceIds, inbound?.mechCircuits),
     circuitDurabilityBuffer,
     circuitCraftMultiplier,
@@ -357,7 +360,13 @@ export function createWorld(boot: SortieBootstrap): World {
     logs: [],
     salvaged: 0,
     carrierCapacity,
-    ammo: boot.ammoStock,
+    ammoStock: boot.ammoStock,
+    currentAmmo: Object.fromEntries(
+      boot.deployedInstanceIds.map((instanceId) => {
+        const row = boot.mechCurrentAmmo.find((entry) => entry.instanceId === instanceId);
+        return [instanceId, row?.currentAmmo];
+      }),
+    ),
     extracted: false,
     failReason: null,
     note: boot.note,
