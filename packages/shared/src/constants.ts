@@ -88,12 +88,13 @@ export const HANDOFF_QUERY_KEYS = {
     "deployableMechs",
     "startingAmmo",
     "deployedInstanceIds",
+    "mechCurrentAmmo",
     "mechDurability",
     "circuitBonuses",
     /** Optional (HubSave v3 / CIRCUIT_DATA_MODEL_V0 §4): per-mech equipped circuits. */
     "mechCircuits",
   ] as const,
-  exploreToHubWear: ["returnKind", "mechWear"] as const,
+  exploreToHubWear: ["returnKind", "mechWear", "mechCurrentAmmo"] as const,
   /** Module 4: hub → invade (minimal context; invade optional). */
   tradeToInvade: ["fromHub", "deployableMechs", "startingAmmo"] as const,
   /** Module 4: invade → hub (sector/intel only — never YieldBag). */

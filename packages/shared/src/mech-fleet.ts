@@ -21,6 +21,18 @@ export const MECH_STATUS_LABEL_JA: Record<MechStatus, string> = {
   destroyed: "大破",
 };
 
+export const MECH_AMMO_BASE_CAPACITY = 28;
+
+export function normalizeCurrentAmmo(
+  value: unknown,
+  capacity = MECH_AMMO_BASE_CAPACITY,
+): number {
+  const raw = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(raw)) return 0;
+  const cap = Math.max(0, Math.floor(capacity));
+  return Math.max(0, Math.min(cap, Math.floor(raw)));
+}
+
 export type OwnedMech = {
   /** Stable instance id within a hub save (not a catalog id). */
   instanceId: string;
@@ -30,6 +42,9 @@ export type OwnedMech = {
   /** Current durability points (0 .. durabilityMax). */
   durability: number;
   durabilityMax: number;
+  /** Current carried ammunition; persisted independently by instanceId. */
+  /** Undefined means this legacy fleet entry has no migration decision yet. */
+  currentAmmo?: number;
 };
 
 /** Provisional balance — tune later; documented in docs/MECH_FLEET.md. */
@@ -114,7 +129,12 @@ let instanceSeq = 0;
 /** Deterministic-ish id for tests; pass `id` to pin. */
 export function createOwnedMech(
   catalogId: MechId,
-  opts?: { instanceId?: string; durability?: number; durabilityMax?: number },
+  opts?: {
+    instanceId?: string;
+    durability?: number;
+    durabilityMax?: number;
+    currentAmmo?: number;
+  },
 ): OwnedMech {
   const durabilityMax =
     opts?.durabilityMax ?? MECH_FLEET_RULES.defaultDurabilityMax;
@@ -132,6 +152,9 @@ export function createOwnedMech(
     status: "operational",
     durability,
     durabilityMax,
+    ...(opts?.currentAmmo != null
+      ? { currentAmmo: normalizeCurrentAmmo(opts.currentAmmo) }
+      : {}),
   });
 }
 
@@ -374,6 +397,10 @@ export function normalizeOwnedMech(
     (raw as OwnedMech).instanceId.length > 0
       ? (raw as OwnedMech).instanceId
       : `owned_${catalogRaw}_anon`;
+  const currentAmmoRaw = (raw as Partial<OwnedMech>).currentAmmo;
+  const currentAmmo =
+    currentAmmoRaw == null ? undefined : normalizeCurrentAmmo(currentAmmoRaw);
+
   const statusRaw =
     typeof (raw as OwnedMech).status === "string"
       ? (raw as OwnedMech).status
@@ -388,6 +415,7 @@ export function normalizeOwnedMech(
     status,
     durability,
     durabilityMax,
+    ...(currentAmmo != null ? { currentAmmo } : {}),
   });
 }
 
