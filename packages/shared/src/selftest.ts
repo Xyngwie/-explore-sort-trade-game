@@ -85,6 +85,8 @@ import {
   applyWearReportsToFleet,
   MECH_AMMO_BASE_CAPACITY,
   normalizeCurrentAmmo,
+  normalizeOwnedMech,
+  normalizeFleet,
 } from "./mech-fleet";
 import {
   coarsenFix,
@@ -1916,6 +1918,26 @@ console.log("shared circuit-effect selftest: ok");
     [["ammo-a", 7], ["ammo-b", 19], ["ammo-c", 3]],
   );
   assert.deepEqual(roundTrip!.hub.ammoLoad, hub.ammoLoad);
+
+  const legacyMech = normalizeOwnedMech({
+    instanceId: "legacy-ammo",
+    catalogId: "mech_gen1",
+    durability: 100,
+    durabilityMax: 100,
+  });
+  assert.ok(legacyMech);
+  assert.equal("currentAmmo" in legacyMech!, false);
+
+  const legacyFleet = normalizeFleet(
+    [{
+      instanceId: "legacy-fleet-ammo",
+      catalogId: "mech_gen1",
+      durability: 100,
+      durabilityMax: 100,
+    }],
+    3,
+  );
+  assert.equal("currentAmmo" in legacyFleet[0]!, false);
 
   const deploy = buildTradeToExplorePayloadFromFleet(
     [a, b, c],
