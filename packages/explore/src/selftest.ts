@@ -111,6 +111,67 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.equal(boot.ammoStock, 40);
 }
 
+// --- per-mech current ammo: canonical instanceId state, no shared-ammo fallback ---
+{
+  const world = createWorld(
+    bootstrapFromSearch(
+      "?deployableMechs=3&startingAmmo=99&deployedInstanceIds=owned_a,owned_b,owned_c&mechCurrentAmmo=owned_a:10;owned_b:20;owned_c:30",
+    ),
+  );
+  assert.deepEqual(world.currentAmmo, { owned_a: 10, owned_b: 20, owned_c: 30 });
+  assert.equal(world.ammoStock, 99);
+
+  startSortie(world);
+  for (const w of world.wingmen) w.alive = false;
+  const enemy = world.enemies[0]!;
+  enemy.alive = true;
+  enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
+  const beforeB = world.currentAmmo.owned_b;
+  const beforeC = world.currentAmmo.owned_c;
+  tickWorld(world, 0.05, idleInput());
+  assert.equal(world.currentAmmo.owned_a, 9, "only firing mech A should consume one round");
+  assert.equal(world.currentAmmo.owned_b, beforeB, "mech B ammo must not change");
+  assert.equal(world.currentAmmo.owned_c, beforeC, "mech C ammo must not change");
+  assert.equal(world.ammoStock, 99, "shared ammoStock must not be consumed by firing");
+}
+
+// --- undefined currentAmmo is preserved; it is not coerced to zero and cannot fire ---
+{
+  const world = createWorld(
+    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=40"),
+  );
+  assert.equal(world.currentAmmo.owned_a, undefined);
+  assert.equal(world.currentAmmo.owned_b, undefined);
+  startSortie(world);
+  for (const w of world.wingmen) w.alive = false;
+  const enemy = world.enemies[0]!;
+  enemy.alive = true;
+  enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
+  const bulletsBefore = world.bullets.length;
+  const cooldownBefore = world.leader.cooldown;
+  tickWorld(world, 0.05, idleInput());
+  assert.equal(world.currentAmmo.owned_a, undefined);
+  assert.equal(world.bullets.length, bulletsBefore);
+  assert.equal(world.leader.cooldown, cooldownBefore);
+}
+
+// --- zero currentAmmo rejects firing without borrowing from ammoStock ---
+{
+  const world = createWorld(
+    bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:0&startingAmmo=40"),
+  );
+  assert.equal(world.currentAmmo.owned_a, 0);
+  startSortie(world);
+  const enemy = world.enemies[0]!;
+  enemy.alive = true;
+  enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
+  const bulletsBefore = world.bullets.length;
+  tickWorld(world, 0.05, idleInput());
+  assert.equal(world.currentAmmo.owned_a, 0);
+  assert.equal(world.bullets.length, bulletsBefore);
+  assert.equal(world.ammoStock, 40);
+}
+
 // --- patrol orbit coherence ---
 {
   const world = createWorld(bootstrapFromSearch(""));
@@ -417,7 +478,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
 
 // --- captain auto-combat without holding fire ---
 {
-  const world = createWorld(bootstrapFromSearch("?startingAmmo=30"));
+  const world = createWorld(bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:30&startingAmmo=999"));
   startSortie(world);
   const enemy = world.enemies[0]!;
   enemy.alive = true;
@@ -428,7 +489,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
     x: world.leader.pos.x + world.balance.weaponRange * 0.5,
     y: world.leader.pos.y,
   };
-  const ammoBefore = world.ammo;
+  const ammoBefore = world.currentAmmo.owned_a;
   const bulletsBefore = world.bullets.length;
   // fire: false — auto reaction should still shoot
   tickWorld(world, 0.05, {
@@ -438,7 +499,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
     interact: false,
   });
   assert.ok(
-    world.ammo < ammoBefore || world.bullets.length > bulletsBefore,
+    world.currentAmmo.owned_a! < ammoBefore! || world.bullets.length > bulletsBefore,
     "leader should auto-fire at in-range enemy without Space/F",
   );
   assert.equal(world.leader.cooldown > 0, true);
