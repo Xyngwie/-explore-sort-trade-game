@@ -110,11 +110,9 @@ export function createExploreSortieOutcome(args: {
   const mechCurrentAmmo = deployedInstanceIds
     .map((instanceId) => {
       const mech = byId.get(instanceId);
-      return mech
-        ? {
-            instanceId,
-            currentAmmo: normalizeCurrentAmmo(mech.currentAmmo ?? 0),
-          }
+      const currentAmmo = mech?.currentAmmo;
+      return mech && currentAmmo != null
+        ? { instanceId, currentAmmo: normalizeCurrentAmmo(currentAmmo) }
         : null;
     })
     .filter((row): row is { instanceId: string; currentAmmo: number } => row != null);
