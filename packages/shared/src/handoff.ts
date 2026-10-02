@@ -68,9 +68,17 @@ export type SortToTradePayload = {
  * v2 (additive): deployedInstanceIds of 健在 mechs only.
  * When ids are present, deployableMechs should match ids.length (builders enforce this).
  */
+export type MechCurrentAmmoRow = {
+  instanceId: string;
+  currentAmmo: number;
+};
+
 export type TradeToExplorePayload = {
   deployableMechs: number;
+  /** @deprecated Legacy shared sortie ammo; canonical state is mechCurrentAmmo. */
   startingAmmo: number;
+  /** Canonical per-instance carried ammo snapshot. */
+  mechCurrentAmmo?: MechCurrentAmmoRow[];
   /** Operational owned-mech instance ids committed to this sortie. */
   deployedInstanceIds?: string[];
   /**
@@ -193,6 +201,8 @@ export function parseMechCircuitsCompact(
 export type ExploreToHubWearPayload = {
   returnKind: SortieReturnKind;
   mechWear: Array<{ instanceId: string; durabilityAfter: number }>;
+  /** Canonical per-instance carried ammo snapshot on return. */
+  mechCurrentAmmo?: MechCurrentAmmoRow[];
   /** Stable id for one generated return handoff; used by HubSave.appliedSortieIds. */
   sortieId?: string;
   inventoryDrops?: FieldInventoryDrop[];
@@ -290,6 +300,10 @@ export function buildTradeToExplorePayloadFromFleet(
     startingAmmo: Math.max(0, Math.floor(startingAmmo)),
     deployedInstanceIds,
     deployedDurability,
+    mechCurrentAmmo: deployedInstanceIds.map((id) => ({
+      instanceId: id,
+      currentAmmo: byId.get(id)!.currentAmmo,
+    })),
   };
 }
 
@@ -502,10 +516,18 @@ export function buildTradeToExploreUrl(
       ? ids.length
       : Math.max(0, Math.floor(payload.deployableMechs));
   u.searchParams.set("deployableMechs", String(deployableMechs));
-  u.searchParams.set(
-    "startingAmmo",
-    String(Math.max(0, Math.floor(payload.startingAmmo))),
-  );
+  if (payload.mechCurrentAmmo && payload.mechCurrentAmmo.length > 0) {
+    const encodedAmmo = encodeMechCurrentAmmoCompact(
+      payload.mechCurrentAmmo,
+      ids.length > 0 ? ids : undefined,
+    );
+    if (encodedAmmo) u.searchParams.set("mechCurrentAmmo", encodedAmmo);
+  } else {
+    u.searchParams.set(
+      "startingAmmo",
+      String(Math.max(0, Math.floor(payload.startingAmmo))),
+    );
+  }
   if (ids.length > 0) {
     u.searchParams.set("deployedInstanceIds", encodeInstanceIds(ids));
   }
@@ -561,6 +583,8 @@ export function parseTradeToExploreSearch(
     deployableMechs,
     startingAmmo: parseNonNegInt(p.get("startingAmmo"), 0),
   };
+  const mechCurrentAmmo = parseMechCurrentAmmoCompact(p.get("mechCurrentAmmo"));
+  if (mechCurrentAmmo.length > 0) payload.mechCurrentAmmo = mechCurrentAmmo;
   if (deployedInstanceIds.length > 0) {
     payload.deployedInstanceIds = deployedInstanceIds;
   }
@@ -606,6 +630,40 @@ function encodeInstanceIdsCompact(ids: readonly string[] | undefined): string {
   return (ids ?? []).map((id) => id.trim()).filter(Boolean).join(",");
 }
 
+function encodeMechCurrentAmmoCompact(
+  rows: readonly MechCurrentAmmoRow[],
+  onlyInstanceIds?: readonly string[],
+): string {
+  const allow = onlyInstanceIds ? new Set(onlyInstanceIds) : null;
+  const seen = new Set<string>();
+  return rows
+    .map((row) => {
+      const id = row.instanceId.trim();
+      if (!id || (allow && !allow.has(id)) || seen.has(id)) return "";
+      seen.add(id);
+      return id + ":" + Math.max(0, Math.min(28, Math.floor(row.currentAmmo)));
+    })
+    .filter(Boolean)
+    .join(";");
+}
+
+function parseMechCurrentAmmoCompact(raw: string | null): MechCurrentAmmoRow[] {
+  if (!raw) return [];
+  const out: MechCurrentAmmoRow[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(";")) {
+    const colon = part.lastIndexOf(":");
+    if (colon <= 0) continue;
+    const instanceId = part.slice(0, colon).trim();
+    const currentAmmo = Number.parseInt(part.slice(colon + 1), 10);
+    if (!instanceId || !Number.isFinite(currentAmmo) || seen.has(instanceId)) continue;
+    seen.add(instanceId);
+    out.push({ instanceId, currentAmmo: Math.max(0, Math.min(28, currentAmmo)) });
+  }
+  return out;
+}
+
+
 export function buildExploreToHubWearUrl(
   payload: ExploreToHubWearPayload,
   baseUrl: string = resolveModuleBaseUrl("trade"),
@@ -613,6 +671,10 @@ export function buildExploreToHubWearUrl(
   const u = new URL(baseUrl);
   u.searchParams.set("returnKind", payload.returnKind);
   u.searchParams.set("mechWear", encodeMechWearCompact(payload.mechWear));
+  if (payload.mechCurrentAmmo && payload.mechCurrentAmmo.length > 0) {
+    const encodedAmmo = encodeMechCurrentAmmoCompact(payload.mechCurrentAmmo);
+    if (encodedAmmo) u.searchParams.set("mechCurrentAmmo", encodedAmmo);
+  }
   const sortieId = encodeSortieId(payload.sortieId);
   if (sortieId) u.searchParams.set("sortieId", sortieId);
   const inventoryDrops = encodeInventoryDrops(payload.inventoryDrops);
@@ -632,9 +694,11 @@ export function parseExploreToHubWearSearch(
   if (!p.has("returnKind") && !p.has("mechWear")) return null;
   const kindRaw = (p.get("returnKind") ?? "").trim();
   if (!isSortieReturnKind(kindRaw)) return null;
+  const mechCurrentAmmo = parseMechCurrentAmmoCompact(p.get("mechCurrentAmmo"));
   return {
     returnKind: kindRaw,
     mechWear: parseMechWearCompact(p.get("mechWear")),
+    ...(mechCurrentAmmo.length > 0 ? { mechCurrentAmmo } : {}),
     ...(encodeSortieId(p.get("sortieId") ?? undefined)
       ? { sortieId: encodeSortieId(p.get("sortieId") ?? undefined) }
       : {}),
@@ -650,7 +714,11 @@ export function toExploreToHubWearPayload(
   mechWear: readonly { instanceId: string; durabilityAfter: number }[],
   opts?: Pick<
     ExploreToHubWearPayload,
-    "sortieId" | "inventoryDrops" | "recoveredInventoryDropIds" | "wreckedMechInstanceIds"
+    | "sortieId"
+    | "inventoryDrops"
+    | "recoveredInventoryDropIds"
+    | "wreckedMechInstanceIds"
+    | "mechCurrentAmmo"
   >,
 ): ExploreToHubWearPayload {
   return {
@@ -659,6 +727,9 @@ export function toExploreToHubWearPayload(
       instanceId: w.instanceId,
       durabilityAfter: Math.max(0, Math.floor(w.durabilityAfter)),
     })),
+    ...(opts?.mechCurrentAmmo?.length
+      ? { mechCurrentAmmo: opts.mechCurrentAmmo }
+      : {}),
     ...(opts?.sortieId ? { sortieId: opts.sortieId } : {}),
     ...(opts?.inventoryDrops?.length ? { inventoryDrops: opts.inventoryDrops } : {}),
     ...(opts?.recoveredInventoryDropIds?.length
