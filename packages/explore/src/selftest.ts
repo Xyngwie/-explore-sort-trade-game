@@ -147,11 +147,20 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   const enemy = world.enemies[0]!;
   enemy.alive = true;
   enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
-  const bulletsBefore = world.bullets.length;
+  const leaderBulletCountBefore = world.bullets.filter(
+    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
+  ).length;
   const cooldownBefore = world.leader.cooldown;
   tickWorld(world, 0.05, idleInput());
+  const leaderBulletCountAfter = world.bullets.filter(
+    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
+  ).length;
   assert.equal(world.currentAmmo.owned_a, undefined);
-  assert.equal(world.bullets.length, bulletsBefore);
+  assert.equal(
+    leaderBulletCountAfter,
+    leaderBulletCountBefore,
+    "undefined CurrentAmmo leader must not generate a bullet",
+  );
   assert.equal(world.leader.cooldown, cooldownBefore);
 }
 
