@@ -618,7 +618,7 @@ function renderDom(): void {
     <div class="hud">
       <span>残時間 <strong id="hud-time" class="${isOperationTimedOut(world) ? "timed-out" : ""}">${isOperationTimedOut(world) ? "0.0s · 時間切れ" : world.timeLeft.toFixed(1) + "s"}</strong></span>
       <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
-      <span>実弾 <strong id="hud-ammo">${world.ammo}</strong></span>
+      <span>実弾 <strong id="hud-ammo">${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
       <span>抽出 <strong id="hud-boarding">${extractHud}</strong></span>
       <span><strong id="hud-speed">${speedHud}</strong></span>
