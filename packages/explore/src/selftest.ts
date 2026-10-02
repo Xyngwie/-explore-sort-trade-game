@@ -548,7 +548,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
 // --- boarding extract + wear scaffold ---
 {
   const world = createWorld(
-    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20"),
+    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20&mechCurrentAmmo=owned_a:17;owned_b:9"),
   );
   startSortie(world);
   for (const e of world.enemies) {
@@ -587,9 +587,14 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
   assert.ok(outcome);
   assert.equal(outcome!.returnKind, "extract");
   assert.equal(outcome!.mechWear.length, 2);
+  assert.deepEqual(outcome!.mechCurrentAmmo, [
+    { instanceId: "owned_a", currentAmmo: 17 },
+    { instanceId: "owned_b", currentAmmo: 9 },
+  ]);
   const wearUrl = hubWearHandoffUrl(world);
   assert.ok(wearUrl && wearUrl.includes("returnKind=extract"));
   assert.ok(wearUrl!.includes("mechWear="));
+  assert.ok(wearUrl!.includes("mechCurrentAmmo="));
 }
 
 // --- wear uses deploy-time durability ---
