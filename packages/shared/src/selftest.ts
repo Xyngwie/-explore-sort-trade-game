@@ -39,6 +39,7 @@ import { CTA_COPY, CTA_CHIP } from "./cta-copy";
 import {
   createHubSave,
   parseHubSave,
+  normalizeHubSnapshot,
   importMaterialsIntoHub,
   importYieldBagIntoHub,
   upsertCircuitIntoHub,
