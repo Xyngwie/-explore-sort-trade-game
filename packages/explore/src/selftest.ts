@@ -115,10 +115,10 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
 {
   const world = createWorld(
     bootstrapFromSearch(
-      "?deployableMechs=3&startingAmmo=99&deployedInstanceIds=owned_a,owned_b,owned_c&mechCurrentAmmo=owned_a:10;owned_b:20;owned_c:30",
+      "?deployableMechs=3&startingAmmo=99&deployedInstanceIds=owned_a,owned_b,owned_c&mechCurrentAmmo=owned_a:10;owned_b:20;owned_c:28",
     ),
   );
-  assert.deepEqual(world.currentAmmo, { owned_a: 10, owned_b: 20, owned_c: 30 });
+  assert.deepEqual(world.currentAmmo, { owned_a: 10, owned_b: 20, owned_c: 28 });
   assert.equal(world.ammoStock, 99);
 
   startSortie(world);
