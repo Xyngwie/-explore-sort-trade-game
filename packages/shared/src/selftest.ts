@@ -1939,6 +1939,21 @@ console.log("shared circuit-effect selftest: ok");
   );
   assert.equal("currentAmmo" in legacyFleet[0]!, false);
 
+  const legacyDeploy = buildTradeToExplorePayloadFromFleet(
+    [legacyMech!],
+    28,
+    ["legacy-ammo"],
+  );
+  assert.deepEqual(legacyDeploy.mechCurrentAmmo, []);
+
+  const legacyOutcome = createExploreSortieOutcome({
+    result: createExpeditionState(),
+    returnKind: "extract",
+    fleet: [legacyMech!],
+    deployedInstanceIds: ["legacy-ammo"],
+  });
+  assert.deepEqual(legacyOutcome.mechCurrentAmmo, []);
+
   const deploy = buildTradeToExplorePayloadFromFleet(
     [a, b, c],
     28,
