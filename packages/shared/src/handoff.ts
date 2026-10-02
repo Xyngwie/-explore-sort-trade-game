@@ -12,7 +12,6 @@ import {
 import {
   filterToDeployableIds,
   selectDeployableInstanceIds,
-  MECH_AMMO_BASE_CAPACITY,
   normalizeCurrentAmmo,
   type OwnedMech,
   type SortieReturnKind,
