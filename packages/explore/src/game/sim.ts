@@ -81,8 +81,10 @@ function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): vo
   if (!from.alive || !target.alive || from.cooldown > 0) return;
   if (dist(from.pos, target.pos) > world.balance.weaponRange) return;
   if (!fromEnemy) {
-    if (world.ammo <= 0) return;
-    world.ammo -= 1;
+    if (from.instanceId == null) return;
+    const currentAmmo = world.currentAmmo[from.instanceId];
+    if (currentAmmo == null || currentAmmo <= 0) return;
+    world.currentAmmo[from.instanceId] = currentAmmo - 1;
   }
   from.cooldown = world.balance.fireCooldown;
   from.heading = angleOf(from.pos, target.pos);
