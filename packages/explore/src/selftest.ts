@@ -1874,9 +1874,12 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const foe = w.enemies.find((e) => e.alive)!;
   foe.pos = { x: w.leader.pos.x + w.balance.weaponRange * 0.5, y: w.leader.pos.y };
   w.leader.cooldown = 0;
-  const ammo0 = w.ammo;
+  const leaderInstanceId = w.deployedInstanceIds[0];
+  assert.ok(leaderInstanceId, "release fixture must have a leader instanceId");
+  w.currentAmmo[leaderInstanceId] = 28;
+  const ammo0 = w.currentAmmo[leaderInstanceId];
   tickWorld(w, 0.02, { move: { x: 0, y: 0 }, clickMove: null, fire: true, interact: false });
-  assert.ok(w.ammo < ammo0, "fire works in release");
+  assert.ok(w.currentAmmo[leaderInstanceId]! < ammo0!, "fire works in release");
   foe.alive = false;
   const crate = w.containers[0]!;
   crate.discovered = true;
