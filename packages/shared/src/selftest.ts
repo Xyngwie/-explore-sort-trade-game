@@ -82,6 +82,8 @@ import {
   selectDeployableInstanceIds,
   buildWearReportsForSortie,
   applyWearReportsToFleet,
+  MECH_AMMO_BASE_CAPACITY,
+  normalizeCurrentAmmo,
 } from "./mech-fleet";
 import {
   coarsenFix,
@@ -1872,3 +1874,84 @@ console.log("shared circuit-effect selftest: ok");
   }
   console.log("shared cta-copy selftest: ok");
 }
+
+
+// --- instanceId-scoped CurrentAmmo contract ---
+{
+  assert.equal(MECH_AMMO_BASE_CAPACITY, 28);
+  assert.equal(normalizeCurrentAmmo(0), 0);
+  assert.equal(normalizeCurrentAmmo(17), 17);
+  assert.equal(normalizeCurrentAmmo(999), 28);
+  assert.equal(normalizeCurrentAmmo(-1), 0);
+
+  const a = createOwnedMech("mech_gen1", {
+    instanceId: "ammo-a",
+    currentAmmo: 7,
+  });
+  const b = createOwnedMech("mech_gen1", {
+    instanceId: "ammo-b",
+    currentAmmo: 19,
+  });
+  const c = createOwnedMech("mech_gen2", {
+    instanceId: "ammo-c",
+    currentAmmo: 3,
+  });
+  const hub = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    ammoLoad: { ammo_standard: 11, ammo_ap: 2, ammo_hp: 0 },
+    fleet: [a, b, c],
+  });
+  assert.deepEqual(
+    hub.fleet.map((m) => [m.instanceId, m.currentAmmo]),
+    [["ammo-a", 7], ["ammo-b", 19], ["ammo-c", 3]],
+  );
+  assert.equal(hub.ammoLoad.ammo_standard, 11);
+  assert.equal(hub.ammoLoad.ammo_ap, 2);
+
+  const roundTrip = parseHubSave(createHubSave(hub));
+  assert.ok(roundTrip);
+  assert.deepEqual(
+    roundTrip!.hub.fleet.map((m) => [m.instanceId, m.currentAmmo]),
+    [["ammo-a", 7], ["ammo-b", 19], ["ammo-c", 3]],
+  );
+  assert.deepEqual(roundTrip!.hub.ammoLoad, hub.ammoLoad);
+
+  const deploy = buildTradeToExplorePayloadFromFleet(
+    [a, b, c],
+    28,
+    ["ammo-a", "ammo-b", "ammo-c"],
+  );
+  assert.deepEqual(deploy.mechCurrentAmmo, [
+    { instanceId: "ammo-a", currentAmmo: 7 },
+    { instanceId: "ammo-b", currentAmmo: 19 },
+    { instanceId: "ammo-c", currentAmmo: 3 },
+  ]);
+  const deployUrl = buildTradeToExploreUrl(deploy);
+  const deployParsed = parseTradeToExploreSearch(new URL(deployUrl).search);
+  assert.deepEqual(deployParsed?.mechCurrentAmmo, deploy.mechCurrentAmmo);
+  assert.equal(new URL(deployUrl).searchParams.has("startingAmmo"), false);
+
+  const returnPayload = toExploreToHubWearPayload(
+    "extract",
+    [
+      { instanceId: "ammo-a", durabilityAfter: 85 },
+      { instanceId: "ammo-b", durabilityAfter: 70 },
+      { instanceId: "ammo-c", durabilityAfter: 55 },
+    ],
+    { mechCurrentAmmo: deploy.mechCurrentAmmo },
+  );
+  const returnUrl = buildExploreToHubWearUrl(returnPayload);
+  const returnParsed = parseExploreToHubWearSearch(new URL(returnUrl).search);
+  assert.deepEqual(returnParsed?.mechCurrentAmmo, deploy.mechCurrentAmmo);
+
+  const destroyed = normalizeHubSnapshot({
+    ...hub,
+    fleet: hub.fleet.map((m) =>
+      m.instanceId === "ammo-b" ? { ...m, status: "destroyed" as const, durability: 0 } : m,
+    ),
+  });
+  assert.equal(destroyed.fleet.find((m) => m.instanceId === "ammo-b")?.currentAmmo, 19);
+  assert.equal(destroyed.fleet.find((m) => m.instanceId === "ammo-a")?.currentAmmo, 7);
+  assert.equal(destroyed.fleet.find((m) => m.instanceId === "ammo-c")?.currentAmmo, 3);
+}
+console.log("shared instance-currentAmmo selftest: ok");
