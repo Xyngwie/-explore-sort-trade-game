@@ -2055,21 +2055,33 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
 
   // release, no circuit: self-defense — shoots in-range enemy, never chases
   {
-    const w = unlockWorld("release");
+    const w = createWorld(
+      bootstrapFromSearch(
+        "?deployedInstanceIds=selfdef_leader,selfdef_wing_a,selfdef_wing_b&deployableMechs=3&startingAmmo=40",
+      ),
+    );
+    startSortie(w);
+    w.commandUnlock = { mode: "release", equippedByUnit: {} };
     clearFoes(w);
     const wa = w.wingmen[0]!;
+    const wingmanInstanceId = wa.instanceId;
+    assert.equal(wingmanInstanceId, "selfdef_wing_a", "self-defense wingman instanceId");
+    w.currentAmmo[wingmanInstanceId!] = 28;
+    const ammo0 = w.currentAmmo[wingmanInstanceId!];
     w.leader.pos = { x: wa.pos.x + 600, y: wa.pos.y }; // keep captain out of it
     const foe = w.enemies[0]!;
     foe.alive = true; foe.hp = foe.maxHp;
     foe.pos = { x: wa.pos.x + w.balance.weaponRange * 0.6, y: wa.pos.y };
     wa.cooldown = 0;
     const start = { ...wa.pos };
-    const ammo0 = w.ammo;
     const intent = decideWingman(w, wa, 0.05);
     assert.equal(intent.fireAt?.id, foe.id, "targets in-range enemy");
     tickWorld(w, 0.02, idle);
-    assert.ok(w.ammo < ammo0, "immobile wingman fires in self-defense");
-    assert.ok(w.bullets.some((b) => b.ownerId === wa.id) || w.ammo < ammo0);
+    assert.ok(
+      w.currentAmmo[wingmanInstanceId!]! < ammo0!,
+      "immobile wingman fires in self-defense",
+    );
+    assert.ok(w.bullets.some((b) => b.ownerId === wa.id) || w.currentAmmo[wingmanInstanceId!]! < ammo0!);
     assert.deepEqual(wa.pos, start, "fires from where it stands");
     // enemy beyond weapon range (but within hunt vision): no fire, no chase
     foe.pos = { x: wa.pos.x + w.balance.weaponRange * 1.6, y: wa.pos.y };
