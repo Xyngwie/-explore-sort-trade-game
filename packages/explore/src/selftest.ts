@@ -1841,7 +1841,9 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
 
 // Execution side — release mode, no circuits: circuit tier blocked (buttons + keys), world unchanged
 {
-  const w = unlockWorld("release");
+  const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=release_leader,release_wing_a,release_wing_b&deployableMechs=3&startingAmmo=40"));
+  startSortie(w);
+  w.commandUnlock = { mode: "release", equippedByUnit: {} };
   const stances = w.wingmen.map((x) => x.stance);
   for (const id of ["camp_set", "camp_unload", "camp_pickup", "purge", "scatter_search"] as const) {
     const r = executeExploreCommand(w, { id });
