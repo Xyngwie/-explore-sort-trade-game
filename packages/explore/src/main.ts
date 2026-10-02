@@ -473,7 +473,7 @@ function renderDom(): void {
         <table>
           <tr><td>僚機</td><td>${world.wingmen.length}</td></tr>
           <tr><td>積載上限</td><td>なし（速度で制約）</td></tr>
-          <tr><td>実弾</td><td>${world.ammo}</td></tr>
+          <tr><td>実弾</td><td>${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</td></tr>
           <tr><td>活動限界</td><td>${world.maxOperationTimeSec}s</td></tr>
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
           <tr><td>戦線セクター</td><td>${
@@ -746,7 +746,7 @@ function paintHudOnly(): void {
   const s = document.getElementById("hud-salvage");
   if (s) s.textContent = String(world.salvaged);
   const a = document.getElementById("hud-ammo");
-  if (a) a.textContent = String(world.ammo);
+  if (a) a.textContent = world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—");
   const h = document.getElementById("hud-hp");
   if (h) h.textContent = String(Math.ceil(world.leader.hp));
 
