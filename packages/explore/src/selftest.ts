@@ -111,6 +111,85 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.equal(boot.ammoStock, 40);
 }
 
+// --- per-mech current ammo: canonical instanceId state, no shared-ammo fallback ---
+{
+  const world = createWorld(
+    bootstrapFromSearch(
+      "?deployableMechs=3&startingAmmo=99&deployedInstanceIds=owned_a,owned_b,owned_c&mechCurrentAmmo=owned_a:10;owned_b:20;owned_c:28",
+    ),
+  );
+  assert.deepEqual(world.currentAmmo, { owned_a: 10, owned_b: 20, owned_c: 28 });
+  assert.equal(world.ammoStock, 99);
+
+  startSortie(world);
+  for (const w of world.wingmen) w.alive = false;
+  const enemy = world.enemies[0]!;
+  enemy.alive = true;
+  enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
+  const beforeB = world.currentAmmo.owned_b;
+  const beforeC = world.currentAmmo.owned_c;
+  tickWorld(world, 0.05, idleInput());
+  assert.equal(world.currentAmmo.owned_a, 9, "only firing mech A should consume one round");
+  assert.equal(world.currentAmmo.owned_b, beforeB, "mech B ammo must not change");
+  assert.equal(world.currentAmmo.owned_c, beforeC, "mech C ammo must not change");
+  assert.equal(world.ammoStock, 99, "shared ammoStock must not be consumed by firing");
+}
+
+// --- undefined currentAmmo is preserved; it is not coerced to zero and cannot fire ---
+{
+  const world = createWorld(
+    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=40"),
+  );
+  assert.equal(world.currentAmmo.owned_a, undefined);
+  assert.equal(world.currentAmmo.owned_b, undefined);
+  startSortie(world);
+  for (const w of world.wingmen) w.alive = false;
+  const enemy = world.enemies[0]!;
+  enemy.alive = true;
+  enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
+  const leaderBulletCountBefore = world.bullets.filter(
+    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
+  ).length;
+  const cooldownBefore = world.leader.cooldown;
+  tickWorld(world, 0.05, idleInput());
+  const leaderBulletCountAfter = world.bullets.filter(
+    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
+  ).length;
+  assert.equal(world.currentAmmo.owned_a, undefined);
+  assert.equal(
+    leaderBulletCountAfter,
+    leaderBulletCountBefore,
+    "undefined CurrentAmmo leader must not generate a bullet",
+  );
+  assert.equal(world.leader.cooldown, cooldownBefore);
+}
+
+// --- zero currentAmmo rejects firing without borrowing from ammoStock ---
+{
+  const world = createWorld(
+    bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:0&startingAmmo=40"),
+  );
+  assert.equal(world.currentAmmo.owned_a, 0);
+  startSortie(world);
+  const enemy = world.enemies[0]!;
+  enemy.alive = true;
+  enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
+  const leaderBulletCountBefore = world.bullets.filter(
+    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
+  ).length;
+  tickWorld(world, 0.05, idleInput());
+  const leaderBulletCountAfter = world.bullets.filter(
+    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
+  ).length;
+  assert.equal(world.currentAmmo.owned_a, 0);
+  assert.equal(
+    leaderBulletCountAfter,
+    leaderBulletCountBefore,
+    "zero CurrentAmmo leader must not generate a bullet",
+  );
+  assert.equal(world.ammoStock, 40);
+}
+
 // --- patrol orbit coherence ---
 {
   const world = createWorld(bootstrapFromSearch(""));
@@ -417,7 +496,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
 
 // --- captain auto-combat without holding fire ---
 {
-  const world = createWorld(bootstrapFromSearch("?startingAmmo=30"));
+  const world = createWorld(bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:30&startingAmmo=999"));
   startSortie(world);
   const enemy = world.enemies[0]!;
   enemy.alive = true;
@@ -428,7 +507,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
     x: world.leader.pos.x + world.balance.weaponRange * 0.5,
     y: world.leader.pos.y,
   };
-  const ammoBefore = world.ammo;
+  const ammoBefore = world.currentAmmo.owned_a;
   const bulletsBefore = world.bullets.length;
   // fire: false — auto reaction should still shoot
   tickWorld(world, 0.05, {
@@ -438,7 +517,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
     interact: false,
   });
   assert.ok(
-    world.ammo < ammoBefore || world.bullets.length > bulletsBefore,
+    world.currentAmmo.owned_a! < ammoBefore! || world.bullets.length > bulletsBefore,
     "leader should auto-fire at in-range enemy without Space/F",
   );
   assert.equal(world.leader.cooldown > 0, true);
@@ -487,7 +566,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
 // --- boarding extract + wear scaffold ---
 {
   const world = createWorld(
-    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20"),
+    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20&mechCurrentAmmo=owned_a:17;owned_b:9"),
   );
   startSortie(world);
   for (const e of world.enemies) {
@@ -526,9 +605,14 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
   assert.ok(outcome);
   assert.equal(outcome!.returnKind, "extract");
   assert.equal(outcome!.mechWear.length, 2);
+  assert.deepEqual(outcome!.mechCurrentAmmo, [
+    { instanceId: "owned_a", currentAmmo: 17 },
+    { instanceId: "owned_b", currentAmmo: 9 },
+  ]);
   const wearUrl = hubWearHandoffUrl(world);
   assert.ok(wearUrl && wearUrl.includes("returnKind=extract"));
   assert.ok(wearUrl!.includes("mechWear="));
+  assert.ok(wearUrl!.includes("mechCurrentAmmo="));
 }
 
 // --- wear uses deploy-time durability ---
@@ -1172,7 +1256,7 @@ function advancePinned(
 
 // --- operation timeout: lock move/cargo, no auto-fail, combat continues ---
 {
-  const world = createWorld(bootstrapFromSearch("?startingAmmo=40"));
+  const world = createWorld(bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:40&startingAmmo=999"));
   startSortie(world);
   // Keep one enemy alive near captain for combat; park others far.
   for (const e of world.enemies) {
@@ -1184,7 +1268,6 @@ function advancePinned(
   foe.hp = foe.maxHp;
   world.leader.pos = { x: 400, y: 400 };
   foe.pos = { x: 410, y: 400 }; // in weapon range
-  world.ammo = 40;
   world.leader.cooldown = 0;
 
   // Near-exhaust the clock then step over zero.
@@ -1234,7 +1317,7 @@ function advancePinned(
   assert.equal(requestExtract(world), false);
 
   // Combat tick still runs (enemy may fire / bullets update / cooldowns tick)
-  const ammoBefore = world.ammo;
+  const ammoBefore = world.currentAmmo.owned_a;
   const foeHpBefore = foe.hp;
   world.leader.cooldown = 0;
   foe.cooldown = 0;
@@ -1248,7 +1331,7 @@ function advancePinned(
   }
   assert.equal(world.phase, "sortie");
   assert.ok(
-    world.ammo < ammoBefore || foe.hp < foeHpBefore || world.bullets.length > 0 ||
+    world.currentAmmo.owned_a! < ammoBefore! || foe.hp < foeHpBefore || world.bullets.length > 0 ||
       world.combatHitsTaken > 0 ||
       !foe.alive,
     "combat must still progress after timeout",
@@ -1758,7 +1841,9 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
 
 // Execution side — release mode, no circuits: circuit tier blocked (buttons + keys), world unchanged
 {
-  const w = unlockWorld("release");
+  const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=release_leader,release_wing_a,release_wing_b&deployableMechs=3&startingAmmo=40"));
+  startSortie(w);
+  w.commandUnlock = { mode: "release", equippedByUnit: {} };
   const stances = w.wingmen.map((x) => x.stance);
   for (const id of ["camp_set", "camp_unload", "camp_pickup", "purge", "scatter_search"] as const) {
     const r = executeExploreCommand(w, { id });
@@ -1791,9 +1876,12 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const foe = w.enemies.find((e) => e.alive)!;
   foe.pos = { x: w.leader.pos.x + w.balance.weaponRange * 0.5, y: w.leader.pos.y };
   w.leader.cooldown = 0;
-  const ammo0 = w.ammo;
+  const leaderInstanceId = w.deployedInstanceIds[0];
+  assert.ok(leaderInstanceId, "release fixture must have a leader instanceId");
+  w.currentAmmo[leaderInstanceId] = 28;
+  const ammo0 = w.currentAmmo[leaderInstanceId];
   tickWorld(w, 0.02, { move: { x: 0, y: 0 }, clickMove: null, fire: true, interact: false });
-  assert.ok(w.ammo < ammo0, "fire works in release");
+  assert.ok(w.currentAmmo[leaderInstanceId]! < ammo0!, "fire works in release");
   foe.alive = false;
   const crate = w.containers[0]!;
   crate.discovered = true;
@@ -1967,21 +2055,33 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
 
   // release, no circuit: self-defense — shoots in-range enemy, never chases
   {
-    const w = unlockWorld("release");
+    const w = createWorld(
+      bootstrapFromSearch(
+        "?deployedInstanceIds=selfdef_leader,selfdef_wing_a,selfdef_wing_b&deployableMechs=3&startingAmmo=40",
+      ),
+    );
+    startSortie(w);
+    w.commandUnlock = { mode: "release", equippedByUnit: {} };
     clearFoes(w);
     const wa = w.wingmen[0]!;
+    const wingmanInstanceId = wa.instanceId;
+    assert.equal(wingmanInstanceId, "selfdef_wing_a", "self-defense wingman instanceId");
+    w.currentAmmo[wingmanInstanceId!] = 28;
+    const ammo0 = w.currentAmmo[wingmanInstanceId!];
     w.leader.pos = { x: wa.pos.x + 600, y: wa.pos.y }; // keep captain out of it
     const foe = w.enemies[0]!;
     foe.alive = true; foe.hp = foe.maxHp;
     foe.pos = { x: wa.pos.x + w.balance.weaponRange * 0.6, y: wa.pos.y };
     wa.cooldown = 0;
     const start = { ...wa.pos };
-    const ammo0 = w.ammo;
     const intent = decideWingman(w, wa, 0.05);
     assert.equal(intent.fireAt?.id, foe.id, "targets in-range enemy");
     tickWorld(w, 0.02, idle);
-    assert.ok(w.ammo < ammo0, "immobile wingman fires in self-defense");
-    assert.ok(w.bullets.some((b) => b.ownerId === wa.id) || w.ammo < ammo0);
+    assert.ok(
+      w.currentAmmo[wingmanInstanceId!]! < ammo0!,
+      "immobile wingman fires in self-defense",
+    );
+    assert.ok(w.bullets.some((b) => b.ownerId === wa.id) || w.currentAmmo[wingmanInstanceId!]! < ammo0!);
     assert.deepEqual(wa.pos, start, "fires from where it stands");
     // enemy beyond weapon range (but within hunt vision): no fire, no chase
     foe.pos = { x: wa.pos.x + w.balance.weaponRange * 1.6, y: wa.pos.y };

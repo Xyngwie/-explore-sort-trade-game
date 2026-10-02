@@ -34,7 +34,7 @@ export function toExploreResult(world: World): ExploreResult {
   const state = createExpeditionState({
     carrierCapacity: world.carrierCapacity,
     maxOperationTimeSec: world.maxOperationTimeSec,
-    ammoStock: world.ammo,
+    ammoStock: world.ammoStock,
     isExtracted: world.extracted,
     salvagedContainers: salvaged,
     totalStockPieces: stockFromContainers(salvaged),
@@ -60,7 +60,13 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
   // Rebuild a minimal fleet snapshot from deploy-time durability (hub is SoT).
   const fleet = world.deployedInstanceIds.map((id) => {
     const durability = world.deployedDurability[id] ?? 100;
-    return createOwnedMech("mech_gen1", { instanceId: id, durability });
+    const currentAmmo = world.currentAmmo[id];
+    return createOwnedMech(
+      "mech_gen1",
+      currentAmmo == null
+        ? { instanceId: id, durability }
+        : { instanceId: id, durability, currentAmmo },
+    );
   });
   const outcome = createExploreSortieOutcome({
     result,
@@ -109,7 +115,7 @@ function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
     kind,
     elapsed: Math.round(world.elapsed * 1000),
     salvaged: world.salvaged,
-    ammo: world.ammo,
+    ammo: JSON.stringify(world.currentAmmo),
   });
   let hash = 2166136261;
   for (let i = 0; i < source.length; i += 1) {
@@ -131,7 +137,11 @@ export function hubWearHandoffUrl(world: World): string | null {
       instanceId: w.instanceId,
       durabilityAfter: w.durabilityAfter,
     })),
-    { sortieId: sortieIdForWorld(world, outcome.returnKind), wreckedMechInstanceIds },
+    {
+      sortieId: sortieIdForWorld(world, outcome.returnKind),
+      wreckedMechInstanceIds,
+      mechCurrentAmmo: outcome.mechCurrentAmmo,
+    },
   );
   return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));
 }
