@@ -43,7 +43,8 @@ export type OwnedMech = {
   durability: number;
   durabilityMax: number;
   /** Current carried ammunition; persisted independently by instanceId. */
-  currentAmmo: number;
+  /** Undefined means this legacy fleet entry has no migration decision yet. */
+  currentAmmo?: number;
 };
 
 /** Provisional balance — tune later; documented in docs/MECH_FLEET.md. */
@@ -151,9 +152,9 @@ export function createOwnedMech(
     status: "operational",
     durability,
     durabilityMax,
-    currentAmmo: normalizeCurrentAmmo(
-      opts?.currentAmmo ?? MECH_AMMO_BASE_CAPACITY,
-    ),
+    ...(opts?.currentAmmo != null
+      ? { currentAmmo: normalizeCurrentAmmo(opts.currentAmmo) }
+      : {}),
   });
 }
 
@@ -398,7 +399,7 @@ export function normalizeOwnedMech(
       : `owned_${catalogRaw}_anon`;
   const currentAmmoRaw = (raw as Partial<OwnedMech>).currentAmmo;
   const currentAmmo =
-    currentAmmoRaw == null ? 0 : normalizeCurrentAmmo(currentAmmoRaw);
+    currentAmmoRaw == null ? undefined : normalizeCurrentAmmo(currentAmmoRaw);
 
   const statusRaw =
     typeof (raw as OwnedMech).status === "string"
@@ -414,7 +415,7 @@ export function normalizeOwnedMech(
     status,
     durability,
     durabilityMax,
-    currentAmmo,
+    ...(currentAmmo != null ? { currentAmmo } : {}),
   });
 }
 
