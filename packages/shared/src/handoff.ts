@@ -301,10 +301,16 @@ export function buildTradeToExplorePayloadFromFleet(
     startingAmmo: Math.max(0, Math.floor(startingAmmo)),
     deployedInstanceIds,
     deployedDurability,
-    mechCurrentAmmo: deployedInstanceIds.map((id) => ({
-      instanceId: id,
-      currentAmmo: normalizeCurrentAmmo(byId.get(id)!.currentAmmo ?? 0),
-    })),
+    mechCurrentAmmo: deployedInstanceIds
+      .map((id) => {
+        const currentAmmo = byId.get(id)!.currentAmmo;
+        return currentAmmo == null
+          ? null
+          : { instanceId: id, currentAmmo: normalizeCurrentAmmo(currentAmmo) };
+      })
+      .filter(
+        (row): row is MechCurrentAmmoRow => row != null,
+      ),
   };
 }
 
