@@ -1,6 +1,7 @@
 import { PIECES_PER_CONTAINER } from "./constants";
 import {
   buildWearReportsForSortie,
+  normalizeCurrentAmmo,
   type MechWearReport,
   type OwnedMech,
   type SortieReturnKind,
