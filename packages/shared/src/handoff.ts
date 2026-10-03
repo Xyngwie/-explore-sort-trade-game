@@ -74,12 +74,19 @@ export type MechCurrentAmmoRow = {
   currentAmmo: number;
 };
 
+export type MechBatteryRow = {
+  instanceId: string;
+  battery: MechBatteryState;
+};
+
 export type TradeToExplorePayload = {
   deployableMechs: number;
   /** @deprecated Legacy shared sortie ammo; canonical state is mechCurrentAmmo. */
   startingAmmo: number;
   /** Canonical per-instance carried ammo snapshot. */
   mechCurrentAmmo?: MechCurrentAmmoRow[];
+  /** Canonical per-instance persistent battery state. */
+  mechBattery?: MechBatteryRow[];
   /** Operational owned-mech instance ids committed to this sortie. */
   deployedInstanceIds?: string[];
   /**
@@ -204,6 +211,8 @@ export type ExploreToHubWearPayload = {
   mechWear: Array<{ instanceId: string; durabilityAfter: number }>;
   /** Canonical per-instance carried ammo snapshot on return. */
   mechCurrentAmmo?: MechCurrentAmmoRow[];
+  /** Canonical per-instance persistent battery state on return. */
+  mechBattery?: MechBatteryRow[];
   /** Stable id for one generated return handoff; used by HubSave.appliedSortieIds. */
   sortieId?: string;
   inventoryDrops?: FieldInventoryDrop[];
@@ -311,6 +320,10 @@ export function buildTradeToExplorePayloadFromFleet(
       .filter(
         (row): row is MechCurrentAmmoRow => row != null,
       ),
+    mechBattery: deployedInstanceIds.map((id) => ({
+      instanceId: id,
+      battery: byId.get(id)!.battery,
+    })),
   };
 }
 
@@ -726,6 +739,7 @@ export function toExploreToHubWearPayload(
     | "recoveredInventoryDropIds"
     | "wreckedMechInstanceIds"
     | "mechCurrentAmmo"
+    | "mechBattery"
   >,
 ): ExploreToHubWearPayload {
   return {
