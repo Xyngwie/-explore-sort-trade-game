@@ -75,7 +75,7 @@ import {
   exploreReturnPayload,
 } from "./game/outcome";
 import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
-import { hubForResortie, resortieSearch } from "./game/resortie";
+import { resortiePlan, resortieSearch } from "./game/resortie";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 /** Deploy query this page was opened with; 再出撃 replaces it with one rebuilt from HubSave. */
@@ -613,12 +613,13 @@ function renderDom(): void {
         }
       </div>`;
     document.getElementById("btn-again")?.addEventListener("click", () => {
-      // 再出撃 (案 A): rebuild the squad from HubSave — the previous sortie's
-      // mechs that can still sortie, with saved ammo / durability / battery.
+      // 再出撃 (案 A + item 15): rebuild the squad from HubSave — the hangar's
+      // saved sortie selection (deployable only, ≤3), with saved ammo /
+      // durability / battery. No save → the previous sortie's mechs.
       const payload = exploreReturnPayload(world);
       if (payload && world.deployedInstanceIds.length > 0) {
-        const hub = hubForResortie(bootSearch, world, payload);
-        const next = resortieSearch(bootSearch, hub, world.deployedInstanceIds);
+        const plan = resortiePlan(bootSearch, world, payload);
+        const next = resortieSearch(bootSearch, plan.hub, plan.ids);
         if (!next) {
           resortieNote = "再出撃できる機体がありません（格納庫で修理・受領してください）。";
           renderDom();

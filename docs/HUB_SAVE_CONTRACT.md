@@ -21,7 +21,7 @@
 |---|---|---|
 | `credits` | number | 所持クレジット |
 | `materials` | number | 所持資材 |
-| `fleet` | `MechId[]` | 配備済み機体（最大3） |
+| `fleet` | `MechId[]` | 配備済み機体（**上限なし**。2026-10-03 項目15 で上限3を撤廃。現行は `OwnedMech[]`、§12） |
 | `ammoLoad` | `Record<AmmoId, number>` | 弾種別所持 |
 | `importedMaterials` | number | 直近の Module 2 搬入表示用（任意。0でも可） |
 | `selectedMechId` | MechId | UI選択（任意） |
@@ -93,7 +93,7 @@ type HubSaveV1 = {
 
 - `v !== 1` → 無視して初期化  
 - `credits` / `materials` は有限数、負なら 0  
-- `fleet` は既知 `MechId` のみ、長さ ≤ `maxMechs`（**2026-10-03 撤廃を決定**。`maxMechs` と読み込み時の切り詰めを消す。実装は未着手、[`STATUS.md`](./STATUS.md) 項目15）  
+- `fleet` は既知 `MechId` のみ。**長さの上限はない**（2026-10-03 項目15 で `HUB_LIMITS.maxMechs` と読み込み時の切り詰めを撤廃。代わりに出撃機の上限 `HUB_LIMITS.maxSortieMechs = 3`、§12.5 `sortieSelection`）  
 - `ammoLoad` は既知 `AmmoId` のみ、合計 ≤ `maxAmmo` にクランプ可  
 
 書けない／読めない環境でもアプリは落ちない（デモ初期値で継続）。
@@ -234,6 +234,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 | フィールド | 型 | 既定・正規化 | 書くもの | PR |
 |---|---|---|---|---|
 | `inventoryFieldDrops` | `FieldInventoryDrop[]`：`{ dropId, frontSeed, cell, inventory: YieldBag, cause, droppedAt }` | 欠落は `[]`。`dropId` は `/^[a-zA-Z0-9_.:-]{1,160}$/`、`frontSeed` は uint32、`cell` は `FrontCellCoord`、`cause` は `FIELD_DROP_CAUSES` 以外なら `wreck_not_carried`、`droppedAt` が不正なら 1970-01-01。読めない要素・同じ `dropId` は 1 件ずつ捨てる。回路の `fieldDrops` とは別 | `applySortieReport`（帰還報告の `inventoryDrops`）。回収（`recoveredInventoryDropIds`）すると `inventory` に足して一覧から外す | #199 |
+| `sortieSelection` | `string[]`（任意）：格納庫で選んだ出撃機の `instanceId` | 欠落は付けない（`undefined`）。正規化（`normalizeSortieSelection`）で `fleet` にいない ID・重複を除き、先頭から最大 3 件（`HUB_LIMITS.maxSortieMechs`）。**使う側は必ず shared `resolveSortieSelection(hub)` を通す**: 選択のうち出撃できる機体（`canDeploy`）を `fleet` の順に最大 3 機。選択がない（初回・旧セーブ）か、選んだ機体がどれも出撃できない（置き去りで `fleet` にいない・大破・要修理）ときは **`fleet` の先頭から出撃できる 3 機**。書くときは `setSortieSelection(hub, ids)`（出撃できる機体だけ・`fleet` の順・最大 3） | trade 格納庫（チェックボックス・「先頭から3機」・出撃リンク押下時に出撃した機体を保存）。Explore の「再出撃」と trade の出撃 URL はどちらもこの値を `resolveSortieSelection` で読む | 項目15 |
 | `lostMechs` | `LostMechReturnState[]`：`{ instanceId, currentAmmo: number \| undefined, battery, circuitIds: string[] }` | 欠落は `[]`。`instanceId` が空・重複、`battery.capacity` が 1 未満・数でない、`currentAmmo` が数でない行は 1 件ずつ捨てる。`currentAmmo` は切り捨て・0 以上（**上限 28 の丸めはしない**）。`circuitIds` は重複と空を除く。件数の上限はない | `applySortieReport`（帰還報告の `lostMechs`）。新しいものを先頭に足す | #206 |
 
 `applySortieReport`（`circuit-inventory.ts`）の追加の動き:
@@ -270,7 +271,8 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - `HANDOFF_QUERY_KEYS.exploreToHubWear` は `returnKind`・`mechWear`・`mechCurrentAmmo` だけ。trade が取り込んだ後に URL から消すのはこの 3 つ（と他の受け渡しのキー）なので、`sortieId` などは URL に残る（`returnKind`・`mechWear` が消えるので再読み込みで再反映はされない）。`tradeToExplore` にも `mechBattery` は入っていない。
 - **直接保存（U9、設計 §5.4・§9 U9）**: Explore は結果画面を最初に描くとき（どの結果ボタンを押すより前）に、この帰還と同じ内容を HubSave に書く（`explore/src/game/hubDirectSave.ts`）。「Sort へ」「再出撃」「格納庫へ」のどれを選んでも、大破・置き去り（`lostMechs`）・摩耗・携行弾・バッテリーは 1 回だけ記録される。HubSave がない（ローカル開発で explore :5173 と trade :5175 の `localStorage` が別、または Explore を直接開いた）ときは書かず、「格納庫へ」の帰還 URL で trade が反映する。
 - trade は帰還 URL を開いたとき、Explore が保存済みの帰還（`sortieId` が `appliedSortieIds` にある）なら再適用せず「探索帰還 … · 反映済み（Explore が出撃終了時に保存）」と出す。帰還 URL だけの場合（旧来・ローカル開発）は 1 回だけ反映する。
-- **再出撃（2026-10-03 参謀の決定・案 A）**: 結果画面の「再出撃」は、直接保存した HubSave から部隊を組み直す（`explore/src/game/resortie.ts`）。出撃機は「前回の出撃機のうちまだ出撃できる機体」（`canDeploy`。置き去りの機体は `fleet` にいない、大破は `destroyed`）で、保存した携行弾・耐久・バッテリーを使う。回路と回路ボーナス・Invade のセクターは前回の出撃 URL から引き継ぐ。出撃できる機体がいなければ再出撃せず結果画面に注記を出す。HubSave にこの帰還がないとき（保存できなかった）は、前回の出撃 URL の機体に同じ帰還をメモリ上で当てて組み直す。項目15（格納庫での出撃機の選択）ができたら、その選択に従う形に変える。
+- **再出撃（2026-10-03 参謀の決定・案 A）**: 結果画面の「再出撃」は、直接保存した HubSave から部隊を組み直す（`explore/src/game/resortie.ts`）。出撃機は「前回の出撃機のうちまだ出撃できる機体」（`canDeploy`。置き去りの機体は `fleet` にいない、大破は `destroyed`）で、保存した携行弾・耐久・バッテリーを使う。回路と回路ボーナス・Invade のセクターは前回の出撃 URL から引き継ぐ。出撃できる機体がいなければ再出撃せず結果画面に注記を出す。HubSave にこの帰還がないとき（保存できなかった）は、前回の出撃 URL の機体に同じ帰還をメモリ上で当てて組み直す。**項目15（2026-10-03）以降、HubSave から組み直すときの出撃機は格納庫の選択**（`sortieSelection` を `resolveSortieSelection` で解決した機体。§12.5）で、格納庫に表示される選択と同じになる（`resortiePlan`）。置き去り（`fleet` にいない）・大破・要修理の機体は除き、選んだ機体がどれも出撃できなければ先頭から出撃できる 3 機。trade の出撃リンクは押したときに出撃した機体を `sortieSelection` に保存するので、通常は「前回の出撃機のうちまだ出撃できる機体」と一致する。HubSave にこの帰還がないときは従来どおり前回の出撃 URL の機体。
+- **出撃 URL（項目15）**: trade の出撃 URL（`deployedInstanceIds`・`mechDurability` など）には選んだ出撃機（最大 3 機）だけを載せる。摩耗・携行弾・バッテリーの書き戻しも、帰還に載った機体（＝出撃した機体）だけに当たる。
 
 ### 12.7 explore での使い方（#203・#206・携行弾の修正・U9）
 

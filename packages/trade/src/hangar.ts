@@ -7,6 +7,9 @@ import {
   CRAFT_SIGNATURE_STORAGE_KEY,
   HANDOFF_QUERY_KEYS,
   INITIAL_HUB,
+  HUB_LIMITS,
+  resolveSortieSelection,
+  setSortieSelection,
   MECH_FLEET_RULES,
   MECH_STATUS_LABEL_JA,
   addMechToHub,
@@ -37,7 +40,6 @@ import {
   canDeploy,
   clearHubSaveFromLocalStorage,
   createOwnedMech,
-  filterToDeployableIds,
   UNOPENED_CONTAINER_PRICE_CREDITS,
   PIECES_PER_CONTAINER,
   addUnopenedContainers,
@@ -406,7 +408,7 @@ export function createInitialHangar(
   const state: HangarState = {
     hub,
     lastDeployedIds: [],
-    selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    selectedDeployIds: resolveSortieSelection(hub),
     log: log.slice(0, MAX_LOG),
     notice: "",
     lastInvadeSector: stash.lastInvadeSector,
@@ -493,10 +495,7 @@ export function ingestLocationSearch(
           log,
           lastExploreReturn,
           craftSignature: state.craftSignature || loadCraftSignature(),
-          selectedDeployIds: filterToDeployableIds(
-            apply.hub.fleet,
-            state.selectedDeployIds,
-          ),
+          selectedDeployIds: selectionAfter(apply.hub, state.selectedDeployIds),
           notice: notices.join(" / "),
         }),
         consumed: true,
@@ -602,10 +601,7 @@ export function ingestLocationSearch(
     lastCircuit,
     lastExploreReturn,
     craftSignature: state.craftSignature || loadCraftSignature(),
-    selectedDeployIds: filterToDeployableIds(
-      hub.fleet,
-      state.selectedDeployIds,
-    ),
+    selectedDeployIds: selectionAfter(hub, state.selectedDeployIds),
     notice:
       notices.length > 0
         ? `ハンドオフ取込: ${notices.join(" / ")}`
@@ -649,7 +645,7 @@ export function grantStarterFleet(state: HangarState): HangarState {
   const next: HangarState = {
     ...state,
     hub,
-    selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    selectedDeployIds: resolveSortieSelection(hub),
     log: pushLog(state.log, "機体を受領"),
     notice: "ハンガーに機体を追加",
   };
@@ -853,7 +849,7 @@ export function loadPlaytestSeed(
     ...state,
     hub,
     lastDeployedIds: [],
-    selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    selectedDeployIds: resolveSortieSelection(hub),
     lastCircuit: resolveActiveCircuit(hub, {
       circuitId,
       circuitBoard: seedBoard,
@@ -906,24 +902,54 @@ export function resetHangar(
   return persistHangar(next, storage ?? undefined);
 }
 
+/**
+ * Sortie squad after a hangar state change. The saved `hub.sortieSelection`
+ * is the single source (item 15; Explore's 再出撃 reads the same value);
+ * a selection only held in state (older callers / tests) is honoured when the
+ * hub has none yet.
+ */
+function selectionAfter(hub: HubSnapshot, prev: readonly string[]): string[] {
+  if ((hub.sortieSelection ?? []).length > 0 || prev.length === 0) {
+    return resolveSortieSelection(hub);
+  }
+  return resolveSortieSelection({ fleet: hub.fleet, sortieSelection: [...prev] });
+}
+
+/** Save a sortie selection into HubSave and mirror it into state. */
+function withSortieSelection(state: HangarState, ids: readonly string[], notice = ""): HangarState {
+  const hub = setSortieSelection(state.hub, ids);
+  return persistHangar({ ...state, hub, selectedDeployIds: resolveSortieSelection(hub), notice });
+}
+
+/**
+ * Hangar checkbox. At most `HUB_LIMITS.maxSortieMechs` (3) mechs; a 4th is
+ * refused. The last selected mech cannot be unchecked (an empty selection
+ * would fall back to the default squad).
+ */
 export function setDeploySelection(
   state: HangarState,
   instanceId: string,
   selected: boolean,
 ): HangarState {
-  const set = new Set(state.selectedDeployIds);
-  if (selected) set.add(instanceId);
-  else set.delete(instanceId);
-  const selectedDeployIds = filterToDeployableIds(state.hub.fleet, [...set]);
-  return { ...state, selectedDeployIds, notice: "" };
+  const current = state.selectedDeployIds;
+  if (selected) {
+    if (current.includes(instanceId)) return state;
+    if (current.length >= HUB_LIMITS.maxSortieMechs) {
+      return { ...state, notice: `出撃は最大 ${HUB_LIMITS.maxSortieMechs} 機まで（他の機体を外してから選んでください）` };
+    }
+    return withSortieSelection(state, [...current, instanceId]);
+  }
+  if (!current.includes(instanceId)) return state;
+  if (current.length <= 1) return { ...state, notice: "出撃する機体を 1 機以上選んでください" };
+  return withSortieSelection(state, current.filter((id) => id !== instanceId));
 }
 
+/** 「先頭から3機」: the first maxSortieMechs deployable mechs in fleet order (the default squad). */
 export function selectAllDeployable(state: HangarState): HangarState {
-  return {
-    ...state,
-    selectedDeployIds: selectDeployableInstanceIds(state.hub.fleet),
-    notice: "",
-  };
+  return withSortieSelection(
+    state,
+    selectDeployableInstanceIds(state.hub.fleet).slice(0, HUB_LIMITS.maxSortieMechs),
+  );
 }
 
 
@@ -933,12 +959,8 @@ export function hubCircuitBonuses(hub: HubSnapshot): AggregatedCircuitBonuses {
 }
 
 export function buildDeployUrl(state: HangarState): string | null {
-  const ids = filterToDeployableIds(
-    state.hub.fleet,
-    state.selectedDeployIds.length > 0
-      ? state.selectedDeployIds
-      : selectDeployableInstanceIds(state.hub.fleet),
-  );
+  // Only the chosen mechs (at most 3) go out — and only they take wear.
+  const ids = selectionAfter(state.hub, state.selectedDeployIds);
   if (ids.length === 0) return null;
   const ammo = ammoTotal(state.hub.ammoLoad);
   const payload = buildTradeToExplorePayloadFromFleet(
@@ -1092,13 +1114,17 @@ export function circuitRestoreStateLabelJa(state: CircuitRestoreState): string {
 
 /** Remember last deploy set when user opens the explore link. */
 export function markDeployed(state: HangarState, ids: string[]): HangarState {
+  // Keep the squad that actually went out as the saved selection (再出撃 / next visit).
+  const hub = ids.length > 0 ? setSortieSelection(state.hub, ids) : state.hub;
   const next: HangarState = {
     ...state,
+    hub,
+    selectedDeployIds: resolveSortieSelection(hub),
     lastDeployedIds: ids,
     log: pushLog(state.log, `出撃コミット ${ids.length}機`),
     notice: "出撃セットを記録（シミュ帰還用）",
   };
-  return next;
+  return persistHangar(next);
 }
 
 export function repairClassic(
@@ -1147,7 +1173,7 @@ export function repairClassic(
   const next: HangarState = {
     ...state,
     hub,
-    selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    selectedDeployIds: resolveSortieSelection(hub),
     log: pushLog(state.log, `修理(集計) ${instanceId}${discNote}`),
     notice: `集計コストで修理完了 → 健在${discNote}`,
   };
@@ -1227,7 +1253,7 @@ export function repairTyped(
     credits: state.hub.credits - creditsNeed,
     inventory: nextInv,
   });
-  const selectedDeployIds = selectDeployableInstanceIds(hub.fleet);
+  const selectedDeployIds = resolveSortieSelection(hub);
   const spend = formatTypedRepairSpend();
   const next: HangarState = {
     ...state,
@@ -1257,10 +1283,7 @@ export function scrapMech(
   const next: HangarState = {
     ...state,
     hub,
-    selectedDeployIds: filterToDeployableIds(
-      hub.fleet,
-      state.selectedDeployIds,
-    ),
+    selectedDeployIds: selectionAfter(hub, state.selectedDeployIds),
     lastDeployedIds: state.lastDeployedIds.filter((id) => id !== instanceId),
     log: pushLog(
       state.log,
@@ -1279,9 +1302,7 @@ export function simulateReturn(
   const ids =
     state.lastDeployedIds.length > 0
       ? state.lastDeployedIds
-      : state.selectedDeployIds.length > 0
-        ? state.selectedDeployIds
-        : selectDeployableInstanceIds(state.hub.fleet);
+      : selectionAfter(state.hub, state.selectedDeployIds);
   if (ids.length === 0) {
     return { ...state, notice: "摩耗対象の機体がありません" };
   }
@@ -1305,7 +1326,7 @@ export function simulateReturn(
     ...state,
     hub,
     lastDeployedIds: [],
-    selectedDeployIds: selectDeployableInstanceIds(hub.fleet),
+    selectedDeployIds: resolveSortieSelection(hub),
     lastExploreReturn: { returnKind: kind, summaryJa },
     log: pushLog(state.log, `シミュ帰還 ${kind} ×${ids.length}${bufNote}`),
     notice: `シミュ帰還（${kind}）で摩耗適用${bufNote}`,
@@ -1565,12 +1586,7 @@ export function buildNextSortieReadiness(state: HangarState): NextSortieReadines
     } else destroyed += 1;
   }
   const deployableIds = selectDeployableInstanceIds(fleet);
-  const selectedIds = filterToDeployableIds(
-    fleet,
-    state.selectedDeployIds.length > 0
-      ? state.selectedDeployIds
-      : deployableIds,
-  );
+  const selectedIds = selectionAfter(state.hub, state.selectedDeployIds);
   const parts: string[] = [`出撃可 ${operational}`];
   if (needsRepair > 0) parts.push(`要修理 ${needsRepair}`);
   if (destroyed > 0) parts.push(`大破 ${destroyed}`);

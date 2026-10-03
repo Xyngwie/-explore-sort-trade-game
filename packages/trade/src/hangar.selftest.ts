@@ -24,6 +24,9 @@ import {
   resolveSizedTruePuzzle,
   encodeEdgeState,
   upsertCircuitIntoHub,
+  addMechToHub,
+  saveHubSaveToLocalStorage,
+  HUB_LIMITS,
   type CircuitOutcome,
 } from "@estg/shared";
 import {
@@ -56,6 +59,9 @@ import {
   RARE_SELL_PRICE_TABLE,
   RARE_YIELD_ITEM_IDS,
   rareSellPriceCredits,
+  setDeploySelection,
+  persistHangar,
+  selectAllDeployable,
   grantDemoInventory,
   setCraftSignature,
   loadCraftSignature,
@@ -1462,4 +1468,66 @@ console.log("trade hangar selftest: ok");
   // same result either way
   assert.deepEqual(legacy1.state.hub.fleet, afterDirect.fleet);
   console.log("trade U9 direct save / legacy return URL once ok");
+}
+
+// Item 15: no fleet cap; hangar picks up to 3 sortie mechs (saved in HubSave.sortieSelection).
+{
+  const prevLs = (globalThis as unknown as { localStorage: Storage }).localStorage;
+  const store = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = store;
+  try {
+    let hub = grantStarterFleet(resetHangar(store)).hub;
+    while (hub.fleet.length < 5) hub = addMechToHub(hub, "mech_gen1")!;
+    hub = { ...hub, fleet: hub.fleet.map((m) => ({ ...m, status: "operational" as const, durability: m.durabilityMax })) };
+    saveHubSaveToLocalStorage(hub, store);
+    const ids = hub.fleet.map((m) => m.instanceId);
+    assert.equal(ids.length, 5);
+    assert.equal(HUB_LIMITS.maxSortieMechs, 3);
+
+    // (1) load keeps all 5; default selection = first 3 deployable
+    let hs = createInitialHangar(store);
+    assert.equal(hs.hub.fleet.length, 5, "5 mechs not truncated on load");
+    assert.deepEqual(hs.selectedDeployIds, ids.slice(0, 3));
+
+    // (2) 4th refused; unchecking the last refused
+    const full = setDeploySelection(hs, ids[3]!, true);
+    assert.deepEqual(full.selectedDeployIds, ids.slice(0, 3), "4th refused");
+    assert.ok(full.notice.includes("最大"));
+    hs = setDeploySelection(hs, ids[0]!, false);
+    hs = setDeploySelection(hs, ids[4]!, true);
+    assert.deepEqual(hs.selectedDeployIds, [ids[1], ids[2], ids[4]], "fleet order");
+    let one = setDeploySelection(setDeploySelection(hs, ids[1]!, false), ids[2]!, false);
+    assert.deepEqual(one.selectedDeployIds, [ids[4]]);
+    one = setDeploySelection(one, ids[4]!, false);
+    assert.deepEqual(one.selectedDeployIds, [ids[4]], "last one stays");
+    assert.ok(one.notice.includes("1 機以上"));
+    persistHangar(hs); // back to the [1,2,4] selection (the probes above persisted)
+
+    // (3) deploy URL carries only the chosen mechs
+    const deploy = parseTradeToExploreSearch(new URL(buildDeployUrl(hs)!).search)!;
+    assert.deepEqual(deploy.deployedInstanceIds, [ids[1], ids[2], ids[4]]);
+
+    // (4) selection persisted → reload keeps it; save again keeps all 5
+    const re = createInitialHangar(store);
+    assert.equal(re.hub.fleet.length, 5);
+    assert.deepEqual(re.hub.sortieSelection, [ids[1], ids[2], ids[4]]);
+    assert.deepEqual(re.selectedDeployIds, [ids[1], ids[2], ids[4]]);
+    // 先頭から3機
+    const firstThree = selectAllDeployable(re);
+    assert.deepEqual(firstThree.selectedDeployIds, ids.slice(0, 3));
+    assert.deepEqual(createInitialHangar(store).selectedDeployIds, ids.slice(0, 3));
+
+    // wear only on the chosen mechs (simulated return of the sortie set)
+    const deployed = markDeployed(re, [ids[1]!, ids[2]!, ids[4]!]);
+    const back = simulateReturn(deployed, "extract");
+    for (const m of back.hub.fleet) {
+      const before = re.hub.fleet.find((x) => x.instanceId === m.instanceId)!;
+      if ([ids[1], ids[2], ids[4]].includes(m.instanceId)) assert.ok(m.durability < before.durability);
+      else assert.equal(m.durability, before.durability, "unselected mech untouched");
+    }
+    assert.equal(back.hub.fleet.length, 5);
+  } finally {
+    (globalThis as unknown as { localStorage: Storage }).localStorage = prevLs;
+  }
+  console.log("trade item15 fleet cap removal / sortie selection ok");
 }

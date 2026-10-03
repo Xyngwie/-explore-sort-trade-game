@@ -7,6 +7,7 @@ import {
   isPartId,
   isPerfectCircuitDebugContext,
   type YieldItemId,
+  HUB_LIMITS,
 } from "@estg/shared";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
@@ -157,6 +158,10 @@ function fleetCards(s: HangarState): string {
       const pct = Math.round((m.durability / m.durabilityMax) * 100);
       const deployable = canDeploy(m);
       const checked = s.selectedDeployIds.includes(m.instanceId);
+      // Item 15: at most 3 sortie mechs — a 4th unchecked box can't be ticked.
+      const selectionFull =
+        s.selectedDeployIds.length >= HUB_LIMITS.maxSortieMechs && !checked;
+      const selectDisabled = !deployable || selectionFull;
       const classicBase = repairCost(m);
       const classicCost =
         classicBase != null
@@ -198,8 +203,10 @@ function fleetCards(s: HangarState): string {
           </div>
           <label class="check">
             <input type="checkbox" data-act="select" data-id="${escapeHtml(m.instanceId)}" ${
-              deployable ? "" : "disabled"
-            } ${checked && deployable ? "checked" : ""} />
+              selectDisabled ? "disabled" : ""
+            } ${checked && deployable ? "checked" : ""} title="${
+              selectionFull ? `出撃は最大 ${HUB_LIMITS.maxSortieMechs} 機まで` : ""
+            }" />
             出撃
           </label>
         </div>
@@ -482,7 +489,8 @@ function render() {
         <span class="stat-pill"><span class="stat-k">Cr</span> ${state.hub.credits}</span>
         <span class="stat-pill"><span class="stat-k">資材</span> ${state.hub.materials}</span>
         <span class="stat-pill"><span class="stat-k">弾薬</span> ${ammoTotal}</span>
-        <span class="stat-pill"><span class="stat-k">艦隊</span> ${ready.total}/3</span>
+        <span class="stat-pill"><span class="stat-k">艦隊</span> ${ready.total}</span>
+        <span class="stat-pill"><span class="stat-k">出撃</span> ${state.selectedDeployIds.length}/${HUB_LIMITS.maxSortieMechs}</span>
         <span class="stat-pill"><span class="stat-k">未開封</span> ${Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0))}</span>
         <span class="stat-pill muted"><span class="stat-k">搬入</span> ${state.hub.importedMaterials}</span>
       </div>
@@ -507,9 +515,10 @@ function render() {
     <div class="card">
       <div class="sortie-head">
         <h2 style="font-size:1rem;margin:0">ハンガー</h2>
-        <button type="button" class="secondary compact" id="btn-select-all">健在を全選択</button>
+        <button type="button" class="secondary compact" id="btn-select-all">先頭から${HUB_LIMITS.maxSortieMechs}機</button>
       </div>
-      ${fleetCards(state)}
+      <p class="muted" style="margin:0.25rem 0 0.5rem">出撃する機体を最大 ${HUB_LIMITS.maxSortieMechs} 機まで選択（選択は保存され、次回・再出撃でも使われます）。</p>
+      <div class="fleet-list">${fleetCards(state)}</div>
     </div>
 
     <div class="card">

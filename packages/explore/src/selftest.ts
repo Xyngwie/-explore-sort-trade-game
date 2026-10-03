@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { createPhaseWatcher } from "./game/phaseWatch";
 import * as shared from "@estg/shared";
 import { saveSortieResultToHub } from "./game/hubDirectSave";
-import { hubForResortie, resortieSearch } from "./game/resortie";
+import { hubForResortie, resortiePlan, resortieSearch } from "./game/resortie";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
 import {
   applyOrder,
@@ -2525,6 +2525,29 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(w2.deployedDurability.m1, 85, "saved durability");
   assert.deepEqual(w2.mechBattery.m1, { capacity: 300, activity: 250 });
   assert.equal(shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub).lostMechs.length, 1, "re-sortie keeps the lostMechs record");
+  // item 15: 再出撃 follows the hangar's saved selection (same resolver as the hangar)
+  {
+    const plan0 = resortiePlan(search, w, payload, store);
+    assert.equal(plan0.fromSave, true);
+    assert.deepEqual(plan0.ids, ["m1"], "no selection → first 3 deployable (m2 lost, m3 wrecked)");
+    const mk = (id: string) => shared.createOwnedMech("mech_gen1", { instanceId: id, durability: 100 });
+    const wide = shared.normalizeHubSnapshot({ ...saved, fleet: [...saved.fleet, mk("m4"), mk("m5"), mk("m6")] });
+    const sel = { ...wide, sortieSelection: ["m5", "m2", "m3", "m1"] };
+    const selStore = memStore();
+    assert.ok(shared.saveHubSaveToLocalStorage(sel, selStore));
+    const plan = resortiePlan(search, w, payload, selStore);
+    assert.deepEqual(plan.ids, ["m1", "m5"], "selection, fleet order, lost/wrecked dropped");
+    assert.deepEqual(plan.ids, shared.resolveSortieSelection(shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(selStore)!.hub)), "same value the hangar reads");
+    const reSel = resortieSearch(search, plan.hub, plan.ids);
+    assert.deepEqual(reSel?.deployedInstanceIds, ["m1", "m5"]);
+    assert.deepEqual(createWorld(bootstrapFromSearch(reSel!.search)).deployedInstanceIds, ["m1", "m5"]);
+    // nothing selected can sortie → default first 3 deployable
+    const gone = memStore();
+    assert.ok(shared.saveHubSaveToLocalStorage({ ...wide, sortieSelection: ["m3"] }, gone));
+    assert.deepEqual(resortiePlan(search, w, payload, gone).ids, ["m1", "m4", "m5"]);
+    // no save holding this return → previous deploy's mechs
+    assert.equal(resortiePlan(search, w, payload, memStore()).fromSave, false);
+  }
 
   // (3) no HubSave (local dev cross-origin): nothing written; re-sortie still
   // rebuilds from the previous deploy with this return applied in memory
@@ -2557,7 +2580,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
     const render = main.slice(main.indexOf("function renderDom(): void {"));
     assert.ok(render.indexOf("ensureDirectSave()") > -1 && render.indexOf("ensureDirectSave()") < render.indexOf('if (world.phase === "briefing")'), "renderDom saves first");
-    assert.ok(main.includes("resortieSearch(bootSearch, hub, world.deployedInstanceIds)"), "再出撃 rebuilds from HubSave");
+    assert.ok(main.includes("resortiePlan(bootSearch, world, payload)") && main.includes("resortieSearch(bootSearch, plan.hub, plan.ids)"), "再出撃 rebuilds from HubSave (hangar selection)");
   }
   console.log("explore U9 direct save / re-sortie ok");
 }
