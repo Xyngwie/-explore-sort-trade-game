@@ -21,6 +21,7 @@ import {
   type FrontCellCoord,
   type HubCircuitRecord,
   type HubSnapshot,
+  type LostMechReturnState,
 } from "./hub-save";
 import type { MechCircuitEntry } from "./handoff";
 import { syncMechStatus } from "./mech-fleet";
@@ -221,6 +222,8 @@ export type SortieCircuitReport = {
   inventoryDrops?: FieldInventoryDrop[];
   recoveredInventoryDropIds?: string[];
   wreckedMechInstanceIds?: string[];
+  /** Explore return snapshots for mechs left behind; does not create field drops. */
+  lostMechs?: LostMechReturnState[];
 
 };
 
@@ -269,6 +272,13 @@ export function applySortieReport(
   const wrecked = new Set(
     (report.wreckedMechInstanceIds ?? []).filter((id) => !lost.has(id)),
   );
+  const lostMechs = (report.lostMechs ?? []).filter(
+    (m, index, rows) =>
+      m.instanceId.trim().length > 0 &&
+      rows.findIndex((row) => row.instanceId === m.instanceId) === index &&
+      !wrecked.has(m.instanceId),
+  );
+  const lostMechIds = new Set(lostMechs.map((m) => m.instanceId));
   const droppedAt = at.toISOString();
   const droppedToField: FieldCircuitDrop[] = [];
   const lostForever: HubCircuitRecord[] = [];
@@ -298,7 +308,7 @@ export function applySortieReport(
   let next: HubSnapshot = {
     ...hub,
     fleet: hub.fleet
-      .filter((m) => !lost.has(m.instanceId))
+      .filter((m) => !lost.has(m.instanceId) && !lostMechIds.has(m.instanceId))
       .map((m) =>
         wrecked.has(m.instanceId)
           ? syncMechStatus({ ...m, durability: 0, status: "destroyed" })
@@ -325,6 +335,13 @@ export function applySortieReport(
         ...next.inventoryFieldDrops,
         ...droppedInventoryToField,
       ],
+    };
+  }
+
+  if (lostMechs.length > 0) {
+    next = {
+      ...next,
+      lostMechs: [...lostMechs, ...(next.lostMechs ?? [])],
     };
   }
 
