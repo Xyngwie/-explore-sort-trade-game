@@ -97,6 +97,7 @@ type HubSaveV1 = {
 - `ammoLoad` は既知 `AmmoId` のみ、合計 ≤ `maxAmmo` にクランプ可  
 
 書けない／読めない環境でもアプリは落ちない（デモ初期値で継続）。
+
 ---
 
 ## 6. 受け入れ条件
@@ -196,6 +197,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - `appliedSortieIds?: string[]`（直近 20 件）。出撃報告の二重反映防止。
 
 ### 12.3 安全に読めない場合
+
 | 状況 | 挙動 |
 |---|---|
 | JSON が壊れている・形が不正 | 元の文字列を `wreckline.hubSave.corrupt.<ISO>` に退避してから `null`（同じ文字列は二重に退避しない）。`loadHubSaveWithStatus` は `status: "corrupt_backed_up"` と `backupKey` を返す |
