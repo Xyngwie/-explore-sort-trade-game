@@ -13,6 +13,7 @@
 import {
   HANDOFF_QUERY_KEYS,
   applyExploreReturnToHub,
+  buildMechCircuitsForDeploy,
   buildTradeToExplorePayloadFromFleet,
   buildTradeToExploreUrl,
   createOwnedMech,
@@ -101,12 +102,14 @@ export function resortieSearch(
   const deployedInstanceIds = payload.deployedInstanceIds ?? [];
   if (deployedInstanceIds.length === 0) return null;
   const keep = new Set(deployedInstanceIds);
-  if (inbound?.mechCircuits) {
-    const mechCircuits = Object.fromEntries(
-      Object.entries(inbound.mechCircuits).filter(([id]) => keep.has(id)),
-    );
-    if (Object.keys(mechCircuits).length > 0) payload.mechCircuits = mechCircuits;
-  }
+  // Mechs that were not in the previous deploy (e.g. a left-behind mech just
+  // recovered, or a newly selected one) take their equipped circuits from the
+  // hub; the previous deploy's mechs keep the circuits they went out with.
+  const mechCircuits = {
+    ...buildMechCircuitsForDeploy(hub, deployedInstanceIds),
+    ...Object.fromEntries(Object.entries(inbound?.mechCircuits ?? {}).filter(([id]) => keep.has(id))),
+  };
+  if (Object.keys(mechCircuits).length > 0) payload.mechCircuits = mechCircuits;
   if (inbound?.circuitBonuses) payload.circuitBonuses = inbound.circuitBonuses;
   const params = new URL(buildTradeToExploreUrl(payload, "https://estg.invalid/explore/")).searchParams;
   const original = new URLSearchParams(originalSearch);

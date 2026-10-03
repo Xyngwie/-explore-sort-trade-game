@@ -223,6 +223,12 @@ export type ExploreToHubWearPayload = {
   lostMechs?: LostMechReturnState[];
   /** Left-behind mechs (`HubSave.lostMechs`) picked up at lift-off → back to the fleet. */
   recoveredLostMechInstanceIds?: string[];
+  /**
+   * Mechs left behind on a sortie NOT via Invade (no front cell): lost outright
+   * with their circuits — removed from the fleet, not kept in `lostMechs`
+   * (CIRCUIT_DATA_MODEL_V0 §5.6, #206 leftover).
+   */
+  abandonedMechInstanceIds?: string[];
 };
 
 const SORTIE_RETURN_KINDS: readonly SortieReturnKind[] = [
@@ -830,6 +836,8 @@ export function buildExploreToHubWearUrl(
   if (lostMechs) u.searchParams.set("lostMechs", lostMechs);
   const recoveredLost = encodeInstanceIdsCompact(payload.recoveredLostMechInstanceIds);
   if (recoveredLost) u.searchParams.set("recoveredLostMechInstanceIds", recoveredLost);
+  const abandoned = encodeInstanceIdsCompact(payload.abandonedMechInstanceIds);
+  if (abandoned) u.searchParams.set("abandonedMechInstanceIds", abandoned);
   return u.toString();
 }
 
@@ -860,6 +868,9 @@ export function parseExploreToHubWearSearch(
     ...(parseInstanceIds(p.get("recoveredLostMechInstanceIds")).length > 0
       ? { recoveredLostMechInstanceIds: parseInstanceIds(p.get("recoveredLostMechInstanceIds")) }
       : {}),
+    ...(parseInstanceIds(p.get("abandonedMechInstanceIds")).length > 0
+      ? { abandonedMechInstanceIds: parseInstanceIds(p.get("abandonedMechInstanceIds")) }
+      : {}),
   };
 }
 
@@ -877,6 +888,7 @@ export function toExploreToHubWearPayload(
     | "mechBattery"
     | "lostMechs"
     | "recoveredLostMechInstanceIds"
+    | "abandonedMechInstanceIds"
   >,
 ): ExploreToHubWearPayload {
   return {
@@ -902,6 +914,9 @@ export function toExploreToHubWearPayload(
     ...(opts?.lostMechs?.length ? { lostMechs: opts.lostMechs } : {}),
     ...(opts?.recoveredLostMechInstanceIds?.length
       ? { recoveredLostMechInstanceIds: opts.recoveredLostMechInstanceIds }
+      : {}),
+    ...(opts?.abandonedMechInstanceIds?.length
+      ? { abandonedMechInstanceIds: opts.abandonedMechInstanceIds }
       : {}),
   };
 }

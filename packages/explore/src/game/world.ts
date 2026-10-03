@@ -452,6 +452,7 @@ export function startSortie(world: World): void {
   world.logs = [];
   world.combatHitsTaken = 0;
   world.leftBehind = [];
+  world.recoveredLostMechIds = [];
   world.sortieNonce = Math.random().toString(36).slice(2, 10);
   for (const c of world.containers) {
     c.taken = false;

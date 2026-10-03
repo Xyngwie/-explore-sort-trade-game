@@ -3,8 +3,11 @@ import {
   CTA_CHIP,
   CTA_COPY,
   HANDOFF_QUERY_KEYS,
+  loadHubSaveFromLocalStorage,
+  normalizeHubSnapshot,
   resolveModuleBaseUrl,
   stripHandoffParams,
+  type HubSnapshot,
 } from "@estg/shared";
 import {
   QUIRK_LABEL,
@@ -60,6 +63,8 @@ import {
 } from "./game/commandUnlock";
 import { createPhaseWatcher } from "./game/phaseWatch";
 import { leftBehindResultHtml } from "./game/leftBehind";
+import { attachLostMechContext } from "./game/lostMechs";
+import { invadeSquadSearch } from "./game/invadeSquad";
 import {
   COMMAND_UNLOCK_MODE_LABEL,
   isDebugUnlockToggleVisible,
@@ -78,9 +83,26 @@ import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSa
 import { resortiePlan, resortieSearch } from "./game/resortie";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
-/** Deploy query this page was opened with; 再出撃 replaces it with one rebuilt from HubSave. */
-let bootSearch = window.location.search;
+/** HubSave as it is now (null without a save / storage). */
+function freshHub(): HubSnapshot | null {
+  try {
+    const loaded = loadHubSaveFromLocalStorage();
+    return loaded?.hub ? normalizeHubSnapshot(loaded.hub) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deploy query this page was opened with; 再出撃 replaces it with one rebuilt from HubSave.
+ * An Invade sortie link (sector only) takes the hangar's sortie selection along (invadeSquad.ts).
+ */
+let bootSearch = invadeSquadSearch(window.location.search, freshHub()) ?? window.location.search;
 const boot = bootstrapFromSearch(bootSearch);
+/** New world + this front cell's left-behind mechs from HubSave (lostMechs.ts). */
+function makeWorld(b: ReturnType<typeof bootstrapFromSearch>): World {
+  return attachLostMechContext(createWorld(b), freshHub());
+}
 if (boot.invadeSector != null) {
   const cleaned = stripHandoffParams(
     window.location.href,
@@ -92,7 +114,7 @@ if (boot.invadeSector != null) {
     history.replaceState(null, "", cleaned);
   }
 }
-let world: World = createWorld(boot);
+let world: World = makeWorld(boot);
 /** Last phase the DOM was rendered for; see game/phaseWatch.ts. */
 const phaseWatch = createPhaseWatcher(world.phase);
 
@@ -626,10 +648,10 @@ function renderDom(): void {
           return;
         }
         bootSearch = next.search;
-        world = createWorld(bootstrapFromSearch(next.search));
+        world = makeWorld(bootstrapFromSearch(next.search));
       } else {
         // No deployed mechs (Explore opened without a deploy URL): as before.
-        world = createWorld(boot);
+        world = makeWorld(boot);
       }
       resortieNote = "";
       needsDom = true;

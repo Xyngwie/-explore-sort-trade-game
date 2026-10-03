@@ -80,6 +80,7 @@ export function applyExploreReturnToHub(
   at = new Date(),
 ): ApplyExploreReturnResult {
   let next = hub;
+  const abandoned = [...new Set((wear.abandonedMechInstanceIds ?? []).map((id) => id.trim()).filter(Boolean))];
   if (wear.sortieId) {
     const report = applySortieReport(
       hub,
@@ -87,8 +88,10 @@ export function applyExploreReturnToHub(
         sortieId: wear.sortieId,
         cell: null,
         frontSeed: null,
-        lostMechInstanceIds: [],
-        lostCause: {},
+        // Left behind outside Invade: lost outright. With cell null their
+        // circuits are lost too (lostForever), never moved to the stash.
+        lostMechInstanceIds: abandoned,
+        lostCause: Object.fromEntries(abandoned.map((id) => [id, "left_behind" as const])),
         recoveredDropIds: [],
         acquiredCircuits: [],
         inventoryDrops: wear.inventoryDrops ?? [],
