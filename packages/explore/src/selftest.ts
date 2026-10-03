@@ -1569,6 +1569,31 @@ function advancePinned(
   assert.ok(url.includes("wreckedMechInstanceIds="));
 }
 
+// --- lostMechs: missing Battery snapshot is omitted; no fabricated 300/300 fallback ---
+{
+  const world = createWorld(
+    bootstrapFromSearch(
+      "?deployedInstanceIds=lost_leader,lost_wing_a,lost_wing_b&deployableMechs=3&startingAmmo=30&mechBattery=lost_leader:300:300;lost_wing_a:300:212;lost_wing_b:300:180",
+    ),
+  );
+  startSortie(world);
+  const leftBehind = world.wingmen[0]!;
+  world.leftBehind = [
+    { id: leftBehind.id, name: leftBehind.name, reason: "outside_circle" },
+  ];
+  delete world.mechBattery[leftBehind.instanceId!];
+  world.phase = "result";
+  world.extracted = true;
+
+  const returnPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(world)!).search);
+  assert.ok(returnPayload);
+  assert.deepEqual(
+    returnPayload!.lostMechs,
+    [],
+    "lostMech without a real Battery snapshot must be omitted",
+  );
+}
+
 console.log("explore selftest: ok");
 
 // --- forced engage browser-back wipe helper ---
