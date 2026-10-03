@@ -98,6 +98,7 @@ P(mine | d) ≈ 0.05 + density * 0.20   // 近傍薄 → 前線 ~25%
 - 名称の最終決定（invade / front / その他）
 - trade / restore / 回路ボーナスの書き換え（独立トラック）
 - **セクター内ネスト 8×8**（PR #35 — 訂正済み）
+
 ---
 
 ## 8. 後続スタブ受け入れ条件
@@ -196,7 +197,8 @@ shared: `buildTradeToInvadeUrl` / `buildInvadeToTradeUrl` / `buildInvadeToExplor
 - 地雷踏み（`board.hitMine`）後、invade は **強制戦闘ロック**: 開く／旗／再生成／スキップ／通常出撃／格納庫渡しを禁止。
 - 許可: グリッド直下（および該当時ハンドオフ）の **「探索へ（強制交戦 chip）」** のみ。
 - ロック中にブラウザの戻る（`popstate`）→ HubSave 全艦隊 `durability=0`（大破）+ trade URL に `intelFlags=allDestroyed` と `returnKind=fail` の wear を載せる。
-- 意図的な強制出撃 CTA は sessionStorage で handoff intent を立て、wipe しない。- explore 側も `engage=forced` の出撃中 `popstate` で同様に wipe → trade（結果画面到達後は intent で抑止）。
+- 意図的な強制出撃 CTA は sessionStorage で handoff intent を立て、wipe しない。
+- explore 側も `engage=forced` の出撃中 `popstate` で同様に wipe → trade（結果画面到達後は intent で抑止）。
 - **強制戦闘が任意の終端（生還 / 失敗 / abort / back-wipe）に達したら** `HubSave.frontProgress.hitMine` をクリアする。再入場で stale ロックを復活させない（開いた地雷マスの見た目は残す）。pending 中（未ハンドオフ）は従来どおりロック。
 
 
