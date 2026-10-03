@@ -12,6 +12,7 @@ import {
   type ExploreResult,
   type ExploreSortieOutcome,
   type SortieReturnKind,
+  type LostMechReturnState,
 } from "@estg/shared";
 import type { World } from "./types";
 
@@ -61,11 +62,12 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
   const fleet = world.deployedInstanceIds.map((id) => {
     const durability = world.deployedDurability[id] ?? 100;
     const currentAmmo = world.currentAmmo[id];
+    const battery = world.mechBattery[id];
     return createOwnedMech(
       "mech_gen1",
       currentAmmo == null
-        ? { instanceId: id, durability }
-        : { instanceId: id, durability, currentAmmo },
+        ? { instanceId: id, durability, ...(battery ? { battery } : {}) }
+        : { instanceId: id, durability, currentAmmo, ...(battery ? { battery } : {}) },
     );
   });
   const outcome = createExploreSortieOutcome({
@@ -123,6 +125,26 @@ function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
     hash = Math.imul(hash, 16777619);
   }
   return `explore_${(hash >>> 0).toString(16)}`;
+}
+
+function lostMechsFromWorld(world: World): LostMechReturnState[] {
+  const out: LostMechReturnState[] = [];
+  const seen = new Set<string>();
+  for (const entry of world.leftBehind ?? []) {
+    const unit = world.wingmen.find((w) => w.id === entry.id);
+    const instanceId = unit?.instanceId?.trim() ?? "";
+    if (!instanceId || seen.has(instanceId)) continue;
+    const fallbackBattery = createOwnedMech("mech_gen1", { instanceId }).battery;
+    const battery = world.mechBattery[instanceId] ?? fallbackBattery;
+    out.push({
+      instanceId,
+      currentAmmo: world.currentAmmo[instanceId],
+      battery: { ...battery },
+      circuitIds: [...(world.circuitIdsByUnit[entry.id] ?? [])],
+    });
+    seen.add(instanceId);
+  }
+  return out;
 }
 
 export function hubWearHandoffUrl(world: World): string | null {
