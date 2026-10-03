@@ -1529,5 +1529,11 @@ console.log("trade hangar selftest: ok");
   } finally {
     (globalThis as unknown as { localStorage: Storage }).localStorage = prevLs;
   }
+  {
+    // the generic [data-act] click → render() must not swallow the checkbox's change event
+    const { readFileSync } = await import("node:fs");
+    const mainSrc = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    assert.ok(mainSrc.includes(`'[data-act]:not([data-act="select"])'`), "sortie checkbox not re-rendered on click");
+  }
   console.log("trade item15 fleet cap removal / sortie selection ok");
 }

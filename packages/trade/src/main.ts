@@ -684,7 +684,10 @@ function render() {
       render();
     });
   });
-  root.querySelectorAll<HTMLButtonElement>("[data-act]").forEach((el) => {
+  // The sortie checkboxes (data-act="select") are handled by their change
+  // listener above. Re-rendering on their click would detach the input before
+  // its change event fires, so the box could never be toggled.
+  root.querySelectorAll<HTMLButtonElement>('[data-act]:not([data-act="select"])').forEach((el) => {
     el.addEventListener("click", () => {
       const id = el.dataset.id!;
       const act = el.dataset.act!;
