@@ -1381,4 +1381,3 @@ export function stripHandoffParams(
   return u.pathname + (qs ? `?${qs}` : "") + u.hash;
 }
 
-export type { LostMechReturnState } from "./hub-save";
