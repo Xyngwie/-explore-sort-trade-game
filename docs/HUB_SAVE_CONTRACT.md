@@ -97,7 +97,6 @@ type HubSaveV1 = {
 - `ammoLoad` は既知 `AmmoId` のみ、合計 ≤ `maxAmmo` にクランプ可  
 
 書けない／読めない環境でもアプリは落ちない（デモ初期値で継続）。
-
 ---
 
 ## 6. 受け入れ条件
@@ -197,7 +196,6 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - `appliedSortieIds?: string[]`（直近 20 件）。出撃報告の二重反映防止。
 
 ### 12.3 安全に読めない場合
-
 | 状況 | 挙動 |
 |---|---|
 | JSON が壊れている・形が不正 | 元の文字列を `wreckline.hubSave.corrupt.<ISO>` に退避してから `null`（同じ文字列は二重に退避しない）。`loadHubSaveWithStatus` は `status: "corrupt_backed_up"` と `backupKey` を返す |
@@ -228,6 +226,17 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - HUB の `ammoLoad`（弾種別の所持）は **共有在庫のまま**。`currentAmmo` は `ammoLoad` に入れない。
 - 帰還の携行弾・バッテリーは、帰還の `mechCurrentAmmo`・`mechBattery` を該当する機体の `currentAmmo`・`battery` に書き戻す（shared `applyReturnedMechState`。#209 で trade に入れ、U9 で shared へ移した。0 も 0 として書く。報告にない機体は変えない）。Explore の直接保存と trade の帰還 URL の反映はどちらも shared `applyExploreReturnToHub`（出撃報告 → 摩耗 → 携行弾・バッテリー）を通る。`sortieId` が既に `appliedSortieIds` にある帰還は何もしないので、二重に反映せず、古い URL を開き直しても新しい値を上書きしない。書き戻した値は次の出撃 URL（`buildTradeToExplorePayloadFromFleet`）の `mechCurrentAmmo`・`mechBattery` でそのまま送られる。
 - trade の旧 typed-repair（`repairTyped`）は機体を作り直すので、`currentAmmo` は未設定に、`battery` は 300／300 に戻る（旧コードは触らない方針。STATUS のバックログ）。
+
+## 12.5a 置き去り機体（lostMechs）の保存対象と回収経路（2026-10-03 正本化）
+
+- **Invade outing:** 未帰還の機体は `lostMechs` に保存する。置き去り時点の `instanceId` / `currentAmmo` / `battery` / `circuitIds` を保持し、Invade の盤上の同一地点に再出現可能とする。
+- **Non-Invade outing:** 未帰還の機体は `lostMechs` に保存せず、**機体および装着回路を完全喪失**とする。これは RS-01「未帰還状態」の明示的な例外であり、Invade outing にのみ Abandoned の永続追跡を適用する。
+- **Invade の再出現:** `lostMechs` の場所情報（`frontSeed` / `cell`）に基づき、Invade board 上で置き去り機を表示し、その地点から Explore に出撃できる。Explore 開始時に対象機体が再出現する。
+- **回収:** Explore の離昇時に搭乗円内に再出現機がいれば回収する。回収成功時は `instanceId` / `currentAmmo` / `battery` / `circuitIds` を維持したまま `fleet` に戻し、`lostMechs` から削除する。
+- **再置き去り:** 再出現した機体を回収しなかった場合、同じ `instanceId` の `lostMechs` 行をその時点の状態で更新する。行を重複追加しない。
+- **通常 deploy:** `lostMechs` の機体は直接 deploy 対象ではない。回収成功後に通常の `fleet` へ戻り、通常の deploy 対象となる。
+- **Wreck / Enemy:** Abandoned から Wreck / Enemy へ遷移する具体条件は本契約では定義しない。`battery.activity === 0` をその直接条件にはしない。
+- **後方互換:** 場所や写しを持たない legacy row は、既存実装の後方互換処理に従う。Invade 側で必要な位置補完は実装済みルールとして扱い、新しい保存スキーマは追加しない。
 
 #### HubSnapshot のトップレベル（`shared` `hub-save.ts`）
 
