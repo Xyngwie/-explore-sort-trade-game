@@ -16,6 +16,7 @@ import {
   type ExploreToHubWearPayload,
 } from "@estg/shared";
 import type { World } from "./types";
+import { strandedNotRecovered } from "./lostMechs";
 
 export function returnKindFromWorld(world: World): SortieReturnKind {
   if (world.extracted) return "extract";
@@ -136,24 +137,61 @@ function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
   return `explore_${(hash >>> 0).toString(16)}`;
 }
 
-function lostMechsFromWorld(world: World): LostMechReturnState[] {
-  const out: LostMechReturnState[] = [];
+/** instanceIds of the wingmen left behind at lift-off this sortie. */
+function leftBehindInstanceIds(world: World): Array<{ unitId: string; instanceId: string }> {
+  const out: Array<{ unitId: string; instanceId: string }> = [];
   const seen = new Set<string>();
   for (const entry of world.leftBehind ?? []) {
     const unit = world.wingmen.find((w) => w.id === entry.id);
     const instanceId = unit?.instanceId?.trim() ?? "";
     if (!instanceId || seen.has(instanceId)) continue;
+    seen.add(instanceId);
+    out.push({ unitId: entry.id, instanceId });
+  }
+  return out;
+}
+
+/**
+ * lostMechs rows of the return (CIRCUIT_DATA_MODEL_V0 §5.6). Only for a
+ * sortie via Invade (`world.sortieLocation`): the wingmen left behind this
+ * sortie, plus reappeared mechs that were not recovered (same row, updated
+ * with this sortie's place). Each row carries `frontSeed` + `cell`.
+ */
+function lostMechsFromWorld(world: World): LostMechReturnState[] {
+  const loc = world.sortieLocation ?? null;
+  if (!loc) return [];
+  const place = { frontSeed: loc.frontSeed, cell: { sx: loc.cell.sx, sy: loc.cell.sy } };
+  const out: LostMechReturnState[] = [];
+  for (const { unitId, instanceId } of leftBehindInstanceIds(world)) {
     const battery = world.mechBattery[instanceId];
     if (!battery) continue;
     out.push({
       instanceId,
       currentAmmo: world.currentAmmo[instanceId],
       battery: { ...battery },
-      circuitIds: [...(world.circuitIdsByUnit[entry.id] ?? [])],
+      circuitIds: [...(world.circuitIdsByUnit[unitId] ?? [])],
+      ...place,
     });
-    seen.add(instanceId);
+  }
+  const seen = new Set(out.map((m) => m.instanceId));
+  for (const m of strandedNotRecovered(world)) {
+    if (seen.has(m.instanceId)) continue;
+    seen.add(m.instanceId);
+    out.push({
+      instanceId: m.instanceId,
+      currentAmmo: m.row.currentAmmo,
+      battery: { ...m.row.battery },
+      circuitIds: [...m.row.circuitIds],
+      ...place,
+    });
   }
   return out;
+}
+
+/** Not via Invade: the wingmen left behind are lost outright with their circuits (#206 leftover). */
+function abandonedFromWorld(world: World): string[] {
+  if (world.sortieLocation) return [];
+  return leftBehindInstanceIds(world).map((r) => r.instanceId);
 }
 
 /**
@@ -179,6 +217,8 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
       mechCurrentAmmo: outcome.mechCurrentAmmo,
       mechBattery: outcome.mechBattery,
       lostMechs: lostMechsFromWorld(world),
+      abandonedMechInstanceIds: abandonedFromWorld(world),
+      recoveredLostMechInstanceIds: [...(world.recoveredLostMechIds ?? [])],
     },
   );
   return payload;

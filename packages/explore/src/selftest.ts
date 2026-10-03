@@ -64,6 +64,8 @@ import {
 } from "@estg/shared";
 import { getCoverObjects } from "./game/coverObjects";
 import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
+import { attachLostMechContext, recoverStrandedAtLiftOff, sortieLocationFor, strandedMechsFor, STRANDED_RING_RADIUS } from "./game/lostMechs";
+import { invadeSquadSearch } from "./game/invadeSquad";
 import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
@@ -2285,7 +2287,8 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
       "僚機Bを置き去り（回路なし・搭乗円の外）",
     ]);
     const html = leftBehindResultHtml(w);
-    assert.ok(html.includes('id="result-left-behind"') && (html.match(/<li>/g) ?? []).length === 2);
+    assert.ok(html.includes('id="result-left-behind"') && (html.match(/<li>/g) ?? []).length === 3);
+    assert.ok(html.includes("Invade を通らない出撃のため、置き去りの機体は回路ごと失われる"), "direct sortie: fate line");
     noLeak(w);
   }
 
@@ -2362,12 +2365,43 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     ]);
     const returnPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(w)!).search);
     assert.ok(returnPayload);
+    // not via Invade (#206 leftover): lost outright with its circuits, not kept in lostMechs
+    assert.equal(returnPayload!.lostMechs, undefined, "direct sortie: no lostMechs row");
+    assert.deepEqual(returnPayload!.abandonedMechInstanceIds, ["m2"], "direct sortie: abandoned");
+  }
+  // Via Invade (sector + HubSave front seed): the left-behind wingman keeps its place.
+  {
+    const w = attachLostMechContext(
+      createWorld(
+        bootstrapFromSearch(
+          "?sectorX=2&sectorY=-1&density=0.3&deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30&mechCurrentAmmo=m1:12;m2:7;m3:9&mechBattery=m1:300:250;m2:300:212;m3:300:180&mechCircuits=m2~circuit_lost*fa*5",
+        ),
+      ),
+      normalizeHubSnapshot({ ...INITIAL_HUB, frontProgress: { seed: 4242, cols: 8, rows: 8, cleared: [], mined: [] } }),
+    );
+    assert.deepEqual(w.sortieLocation, { frontSeed: 4242, cell: { sx: 2, sy: -1 } });
+    startSortie(w);
+    for (const e of w.enemies) {
+      e.alive = false;
+      e.hp = 0;
+    }
+    w.leader.pos = { x: 700, y: 400 };
+    w.wingmen[0]!.pos = { x: 700, y: 400 };
+    w.wingmen[1]!.pos = { x: 700, y: 400 };
+    extract(w, () => {
+      w.wingmen[0]!.pos = { x: 1300, y: 400 };
+    });
+    const returnPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(w)!).search);
     assert.deepEqual(returnPayload!.lostMechs, [{
       instanceId: "m2",
       currentAmmo: 7,
       battery: { capacity: 300, activity: 212 },
       circuitIds: ["circuit_lost"],
+      frontSeed: 4242,
+      cell: { sx: 2, sy: -1 },
     }]);
+    assert.equal(returnPayload!.abandonedMechInstanceIds, undefined, "via Invade: nothing abandoned");
+    assert.ok(leftBehindResultHtml(w).includes("前線マス (2, -1) に残る"), "via Invade: fate line");
   }
   console.log("explore left-behind result line ok");
 }
@@ -2491,7 +2525,11 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(m1.currentAmmo, 21, "carried ammo written");
   assert.deepEqual(m1.battery, { capacity: 300, activity: 250 }, "deployed battery carried through, not 300/300");
   assert.equal(saved.fleet.some((m) => m.instanceId === "m2"), false, "left-behind mech leaves the fleet");
-  assert.deepEqual(saved.lostMechs, [{ instanceId: "m2", currentAmmo: 12, battery: { capacity: 300, activity: 212 }, circuitIds: ["c_wing"] }]);
+  // direct sortie (not via Invade, #206 leftover): lost outright with its circuit
+  assert.deepEqual(saved.lostMechs, [], "direct sortie: not kept in lostMechs");
+  assert.deepEqual(payload.abandonedMechInstanceIds, ["m2"]);
+  assert.equal(saved.circuits.some((c) => c.circuitId === "c_wing"), false, "its circuit is lost too (not stashed)");
+  assert.equal(saved.circuits.length, hub0.circuits.length - 1, "circuit count drops only by the lost one");
   const m3 = saved.fleet.find((m) => m.instanceId === "m3")!;
   assert.equal(m3.status, "destroyed", "wrecked mech kept as destroyed");
   assert.ok(saved.appliedSortieIds?.includes(payload.sortieId!), "sortieId recorded");
@@ -2524,7 +2562,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(w2.currentAmmo.m1, 21, "saved ammo, not refilled");
   assert.equal(w2.deployedDurability.m1, 85, "saved durability");
   assert.deepEqual(w2.mechBattery.m1, { capacity: 300, activity: 250 });
-  assert.equal(shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub).lostMechs.length, 1, "re-sortie keeps the lostMechs record");
+  assert.equal(shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub).lostMechs.length, 0, "re-sortie: still nothing in lostMechs");
   // item 15: 再出撃 follows the hangar's saved selection (same resolver as the hangar)
   {
     const plan0 = resortiePlan(search, w, payload, store);
@@ -2583,4 +2621,154 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.ok(main.includes("resortiePlan(bootSearch, world, payload)") && main.includes("resortieSearch(bootSearch, plan.hub, plan.ids)"), "再出撃 rebuilds from HubSave (hangar selection)");
   }
   console.log("explore U9 direct save / re-sortie ok");
+}
+
+// lostMechs recovery PR 2: via Invade the left-behind mech stays on its front
+// cell, reappears on the next sortie there and is recovered at lift-off when
+// inside the boarding circle; not recovered → the same row is updated.
+{
+  const memStore = () => {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+  };
+  const mk = (id: string, durability: number, currentAmmo: number, activity: number) => ({
+    ...shared.createOwnedMech("mech_gen1", { instanceId: id, durability, currentAmmo }),
+    battery: { capacity: 300, activity },
+  });
+  let hub0 = shared.normalizeHubSnapshot({
+    ...shared.INITIAL_HUB,
+    fleet: [mk("m1", 100, 20, 250), mk("m2", 90, 12, 212)],
+    ammoLoad: { ...shared.INITIAL_HUB.ammoLoad, standard: 30 } as never,
+    frontProgress: { seed: 777, cols: 8, rows: 8, cleared: [], mined: [] },
+  });
+  hub0 = shared.upsertCircuitIntoHub(hub0, {
+    circuitId: "c_wing",
+    circuitBoard: shared.createEmptyCircuitBoard(4, 4, "lm_wing") as never,
+    outcome: "bypass",
+  } as never);
+  hub0 = ((shared.equipCircuit(hub0, "c_wing", "m2") as unknown as { hub?: typeof hub0 }).hub) ?? hub0;
+  const store = memStore();
+  assert.ok(shared.saveHubSaveToLocalStorage(hub0, store));
+  const load = () => shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub);
+
+  // Invade's link carries only the sector → the squad comes from HubSave
+  const invadeLink = "?sectorX=3&sectorY=-2&density=0.3&engage=voluntary";
+  const search = invadeSquadSearch(invadeLink, hub0);
+  assert.ok(search, "Invade link without deploy keys → squad from HubSave");
+  const inbound = shared.parseTradeToExploreSearch(search!);
+  assert.deepEqual(inbound?.deployedInstanceIds, ["m1", "m2"], "hangar selection (default first 3 deployable)");
+  assert.deepEqual(inbound?.mechCircuits?.m2?.map((c) => c.circuitId), ["c_wing"], "equipped circuits go along");
+  assert.deepEqual(shared.parseInvadeToExploreSearch(search!)?.sectorX, 3, "sector kept");
+  assert.equal(invadeSquadSearch("?deployedInstanceIds=m1&deployableMechs=1", hub0), null, "trade deploy link untouched");
+  assert.equal(invadeSquadSearch(`${invadeLink}&deployedInstanceIds=m1&deployableMechs=1`, hub0), null, "link with a squad untouched");
+  assert.equal(invadeSquadSearch(invadeLink, null), null, "no save → unchanged");
+
+  const world = (q: string) => attachLostMechContext(createWorld(bootstrapFromSearch(q)), load());
+  /** Sortie; `leftOut` wingmen are pulled out of the circle just before lift-off; `leaderAt` is where X is pressed. */
+  const run = (q: string, leftOut: boolean, leaderAt?: { x: number; y: number }) => {
+    const w = world(q);
+    startSortie(w);
+    for (const e of w.enemies) { e.alive = false; e.hp = 0; }
+    if (leaderAt) w.leader.pos = { ...leaderAt };
+    for (const u of w.wingmen) u.pos = { ...w.leader.pos };
+    assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 2 && w.phase === "sortie"; t += 0.1) {
+      if (leftOut && w.balance.boardingLiftOffDelaySec - boardingElapsed(w) <= 0.3) {
+        for (const u of w.wingmen) u.pos = { x: w.leader.pos.x + 600, y: w.leader.pos.y };
+      }
+      tickWorld(w, 0.1, idleInput());
+    }
+    assert.equal(w.phase, "result");
+    assert.equal(w.extracted, true);
+    const res = saveSortieResultToHub(w, store);
+    assert.equal(res.status, "saved");
+    return { w, payload: (res as { payload: shared.ExploreToHubWearPayload }).payload };
+  };
+
+  // (1) via Invade: m2 left behind → lostMechs row with its place, copy, time and sortie id
+  const first = run(search!, true);
+  assert.deepEqual(first.w.sortieLocation, { frontSeed: 777, cell: { sx: 3, sy: -2 } });
+  let saved = load();
+  assert.equal(saved.fleet.some((m) => m.instanceId === "m2"), false);
+  assert.equal(saved.lostMechs.length, 1);
+  const row = saved.lostMechs[0]!;
+  assert.equal(row.instanceId, "m2");
+  assert.equal(row.frontSeed, 777);
+  assert.deepEqual(row.cell, { sx: 3, sy: -2 });
+  assert.equal(row.lostSortieId, first.payload.sortieId);
+  assert.ok(typeof row.lostAt === "string" && row.lostAt.length > 0, "lostAt");
+  assert.equal(row.catalogId, "mech_gen1", "copy kept");
+  assert.equal(row.currentAmmo, 12);
+  assert.deepEqual(row.battery, { capacity: 300, activity: 212 });
+  assert.deepEqual(row.circuitIds, ["c_wing"]);
+  assert.equal(saved.circuits.find((c) => c.circuitId === "c_wing")?.equippedTo, "m2", "circuit stays on the lost mech");
+  assert.equal(first.payload.abandonedMechInstanceIds, undefined);
+
+  // a different cell / another front seed → nothing reappears
+  assert.deepEqual(world(search!.replace("sectorX=3", "sectorX=4")).strandedMechs, []);
+  assert.deepEqual(strandedMechsFor(saved, { frontSeed: 778, cell: { sx: 3, sy: -2 } }, [], { x: 0, y: 0 }), []);
+  // not via Invade → no location, nothing reappears
+  assert.equal(sortieLocationFor(null, saved), null);
+  assert.equal(sortieLocationFor({ sectorX: 3, sectorY: -2 }, { frontProgress: null }), null, "no saved front seed");
+  assert.equal(sortieLocationFor({ sectorX: 40, sectorY: 0 }, saved), null, "out of the front coord bound");
+
+  // (2) same cell, X far from the drop zone → m2 reappears but is not recovered:
+  // the same row is updated (latest sortie id / time), never duplicated
+  const search2 = invadeSquadSearch(invadeLink, saved)!;
+  assert.deepEqual(shared.parseTradeToExploreSearch(search2)?.deployedInstanceIds, ["m1"]);
+  const w2 = world(search2);
+  assert.deepEqual(w2.strandedMechs?.map((m) => m.instanceId), ["m2"], "reappears on the same cell");
+  const sm = w2.strandedMechs![0]!;
+  assert.ok(Math.hypot(sm.pos.x - w2.leader.pos.x, sm.pos.y - w2.leader.pos.y) <= STRANDED_RING_RADIUS + 0.001, "waits near the drop zone");
+  const second = run(search2, false, { x: 900, y: 300 });
+  assert.deepEqual(second.w.recoveredLostMechIds, []);
+  saved = load();
+  assert.equal(saved.lostMechs.length, 1, "no new row");
+  assert.equal(saved.lostMechs[0]!.instanceId, "m2");
+  assert.equal(saved.lostMechs[0]!.lostSortieId, second.payload.sortieId, "updated to the latest sortie");
+  assert.notEqual(second.payload.sortieId, first.payload.sortieId);
+  assert.deepEqual(saved.lostMechs[0]!.cell, { sx: 3, sy: -2 });
+  assert.deepEqual(saved.lostMechs[0]!.circuitIds, ["c_wing"]);
+  assert.equal(saved.lostMechs[0]!.currentAmmo, 12);
+  assert.ok(leftBehindResultHtml(second.w).includes("置き去りだった機体 m2 は回収できず"));
+
+  // recovery needs the captain aboard
+  {
+    const wn = world(invadeSquadSearch(invadeLink, saved)!);
+    const boarding = { center: { ...wn.leader.pos }, radius: 110 } as never;
+    assert.deepEqual(recoverStrandedAtLiftOff(wn, boarding, false), []);
+    assert.deepEqual(recoverStrandedAtLiftOff(wn, boarding, true), ["m2"]);
+  }
+
+  // (3) same cell, X at the drop zone → m2 inside the circle at lift-off → recovered
+  const search3 = invadeSquadSearch(invadeLink, saved)!;
+  assert.deepEqual(shared.parseTradeToExploreSearch(search3)?.deployedInstanceIds, ["m1"]);
+  const third = run(search3, false);
+  assert.deepEqual(third.w.recoveredLostMechIds, ["m2"]);
+  assert.deepEqual(third.payload.recoveredLostMechInstanceIds, ["m2"]);
+  saved = load();
+  assert.deepEqual(saved.lostMechs, [], "gone from lostMechs");
+  const back = saved.fleet.find((m) => m.instanceId === "m2");
+  assert.ok(back, "back in the fleet");
+  assert.equal(back!.currentAmmo, 12, "ammo as left");
+  assert.deepEqual(back!.battery, { capacity: 300, activity: 212 }, "battery as left");
+  assert.equal(saved.circuits.find((c) => c.circuitId === "c_wing")?.equippedTo, "m2", "circuit still equipped");
+  assert.ok(shared.resolveSortieSelection(saved).includes("m2"), "selectable in the hangar");
+  assert.ok(leftBehindResultHtml(third.w).includes("置き去りだった機体 m2 を回収"));
+  // 再出撃 right after the recovery: m2 goes out with its circuit (from the hub)
+  {
+    const plan = resortiePlan(search3, third.w, third.payload, store);
+    assert.equal(plan.fromSave, true);
+    const re = resortieSearch(search3, plan.hub, plan.ids);
+    assert.deepEqual(re?.deployedInstanceIds, ["m1", "m2"]);
+    assert.deepEqual(shared.parseTradeToExploreSearch(re!.search)?.mechCircuits?.m2?.map((c) => c.circuitId), ["c_wing"]);
+    assert.equal(shared.parseInvadeToExploreSearch(re!.search)?.sectorX, 3, "same sector");
+  }
+  // the next sortie there: nothing left on the cell
+  assert.deepEqual(world(invadeSquadSearch(invadeLink, saved)!).strandedMechs, []);
+  console.log("explore lostMechs reappear / recover ok");
 }

@@ -220,6 +220,17 @@ export function renderWorld(
     ctx.fillRect(tx(b.pos.x) - 2, ty(b.pos.y) - 2, 4, 4);
   }
 
+  // Left-behind mechs waiting on this front cell (lostMechs.ts): recovered at
+  // lift-off when inside the boarding circle; hidden once recovered.
+  const recoveredLost = new Set(world.recoveredLostMechIds ?? []);
+  for (const m of world.strandedMechs ?? []) {
+    if (recoveredLost.has(m.instanceId)) continue;
+    drawCraft(ctx, tx(m.pos.x), ty(m.pos.y), 9 * sx, "#8a9099", Math.PI / 2);
+    ctx.fillStyle = "#c3c8cf";
+    ctx.font = "11px sans-serif";
+    ctx.fillText(`${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+  }
+
   // Wingmen
   for (const w of world.wingmen) {
     if (!w.alive) continue;

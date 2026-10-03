@@ -1,4 +1,5 @@
 import { decideWingman } from "./brain";
+import { recoverStrandedAtLiftOff } from "./lostMechs";
 import {
   applyOrder,
   campDamageTakenMul,
@@ -275,6 +276,8 @@ function resolveBoardingLiftOff(world: World): void {
     .map((u) => ({ id: u.id, name: u.name, reason: isWingmanMobileFor(world, u.id) ? "outside_circle" : "no_circuit" }));
   if (outside.length > 0) pushLog(world, `置き去り：${outside.map((u) => u.name).join("・")}（搭乗円外のため回収せず）。`);
   if (inside.length > 0) pushLog(world, `回収完了：${inside.map((u) => u.name).join("・")}。`);
+  const recoveredLost = recoverStrandedAtLiftOff(world, boarding, captainIn);
+  if (recoveredLost.length > 0) pushLog(world, `置き去りだった機体を回収：${recoveredLost.join("・")}（部隊に復帰）。`);
   world.boarding = null; world.camp = null; world.phase = "result";
   if (captainIn) {
     let circleCrates = 0;

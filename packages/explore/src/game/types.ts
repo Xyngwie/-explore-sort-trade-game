@@ -4,6 +4,7 @@ import type { DensityThreat } from "./balance";
 import type { CoverObject } from "./coverObjects";
 import type { CommandUnlockState } from "./commandUnlock";
 import type { LeftBehindEntry } from "./leftBehind";
+import type { SortieLocation, StrandedMech } from "./lostMechs";
 
 export type Stance = "patrol" | "escort" | "recover" | "raid";
 export const STANCE_LABEL: Record<Stance, string> = { patrol: "哨戒", escort: "帯同", recover: "回収", raid: "遊撃" };
@@ -29,5 +30,11 @@ export type World = { balance: Balance; phase: Phase; timeLeft: number; operatio
   /** Explore-local command unlock mode + equipped circuits (not a save/handoff contract). */
   commandUnlock: CommandUnlockState;
   /** Explore-local: wingmen left behind at lift-off (result-screen display only; not handoff/Hub output). */
-  leftBehind?: LeftBehindEntry[]; };
+  leftBehind?: LeftBehindEntry[];
+  /** Place of this sortie on the Invade front (null: not via Invade → left-behind mechs are lost outright). */
+  sortieLocation?: SortieLocation | null;
+  /** HubSave lostMechs left on this front cell, waiting near the drop zone (recovered if inside the boarding circle at lift-off). */
+  strandedMechs?: StrandedMech[];
+  /** instanceIds of reappeared mechs recovered at lift-off this sortie. */
+  recoveredLostMechIds?: string[]; };
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };

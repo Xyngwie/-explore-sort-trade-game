@@ -430,5 +430,32 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   assert.deepEqual(rows, [{ instanceId: "x", currentAmmo: 3, battery: { capacity: 300, activity: 10 }, circuitIds: [] }]);
 }
 
+// (H) left behind on a sortie NOT via Invade (abandonedMechInstanceIds): lost
+// outright with its circuits — out of the fleet, no lostMechs row, circuit gone
+// (not stashed); other circuits untouched. URL round trip carries the ids.
+{
+  const lead = createOwnedMech("mech_gen1", { instanceId: "lead" });
+  const wing = createOwnedMech("mech_gen1", { instanceId: "wing-x", currentAmmo: 4 });
+  const h = normalizeHubSnapshot({
+    ...INITIAL_HUB, fleet: [lead, wing],
+    circuits: [mkCircuit("c-x", "wing-x"), mkCircuit("c-lead", "lead"), mkCircuit("c-stash", null)],
+  });
+  const url = buildExploreToHubWearUrl(
+    { returnKind: "extract", mechWear: [], sortieId: "s-abandon", abandonedMechInstanceIds: ["wing-x"] },
+    "https://estg.invalid/trade/",
+  );
+  const payload = parseExploreToHubWearSearch(new URL(url).search)!;
+  assert.deepEqual(payload.abandonedMechInstanceIds, ["wing-x"]);
+  const r = applyExploreReturnToHub(h, payload);
+  assert.equal(r.applied, true);
+  assert.deepEqual(r.hub.fleet.map((m) => m.instanceId), ["lead"]);
+  assert.deepEqual(r.hub.lostMechs, []);
+  assert.deepEqual(r.hub.circuits.map((c) => [c.circuitId, c.equippedTo]), [["c-lead", "lead"], ["c-stash", null]]);
+  placesOk(r.hub);
+  assert.equal(applyExploreReturnToHub(r.hub, payload).applied, false, "same sortieId → no-op");
+  // no ids → nothing abandoned (key omitted)
+  assert.equal(new URL(buildExploreToHubWearUrl({ returnKind: "extract", mechWear: [] }, "https://estg.invalid/trade/")).searchParams.has("abandonedMechInstanceIds"), false);
+}
+
 console.log("shared lostMechs recovery selftest: ok");
 console.log("shared circuit sortie selftest: ok");
