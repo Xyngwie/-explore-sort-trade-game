@@ -7,6 +7,7 @@ import {
 import {
   HUB_SAVE_STORAGE_KEY,
   applySortieReport,
+  applyExploreReturnToHub,
   MECH_FLEET_RULES,
   buildExploreToHubWearUrl,
   buildInvadeToTradeUrl,
@@ -1411,3 +1412,54 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 }
 
 console.log("trade hangar selftest: ok");
+
+// U9: Explore saved the return to HubSave at sortie end (shared
+// applyExploreReturnToHub). Trade opening the same 格納庫 return URL must not
+// apply it again; a legacy return URL alone (no direct save) applies once.
+{
+  const u9Storage = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = u9Storage;
+  const base = grantStarterFleet(resetHangar(u9Storage));
+  const [idA, idB] = base.hub.fleet.map((m) => m.instanceId);
+  assert.ok(idA && idB);
+  const durA = base.hub.fleet.find((m) => m.instanceId === idA)!.durability;
+  const payload = toExploreToHubWearPayload(
+    "extract",
+    [{ instanceId: idA!, durabilityAfter: durA - 15 }],
+    {
+      sortieId: "sortie_u9_direct_1",
+      mechCurrentAmmo: [{ instanceId: idA!, currentAmmo: 9 }],
+      mechBattery: [{ instanceId: idA!, battery: { capacity: 300, activity: 280 } }],
+      lostMechs: [{ instanceId: idB!, currentAmmo: 4, battery: { capacity: 300, activity: 250 }, circuitIds: [] }],
+    },
+  );
+  const returnSearch = new URL(buildExploreToHubWearUrl(payload)).search;
+
+  // (a) direct save first (what Explore does), then trade opens the return URL
+  const direct = applyExploreReturnToHub(base.hub, payload);
+  assert.equal(direct.applied, true);
+  const afterDirect = normalizeHubSnapshot(direct.hub);
+  const opened = ingestLocationSearch({ ...base, hub: afterDirect }, returnSearch);
+  assert.equal(opened.consumed, true);
+  assert.deepEqual(opened.state.hub.fleet, afterDirect.fleet, "no second wear / ammo write");
+  assert.deepEqual(opened.state.hub.lostMechs, afterDirect.lostMechs, "lostMechs recorded once");
+  assert.equal(opened.state.hub.lostMechs.length, 1);
+  assert.equal(opened.state.hub.fleet.find((m) => m.instanceId === idA)!.durability, durA - 15);
+  assert.equal(opened.state.hub.fleet.find((m) => m.instanceId === idA)!.currentAmmo, 9);
+  assert.ok(opened.state.lastExploreReturn?.summaryJa.includes("反映済み"));
+
+  // (b) legacy: only the return URL (e.g. local dev cross-origin) → applies once
+  const legacy1 = ingestLocationSearch(base, returnSearch);
+  const a1 = legacy1.state.hub.fleet.find((m) => m.instanceId === idA)!;
+  assert.equal(a1.durability, durA - 15);
+  assert.equal(a1.currentAmmo, 9);
+  assert.deepEqual(a1.battery, { capacity: 300, activity: 280 });
+  assert.equal(legacy1.state.hub.fleet.some((m) => m.instanceId === idB), false);
+  assert.equal(legacy1.state.hub.lostMechs.length, 1);
+  const legacy2 = ingestLocationSearch(legacy1.state, returnSearch);
+  assert.deepEqual(legacy2.state.hub.fleet, legacy1.state.hub.fleet, "second open does nothing");
+  assert.deepEqual(legacy2.state.hub.lostMechs, legacy1.state.hub.lostMechs);
+  // same result either way
+  assert.deepEqual(legacy1.state.hub.fleet, afterDirect.fleet);
+  console.log("trade U9 direct save / legacy return URL once ok");
+}

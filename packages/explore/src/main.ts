@@ -72,10 +72,15 @@ import {
   sortHandoffUrl,
   toExploreResult,
   returnKindFromWorld,
+  exploreReturnPayload,
 } from "./game/outcome";
+import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
+import { hubForResortie, resortieSearch } from "./game/resortie";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
-const boot = bootstrapFromSearch(window.location.search);
+/** Deploy query this page was opened with; 再出撃 replaces it with one rebuilt from HubSave. */
+let bootSearch = window.location.search;
+const boot = bootstrapFromSearch(bootSearch);
 if (boot.invadeSector != null) {
   const cleaned = stripHandoffParams(
     window.location.href,
@@ -452,8 +457,32 @@ function logsHtml(): string {
     .join("");
 }
 
+/** Direct-save outcome per world (U9). Saved once, when the result screen first renders. */
+const directSaves = new WeakMap<World, DirectSaveResult>();
+let resortieNote = "";
+
+function ensureDirectSave(): DirectSaveResult | null {
+  if (world.phase !== "result") return null;
+  const done = directSaves.get(world);
+  if (done) return done;
+  const res = saveSortieResultToHub(world);
+  directSaves.set(world, res);
+  return res;
+}
+
+function directSaveNoteText(res: DirectSaveResult | null): string {
+  if (!res) return "";
+  if (res.status === "saved") return "出撃結果を HubSave に保存しました（格納庫で再適用はしません）。";
+  if (res.status === "already_applied") return "出撃結果は HubSave に保存済みです。";
+  if (res.reason === "no_save") return "HubSave がないため保存していません（格納庫へ の帰還 URL で反映されます）。";
+  if (res.reason === "write_refused") return "HubSave に保存できませんでした（新しい版のセーブ）。";
+  return "";
+}
+
 function renderDom(): void {
   phaseWatch.markRendered(world.phase);
+  // U9: record the sortie result before any result button can be pressed.
+  const directSave = ensureDirectSave();
   const result = world.phase === "result" ? toExploreResult(world) : null;
   const sortUrl = result ? sortHandoffUrl(world) : "";
   const wearUrl = world.phase === "result" ? hubWearHandoffUrl(world) : null;
@@ -573,6 +602,8 @@ function renderDom(): void {
           }
           <button type="button" class="secondary" id="btn-again">${CTA_COPY.sortieAgain}</button>
         </div>
+        ${directSaveNoteText(directSave) ? `<p class="muted" id="direct-save-note">${escapeHtml(directSaveNoteText(directSave))}</p>` : ""}
+        ${resortieNote ? `<p class="warn" id="resortie-note">${escapeHtml(resortieNote)}</p>` : ""}
         <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(sortUrl)}</p>
         ${
           wearUrl
@@ -582,8 +613,24 @@ function renderDom(): void {
         }
       </div>`;
     document.getElementById("btn-again")?.addEventListener("click", () => {
-      // Reuse boot so stripped invade/trade query still applies to re-sortie.
-      world = createWorld(boot);
+      // 再出撃 (案 A): rebuild the squad from HubSave — the previous sortie's
+      // mechs that can still sortie, with saved ammo / durability / battery.
+      const payload = exploreReturnPayload(world);
+      if (payload && world.deployedInstanceIds.length > 0) {
+        const hub = hubForResortie(bootSearch, world, payload);
+        const next = resortieSearch(bootSearch, hub, world.deployedInstanceIds);
+        if (!next) {
+          resortieNote = "再出撃できる機体がありません（格納庫で修理・受領してください）。";
+          renderDom();
+          return;
+        }
+        bootSearch = next.search;
+        world = createWorld(bootstrapFromSearch(next.search));
+      } else {
+        // No deployed mechs (Explore opened without a deploy URL): as before.
+        world = createWorld(boot);
+      }
+      resortieNote = "";
       needsDom = true;
       renderDom();
     });

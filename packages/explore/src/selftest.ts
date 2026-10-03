@@ -4,6 +4,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createPhaseWatcher } from "./game/phaseWatch";
+import * as shared from "@estg/shared";
+import { saveSortieResultToHub } from "./game/hubDirectSave";
+import { hubForResortie, resortieSearch } from "./game/resortie";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
 import {
   applyOrder,
@@ -61,7 +64,7 @@ import {
 } from "@estg/shared";
 import { getCoverObjects } from "./game/coverObjects";
 import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
-import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
+import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
   QUIRK_LABEL,
@@ -2414,4 +2417,147 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.ok(!main.includes("phaseBefore"), "no per-frame phase snapshot");
   }
   console.log("explore retreat → result screen ok");
+}
+
+// U9: Explore writes the sortie result to HubSave at sortie end (direct save);
+// re-sortie (案 A) rebuilds the squad from HubSave.
+{
+  const memStore = () => {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+  };
+  const makeHub = () => {
+    const mk = (id: string, durability: number, currentAmmo?: number, activity = 300) => ({
+      ...shared.createOwnedMech("mech_gen1", { instanceId: id, durability, ...(currentAmmo != null ? { currentAmmo } : {}) }),
+      battery: { capacity: 300, activity },
+    });
+    let hub = shared.normalizeHubSnapshot({
+      ...shared.INITIAL_HUB,
+      fleet: [mk("m1", 100, undefined, 250), mk("m2", 90, 12, 212), mk("m3", 60, 5, 180)],
+    });
+    hub = shared.upsertCircuitIntoHub(hub, {
+      circuitId: "c_wing",
+      circuitBoard: shared.createEmptyCircuitBoard(4, 4, "u9_wing") as never,
+      outcome: "bypass",
+    } as never);
+    const eq = shared.equipCircuit(hub, "c_wing", "m2") as unknown as { hub?: typeof hub };
+    return eq.hub ?? hub;
+  };
+  const deploySearch = (hub: ReturnType<typeof makeHub>) => {
+    const payload = shared.buildTradeToExplorePayloadFromFleet(hub.fleet, 20, ["m1", "m2", "m3"]);
+    payload.mechCircuits = { m2: [{ circuitId: "c_wing", restoreState: "bypass" } as never] };
+    const url = new URL(shared.buildTradeToExploreUrl(payload, "https://estg.invalid/explore/"));
+    // Flat wear cannot wreck an operational mech; the deploy-time durability
+    // says 10 for m3 so extract wear (15) wrecks it (wreckedMechInstanceIds).
+    url.searchParams.set("mechDurability", url.searchParams.get("mechDurability")!.replace("m3:60", "m3:10"));
+    return url.search;
+  };
+  /** Sortie with m2 (wing-a) left outside the circle, m3 wrecked by extract wear. */
+  const runSortie = (search: string) => {
+    const w = createWorld(bootstrapFromSearch(search));
+    startSortie(w);
+    for (const e of w.enemies) { e.alive = false; e.hp = 0; }
+    w.currentAmmo.m1 = 21; // leader fired 7 of 28 (unset → full)
+    w.leader.pos = { x: 700, y: 400 };
+    for (const u of w.wingmen) u.pos = { x: 700, y: 400 };
+    assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 2 && w.phase === "sortie"; t += 0.1) {
+      if (w.balance.boardingLiftOffDelaySec - boardingElapsed(w) <= 0.3) w.wingmen[0]!.pos = { x: 1300, y: 400 };
+      tickWorld(w, 0.1, idleInput());
+    }
+    assert.equal(w.phase, "result");
+    assert.equal(w.extracted, true);
+    return w;
+  };
+
+  const store = memStore();
+  const hub0 = makeHub();
+  assert.ok(shared.saveHubSaveToLocalStorage(hub0, store));
+  const search = deploySearch(hub0);
+  const w = runSortie(search);
+  assert.equal(saveSortieResultToHub({ ...w, phase: "sortie" } as typeof w, store).status, "skipped", "only at result");
+
+  // (1) direct save writes the correct save
+  const res = saveSortieResultToHub(w, store);
+  assert.equal(res.status, "saved");
+  const payload = (res as { payload: shared.ExploreToHubWearPayload }).payload;
+  const saved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub);
+  const m1 = saved.fleet.find((m) => m.instanceId === "m1")!;
+  assert.equal(m1.durability, 100 - 15, "extract wear");
+  assert.equal(m1.currentAmmo, 21, "carried ammo written");
+  assert.deepEqual(m1.battery, { capacity: 300, activity: 250 }, "deployed battery carried through, not 300/300");
+  assert.equal(saved.fleet.some((m) => m.instanceId === "m2"), false, "left-behind mech leaves the fleet");
+  assert.deepEqual(saved.lostMechs, [{ instanceId: "m2", currentAmmo: 12, battery: { capacity: 300, activity: 212 }, circuitIds: ["c_wing"] }]);
+  const m3 = saved.fleet.find((m) => m.instanceId === "m3")!;
+  assert.equal(m3.status, "destroyed", "wrecked mech kept as destroyed");
+  assert.ok(saved.appliedSortieIds?.includes(payload.sortieId!), "sortieId recorded");
+  assert.deepEqual(
+    payload.mechBattery?.map((r) => [r.instanceId, r.battery.activity]),
+    [["m1", 250], ["m2", 212], ["m3", 180]],
+    "return carries the deployed battery",
+  );
+  // the 格納庫 URL carries the same return
+  assert.deepEqual(parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(w)!).search)?.sortieId, payload.sortieId);
+
+  // second save (re-render) → already applied, save unchanged
+  const before = store.getItem(shared.HUB_SAVE_STORAGE_KEY);
+  assert.equal(saveSortieResultToHub(w, store).status, "already_applied");
+  assert.equal(store.getItem(shared.HUB_SAVE_STORAGE_KEY), before);
+
+  // (2) each result button after the direct save:
+  //  - Sort へ: a plain link; lostMechs is already in the save (above)
+  //  - 格納庫へ: the same return applied again by trade's path → nothing changes
+  assert.equal(shared.applyExploreReturnToHub(saved, payload).applied, false);
+  //  - 再出撃: rebuild from HubSave → m2 (lost) and m3 (wrecked) excluded, saved ammo used
+  const hubRe = hubForResortie(search, w, payload, store);
+  assert.deepEqual(hubRe.fleet, saved.fleet, "re-sortie reads the saved hub");
+  const re = resortieSearch(search, hubRe, w.deployedInstanceIds);
+  assert.ok(re);
+  assert.deepEqual(re!.deployedInstanceIds, ["m1"]);
+  const w2 = createWorld(bootstrapFromSearch(re!.search));
+  assert.deepEqual(w2.deployedInstanceIds, ["m1"]);
+  assert.equal(w2.wingmen.length, 0, "no left-behind / wrecked wingman in the next sortie");
+  assert.equal(w2.currentAmmo.m1, 21, "saved ammo, not refilled");
+  assert.equal(w2.deployedDurability.m1, 85, "saved durability");
+  assert.deepEqual(w2.mechBattery.m1, { capacity: 300, activity: 250 });
+  assert.equal(shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub).lostMechs.length, 1, "re-sortie keeps the lostMechs record");
+
+  // (3) no HubSave (local dev cross-origin): nothing written; re-sortie still
+  // rebuilds from the previous deploy with this return applied in memory
+  const empty = memStore();
+  assert.deepEqual(saveSortieResultToHub(w, empty), { status: "skipped", reason: "no_save" });
+  assert.equal(empty.getItem(shared.HUB_SAVE_STORAGE_KEY), null);
+  const reFallback = resortieSearch(search, hubForResortie(search, w, payload, empty), w.deployedInstanceIds);
+  assert.deepEqual(reFallback?.deployedInstanceIds, ["m1"]);
+  assert.equal(createWorld(bootstrapFromSearch(reFallback!.search)).currentAmmo.m1, 21);
+
+  // (4) nobody left to sortie → null (button shows a note instead)
+  const allGone = shared.normalizeHubSnapshot({ ...saved, fleet: saved.fleet.filter((m) => m.instanceId !== "m1") });
+  assert.equal(resortieSearch(search, allGone, w.deployedInstanceIds), null);
+
+  // (5) deploy URL without mechBattery → return omits battery (no fake 300/300)
+  {
+    const wb = createWorld(bootstrapFromSearch("?deployedInstanceIds=x1&deployableMechs=1&mechDurability=x1:100"));
+    startSortie(wb);
+    assert.equal(executeExploreCommand(wb, { id: "abort" }).status, "done");
+    assert.equal(exploreReturnPayload(wb)?.mechBattery, undefined);
+  }
+  // (6) two sorties never share a sortieId (per-sortie nonce)
+  {
+    const a = createWorld(bootstrapFromSearch(search)); startSortie(a); executeExploreCommand(a, { id: "abort" });
+    const b = createWorld(bootstrapFromSearch(search)); startSortie(b); executeExploreCommand(b, { id: "abort" });
+    assert.notEqual(exploreReturnPayload(a)?.sortieId, exploreReturnPayload(b)?.sortieId);
+  }
+  // (7) main.ts saves when the result screen renders (before any result button)
+  {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    const render = main.slice(main.indexOf("function renderDom(): void {"));
+    assert.ok(render.indexOf("ensureDirectSave()") > -1 && render.indexOf("ensureDirectSave()") < render.indexOf('if (world.phase === "briefing")'), "renderDom saves first");
+    assert.ok(main.includes("resortieSearch(bootSearch, hub, world.deployedInstanceIds)"), "再出撃 rebuilds from HubSave");
+  }
+  console.log("explore U9 direct save / re-sortie ok");
 }

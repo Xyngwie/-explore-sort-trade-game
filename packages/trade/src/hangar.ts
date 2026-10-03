@@ -14,8 +14,6 @@ import {
   applyRepair,
   applyScrap,
   applyWearReportsToFleet,
-  normalizeBattery,
-  normalizeCurrentAmmo,
   buildTradeToExplorePayloadFromFleet,
   buildMechCircuitsForDeploy,
   buildTradeToExploreUrl,
@@ -68,7 +66,7 @@ import {
   applyRepairDiscountToCost,
   applyDurabilityBufferToWear,
   buildWearReportsForSortie,
-  applySortieReport,
+  applyExploreReturnToHub,
   formatCircuitBonusesJa,
   computeCircuitEffectForBoard,
   formatCircuitEffectJa,
@@ -79,12 +77,10 @@ import {
   type CircuitEffectBreakdown,
   type CircuitOutcome,
   type CircuitRestoreState,
-  type ExploreToHubWearPayload,
   type HubCircuitRecord,
   type HubSnapshot,
   type InvadeToTradePayload,
   type MechId,
-  type OwnedMech,
   type RestoreToTradePayload,
   type SortieReturnKind,
   type YieldBag,
@@ -475,51 +471,38 @@ export function ingestLocationSearch(
 
   const wear = parseExploreToHubWearSearch(search);
   if (wear) {
-    if (wear.sortieId) {
-      const apply = applySortieReport(hub, {
-        sortieId: wear.sortieId,
-        cell: null,
-        frontSeed: null,
-        lostMechInstanceIds: [],
-        lostCause: {},
-        recoveredDropIds: [],
-        acquiredCircuits: [],
-        inventoryDrops: wear.inventoryDrops ?? [],
-        recoveredInventoryDropIds: wear.recoveredInventoryDropIds ?? [],
-        wreckedMechInstanceIds: wear.wreckedMechInstanceIds ?? [],
-        lostMechs: wear.lostMechs ?? [],
-      });
-      if (!apply.applied) {
-        log = pushLog(log, `帰還 sortieId=${wear.sortieId} は既適用のため無視`);
-        notices.push("探索帰還は既に適用済み");
-        consumed = true;
-        return {
-          state: persistHangar({
-            ...state,
-            hub: normalizeHubSnapshot(apply.hub),
-            log,
-            lastExploreReturn,
-            craftSignature: state.craftSignature || loadCraftSignature(),
-            selectedDeployIds: filterToDeployableIds(
-              apply.hub.fleet,
-              state.selectedDeployIds,
-            ),
-            notice: notices.join(" / "),
-          }),
-          consumed: true,
-        };
-      }
-      hub = apply.hub;
-    }
-
+    const kindJaFor = (kind: typeof wear.returnKind) =>
+      kind === "extract" ? "EXTRACT" : kind === "abort" ? "中断" : "失敗";
+    // U9: Explore saves the result to HubSave at sortie end. The same function
+    // applies a legacy return URL once; a return Explore already saved is
+    // skipped by sortieId / appliedSortieIds (no double apply).
     const beforeById = new Map(hub.fleet.map((m) => [m.instanceId, m.durability]));
-    hub = {
-      ...hub,
-      fleet: applyReturnedMechState(
-        applyWearReportsToFleet(hub.fleet, wear.mechWear),
-        wear,
-      ),
-    };
+    const apply = applyExploreReturnToHub(hub, wear);
+    if (!apply.applied) {
+      log = pushLog(log, `帰還 sortieId=${wear.sortieId} は反映済み（Explore が保存）のため再適用しない`);
+      lastExploreReturn = {
+        returnKind: wear.returnKind,
+        summaryJa: `探索帰還 ${kindJaFor(wear.returnKind)} · 反映済み（Explore が出撃終了時に保存）`,
+      };
+      notices.push(lastExploreReturn.summaryJa);
+      consumed = true;
+      return {
+        state: persistHangar({
+          ...state,
+          hub: normalizeHubSnapshot(apply.hub),
+          log,
+          lastExploreReturn,
+          craftSignature: state.craftSignature || loadCraftSignature(),
+          selectedDeployIds: filterToDeployableIds(
+            apply.hub.fleet,
+            state.selectedDeployIds,
+          ),
+          notice: notices.join(" / "),
+        }),
+        consumed: true,
+      };
+    }
+    hub = apply.hub;
     hub = normalizeHubSnapshot(hub);
     const detail = wear.mechWear
       .map((w) => {
@@ -533,15 +516,9 @@ export function ingestLocationSearch(
       log,
       `帰還ウェア ${wear.returnKind} ×${wear.mechWear.length}${detail ? ` · ${detail}` : ""}`,
     );
-    const kindJa =
-      wear.returnKind === "extract"
-        ? "EXTRACT"
-        : wear.returnKind === "abort"
-          ? "中断"
-          : "失敗";
     lastExploreReturn = {
       returnKind: wear.returnKind,
-      summaryJa: `探索帰還 ${kindJa} · 摩耗報告 ${wear.mechWear.length}機${
+      summaryJa: `探索帰還 ${kindJaFor(wear.returnKind)} · 摩耗報告 ${wear.mechWear.length}機${
         detail ? ` · ${detail}` : ""
       }`,
     };
@@ -645,28 +622,8 @@ export function ingestLocationSearch(
  * Only called when the return is applied (a sortieId already in
  * appliedSortieIds returns early above), so a stale URL never overwrites.
  */
-export function applyReturnedMechState(
-  fleet: readonly OwnedMech[],
-  wear: Pick<ExploreToHubWearPayload, "mechCurrentAmmo" | "mechBattery">,
-): OwnedMech[] {
-  const ammo = new Map(
-    (wear.mechCurrentAmmo ?? []).map((row) => [row.instanceId, row.currentAmmo]),
-  );
-  const battery = new Map(
-    (wear.mechBattery ?? []).map((row) => [row.instanceId, row.battery]),
-  );
-  if (ammo.size === 0 && battery.size === 0) return [...fleet];
-  return fleet.map((m) => {
-    let next = m;
-    if (ammo.has(m.instanceId)) {
-      next = { ...next, currentAmmo: normalizeCurrentAmmo(ammo.get(m.instanceId)) };
-    }
-    if (battery.has(m.instanceId)) {
-      next = { ...next, battery: normalizeBattery(battery.get(m.instanceId)) };
-    }
-    return next;
-  });
-}
+/** Moved to shared (U9: Explore's direct save and trade's return URL use the same write-back). */
+export { applyReturnedMechState } from "@estg/shared";
 
 export function clearHandoffFromUrl(): void {
   if (typeof window === "undefined") return;
