@@ -49,7 +49,14 @@ import {
   isShortcutsOverlayHidden,
   setShortcutsOverlayHidden,
 } from "./game/keyboardOverlay";
-import { DEFAULT_EXPEDITION_LOADOUT, parseExploreToHubWearSearch } from "@estg/shared";
+import {
+  DEFAULT_EXPEDITION_LOADOUT,
+  MECH_AMMO_BASE_CAPACITY,
+  buildTradeToExplorePayloadFromFleet,
+  buildTradeToExploreUrl,
+  createOwnedMech,
+  parseExploreToHubWearSearch,
+} from "@estg/shared";
 import { getCoverObjects } from "./game/coverObjects";
 import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
@@ -135,33 +142,75 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.equal(world.ammoStock, 99, "shared ammoStock must not be consumed by firing");
 }
 
-// --- undefined currentAmmo is preserved; it is not coerced to zero and cannot fire ---
+// --- unset currentAmmo sorties full (interim rule, pending 神宮's economy decision) ---
+// Every deployed unit (leader + wingmen) must be able to fire at an in-range enemy.
+function assertEveryDeployedUnitFires(search: string, label: string): void {
+  const probe = createWorld(bootstrapFromSearch(search));
+  const unitIds = [probe.leader.id, ...probe.wingmen.map((w) => w.id)];
+  assert.equal(unitIds.length, probe.deployedInstanceIds.length, `${label}: one unit per deployed mech`);
+  for (const unitId of unitIds) {
+    const world = createWorld(bootstrapFromSearch(search));
+    startSortie(world);
+    const units = [world.leader, ...world.wingmen];
+    const shooter = units.find((u) => u.id === unitId)!;
+    const instanceId = shooter.instanceId!;
+    assert.ok(instanceId, `${label}: ${unitId} has an instanceId`);
+    // Keep everyone else out of the exchange.
+    for (const other of units) {
+      if (other.id !== unitId) other.pos = { x: shooter.pos.x + 5000, y: shooter.pos.y + 5000 };
+    }
+    for (const e of world.enemies) e.alive = false;
+    const foe = world.enemies[0]!;
+    foe.alive = true;
+    foe.hp = foe.maxHp;
+    foe.pos = { x: shooter.pos.x + world.balance.weaponRange * 0.5, y: shooter.pos.y };
+    shooter.cooldown = 0;
+    const ammo0 = world.currentAmmo[instanceId];
+    assert.equal(ammo0, MECH_AMMO_BASE_CAPACITY, `${label}: ${unitId} sorties full`);
+    tickWorld(world, 0.02, idleInput());
+    assert.ok(
+      world.bullets.some((b) => !b.fromEnemy && b.ownerId === unitId),
+      `${label}: ${unitId} fires at an in-range enemy`,
+    );
+    assert.equal(world.currentAmmo[instanceId], ammo0! - 1, `${label}: ${unitId} spends one round`);
+  }
+}
+
+{
+  // Exact deploy URL emitted by trade's buildDeployUrl on main d6ca6ff for a
+  // 3-mech fleet without currentAmmo (no mechCurrentAmmo key).
+  const tradeD6ca6ffFixture =
+    "?deployableMechs=3&mechBattery=owned_a%3A300%3A300%3Bowned_b%3A300%3A300%3Bowned_c%3A300%3A300" +
+    "&startingAmmo=20&deployedInstanceIds=owned_a%2Cowned_b%2Cowned_c" +
+    "&mechDurability=owned_a%3A100%3Bowned_b%3A100%3Bowned_c%3A100";
+  const world = createWorld(bootstrapFromSearch(tradeD6ca6ffFixture));
+  assert.deepEqual(world.currentAmmo, { owned_a: 28, owned_b: 28, owned_c: 28 });
+  assert.equal(world.ammoStock, 20, "startingAmmo stays the shared stock only");
+  assertEveryDeployedUnitFires(tradeD6ca6ffFixture, "trade d6ca6ff fixture");
+
+  // Same path through the shared builders trade's buildDeployUrl uses.
+  const fleet = [
+    createOwnedMech("mech_gen1", { instanceId: "owned_x" }),
+    createOwnedMech("mech_gen2", { instanceId: "owned_y" }),
+    createOwnedMech("mech_gen1", { instanceId: "owned_z" }),
+  ];
+  const built = buildTradeToExploreUrl(
+    buildTradeToExplorePayloadFromFleet(fleet, 40, ["owned_x", "owned_y", "owned_z"]),
+    "https://example.invalid/explore/",
+  );
+  const builtSearch = new URL(built).search;
+  assert.ok(!builtSearch.includes("mechCurrentAmmo"), "fleet without currentAmmo emits no mechCurrentAmmo");
+  assertEveryDeployedUnitFires(builtSearch, "shared builder");
+}
+
+// --- given currentAmmo is used as-is; only unset mechs are filled ---
 {
   const world = createWorld(
-    bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=40"),
+    bootstrapFromSearch(
+      "?deployedInstanceIds=owned_a,owned_b,owned_c&mechCurrentAmmo=owned_a:5;owned_c:0&startingAmmo=40",
+    ),
   );
-  assert.equal(world.currentAmmo.owned_a, undefined);
-  assert.equal(world.currentAmmo.owned_b, undefined);
-  startSortie(world);
-  for (const w of world.wingmen) w.alive = false;
-  const enemy = world.enemies[0]!;
-  enemy.alive = true;
-  enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
-  const leaderBulletCountBefore = world.bullets.filter(
-    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
-  ).length;
-  const cooldownBefore = world.leader.cooldown;
-  tickWorld(world, 0.05, idleInput());
-  const leaderBulletCountAfter = world.bullets.filter(
-    (b) => !b.fromEnemy && b.ownerId === world.leader.id,
-  ).length;
-  assert.equal(world.currentAmmo.owned_a, undefined);
-  assert.equal(
-    leaderBulletCountAfter,
-    leaderBulletCountBefore,
-    "undefined CurrentAmmo leader must not generate a bullet",
-  );
-  assert.equal(world.leader.cooldown, cooldownBefore);
+  assert.deepEqual(world.currentAmmo, { owned_a: 5, owned_b: MECH_AMMO_BASE_CAPACITY, owned_c: 0 });
 }
 
 // --- zero currentAmmo rejects firing without borrowing from ammoStock ---
