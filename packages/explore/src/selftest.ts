@@ -49,7 +49,7 @@ import {
   isShortcutsOverlayHidden,
   setShortcutsOverlayHidden,
 } from "./game/keyboardOverlay";
-import { DEFAULT_EXPEDITION_LOADOUT } from "@estg/shared";
+import { DEFAULT_EXPEDITION_LOADOUT, parseExploreToHubWearSearch } from "@estg/shared";
 import { getCoverObjects } from "./game/coverObjects";
 import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
@@ -2186,7 +2186,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     const res = JSON.stringify(toExploreResult(w));
     const out = JSON.stringify(buildSortieOutcome(w));
     for (const blob of [res, out, hubWearHandoffUrl(w) ?? "", sortHandoffUrl(w)]) {
-      assert.ok(!blob.includes("leftBehind") && !blob.includes("置き去り") && !blob.includes("no_circuit"), "left-behind stays explore-internal");
+      assert.ok(!blob.includes("leftBehind") && !blob.includes("置き去り") && !blob.includes("no_circuit"), "left-behind UI state stays Explore-internal");
     }
     assert.deepEqual(buildSortieOutcome(w)!.mechWear.map((m) => m.instanceId), ["m1", "m2", "m3"], "wear shape unchanged");
   };
@@ -2257,6 +2257,39 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.equal(w.phase, "result");
     assert.deepEqual(leftBehindResultLines(w), []);
     assert.equal(leftBehindResultHtml({}), "", "missing field → no line");
+  }
+  // Return contract captures the existing left-behind source state without changing
+  // the Explore-local display record or inventing wreck/enemy semantics.
+  {
+    const w = createWorld(
+      bootstrapFromSearch(
+        "?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30&mechCurrentAmmo=m1:12;m2:7;m3:9&mechBattery=m1:300:250;m2:300:212;m3:300:180&mechCircuits=m2~circuit_lost*fa*5",
+      ),
+    );
+    startSortie(w);
+    for (const e of w.enemies) {
+      e.alive = false;
+      e.hp = 0;
+    }
+    w.leader.pos = { x: 700, y: 400 };
+    w.wingmen[0]!.pos = { x: 700, y: 400 };
+    w.wingmen[1]!.pos = { x: 1300, y: 400 };
+    assert.ok(requestExtract(w));
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 1 && w.phase === "sortie"; t += 0.1) {
+      tickWorld(w, 0.1, idleInput());
+    }
+    assert.equal(w.extracted, true);
+    assert.deepEqual(w.leftBehind, [
+      { id: w.wingmen[1]!.id, name: "僚機B", reason: "outside_circle" },
+    ]);
+    const returnPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(w)!).search);
+    assert.ok(returnPayload);
+    assert.deepEqual(returnPayload!.lostMechs, [{
+      instanceId: "m3",
+      currentAmmo: 9,
+      battery: { capacity: 300, activity: 180 },
+      circuitIds: [],
+    }]);
   }
   console.log("explore left-behind result line ok");
 }
