@@ -272,12 +272,19 @@ export function applySortieReport(
   const wrecked = new Set(
     (report.wreckedMechInstanceIds ?? []).filter((id) => !lost.has(id)),
   );
-  const lostMechs = (report.lostMechs ?? []).filter(
-    (m, index, rows) =>
-      m.instanceId.trim().length > 0 &&
-      rows.findIndex((row) => row.instanceId === m.instanceId) === index &&
-      !wrecked.has(m.instanceId),
-  );
+  const canonicalCircuitIds = new Set(hub.circuits.map((c) => c.circuitId));
+  const lostMechs = (report.lostMechs ?? [])
+    .filter(
+      (m, index, rows) =>
+        m.instanceId.trim().length > 0 &&
+        rows.findIndex((row) => row.instanceId === m.instanceId) === index &&
+        !lost.has(m.instanceId) &&
+        !wrecked.has(m.instanceId),
+    )
+    .map((m) => ({
+      ...m,
+      circuitIds: [...new Set(m.circuitIds.filter((id) => canonicalCircuitIds.has(id)))],
+    }));
   const lostMechIds = new Set(lostMechs.map((m) => m.instanceId));
   const droppedAt = at.toISOString();
   const droppedToField: FieldCircuitDrop[] = [];
