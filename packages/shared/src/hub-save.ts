@@ -628,7 +628,16 @@ export function normalizeLostMechs(
         ? undefined
         : Math.max(0, Math.floor(Number(obj.currentAmmo)));
     if (obj.currentAmmo != null && !Number.isFinite(Number(obj.currentAmmo))) continue;
-    const battery = normalizeBattery(obj.battery);
+    const batteryRaw = obj.battery;
+    if (!batteryRaw || typeof batteryRaw !== "object" || Array.isArray(batteryRaw)) continue;
+    const batteryObj = batteryRaw as Record<string, unknown>;
+    const capacity = Number(batteryObj.capacity);
+    const activity = Number(batteryObj.activity);
+    if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(activity)) continue;
+    const battery: MechBatteryState = {
+      capacity: Math.floor(capacity),
+      activity: Math.max(0, Math.min(Math.floor(capacity), Math.floor(activity))),
+    };
     const circuitIds = Array.isArray(obj.circuitIds)
       ? [...new Set(obj.circuitIds.filter((id): id is string => typeof id === "string").map((id) => id.trim()).filter(Boolean))]
       : [];
