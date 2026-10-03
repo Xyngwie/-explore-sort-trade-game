@@ -2772,3 +2772,31 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.deepEqual(world(invadeSquadSearch(invadeLink, saved)!).strandedMechs, []);
   console.log("explore lostMechs reappear / recover ok");
 }
+
+// lostMechs recovery follow-up 2 (2026-10-03 神宮): an Invade sortie built from
+// HubSave leaves circuits on a left-behind mech out of the circuit bonuses
+// (same as trade's hubCircuitBonuses).
+{
+  const mk = (id: string) => ({ ...shared.createOwnedMech("mech_gen1", { instanceId: id, durability: 100, currentAmmo: 20 }), battery: { capacity: 300, activity: 250 } });
+  let hub = shared.normalizeHubSnapshot({ ...shared.INITIAL_HUB, fleet: [mk("m1"), mk("m2")], frontProgress: { seed: 777, cols: 8, rows: 8, cleared: [], mined: [] } });
+  hub = shared.upsertCircuitIntoHub(hub, {
+    circuitId: "c_awake",
+    circuitBoard: { ...shared.createEmptyCircuitBoard(8, 8, "c_awake"), outcome: "fully_awakened" } as never,
+    outcome: "fully_awakened",
+  } as never);
+  const eq = shared.equipCircuit(hub, "c_awake", "m2");
+  assert.equal(eq.ok, true);
+  hub = eq.hub;
+  const link = "?sectorX=1&sectorY=1&density=0.3&engage=voluntary";
+  const home = shared.parseTradeToExploreSearch(invadeSquadSearch(link, hub)!);
+  assert.ok((home?.circuitBonuses?.durabilityBuffer ?? 0) >= 10, "mech home → its circuit counts");
+  const lost = shared.applyExploreReturnToHub(hub, {
+    returnKind: "extract", mechWear: [], sortieId: "ex_bonus_lost",
+    lostMechs: [{ instanceId: "m2", currentAmmo: 9, battery: { capacity: 300, activity: 200 }, circuitIds: ["c_awake"], frontSeed: 777, cell: { sx: 1, sy: 1 } }],
+  } as never);
+  assert.equal(lost.applied, true);
+  assert.equal(lost.hub.circuits.find((c) => c.circuitId === "c_awake")?.equippedTo, "m2", "kept on the lost mech");
+  const away = shared.parseTradeToExploreSearch(invadeSquadSearch(link, lost.hub)!);
+  assert.equal(away?.circuitBonuses, undefined, "mech left behind → no circuit bonuses from its circuit");
+  console.log("explore invade sortie bonuses exclude lost-mech circuits ok");
+}

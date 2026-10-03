@@ -13,6 +13,7 @@ import {
   buildMechCircuitsForDeploy,
   buildTradeToExplorePayloadFromFleet,
   buildTradeToExploreUrl,
+  hubVisibleCircuits,
   parseInvadeToExploreSearch,
   parseTradeToExploreSearch,
   resolveSortieSelection,
@@ -34,7 +35,8 @@ export function invadeSquadSearch(search: string, hub: HubSnapshot | null): stri
   if ((payload.deployedInstanceIds ?? []).length === 0) return null;
   const mechCircuits = buildMechCircuitsForDeploy(hub, payload.deployedInstanceIds ?? []);
   if (Object.keys(mechCircuits).length > 0) payload.mechCircuits = mechCircuits;
-  const bonuses = aggregateCircuitBonuses(hub.circuits ?? []);
+  // circuits on a left-behind mech do not count (same as trade's hubCircuitBonuses)
+  const bonuses = aggregateCircuitBonuses(hubVisibleCircuits(hub));
   if (bonuses.durabilityBuffer > 0 || bonuses.craftMultiplier > 1 || bonuses.repairDiscount > 0) {
     payload.circuitBonuses = {
       craftMultiplier: bonuses.craftMultiplier,

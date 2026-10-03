@@ -52,6 +52,7 @@ import {
   simulateReturn,
   yieldBagFromTypedRepairCost,
   hubCircuitBonuses,
+  lostMechCountLineJa,
   repairClassic,
   sellRareItem,
   isRareYieldItemId,
@@ -1623,4 +1624,68 @@ console.log("trade hangar selftest: ok");
   const soldBack = sellCircuit(hs, SEED_CIRCUIT_ID);
   assert.ok(soldBack.notice.startsWith("回路売却"), "can be sold again");
   console.log("trade lost-mech circuits hidden from the HUB ok");
+}
+
+// lostMechs recovery follow-up 2 (2026-10-03 神宮): circuits on a left-behind
+// mech do not count toward the circuit bonuses (repair discount / craft
+// multiplier / durability buffer); the sortie panel shows the left-behind count.
+{
+  const shared = await import("@estg/shared");
+  const store = memoryStorage();
+  let hs = loadPlaytestSeed(createInitialHangar(store), { storage: store, injectRate: 0, rng: () => 0 });
+  const wingId = hs.hub.fleet.find((m) => m.status === "operational" && m.instanceId !== hs.hub.fleet[0]!.instanceId)!.instanceId;
+  let hub = upsertCircuitIntoHub(hs.hub, {
+    circuitId: "lb_awake",
+    circuitBoard: { ...createEmptyCircuitBoard(8, 8, "lb_awake"), outcome: "fully_awakened" } as never,
+    outcome: "fully_awakened",
+  } as never);
+  for (const c of hub.circuits.filter((x) => x.equippedTo === wingId)) hub = shared.unequipCircuit(hub, c.circuitId).hub;
+  const eq = shared.equipCircuit(hub, "lb_awake", wingId);
+  assert.equal(eq.ok, true, `equip: ${eq.reason}`);
+  hub = eq.hub;
+  saveHubSaveToLocalStorage(hub, store);
+  hs = createInitialHangar(store);
+  const before = hubCircuitBonuses(hs.hub);
+  assert.ok(before.durabilityBuffer >= 10 && before.repairDiscount > 0, "awakened circuit counts while its mech is home");
+  assert.equal(lostMechCountLineJa(hs.hub), null, "0 lost → line hidden");
+
+  const lostRet = applyExploreReturnToHub(hs.hub, {
+    returnKind: "extract", mechWear: [], sortieId: "lb_bonus_lost",
+    lostMechs: [{ instanceId: wingId, currentAmmo: 9, battery: { capacity: 300, activity: 200 }, circuitIds: ["lb_awake"], frontSeed: 77, cell: { sx: 1, sy: 2 } }],
+  });
+  assert.equal(lostRet.applied, true);
+  saveHubSaveToLocalStorage(lostRet.hub, store);
+  hs = createInitialHangar(store);
+  assert.equal(hs.hub.circuits.find((c) => c.circuitId === "lb_awake")?.equippedTo, wingId, "still in HubSave on the lost mech");
+  const lost = hubCircuitBonuses(hs.hub);
+  const visibleOnly = shared.aggregateCircuitBonuses(shared.hubVisibleCircuits(hs.hub));
+  assert.deepEqual(lost, visibleOnly, "bonuses = visible circuits only");
+  assert.equal(lost.durabilityBuffer, before.durabilityBuffer - 10, "durability buffer drops by the lost circuit");
+  assert.ok(lost.repairDiscount < before.repairDiscount, "repair discount drops");
+  assert.ok(lost.craftMultiplier <= before.craftMultiplier, "craft multiplier never rises");
+  assert.equal(lost.counts.fully_awakened, before.counts.fully_awakened - 1);
+  const deploy = buildDeployUrl(hs);
+  if (deploy) {
+    const inbound = parseTradeToExploreSearch(new URL(deploy).search);
+    assert.equal(inbound?.circuitBonuses?.durabilityBuffer ?? 0, lost.durabilityBuffer, "deploy link carries the reduced bonuses");
+  }
+  assert.equal(lostMechCountLineJa(hs.hub), "置き去り 1 機（Invade の盤に表示）");
+  assert.equal(lostMechCountLineJa({ lostMechs: [{}, {}] as never }), "置き去り 2 機（Invade の盤に表示）");
+  {
+    const { readFileSync } = await import("node:fs");
+    const mainSrc = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    const i = mainSrc.indexOf("${deployList}");
+    assert.ok(i > 0 && mainSrc.indexOf("lostLine ?", i) > i && mainSrc.indexOf("lostLine ?", i) < mainSrc.indexOf("摩耗 / 修理", i), "line under the sortie mech list");
+  }
+
+  // recovered → counts again
+  const rec = applyExploreReturnToHub(hs.hub, {
+    returnKind: "extract", mechWear: [], sortieId: "lb_bonus_recover", recoveredLostMechInstanceIds: [wingId],
+  });
+  assert.equal(rec.applied, true);
+  saveHubSaveToLocalStorage(rec.hub, store);
+  hs = createInitialHangar(store);
+  assert.deepEqual(hubCircuitBonuses(hs.hub), before, "recovered → bonuses back");
+  assert.equal(lostMechCountLineJa(hs.hub), null, "recovered → line hidden");
+  console.log("trade lost-mech circuits excluded from bonuses + count line ok");
 }
