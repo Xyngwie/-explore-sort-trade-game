@@ -328,3 +328,18 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
   .cell-sortie-bar:has(.cta-cluster) p:first-child { display: none; }
   .cell-sortie-bar:has(.cta-cluster) .btn { padding: 0.25rem 0.5rem; font-size: 0.72rem; }
 }
+/* Left-behind mechs (HubSave.lostMechs) on this cell — display only.
+   候補（神宮の確認待ち）: 右上の小さな灰色の点。灰色は Explore の置き去り機の色 #8a9099 に合わせた。 */
+.cell.lost-mech { position: relative; }
+.cell.lost-mech::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #8a9099;
+  box-shadow: 0 0 0 1px #0d1014;
+  pointer-events: none;
+}
