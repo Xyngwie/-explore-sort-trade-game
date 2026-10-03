@@ -542,7 +542,15 @@ export function buildTradeToExploreUrl(
       ids.length > 0 ? ids : undefined,
     );
     if (encodedAmmo) u.searchParams.set("mechCurrentAmmo", encodedAmmo);
-  } else {
+  }
+  if (payload.mechBattery && payload.mechBattery.length > 0) {
+    const encodedBattery = encodeMechBatteryCompact(
+      payload.mechBattery,
+      ids.length > 0 ? ids : undefined,
+    );
+    if (encodedBattery) u.searchParams.set("mechBattery", encodedBattery);
+  }
+  if (!payload.mechCurrentAmmo || payload.mechCurrentAmmo.length === 0) {
     u.searchParams.set(
       "startingAmmo",
       String(Math.max(0, Math.floor(payload.startingAmmo))),
@@ -590,7 +598,8 @@ export function parseTradeToExploreSearch(
     !p.has("deployedInstanceIds") &&
     !p.has("mechDurability") &&
     !p.has("circuitBonuses") &&
-    !p.has("mechCircuits")
+    !p.has("mechCircuits") &&
+    !p.has("mechBattery")
   ) {
     return null;
   }
@@ -605,6 +614,8 @@ export function parseTradeToExploreSearch(
   };
   const mechCurrentAmmo = parseMechCurrentAmmoCompact(p.get("mechCurrentAmmo"));
   if (mechCurrentAmmo.length > 0) payload.mechCurrentAmmo = mechCurrentAmmo;
+  const mechBattery = parseMechBatteryCompact(p.get("mechBattery"));
+  if (mechBattery.length > 0) payload.mechBattery = mechBattery;
   if (deployedInstanceIds.length > 0) {
     payload.deployedInstanceIds = deployedInstanceIds;
   }
@@ -648,6 +659,50 @@ function encodeDropIds(ids: readonly string[] | undefined): string {
 
 function encodeInstanceIdsCompact(ids: readonly string[] | undefined): string {
   return (ids ?? []).map((id) => id.trim()).filter(Boolean).join(",");
+}
+
+function encodeMechBatteryCompact(
+  rows: readonly MechBatteryRow[],
+  onlyInstanceIds?: readonly string[],
+): string {
+  const allow = onlyInstanceIds ? new Set(onlyInstanceIds) : null;
+  const seen = new Set<string>();
+  return rows
+    .map((row) => {
+      const id = row.instanceId.trim();
+      if (!id || (allow && !allow.has(id)) || seen.has(id)) return "";
+      seen.add(id);
+      const capacity = Math.max(1, Math.floor(row.battery.capacity));
+      const activity = Math.max(0, Math.min(capacity, Math.floor(row.battery.activity)));
+      return encodeURIComponent(id) + ":" + capacity + ":" + activity;
+    })
+    .filter(Boolean)
+    .join(";");
+}
+
+function parseMechBatteryCompact(raw: string | null): MechBatteryRow[] {
+  if (!raw) return [];
+  const out: MechBatteryRow[] = [];
+  const seen = new Set<string>();
+  for (const part of raw.split(";")) {
+    const fields = part.split(":");
+    if (fields.length !== 3) continue;
+    const instanceId = decodeURIComponent(fields[0] ?? "").trim();
+    const capacity = Number.parseInt(fields[1] ?? "", 10);
+    const activity = Number.parseInt(fields[2] ?? "", 10);
+    if (!instanceId || !Number.isFinite(capacity) || !Number.isFinite(activity) || capacity <= 0 || seen.has(instanceId)) {
+      continue;
+    }
+    seen.add(instanceId);
+    out.push({
+      instanceId,
+      battery: {
+        capacity: Math.floor(capacity),
+        activity: Math.max(0, Math.min(Math.floor(capacity), Math.floor(activity))),
+      },
+    });
+  }
+  return out;
 }
 
 function encodeMechCurrentAmmoCompact(
@@ -695,6 +750,10 @@ export function buildExploreToHubWearUrl(
     const encodedAmmo = encodeMechCurrentAmmoCompact(payload.mechCurrentAmmo);
     if (encodedAmmo) u.searchParams.set("mechCurrentAmmo", encodedAmmo);
   }
+  if (payload.mechBattery && payload.mechBattery.length > 0) {
+    const encodedBattery = encodeMechBatteryCompact(payload.mechBattery);
+    if (encodedBattery) u.searchParams.set("mechBattery", encodedBattery);
+  }
   const sortieId = encodeSortieId(payload.sortieId);
   if (sortieId) u.searchParams.set("sortieId", sortieId);
   const inventoryDrops = encodeInventoryDrops(payload.inventoryDrops);
@@ -715,10 +774,12 @@ export function parseExploreToHubWearSearch(
   const kindRaw = (p.get("returnKind") ?? "").trim();
   if (!isSortieReturnKind(kindRaw)) return null;
   const mechCurrentAmmo = parseMechCurrentAmmoCompact(p.get("mechCurrentAmmo"));
+  const mechBattery = parseMechBatteryCompact(p.get("mechBattery"));
   return {
     returnKind: kindRaw,
     mechWear: parseMechWearCompact(p.get("mechWear")),
     ...(mechCurrentAmmo.length > 0 ? { mechCurrentAmmo } : {}),
+    ...(mechBattery.length > 0 ? { mechBattery } : {}),
     ...(encodeSortieId(p.get("sortieId") ?? undefined)
       ? { sortieId: encodeSortieId(p.get("sortieId") ?? undefined) }
       : {}),
