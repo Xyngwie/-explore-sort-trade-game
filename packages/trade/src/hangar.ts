@@ -968,9 +968,21 @@ export function selectAllDeployable(state: HangarState): HangarState {
 }
 
 
-/** Aggregate HubSave.circuits outcomes into sortie/hub bonuses. */
+/**
+ * Aggregate HubSave.circuits outcomes into sortie/hub bonuses (repair discount,
+ * craft multiplier, durability buffer). Circuits on a left-behind mech
+ * (`lostMechs`) are out of the HUB's hands and do not count (2026-10-03 神宮);
+ * they count again once the mech is recovered. The perfect max-size record is
+ * separate and still counts every circuit.
+ */
 export function hubCircuitBonuses(hub: HubSnapshot): AggregatedCircuitBonuses {
-  return aggregateCircuitBonuses(hub.circuits ?? []);
+  return aggregateCircuitBonuses(hubVisibleCircuits(hub));
+}
+
+/** Sortie panel line under the sortie mech list; null when no mech is left behind (hidden). */
+export function lostMechCountLineJa(hub: Pick<HubSnapshot, "lostMechs">): string | null {
+  const n = (hub.lostMechs ?? []).length;
+  return n > 0 ? `置き去り ${n} 機（Invade の盤に表示）` : null;
 }
 
 export function buildDeployUrl(state: HangarState): string | null {
