@@ -120,6 +120,37 @@ assert.equal(noFront.hub.fieldDrops.length, 0);
 assert.equal(noFront.hub.circuits.length, 0);
 
 
+// Invalid lost-mech snapshots are discarded rather than receiving normalizeBattery defaults.
+{
+  const base = createOwnedMech("mech_gen1", { instanceId: "valid-lost" });
+  const result = normalizeLostMechs([
+    {
+      instanceId: "missing-battery",
+      currentAmmo: 4,
+      circuitIds: [],
+    },
+    {
+      instanceId: "invalid-battery",
+      currentAmmo: 5,
+      battery: { capacity: "bad", activity: 1 },
+      circuitIds: [],
+    },
+    {
+      instanceId: "valid-lost",
+      currentAmmo: 6,
+      battery: { capacity: 300, activity: 221 },
+      circuitIds: [],
+    },
+  ]);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0], {
+    instanceId: base.instanceId,
+    currentAmmo: 6,
+    battery: { capacity: 300, activity: 221 },
+    circuitIds: [],
+  });
+}
+
 // Explore left-behind return state is persisted independently from wreck/field drops.
 {
   const lostMech = {
