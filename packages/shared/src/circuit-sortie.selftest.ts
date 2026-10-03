@@ -5,6 +5,7 @@ import {
   deserializeHubSave,
   serializeHubSave,
   type HubCircuitRecord,
+  normalizeLostMechs,
 } from "./hub-save";
 import { createOwnedMech } from "./mech-fleet";
 import { createEmptyCircuitBoard } from "./circuit-board";
