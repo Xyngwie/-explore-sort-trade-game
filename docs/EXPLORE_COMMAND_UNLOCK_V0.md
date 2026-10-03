@@ -49,7 +49,7 @@
 ```ts
 // commandUnlock.ts（純関数）
 isCommandUnlocked(commandId, equippedCircuits, { mode?: "all_unlocked" | "release", table? }): boolean
-isCommandUnlockedFor(world, commandId): boolean        // world.commandUnlock を使う
+isCommandUnlockedFor(world, commandId, unitId?): boolean  // world.commandUnlock を使う
 CIRCUIT_COMMAND_UNLOCKS: CircuitCommandUnlockTable     // 本番の対応表 = 空（Phase 3 で決める）
 
 // commands.ts（実行側ゲート）
@@ -68,7 +68,7 @@ isWingmanMobilityUnlocked(wingmanId, equippedCircuits, { mode, table }): boolean
 isWingmanMobileFor(world, wingmanId): boolean
 ```
 
-- 引数に僚機 ID を取る（将来の僚機ごとの回路に備える）。現時点では出撃の装備回路を全僚機で共有するため、全僚機が同じ結果になる。
+- 引数に僚機 ID を取り、`equippedByUnit` からその僚機自身の回路を判定する。機体ごとに装備が異なれば判定結果も独立する。
 - **all_unlocked（プレビュー既定）**: 従来どおり移動する。
 - **release・回路なし**: 僚機は同行するが **移動しない**（追従・方針ごとの移動・探索・回収なし）。出撃開始地点に留まり、**武器射程内の敵だけをその場から撃つ（自衛）**。追いかけない。
   - 実装は `decideWingman` 冒頭の 1 分岐のみ: `moveTarget: null`・`trySalvage: false`・`fireAt` = 射程（`weaponRange`）内の最寄りの敵。回収チャネル中なら中断。それ以外の僚機 AI は変更なし。
@@ -84,11 +84,15 @@ isWingmanMobileFor(world, wingmanId): boolean
   - 判定は離昇の瞬間の `isWingmanMobileFor`。記録は Explore 内部の `world.leftBehind` のみで、`ExploreResult`／`ExploreSortieOutcome`／Sort・Hub 摩耗 URL には含めない（Hub への出力形式は不変）。隊長が円外で脱出失敗の場合も、円外の僚機は既存ログと同じく列挙される。
   - 救済処理・大破機体の持ち帰りは設計中のため入れていない。
 
-## 4. 回路装備状態の出どころ（契約）
+## 4. 回路装備状態の出どころ（現行契約）
 
-- `World.commandUnlock = { mode, equippedCircuits: string[], table? }` は **Explore ローカル**（セーブ／ハンドオフ契約ではない）。
-- 現在、HubSave には「装備中の回路」という概念がなく（`HubSnapshot.circuits` は所持ボード一覧）、trade→explore には集計済み `circuitBonuses` しか渡っていない。したがって `equippedCircuits` は **常に `[]`**。
-- 実際の装備状態を Explore に届けるには、trade→explore ハンドオフへの **任意・後方互換フィールド追加**（例: 装備回路キー一覧）が必要。これは契約変更なので **承認後の別タスク**。既存 URL キーは変更しない。
+- `World.commandUnlock` は **Explore ローカルの判定状態**であり、HubSaveそのものを保存する契約ではない。
+- 現行の型は `CommandUnlockState = { mode, equippedByUnit: Record<unitId, string[]>, table? }`。旧 `equippedCircuits: string[]` ではない。
+- `packages/explore/src/game/circuitJudgement.ts` の `buildEquippedByUnit()` が、Trade→Explore の `mechCircuits`（`instanceId` keyed）を、出撃順に `leader` / `wing-a` / `wing-b` の Explore unitIdへ変換する。
+- この変換時、`restoreState` が `fully_awakened` または `bypass` の回路だけを `equippedByUnit` に入れる。 `offline` と `unrestored` は回路判定の対象にならない。
+- `packages/shared` 側の canonical ownership は引き続き `HubSave.circuits` と `equippedTo = instanceId`。Explore は受け取った出撃対象だけを機体単位へ写像する。
+- `mechCircuits` は任意の後方互換フィールドで、旧URLなどで存在しない場合は `equippedByUnit` が空になり得る。ただし `commandUnlock` 自体が存在しない従来形式では `isCommandUnlockedFor()` / `isWingmanMobileFor()` が **all-unlocked の旧挙動**を維持する。
+- 本番の `CIRCUIT_COMMAND_UNLOCKS` は現在も空。回路→コマンドの具体的な対応表は未決定であり、この文書では新しい対応を定義しない。
 
 ## 5. モード（プレビュー／リリース）
 
