@@ -45,7 +45,7 @@ export function syncLostMechsToBoard(
   storage?: Pick<Storage, "getItem" | "setItem"> | null,
 ): Pick<FrontSession, "lostByCell" | "placement"> {
   const hub = readHub(storage);
-  const empty = { changed: false, moved: [], placed: [], movedDrops: [] };
+  const empty = { changed: false, moved: [], placed: [], movedDrops: [], movedInventoryDrops: [] };
   if (board.seed == null || !Number.isFinite(board.seed)) {
     return { lostByCell: new Map(), placement: empty };
   }

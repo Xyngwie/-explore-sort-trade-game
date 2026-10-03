@@ -89,6 +89,27 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
   assert.equal(lostMechSortieLineJa(2), "置き去り機 2 機：出撃して離陸すれば回収");
 }
 
+// inventoryFieldDrops: same rule as lostMechs / fieldDrops (same coordinates, clamped; this board kept)
+{
+  const inv = (dropId: string, frontSeed: number, cell: { sx: number; sy: number }) => ({
+    dropId, frontSeed, cell, inventory: { iron: 2 }, cause: "wreck_not_carried", droppedAt: "2026-10-03T00:00:00.000Z",
+  });
+  const hub = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    inventoryFieldDrops: [inv("inv_here", 10, { sx: 1, sy: 1 }), inv("inv_old", 9, { sx: -3, sy: 2 }), inv("inv_far", 9, { sx: -25, sy: 18 })],
+  } as never);
+  assert.equal(hub.inventoryFieldDrops.length, 3, "fixture inventory drops survive normalize");
+  const res = placeLostOnFront(hub, 10, AOI_HALF);
+  assert.equal(res.changed, true);
+  assert.deepEqual(res.movedInventoryDrops, ["inv_old", "inv_far"]);
+  const byId = new Map(res.hub.inventoryFieldDrops.map((d) => [d.dropId, d]));
+  assert.deepEqual([byId.get("inv_here")!.frontSeed, byId.get("inv_here")!.cell], [10, { sx: 1, sy: 1 }], "inventory drop on this board: unchanged");
+  assert.deepEqual([byId.get("inv_old")!.frontSeed, byId.get("inv_old")!.cell], [10, { sx: -3, sy: 2 }], "inventory drop: same coordinates");
+  assert.deepEqual(byId.get("inv_far")!.cell, { sx: -11, sy: 11 }, "inventory drop: clamped into range");
+  assert.deepEqual(byId.get("inv_old")!.inventory, hub.inventoryFieldDrops.find((d) => d.dropId === "inv_old")!.inventory, "contents kept");
+  assert.equal(placeLostOnFront(res.hub, 10, AOI_HALF).changed, false, "idempotent");
+}
+
 // hub-persist: Invade open puts legacy rows on the start cell and saves; regenerate moves rows to the same coords
 {
   const st = memStorage();

@@ -7,7 +7,8 @@
  *   touches mines / opening.
  * - Board regenerated (new seed): every placed row moves to the same
  *   coordinates on the new board (`frontSeed` rewritten), clamped into the
- *   playable range. Circuit field drops (`fieldDrops`) follow the same rule.
+ *   playable range. Circuit field drops (`fieldDrops`) and general inventory
+ *   field drops (`inventoryFieldDrops`) follow the same rule.
  * - Rows without a place (left behind before Explore recorded places) are put
  *   on the current board's start cell (HQ 0,0) when Invade opens; from then on
  *   they reappear / are recovered like any other row (Explore).
@@ -47,10 +48,12 @@ export type FrontPlacementResult = {
   placed: string[];
   /** fieldDrops moved from another board. */
   movedDrops: string[];
+  /** inventoryFieldDrops moved from another board. */
+  movedInventoryDrops: string[];
 };
 
 /**
- * Put every left-behind mech (and circuit field drop) on the board with
+ * Put every left-behind mech (and circuit / inventory field drop) on the board with
  * `seed`: rows of another board keep their coordinates (clamped), rows without
  * a place go to the start cell. Rows already on this board are kept as they are
  * (only clamped if out of range).
@@ -60,6 +63,7 @@ export function placeLostOnFront(hub: HubSnapshot, seed: number, aoiHalf: number
   const moved: string[] = [];
   const placed: string[] = [];
   const movedDrops: string[] = [];
+  const movedInventoryDrops: string[] = [];
   const lostMechs = (hub.lostMechs ?? []).map((row) => {
     if (row.frontSeed == null || row.cell == null) {
       placed.push(row.instanceId);
@@ -76,13 +80,20 @@ export function placeLostOnFront(hub: HubSnapshot, seed: number, aoiHalf: number
     movedDrops.push(d.dropId);
     return { ...d, frontSeed: s, cell };
   });
-  const changed = moved.length + placed.length + movedDrops.length > 0;
+  const inventoryFieldDrops = (hub.inventoryFieldDrops ?? []).map((d) => {
+    const cell = clampToFront(d.cell, aoiHalf);
+    if (d.frontSeed === s && sameCell(cell, d.cell)) return d;
+    movedInventoryDrops.push(d.dropId);
+    return { ...d, frontSeed: s, cell };
+  });
+  const changed = moved.length + placed.length + movedDrops.length + movedInventoryDrops.length > 0;
   return {
-    hub: changed ? normalizeHubSnapshot({ ...hub, lostMechs, fieldDrops }) : hub,
+    hub: changed ? normalizeHubSnapshot({ ...hub, lostMechs, fieldDrops, inventoryFieldDrops }) : hub,
     changed,
     moved,
     placed,
     movedDrops,
+    movedInventoryDrops,
   };
 }
 

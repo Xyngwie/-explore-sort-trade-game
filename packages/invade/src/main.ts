@@ -401,6 +401,7 @@ function dangerLegendHtml(): string {
     <span class="danger-swatch flag"><span class="chip" aria-hidden="true"></span>旗</span>
     <span class="danger-swatch pending"><span class="chip" aria-hidden="true"></span>敵接触・未解決</span>
     <span class="danger-swatch resolved"><span class="chip" aria-hidden="true"></span>解決済・再出撃可</span>
+    <span class="danger-swatch lost-mech"><span class="chip" aria-hidden="true"></span>置き去り機</span>
     ${swatches}
   </div>
   <p class="muted" style="margin-top:0.35rem;font-size:0.72rem">未開マスの色は HQ からの距離帯（爆弾密度の手触り）。近傍薄 → 前線濃。</p>`;
