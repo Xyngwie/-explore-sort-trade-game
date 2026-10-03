@@ -214,6 +214,17 @@ API: `spawnContainersAt` / `spawnEnemyDeathDrops`。
 
 ---
 
+
+### 5.6 置き去り機体の再出現・回収（2026-10-03 正本化）
+
+- **Invade outing の判定:** Invade のセクター情報と HubSave の `frontProgress.seed` がある出撃を Invade outing とする。出撃地点の `frontSeed`＋`cell` を置き去り機体の再出現場所として扱う。
+- **再出現:** 出撃開始時、同じ `frontSeed`＋`cell` に記録された `lostMechs` のうち今回の出撃機ではない機体を World に再出現させる。再出現機は隊長の降下地点付近に配置される。
+- **回収:** 離昇時に隊長の搭乗円内にいる再出現機を回収する。撤退・全滅では回収しない。回収した機体は保存済みの `instanceId`・`currentAmmo`・`battery`・`circuitIds` を維持したまま fleet へ戻る。
+- **再度の置き去り:** 再出現機を回収しなかった場合、同じ `instanceId` の `lostMechs` 行をその時点の状態へ更新する。新しい別機体として登録しない。
+- **Non-Invade outing:** Invade を経由しない出撃では、離昇時の未帰還機体を `lostMechs` に保持せず完全喪失とする。
+- **状態保持:** 回収時に `CurrentAmmo`・Battery・circuitIds を startingAmmo 等で上書き・再生成しない。
+- **未定義遷移:** Abandoned → Wrecked / Enemy の具体条件は本仕様では定義しない。Battery Activity=0 は直接条件にしない。
+
 ## 6. I/O v2 との関係
 
 本ドキュメントは **振る舞い** の正本。機体インスタンス入出力は `docs/EXPLORE_IO_V2.md`。
