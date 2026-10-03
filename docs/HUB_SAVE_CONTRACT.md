@@ -216,7 +216,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 
 ### 12.5 2026-10-01〜03 の追加（#199・#201・#203・#204・#206、携行弾の修正）
 
-`HubSaveV3`（`v: 3`・キー `wreckline.hubSave.v3`）のまま、任意フィールドを加算した。版もキーも変えていない。ここではコード（main `d6ca6ff` に携行弾の修正（explore、branch `fix/explore-unset-ammo-full`）と携行弾の修正（trade、branch `fix/trade-writeback-ammo-battery`）を入れた後）がしていることを書く。反映経路（U9）は **2026-10-03 に神宮が「Explore が出撃終了時に HubSave へ直接書く」と決定、実装は別 PR**（[`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md) §5.5）。下の帰還 URL の記述は、その PR までの動き。
+`HubSaveV3`（`v: 3`・キー `wreckline.hubSave.v3`）のまま、任意フィールドを加算した。版もキーも変えていない。ここではコード（main `d6ca6ff` に携行弾の修正（explore、#208）と携行弾の修正（trade、#209）を入れた後）がしていることを書く。反映経路（U9）は **2026-10-03 に神宮が「Explore が出撃終了時に HubSave へ直接書く」と決定、実装は別 PR**（[`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md) §5.5）。下の帰還 URL の記述は、その PR までの動き。
 
 #### 機体ごと（`fleet[]` の `OwnedMech`。`shared` `mech-fleet.ts`）
 
@@ -226,7 +226,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 | `battery` | `{ capacity: number; activity: number }`。`capacity` は 1 以上の整数、`activity` は 0〜`capacity` の整数 | 欠落・不正は `capacity 300`／`activity 300`（`MECH_BATTERY_DEFAULT_*`）。`normalizeBattery` で切り捨て・範囲内に収める。新しく作る機体も 300／300 | #204 |
 
 - HUB の `ammoLoad`（弾種別の所持）は **共有在庫のまま**。`currentAmmo` は `ammoLoad` に入れない。
-- trade は帰還の反映時に、帰還 URL の `mechCurrentAmmo`・`mechBattery` を該当する機体の `currentAmmo`・`battery` に書き戻す（携行弾の修正（trade、branch `fix/trade-writeback-ammo-battery`）。`applyReturnedMechState`。0 も 0 として書く。報告にない機体は変えない）。`sortieId` が既に `appliedSortieIds` にある帰還は従来どおり無視するので、古い URL を開き直しても新しい値を上書きしない。書き戻した値は次の出撃 URL（`buildTradeToExplorePayloadFromFleet`）の `mechCurrentAmmo`・`mechBattery` でそのまま送られる。
+- trade は帰還の反映時に、帰還 URL の `mechCurrentAmmo`・`mechBattery` を該当する機体の `currentAmmo`・`battery` に書き戻す（携行弾の修正（trade、#209）。`applyReturnedMechState`。0 も 0 として書く。報告にない機体は変えない）。`sortieId` が既に `appliedSortieIds` にある帰還は従来どおり無視するので、古い URL を開き直しても新しい値を上書きしない。書き戻した値は次の出撃 URL（`buildTradeToExplorePayloadFromFleet`）の `mechCurrentAmmo`・`mechBattery` でそのまま送られる。
 - trade の旧 typed-repair（`repairTyped`）は機体を作り直すので、`currentAmmo` は未設定に、`battery` は 300／300 に戻る（旧コードは触らない方針。STATUS のバックログ）。
 
 #### HubSnapshot のトップレベル（`shared` `hub-save.ts`）
@@ -241,7 +241,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - `wreckedMechInstanceIds` の機体（`lostMechInstanceIds` に入っていないもの）は `fleet` に **残したまま** `durability 0`・`status "destroyed"` にする（#199）。
 - `lostMechs` は、`fleet` にいて `lostMechInstanceIds`・`wreckedMechInstanceIds` に入っていない機体だけを受け付け、その機体を `fleet` から外して `hub.lostMechs` に記録する。`circuitIds` は `circuits` に実在する ID だけ残す。**回路の落とし物（`fieldDrops`）は作らない**。回路レコードは `circuits` に残り、装着先の機体が `fleet` にないので、正規化（12.3「`equippedTo` が存在しない機体 → 倉庫へ」）で倉庫（`equippedTo: null`）に戻る（#206）。
   - **決定（2026-10-03 神宮）・実装は未着手**: 置き去りの僚機の回路は落とし物（`fieldDrops`）にしない。回路は失われた機体（`lostMechs` の項目）に付いたままで、`circuitIds` も変えない。失われた機体が戻るのは、プレイヤーが World で見つけて回収したときだけ（回収の処理は Explore が持ち、今ある帰還の反映に乗せる）。自動で部隊に戻ることはない。回収したら `instanceId`・`currentAmmo`・`battery`・`circuitIds` をそのまま保ち、`lostMechs` から外す。再び現れて回収されなかった場合は、同じ `lostMechs` の項目を最新の状態で更新する。残骸化・敵化の条件は未定（バッテリーの活動量 0 はその条件ではない）。回収した機体は通常の部隊として出撃し、`lostMechs` の機体が直接出撃することはない。World での発見・回収の処理は未実装。
-  - **既知の食い違い**: 上の正規化で回路が倉庫に戻る今の動きは、この決定（回路は失われた機体に付いたまま）と食い違う。`lostMechs[].circuitIds` には ID が残るので、同じ回路が倉庫にも失われた機体にもあるように見える。コードは未修正。
+  - **既知の食い違い**: 上の正規化で回路が倉庫に戻る今の動きは、この決定（回路は失われた機体に付いたまま）と食い違う。`lostMechs[].circuitIds` には ID が残るので、同じ回路が倉庫にも失われた機体にもあるように見える。回収の実装（U9 の後）と一緒に直す（それまで未修正）。Invade を通らない出撃では、決定どおりなら置き去りの機体は `lostMechs` に残さず機体も回路も失うが、今は残している（これも既知の食い違い。[`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md) §5.6）。
 - `sortieId` がない・不正（`/^[a-zA-Z0-9_.:-]{1,64}$/` 以外）、または `appliedSortieIds` に既にあるときは何もしない（`applied: false`）。反映したら `appliedSortieIds` の末尾に足し、直近 20 件（`HUB_LIMITS.maxAppliedSortieIds`）に切り詰める。
 
 ### 12.6 受け渡し URL のキー（2026-10-01〜03 の追加）
@@ -271,6 +271,6 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 
 ### 12.7 explore での使い方（#203・#206・携行弾の修正）
 
-- `World.currentAmmo: Record<instanceId, number | undefined>` は出撃時（`createWorld`）に出撃機ごとに作る。`mechCurrentAmmo` に値がある機体はその値（0 なら撃てない）。**値がない機体は満タン `MECH_AMMO_BASE_CAPACITY`（28）にする**（携行弾の修正（explore、branch `fix/explore-unset-ammo-full`）。**暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**。設計は [`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。`startingAmmo` は `World.ammoStock`（HUB の共有在庫の写し）にだけ入り、射撃では減らない。
+- `World.currentAmmo: Record<instanceId, number | undefined>` は出撃時（`createWorld`）に出撃機ごとに作る。`mechCurrentAmmo` に値がある機体はその値（0 なら撃てない）。**値がない機体は満タン `MECH_AMMO_BASE_CAPACITY`（28）にする**（携行弾の修正（explore、#208）。**暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**。設計は [`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。`startingAmmo` は `World.ammoStock`（HUB の共有在庫の写し）にだけ入り、射撃では減らない。
 - 射撃は撃った機体の `currentAmmo` だけを 1 減らす。`currentAmmo` が 0 以下の機体は撃たない（`sim.ts` `tryFire`）。修正前（#203〜携行弾の修正）は、trade が `currentAmmo` を設定しないため出撃 URL に `mechCurrentAmmo` が載らず、未設定の機体が撃てなかった（2026-10-03 に手元で確認。explore の selftest で、d6ca6ff の trade が出す出撃 URL そのものと shared の URL 生成の両方から、隊長機・僚機が射程内の敵を撃てることを固定した）。
 - `World.mechBattery` は `mechBattery` の写しで、今は `lostMechs` の記録にだけ使う。`World.circuitIdsByUnit` は `mechCircuits` の全回路 ID（状態を問わない）をユニットごとに持ち、`lostMechs.circuitIds` に使う。効果の判定は従来どおり `equippedByUnit`（FA・Bypass だけ）。
