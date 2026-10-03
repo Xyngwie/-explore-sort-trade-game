@@ -273,10 +273,12 @@ export function applySortieReport(
     (report.wreckedMechInstanceIds ?? []).filter((id) => !lost.has(id)),
   );
   const canonicalCircuitIds = new Set(hub.circuits.map((c) => c.circuitId));
+  const fleetIds = new Set(hub.fleet.map((m) => m.instanceId));
   const lostMechs = (report.lostMechs ?? [])
     .filter(
       (m, index, rows) =>
         m.instanceId.trim().length > 0 &&
+        fleetIds.has(m.instanceId) &&
         rows.findIndex((row) => row.instanceId === m.instanceId) === index &&
         !lost.has(m.instanceId) &&
         !wrecked.has(m.instanceId),
