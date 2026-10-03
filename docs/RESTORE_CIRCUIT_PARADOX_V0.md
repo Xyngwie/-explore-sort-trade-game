@@ -1,5 +1,7 @@
 # RESTORE Circuit Paradox V0（回路パラドックス／宇宙構想メモ）
 
+> **本作の範囲外の構想。世界観は [`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §2.1 を優先する。**
+
 **ステータス:** 願望・与太話由来の構想メモ · §6 刻印/ロックは薄い実装あり  
 **位置づけ:** **NOT V0 acceptance / NOT implementation ticket**  
 **Related:** [`PRODUCT_VISION.md`](./PRODUCT_VISION.md)、[`RESTORE_V0.md`](./RESTORE_V0.md)（flawed boards / perfect rare）
