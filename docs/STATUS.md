@@ -17,11 +17,11 @@
 
 ## 開いている PR
 
-2026-10-03 時点で 3 件。いずれも 2026-09-29〜30 に作られ、その後の main に追い越されている（扱いは神宮／オーケストレーターの判断待ち。この STATUS の PR では閉じていない）:
-
-- #190 docs: refresh implementation plan for current main（`docs/IMPLEMENTATION_PLAN.md` を `823ae4d` 基準で書き直す案）。基準の時点ですでにマージ済みだった B（#158）を「次の主実装」、C・D を「未着手」としており、その後の E（#195）・D（#197）・F の一部（#199・#206）も反映していない。main の `docs/IMPLEMENTATION_PLAN.md` 自体も 2026-09-26 のまま。#190 にあった GeminiSpark QA の結果は下の「QA・実機確認の記録」に移した
-- #193 chore: update agent claims after PR191（`docs/AGENT_CLAIMS.md` の #191 完了扱い）。同じ更新をこの STATUS 同期の PR に含めた。#193 の「実装Eの担当宣言が確定するまで着手しない」は、E が #195 でマージ済みのため古い
-- #194 test(shared): cover circuit sortie field-drop contract [main rerun]。同じ内容（`packages/shared/src/circuit-sortie.selftest.ts` と `package.json`）が #196 でマージ済み。そのあと #206 が同じファイルにテストを足しているため、今の main とは add/add で競合する
+- 2026-10-03 時点で、9/29〜30 に作られて追い越されていた 3 件を整理した:
+  - #194（shared の落とし物契約テストの再 PR）: #196 と同一内容で、その後 #206 が同じファイルに追記して main と競合 → 2026-10-03 に閉じた
+  - #190（`docs/IMPLEMENTATION_PLAN.md` を `823ae4d` 基準で書き直す案）: B（#158）を「次の主実装」、C・D を「未着手」としており、作成時点でも古かった。GeminiSpark QA の結果は下の「QA・実機確認の記録」に移した → この STATUS の PR のマージ後に閉じる。main の `docs/IMPLEMENTATION_PLAN.md` は 2026-09-26 のまま
+  - #193（`docs/AGENT_CLAIMS.md` の #191 完了扱い）: 同じ更新をこの STATUS の PR に含めた（#193 の「実装Eの担当宣言が確定するまで着手しない」は E が #195 でマージ済みのため含めない）→ この STATUS の PR のマージ後に閉じる
+- これから出す PR（順番どおり）: 携行弾の修正（explore）→ 携行弾の修正（trade）→ 契約文書 → U9 の実装
 
 ## 進行中／次にやること
 
@@ -34,7 +34,6 @@
 - **U9（反映経路）の実装**: Explore が出撃終了時に HubSave へ直接書く（2026-10-03 神宮の決定）。携行弾の修正（explore・trade）と契約文書の PR の後に別 PR で対応。trade は `sortieId`／`appliedSortieIds` で二重反映しない
 - **最優先: 携行弾の修正**（下の「既知の問題」。explore の修正 PR → trade の修正 PR）
 - **文書**: 2026-10-01〜03 に増えた保存・受け渡しの項目（下記）を `docs/HUB_SAVE_CONTRACT.md`・`CIRCUIT_DATA_MODEL_V0.md` に追記する（次の文書のみの PR で対応）。`docs/IMPLEMENTATION_PLAN.md` は 2026-09-26 のまま
-- **PR の整理**: 上の #190・#193・#194 の扱いを決める
 
 設計との差:
 
