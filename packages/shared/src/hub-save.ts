@@ -18,7 +18,9 @@ import {
   createOwnedMech,
   normalizeBattery,
   normalizeFleet,
+  MECH_STATUSES,
   type MechBatteryState,
+  type MechStatus,
   type OwnedMech,
 } from "./mech-fleet";
 import {
@@ -125,13 +127,35 @@ export type FieldInventoryDrop = {
   droppedAt: string;
 };
 
-/** Persistent snapshot of a mech left behind during Explore return. */
+/**
+ * Persistent snapshot of a mech left behind during Explore return.
+ *
+ * Since the lostMechs-recovery shared PR (2026-10-03, CIRCUIT_DATA_MODEL_V0
+ * §5.6) the circuits stay attached to the lost mech: their records keep
+ * `equippedTo === instanceId` and `circuitIds` is reconciled to exactly those
+ * records on every normalize (HubCircuitRecord stays the source of truth).
+ * Every field after `circuitIds` is optional (older saves / returns lack
+ * them; invalid values are dropped one by one, the row is kept).
+ */
 export type LostMechReturnState = {
   instanceId: string;
   currentAmmo: number | undefined;
   battery: MechBatteryState;
   /** Circuit ids only; HubCircuitRecord remains the circuit source of truth. */
   circuitIds: string[];
+  /** Where it was left: Invade front seed (uint32) … */
+  frontSeed?: number;
+  /** … and sortie cell. */
+  cell?: FrontCellCoord;
+  /** ISO time it was (last) left behind. */
+  lostAt?: string;
+  /** sortieId of the sortie it was (last) left behind in. */
+  lostSortieId?: string;
+  /** Copy for putting it back into the fleet on recovery. */
+  catalogId?: MechId;
+  durability?: number;
+  durabilityMax?: number;
+  status?: MechStatus;
 };
 
 /**
@@ -480,12 +504,15 @@ export function mechSlotCapacity(_mech?: Pick<OwnedMech, "instanceId"> | null): 
 function enforceEquipIntegrity(
   circuits: HubCircuitRecord[],
   fleet: readonly OwnedMech[],
+  /** Left-behind mechs: their circuits stay attached (not counted in any cap). */
+  lostMechIds: ReadonlySet<string> = new Set(),
 ): HubCircuitRecord[] {
   const mechs = new Map(fleet.map((m) => [m.instanceId, m]));
   const byMech = new Map<string, number[]>();
   const out = circuits.map((c) => ({ ...c }));
   out.forEach((c, i) => {
     if (c.equippedTo == null) return;
+    if (!mechs.has(c.equippedTo) && lostMechIds.has(c.equippedTo)) return;
     if (!mechs.has(c.equippedTo)) {
       c.equippedTo = null;
       return;
@@ -653,9 +680,67 @@ export function normalizeLostMechs(
       ? [...new Set(obj.circuitIds.filter((id): id is string => typeof id === "string").map((id) => id.trim()).filter(Boolean))]
       : [];
     seen.add(instanceId);
-    out.push({ instanceId, currentAmmo, battery, circuitIds });
+    out.push({ instanceId, currentAmmo, battery, circuitIds, ...normalizeLostMechExtras(obj) });
   }
   return out;
+}
+
+/**
+ * Optional location / time / copy fields of a lostMechs row. Each invalid
+ * value is dropped on its own (the row itself is kept — older rows have none).
+ */
+export function normalizeLostMechExtras(
+  obj: Record<string, unknown>,
+): Partial<Omit<LostMechReturnState, "instanceId" | "currentAmmo" | "battery" | "circuitIds">> {
+  const out: Partial<Omit<LostMechReturnState, "instanceId" | "currentAmmo" | "battery" | "circuitIds">> = {};
+  const seed = typeof obj.frontSeed === "number" ? obj.frontSeed : obj.frontSeed == null ? NaN : Number(obj.frontSeed);
+  if (Number.isFinite(seed)) out.frontSeed = Math.trunc(seed) >>> 0;
+  const cell = normalizeFrontCoord(obj.cell);
+  if (cell) out.cell = cell;
+  const lostAt = sanitizeIso(obj.lostAt);
+  if (lostAt) out.lostAt = lostAt;
+  const lostSortieId = sanitizeSortieId(obj.lostSortieId);
+  if (lostSortieId) out.lostSortieId = lostSortieId;
+  if (typeof obj.catalogId === "string" && isMechId(obj.catalogId)) out.catalogId = obj.catalogId;
+  const dMax = Number(obj.durabilityMax);
+  if (obj.durabilityMax != null && Number.isFinite(dMax) && dMax >= 1) out.durabilityMax = Math.floor(dMax);
+  const d = Number(obj.durability);
+  if (obj.durability != null && Number.isFinite(d)) {
+    out.durability = Math.max(0, Math.floor(d));
+    if (out.durabilityMax != null) out.durability = Math.min(out.durability, out.durabilityMax);
+  }
+  if (typeof obj.status === "string" && (MECH_STATUSES as readonly string[]).includes(obj.status)) {
+    out.status = obj.status as MechStatus;
+  }
+  return out;
+}
+
+/**
+ * One place per mech and per circuit (lostMechs recovery PR):
+ * - a row whose mech is in `fleet` is dropped (the fleet copy wins);
+ * - `circuitIds` = the circuits whose record has `equippedTo === instanceId`
+ *   (row order first, then any other such record). Older saves where the
+ *   left-behind mech's circuit had been moved to the stash (`equippedTo:
+ *   null`, the old duplication) keep the circuit where its record is — in the
+ *   stash — and the id is dropped from the row. No circuit is lost or added.
+ */
+function reconcileLostMechs(
+  lostMechs: LostMechReturnState[],
+  fleet: readonly OwnedMech[],
+  circuits: readonly HubCircuitRecord[],
+): LostMechReturnState[] {
+  const fleetIds = new Set(fleet.map((m) => m.instanceId));
+  return lostMechs
+    .filter((m) => !fleetIds.has(m.instanceId))
+    .map((m) => {
+      const attached = circuits.filter((c) => c.equippedTo === m.instanceId).map((c) => c.circuitId);
+      const set = new Set(attached);
+      const circuitIds = [
+        ...m.circuitIds.filter((id) => set.has(id)),
+        ...attached.filter((id) => !m.circuitIds.includes(id)),
+      ];
+      return { ...m, circuitIds };
+    });
 }
 
 /** Normalize one field drop; null when unusable (dropped individually). */
@@ -785,15 +870,20 @@ export function normalizeHubSnapshot(
     fallback.inventory ?? emptyYieldBag(),
   );
 
+  const rawRec = raw as Record<string, unknown> | null | undefined;
+  const fleetIdSet = new Set(fleet.map((m) => m.instanceId));
+  const lostMechsRaw = normalizeLostMechs(rawRec?.lostMechs ?? fallback.lostMechs ?? []).filter(
+    (m) => !fleetIdSet.has(m.instanceId),
+  );
   const circuits = enforceEquipIntegrity(
     normalizeCircuits(
       (raw as HubSnapshot | undefined)?.circuits,
       fallback.circuits ?? [],
     ),
     fleet,
+    new Set(lostMechsRaw.map((m) => m.instanceId)),
   );
 
-  const rawRec = raw as Record<string, unknown> | null | undefined;
   // Missing (v1/v2) → derived from Perfect circuits (U11); stored v3 value kept as-is.
   const perfectMaxSize = normalizePerfectMaxSize(
     rawRec && "perfectMaxSize" in rawRec
@@ -807,7 +897,7 @@ export function normalizeHubSnapshot(
   const inventoryFieldDrops = normalizeInventoryFieldDrops(
     rawRec?.inventoryFieldDrops ?? fallback.inventoryFieldDrops ?? [],
   );
-  const lostMechs = normalizeLostMechs(rawRec?.lostMechs ?? fallback.lostMechs ?? []);
+  const lostMechs = reconcileLostMechs(lostMechsRaw, fleet, circuits);
   const appliedSortieIds = normalizeAppliedSortieIds(
     rawRec?.appliedSortieIds ?? fallback.appliedSortieIds ?? [],
   );
