@@ -296,3 +296,14 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - `World.currentAmmo: Record<instanceId, number | undefined>` は出撃時（`createWorld`）に出撃機ごとに作る。`mechCurrentAmmo` に値がある機体はその値（0 なら撃てない）。**値がない機体は満タン `MECH_AMMO_BASE_CAPACITY`（28）にする**（携行弾の修正（explore、#208）。**暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**。設計は [`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。`startingAmmo` は `World.ammoStock`（HUB の共有在庫の写し）にだけ入り、射撃では減らない。
 - 射撃は撃った機体の `currentAmmo` だけを 1 減らす。`currentAmmo` が 0 以下の機体は撃たない（`sim.ts` `tryFire`）。修正前（#203〜携行弾の修正）は、trade が `currentAmmo` を設定しないため出撃 URL に `mechCurrentAmmo` が載らず、未設定の機体が撃てなかった（2026-10-03 に手元で確認。explore の selftest で、d6ca6ff の trade が出す出撃 URL そのものと shared の URL 生成の両方から、隊長機・僚機が射程内の敵を撃てることを固定した）。
 - `World.mechBattery` は `mechBattery` の写しで、`lostMechs` の記録と帰還の `mechBattery`（U9）に使う。`World.circuitIdsByUnit` は `mechCircuits` の全回路 ID（状態を問わない）をユニットごとに持ち、`lostMechs.circuitIds` に使う。効果の判定は従来どおり `equippedByUnit`（FA・Bypass だけ）。
+
+### 12.8 置き去り機体の再出現・回収（2026-10-03 正本化）
+
+RS-01 の例外として、置き去り機体の扱いは出撃経路で分かれる。
+
+- **Invade を通った出撃:** 未帰還の僚機は `lostMechs` に保存する。保存した機体は、同じ `frontSeed`＋`cell` の Invade 盤から再び出撃したときに World へ再出現する。プレイヤーが回収しないまま出撃を終えた場合は、同じ `lostMechs` の項目をその時点の状態で更新する。
+- **回収:** Explore の離昇時に、再出現した置き去り機体が搭乗円内にあれば回収する。回収成功時は `instanceId`・`currentAmmo`・`battery`・`circuitIds` を保持したまま `fleet` に戻し、`lostMechs` から削除する。回収した機体は通常 fleet と同じ deploy 対象になる。
+- **Non-Invade 出撃:** 未帰還機体は `lostMechs` に保存せず、機体そのものを完全喪失とする。装着回路も回収可能な状態として残さない。したがって後から Invade で再出現・回収することはできない。
+- **直接 deploy 禁止:** `lostMechs` の機体を直接 deploy 対象にはしない。Invade で再出現し、Explore の回収処理を経て fleet に戻った後に deploy 可能となる。
+- **legacy row:** 古い `lostMechs` 行など場所情報を持たない互換データは、Invade を開いた際に現在の盤の開始地点へ配置して場所情報を補完する。これは後方互換処理であり、新しい置き去り状態を推測する仕様ではない。
+- **Wreck / Enemy:** Abandoned から Wreck / Enemy へ遷移する具体条件は本契約では定義しない。Battery Activity=0 を直接条件にも使わない。
