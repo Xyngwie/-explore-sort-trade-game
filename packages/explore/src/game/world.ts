@@ -3,6 +3,7 @@ import {
   parseInvadeToExploreSearch,
   parseTradeToExploreSearch,
   wingmanCountFromMechs,
+  MECH_AMMO_BASE_CAPACITY,
   type MechBatteryState,
 } from "@estg/shared";
 import {
@@ -386,7 +387,11 @@ export function createWorld(boot: SortieBootstrap): World {
     currentAmmo: Object.fromEntries(
       boot.deployedInstanceIds.map((instanceId) => {
         const row = boot.mechCurrentAmmo.find((entry) => entry.instanceId === instanceId);
-        return [instanceId, row?.currentAmmo];
+        // Interim rule (2026-10-03, pending 神宮's economy decision on how the
+        // shared ammoLoad is split per mech): a deployed mech whose currentAmmo
+        // is unset sorties full (per-mech capacity). A given value — including
+        // 0 — is used as-is. See docs/MECH_FLEET.md "携行弾".
+        return [instanceId, row?.currentAmmo ?? MECH_AMMO_BASE_CAPACITY];
       }),
     ),
     extracted: false,
