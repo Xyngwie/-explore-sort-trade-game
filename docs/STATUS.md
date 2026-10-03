@@ -31,14 +31,14 @@
 - **G**: Invade の盤で落とし物のあるマスに印を出す（未着手。2026-09-28 以降 `packages/invade` の変更なし）
 - **C の残り**: 装着中の回路の売却（U14: 自動で外して売る・確認あり）、`circuitBonuses` を装着中の回路だけで集計（U5。今の `hubCircuitBonuses` は全所持回路を集計）
 - **E の残り**: 小隊方針の「対象外」表示（C20。設計書でも E と同時にやるかは別判断）
-- **要判断（未確認）**: 下の「設計との差」の反映経路（U9）は神宮に確認中
+- **U9（反映経路）の実装**: Explore が出撃終了時に HubSave へ直接書く（2026-10-03 神宮の決定）。携行弾の修正（explore・trade）と契約文書の PR の後に別 PR で対応。trade は `sortieId`／`appliedSortieIds` で二重反映しない
 - **最優先: 携行弾の修正**（下の「既知の問題」。explore の修正 PR → trade の修正 PR）
 - **文書**: 2026-10-01〜03 に増えた保存・受け渡しの項目（下記）を `docs/HUB_SAVE_CONTRACT.md`・`CIRCUIT_DATA_MODEL_V0.md` に追記する（次の文書のみの PR で対応）。`docs/IMPLEMENTATION_PLAN.md` は 2026-09-26 のまま
 - **PR の整理**: 上の #190・#193・#194 の扱いを決める
 
 設計との差:
 
-- **反映経路（U9）— 未確認（神宮に確認中）**: 設計書は「explore が結果確定時に HubSave へ直接反映」（案 B）と決めているが、#199・#206 の実装は帰還 URL（`hubWearHandoffUrl`）に `sortieId`・`wreckedMechInstanceIds`・`lostMechs` などを載せ、trade が読み込み時に `applySortieReport` を呼ぶ形（設計書が採らなかった案 A に近い）。「格納庫へ」以外を選ぶと反映されない問題（設計書 §5.4）が残るかは未確認。意図的な変更かどうかも未確認
+- **反映経路（U9）— 決定済み（2026-10-03 神宮）**: 「Explore が出撃終了時に HubSave へ直接書く。弾修正①②の後に別 PR で対応」。設計書（§5.4・§9 U9）どおり。今の実装（#199・#206）は帰還 URL（`hubWearHandoffUrl`）に `sortieId`・`wreckedMechInstanceIds`・`lostMechs` などを載せ、trade が読み込み時に `applySortieReport` を呼ぶ形（設計書が採らなかった案 A に近い）で、「格納庫へ」以外を選ぶと反映されない。直接書く形への切り替えは別 PR（帰還 URL は互換のため読めるまま残してよい）
 - **置き去りの僚機の回路（設計書 §5.1・項目6）— 決定済み（2026-10-03 確認）**: 神宮の設計どおり、置き去りの僚機の回路はその場で落とし物（`fieldDrops`）になる。落とし物の作成は F の残りで実装する。**それまでの暫定**: #206 では置き去りの機体は `fleet` から外れて `lostMechs` に記録されるが落とし物は作らず、コードを読む限り、その機体に装着していた回路は保存の整合処理（`enforceEquipIntegrity`：装着先の機体がない回路は倉庫へ）で倉庫に戻る（実機は未確認）
 
 2026-10-01〜03 に main へ入った保存・受け渡しの追加（設計書 A〜G の外。契約文書への追記は次の文書のみの PR で行う）:
@@ -70,7 +70,7 @@
 | C | 倉庫と付け替え（HUB のみ・無料） | 一部完了: 装着／取り外し UI（#160。#192 で trade の画面に読み込み）、旧セーブ・壊れたセーブの案内（#164）。残り: 装着中の回路の売却（U14）、`circuitBonuses` を装着中だけで集計（U5） | #160・#164・#192 |
 | D | 出撃 URL に装着回路 | 完了: shared の受け渡し境界（#168）、`buildDeployUrl` に `mechCircuits`（#197） | #168・#197 |
 | E | explore の機体ごと判定 | 完了（FA・Bypass だけ有効、隊長は隊長機・僚機はその僚機の回路、小隊方針は解放済みの僚機にだけ適用）。小隊方針の「対象外」表示（C20）は未実装 | #195 |
-| F | 落とし物の記録と回収 | 一部: 帰還の `sortieId` と 1 回だけの反映・大破機の保持（#199）、置き去りの機体の `lostMechs`（#206）、shared の落とし物契約のテスト（#196）。残り: 回路の落とし物の作成（今は `cell: null` 固定）、Explore での出現と回収。置き去りの僚機の回路は今は倉庫に戻る（暫定。落とし物にするのは F の残り）。反映経路（U9）は神宮に確認中（上の「設計との差」） | #196・#199・#206 |
+| F | 落とし物の記録と回収 | 一部: 帰還の `sortieId` と 1 回だけの反映・大破機の保持（#199）、置き去りの機体の `lostMechs`（#206）、shared の落とし物契約のテスト（#196）。残り: 回路の落とし物の作成（今は `cell: null` 固定）、Explore での出現と回収。置き去りの僚機の回路は今は倉庫に戻る（暫定。落とし物にするのは F の残り）。反映経路（U9）は「Explore が直接 HubSave に書く」に決定、実装は別 PR（上の「設計との差」） | #196・#199・#206 |
 | G | 前線の落とし物表示（invade） | 未着手 | — |
 
 回路・部隊設計 v0 由来の仕様変更（[`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md)。各項目は別タスク。項目1・2・6・14 の実装は上の表 A〜G）:
@@ -100,6 +100,6 @@
 
 - **trade から出撃した機体が射撃しない可能性（2026-10-03 に手元で確認・実機は未確認）**: #203（2026-10-02 23:07 JST マージ・デプロイ済み）以降、Explore の射撃は機体ごとの `currentAmmo` だけを使い、`undefined` なら撃たない（`sim.ts` `tryFire`）。一方 trade には `OwnedMech.currentAmmo` を設定する処理がなく（旧来の `startingAmmo`／`ammoLoad` からの割り当て規則は #201 で意図的に未定義）、出撃 URL に `mechCurrentAmmo` が載らない。trade の URL 生成→explore の起動を手元でつなぐと `currentAmmo` は空で、射程内の敵がいても隊長機の弾は出ない（`currentAmmo` に 28 を入れると撃つ）。帰還 URL の `mechCurrentAmmo` を HubSave に書き戻す処理も trade にない。割り当て規則は神宮の判断が要る。詳細は `HUB_SAVE_CONTRACT.md` §12.5・§12.7（契約文書の PR）
   - **暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**: 出撃時に `currentAmmo` が未設定の機体は満タン（その機体の上限＝今は 28）として扱う。`mechCurrentAmmo` に値がある機体はその値を使う（0 なら撃てない）。旧来の共有弾薬（`ammoLoad`）を機体ごとにどう配るかの本ルールは、神宮が経済タスクで決める。それまではこの暫定ルール
-  - 対応の順番（参謀の指示）: この STATUS の PR → explore の修正 PR（未設定は満タンで出撃）→ trade の修正 PR（帰還の `mechCurrentAmmo`・`mechBattery` を HubSave に書き戻し、次の出撃 URL に載せる）→ 契約文書の PR
+  - 対応の順番（参謀の指示）: この STATUS の PR → explore の修正 PR（未設定は満タンで出撃）→ trade の修正 PR（帰還の `mechCurrentAmmo`・`mechBattery` を HubSave に書き戻し、次の出撃 URL に載せる）→ 契約文書の PR → U9 の実装 PR（Explore が直接 HubSave に書く。trade の書き戻しはこちらへ移す）
 - ~~explore selftest が約 1 割の確率で失敗する~~ → **解消済み（2026-09-28, テスト側のみ）**。原因は、ランダムなカバー配置（`coverObjects.ts`）でコンテナ上の隊長がカバー中心へ吸着され回収半径から外れること（失敗 25/25 件で吸着範囲内にカバーあり）。`selftest.ts` で `Math.random` を固定シード（mulberry32）に差し替え、コンテナ上・直進テスト経路の近くのカバーをテスト内で除去（`clearCoverNear`）。本番コード・カバー挙動は無変更。同原因の潜在 flake（cargo 速度テスト）も同時に対処
 - ~~`.github/workflows/gemini-playtest.yml` の字下げ崩れで `main` への push のたびに失敗表示~~ → **解消（2026-09-28 に #144 で workflow ファイルを削除）**。Gemini の Actions 自動化は保留
