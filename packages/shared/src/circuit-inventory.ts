@@ -87,6 +87,18 @@ export function isCircuitOnLostMech(
   return rec.equippedTo != null && (hub.lostMechs ?? []).some((m) => m.instanceId === rec.equippedTo);
 }
 
+/**
+ * Circuits the HUB shows as owned: every `HubSave.circuits` record except the
+ * ones attached to a left-behind mech (`lostMechs`). Those stay in the save
+ * (they come back with the mech when it is recovered) but are not listed,
+ * counted, sold or re-equipped in the HUB.
+ */
+export function hubVisibleCircuits<C extends Pick<HubCircuitRecord, "equippedTo">>(
+  hub: Pick<HubSnapshot, "lostMechs"> & { circuits?: readonly C[] | null },
+): C[] {
+  return (hub.circuits ?? []).filter((c) => !isCircuitOnLostMech(hub, c));
+}
+
 export function equipCircuit(
   hub: HubSnapshot,
   circuitId: string,

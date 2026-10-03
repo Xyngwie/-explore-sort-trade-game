@@ -8,6 +8,7 @@ import {
   isPerfectCircuitDebugContext,
   type YieldItemId,
   HUB_LIMITS,
+  hubVisibleCircuits,
 } from "@estg/shared";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
@@ -237,7 +238,8 @@ function fleetCards(s: HangarState): string {
 
 
 function circuitRows(s: HangarState): string {
-  const list = s.hub.circuits ?? [];
+  // circuits on a left-behind mech (lostMechs) are not listed (not sellable / re-equippable)
+  const list = hubVisibleCircuits(s.hub);
   if (list.length === 0) {
     return `<p class="muted" style="margin:0.5rem 0 0">回路なし（restore 取込またはシード読込で HubSave に残ります）</p>`;
   }
@@ -346,7 +348,7 @@ function nextSortiePanel(s: HangarState): string {
   const deployUrl = buildDeployUrl(s);
   const invadeUrl = buildInvadeUrl(s);
   const restoreUrl = buildRestoreUrl(s);
-  const circuits = formatCircuitHubBrief(s.hub.circuits, s.lastCircuit);
+  const circuits = formatCircuitHubBrief(hubVisibleCircuits(s.hub), s.lastCircuit);
   const bonuses = formatCircuitBonusesJa(hubCircuitBonuses(s.hub));
   const readyToDeploy = ready.canDeployExplore && ready.needsRepair === 0;
   const emphasizeDeploy = readyToDeploy && !!deployUrl;
@@ -385,7 +387,7 @@ function nextSortiePanel(s: HangarState): string {
 
   const hasExplore = s.lastExploreReturn != null;
   const hasIntel = s.lastInvadeSector != null;
-  const hasCircuit = (s.hub.circuits?.length ?? 0) > 0;
+  const hasCircuit = hubVisibleCircuits(s.hub).length > 0;
   const activeLine =
     circuits.lines.find((l) => l.active) ?? circuits.lines[0] ?? null;
   const activeEffect = activeLine?.effectJa ?? "効果 —";

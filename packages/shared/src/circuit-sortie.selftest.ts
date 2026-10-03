@@ -16,6 +16,7 @@ import {
   stashCircuits,
   unequipCircuit,
   LOST_MECH_RECOVERY_FALLBACK_DURABILITY,
+  hubVisibleCircuits,
 } from "./circuit-inventory";
 import { applyExploreReturnToHub } from "./sortie-return";
 import { buildExploreToHubWearUrl, parseExploreToHubWearSearch } from "./handoff";
@@ -455,6 +456,19 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   assert.equal(applyExploreReturnToHub(r.hub, payload).applied, false, "same sortieId → no-op");
   // no ids → nothing abandoned (key omitted)
   assert.equal(new URL(buildExploreToHubWearUrl({ returnKind: "extract", mechWear: [] }, "https://estg.invalid/trade/")).searchParams.has("abandonedMechInstanceIds"), false);
+}
+
+// (I) hubVisibleCircuits: circuits on a lost mech are hidden from the HUB; others kept in order
+{
+  const h = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    fleet: [createOwnedMech("mech_gen1", { instanceId: "here" })],
+    circuits: [mkCircuit("c-lost", "gone"), mkCircuit("c-here", "here"), mkCircuit("c-stash", null)],
+    lostMechs: [{ instanceId: "gone", currentAmmo: 1, battery: { capacity: 300, activity: 1 }, circuitIds: ["c-lost"] }],
+  });
+  assert.equal(h.circuits.length, 3, "kept in the save");
+  assert.deepEqual(hubVisibleCircuits(h).map((c) => c.circuitId), ["c-here", "c-stash"]);
+  assert.deepEqual(hubVisibleCircuits({ lostMechs: [] }), [], "no circuits field → []");
 }
 
 console.log("shared lostMechs recovery selftest: ok");
