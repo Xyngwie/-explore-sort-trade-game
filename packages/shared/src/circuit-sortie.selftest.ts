@@ -122,11 +122,13 @@ assert.equal(noFront.hub.circuits.length, 0);
 
 // Explore left-behind return state is persisted independently from wreck/field drops.
 {
-  const lostMech = createOwnedMech("mech_gen1", {
-    instanceId: "left-behind-mech",
-    currentAmmo: 11,
+  const lostMech = {
+    ...createOwnedMech("mech_gen1", {
+      instanceId: "left-behind-mech",
+      currentAmmo: 11,
+    }),
     battery: { capacity: 300, activity: 221 },
-  });
+  };
   const circuit: HubCircuitRecord = {
     ...equippedCircuit,
     circuitId: "left-behind-circuit",
