@@ -93,7 +93,7 @@ type HubSaveV1 = {
 
 - `v !== 1` → 無視して初期化  
 - `credits` / `materials` は有限数、負なら 0  
-- `fleet` は既知 `MechId` のみ、長さ ≤ `maxMechs`  
+- `fleet` は既知 `MechId` のみ、長さ ≤ `maxMechs`（**2026-10-03 撤廃を決定**。`maxMechs` と読み込み時の切り詰めを消す。実装は未着手、[`STATUS.md`](./STATUS.md) 項目15）  
 - `ammoLoad` は既知 `AmmoId` のみ、合計 ≤ `maxAmmo` にクランプ可  
 
 書けない／読めない環境でもアプリは落ちない（デモ初期値で継続）。
@@ -214,3 +214,64 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - 回路（`circuit-inventory.ts`）: `circuitEffectValue`／`circuitActiveEffect`／`circuitSize`／`equipCircuit`／`unequipCircuit`／`recordPerfectSize`／`craftMaxSize`／`addFieldDrops`／`recoverFieldDrops`／`applySortieReport`／`buildMechCircuitsForDeploy`。
 - `upsertCircuitIntoHub`（restore→trade の取込）は既存レコードの `equippedTo`・`origin`・`acquiredAt` を引き継ぐ。`perfectMaxSize` の更新は実装 B で取込側から `recordPerfectSize` を呼ぶ。
 
+### 12.5 2026-10-01〜03 の追加（#199・#201・#203・#204・#206、携行弾の修正）
+
+`HubSaveV3`（`v: 3`・キー `wreckline.hubSave.v3`）のまま、任意フィールドを加算した。版もキーも変えていない。ここではコード（main `d6ca6ff` に携行弾の修正（explore、#208）と携行弾の修正（trade、#209）を入れた後）がしていることを書く。反映経路（U9）は **2026-10-03 に神宮が「Explore が出撃終了時に HubSave へ直接書く」と決定、実装は別 PR**（[`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md) §5.5）。下の帰還 URL の記述は、その PR までの動き。
+
+#### 機体ごと（`fleet[]` の `OwnedMech`。`shared` `mech-fleet.ts`）
+
+| フィールド | 型・範囲 | 既定・正規化 | PR |
+|---|---|---|---|
+| `currentAmmo?` | 整数 0〜28（`MECH_AMMO_BASE_CAPACITY = 28`）。`instanceId` ごとの携行弾 | **保存上の欠落は `undefined` のまま**（旧セーブの機体・`createOwnedMech` で `currentAmmo` を渡さずに作った機体。一度も出撃・帰還していない機体）。値があれば `normalizeCurrentAmmo` で切り捨て・0〜28 に収める（数でなければ 0）。**未設定の機体は出撃時に満タン（28）として扱う（暫定ルール、12.7）**。旧来の `startingAmmo`／`ammoLoad` から機体ごとに配る本ルールは神宮が経済タスクで決める | #201・携行弾の修正 |
+| `battery` | `{ capacity: number; activity: number }`。`capacity` は 1 以上の整数、`activity` は 0〜`capacity` の整数 | 欠落・不正は `capacity 300`／`activity 300`（`MECH_BATTERY_DEFAULT_*`）。`normalizeBattery` で切り捨て・範囲内に収める。新しく作る機体も 300／300 | #204 |
+
+- HUB の `ammoLoad`（弾種別の所持）は **共有在庫のまま**。`currentAmmo` は `ammoLoad` に入れない。
+- trade は帰還の反映時に、帰還 URL の `mechCurrentAmmo`・`mechBattery` を該当する機体の `currentAmmo`・`battery` に書き戻す（携行弾の修正（trade、#209）。`applyReturnedMechState`。0 も 0 として書く。報告にない機体は変えない）。`sortieId` が既に `appliedSortieIds` にある帰還は従来どおり無視するので、古い URL を開き直しても新しい値を上書きしない。書き戻した値は次の出撃 URL（`buildTradeToExplorePayloadFromFleet`）の `mechCurrentAmmo`・`mechBattery` でそのまま送られる。
+- trade の旧 typed-repair（`repairTyped`）は機体を作り直すので、`currentAmmo` は未設定に、`battery` は 300／300 に戻る（旧コードは触らない方針。STATUS のバックログ）。
+
+#### HubSnapshot のトップレベル（`shared` `hub-save.ts`）
+
+| フィールド | 型 | 既定・正規化 | 書くもの | PR |
+|---|---|---|---|---|
+| `inventoryFieldDrops` | `FieldInventoryDrop[]`：`{ dropId, frontSeed, cell, inventory: YieldBag, cause, droppedAt }` | 欠落は `[]`。`dropId` は `/^[a-zA-Z0-9_.:-]{1,160}$/`、`frontSeed` は uint32、`cell` は `FrontCellCoord`、`cause` は `FIELD_DROP_CAUSES` 以外なら `wreck_not_carried`、`droppedAt` が不正なら 1970-01-01。読めない要素・同じ `dropId` は 1 件ずつ捨てる。回路の `fieldDrops` とは別 | `applySortieReport`（帰還報告の `inventoryDrops`）。回収（`recoveredInventoryDropIds`）すると `inventory` に足して一覧から外す | #199 |
+| `lostMechs` | `LostMechReturnState[]`：`{ instanceId, currentAmmo: number \| undefined, battery, circuitIds: string[] }` | 欠落は `[]`。`instanceId` が空・重複、`battery.capacity` が 1 未満・数でない、`currentAmmo` が数でない行は 1 件ずつ捨てる。`currentAmmo` は切り捨て・0 以上（**上限 28 の丸めはしない**）。`circuitIds` は重複と空を除く。件数の上限はない | `applySortieReport`（帰還報告の `lostMechs`）。新しいものを先頭に足す | #206 |
+
+`applySortieReport`（`circuit-inventory.ts`）の追加の動き:
+
+- `wreckedMechInstanceIds` の機体（`lostMechInstanceIds` に入っていないもの）は `fleet` に **残したまま** `durability 0`・`status "destroyed"` にする（#199）。
+- `lostMechs` は、`fleet` にいて `lostMechInstanceIds`・`wreckedMechInstanceIds` に入っていない機体だけを受け付け、その機体を `fleet` から外して `hub.lostMechs` に記録する。`circuitIds` は `circuits` に実在する ID だけ残す。**回路の落とし物（`fieldDrops`）は作らない**。回路レコードは `circuits` に残り、装着先の機体が `fleet` にないので、正規化（12.3「`equippedTo` が存在しない機体 → 倉庫へ」）で倉庫（`equippedTo: null`）に戻る（#206）。
+  - **決定（2026-10-03 神宮）・実装は未着手**: 置き去りの僚機の回路は落とし物（`fieldDrops`）にしない。回路は失われた機体（`lostMechs` の項目）に付いたままで、`circuitIds` も変えない。失われた機体が戻るのは、プレイヤーが World で見つけて回収したときだけ（回収の処理は Explore が持ち、今ある帰還の反映に乗せる）。自動で部隊に戻ることはない。回収したら `instanceId`・`currentAmmo`・`battery`・`circuitIds` をそのまま保ち、`lostMechs` から外す。再び現れて回収されなかった場合は、同じ `lostMechs` の項目を最新の状態で更新する。残骸化・敵化の条件は未定（バッテリーの活動量 0 はその条件ではない）。回収した機体は通常の部隊として出撃し、`lostMechs` の機体が直接出撃することはない。World での発見・回収の処理は未実装。
+  - **足す予定の項目（2026-10-03 決定・未実装）**: 置き去りにした場所 `{ frontSeed, cell }`・`lostAt`・`lostSortieId`、部隊へ戻すための写し `catalogId`・`durability`・`durabilityMax`・`status`。Invade は `frontSeed` で絞って表示する。別の構造は作らない。`lostMechs` の機体は出撃の上限にも回路の上限にも数えない。
+  - **既知の食い違い**: 上の正規化で回路が倉庫に戻る今の動きは、この決定（回路は失われた機体に付いたまま）と食い違う。`lostMechs[].circuitIds` には ID が残るので、同じ回路が倉庫にも失われた機体にもあるように見える。回収の実装（U9 の後）と一緒に直す（それまで未修正）。Invade を通らない出撃では、決定どおりなら置き去りの機体は `lostMechs` に残さず機体も回路も失うが、今は残している（これも既知の食い違い。[`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md) §5.6）。
+- `sortieId` がない・不正（`/^[a-zA-Z0-9_.:-]{1,64}$/` 以外）、または `appliedSortieIds` に既にあるときは何もしない（`applied: false`）。反映したら `appliedSortieIds` の末尾に足し、直近 20 件（`HUB_LIMITS.maxAppliedSortieIds`）に切り詰める。
+
+### 12.6 受け渡し URL のキー（2026-10-01〜03 の追加）
+
+**trade → explore**（`buildTradeToExploreUrl`／`parseTradeToExploreSearch`）:
+
+| キー | 形 | 内容 |
+|---|---|---|
+| `mechCurrentAmmo` | `instanceId:弾数;instanceId:弾数`（`instanceId` はエンコードしない） | 出撃機のうち `currentAmmo` がある機体だけ。**このキーを載せるときは `startingAmmo` を載せない**（`startingAmmo` は `@deprecated`。キーがないときだけ従来どおり載せる） |
+| `mechBattery` | `encodeURIComponent(instanceId):capacity:activity;…` | 出撃する全機体のバッテリー |
+
+**explore → trade（帰還 URL。`hubWearHandoffUrl` → `buildExploreToHubWearUrl`／`parseExploreToHubWearSearch`）**。既存の `returnKind`・`mechWear` に加えて:
+
+| キー | 形 | explore が今載せるか | trade の扱い |
+|---|---|---|---|
+| `sortieId` | `explore_<16進>`（出撃機・帰還の種類・経過ミリ秒・回収数・携行弾から FNV-1a ハッシュ） | 載せる | あれば `applySortieReport` を呼ぶ（なければ従来どおり摩耗だけ反映） |
+| `wreckedMechInstanceIds` | `id,id` | 載せる（帰還後の耐久が 0 以下の機体） | 大破で `fleet` に残す |
+| `lostMechs` | JSON 配列（`LostMechReturnState`） | 載せる（離昇時の置き去りの僚機で、`instanceId` と受け取ったバッテリーがあるもの。回路 ID は出撃時に受け取った `mechCircuits` の全 ID） | `fleet` から外して `lostMechs` に記録 |
+| `mechCurrentAmmo` | trade → explore と同じ形 | 載せる（出撃した全機体。未設定で出撃した機体も満タンからの残り） | 機体の `currentAmmo` に書き戻す（携行弾の修正・trade） |
+| `mechBattery` | trade → explore と同じ形 | **載せない**（explore は今バッテリーを消費しない） | 載っていれば機体の `battery` に書き戻す（携行弾の修正・trade）。explore が載せるのは U9 の PR 以降の予定 |
+| `inventoryDrops` | JSON 配列（`FieldInventoryDrop`） | 載せない（今の Explore には表せる一般インベントリの落とし物がない。#199 の PR 本文） | `inventoryFieldDrops` に追加 |
+| `recoveredInventoryDropIds` | `id,id` | 載せない | `inventoryFieldDrops` から回収 |
+
+- trade の帰還の反映では `cell: null`・`frontSeed: null`・`lostMechInstanceIds: []`・`recoveredDropIds: []`・`acquiredCircuits: []` を固定で渡す。回路の落とし物の作成・回収（実装 F の残り）はまだない。
+- `HANDOFF_QUERY_KEYS.exploreToHubWear` は `returnKind`・`mechWear`・`mechCurrentAmmo` だけ。trade が取り込んだ後に URL から消すのはこの 3 つ（と他の受け渡しのキー）なので、`sortieId` などは URL に残る（`returnKind`・`mechWear` が消えるので再読み込みで再反映はされない）。`tradeToExplore` にも `mechBattery` は入っていない。
+- この経路（帰還 URL を trade が読んで HubSave に反映）は、設計 §5.4・§9 U9 の「explore が結果確定時に HubSave へ直接反映」と異なる。**2026-10-03 に神宮が設計どおり（Explore が出撃終了時に直接書く）と決定。実装は携行弾の修正の後の別 PR**（trade の書き戻しもそちらへ移す。帰還 URL は互換のため読めるまま残してよい）。[`CIRCUIT_DATA_MODEL_V0.md`](./CIRCUIT_DATA_MODEL_V0.md) §5.5。
+
+### 12.7 explore での使い方（#203・#206・携行弾の修正）
+
+- `World.currentAmmo: Record<instanceId, number | undefined>` は出撃時（`createWorld`）に出撃機ごとに作る。`mechCurrentAmmo` に値がある機体はその値（0 なら撃てない）。**値がない機体は満タン `MECH_AMMO_BASE_CAPACITY`（28）にする**（携行弾の修正（explore、#208）。**暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**。設計は [`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。`startingAmmo` は `World.ammoStock`（HUB の共有在庫の写し）にだけ入り、射撃では減らない。
+- 射撃は撃った機体の `currentAmmo` だけを 1 減らす。`currentAmmo` が 0 以下の機体は撃たない（`sim.ts` `tryFire`）。修正前（#203〜携行弾の修正）は、trade が `currentAmmo` を設定しないため出撃 URL に `mechCurrentAmmo` が載らず、未設定の機体が撃てなかった（2026-10-03 に手元で確認。explore の selftest で、d6ca6ff の trade が出す出撃 URL そのものと shared の URL 生成の両方から、隊長機・僚機が射程内の敵を撃てることを固定した）。
+- `World.mechBattery` は `mechBattery` の写しで、今は `lostMechs` の記録にだけ使う。`World.circuitIdsByUnit` は `mechCircuits` の全回路 ID（状態を問わない）をユニットごとに持ち、`lostMechs.circuitIds` に使う。効果の判定は従来どおり `equippedByUnit`（FA・Bypass だけ）。

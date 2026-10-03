@@ -11,12 +11,26 @@
       "CurrentStep": "対象外"
     },
     {
-      "Item": "置き去り機体の再会時ランダム分岐",
+      "Item": "置き去り機体の World での発見・回収",
       "Rule": [
-        "敵機として再登場",
-        "残骸＋Inventoryとして再登場"
+        "回路は失われた機体（lostMechs）に付いたまま。circuitIds は変えず、落とし物（fieldDrops）にしない",
+        "部隊に戻るのはプレイヤーが Explore の World で見つけて回収したときだけ。自動では戻らない。回収は Explore が持ち、今ある帰還の反映に乗せる",
+        "回収したら instanceId・currentAmmo・battery・circuitIds をそのまま保ち、lostMechs から外す",
+        "回収されずに再び現れた場合は、同じ lostMechs の項目を最新の状態で更新する",
+        "敵機・残骸への自動の変化はしない。条件は未定（battery の活動量 0 は条件ではない）",
+        "回収した機体は通常の部隊として出撃する。lostMechs の機体が直接出撃することはない",
+        "再び現れた機体をまた置き去りにしたら、Invade の盤にもう一度置き去りとして記録する",
+        "回収は離昇の時点で決まる: 離昇時に抽出（帰還）の搭乗円の中にいる置き去りの機体を回収する（僚機の搭乗円と同じ考え方。範囲内に N 秒いたら、ではない）",
+        "Invade を通らない出撃（cell なし）では置き去りの機体は再び現れない。機体と回路はその場で失い、lostMechs にも残さない",
+        "回路の二重化（正規化で回路が倉庫に戻る）は回収の実装と一緒に直す。それまでは既知の食い違い",
+        "Invade の盤を作り直したときは、置き去りの機体と落とし物の回路を新しい盤のどこかへ移して残す",
+        "lostMechs に {frontSeed, cell}・lostAt・lostSortieId と戻すための写し（catalogId・durability・durabilityMax・status）を足す。Invade は frontSeed で絞って表示する。別の構造は作らない",
+        "lostMechs の機体は出撃の上限にも回路の上限にも数えない",
+        "「再び現れた残骸」という状態は当面作らない"
       ],
-      "CurrentStep": "基本状態保存まで。再会時の実装は対象外"
+      "Order": "U9（Explore の直接保存）の後に実装する",
+      "Decided": "2026-10-03 神宮（旧案「再会時に敵機／残骸＋Inventory としてランダム分岐」は撤回）。詳細は CIRCUIT_DATA_MODEL_V0.md §5.6",
+      "CurrentStep": "基本状態保存（lostMechs）まで。発見・回収・再出現の実装は対象外"
     },
     {
       "Item": "置き去り機体の特殊表示・回収作戦UI",
