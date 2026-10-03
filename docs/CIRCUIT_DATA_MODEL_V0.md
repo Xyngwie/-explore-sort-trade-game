@@ -303,15 +303,15 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 - 注意（確認済み）: ローカル開発では explore（:5173）と trade（:5175）が別オリジンで `localStorage` を共有しない（`LOCAL_DEV_MODULE_URLS`）。`forcedBackWipe.ts` と同じ制約で、ローカルでは HUB に反映されない。
 - 別案（案 A）: 摩耗 URL に `lostMechs`・`recoveredDrops`・`sectorX/Y` を足して trade が反映する。既存の URL 方式に揃うが、上の「ボタンの選び方で記録が消える」問題が残るので採らない（§9 U9）。
 
-### 5.5 実装の現状（2026-10-03、main `d6ca6ff`。#196・#199・#206）
+### 5.5 実装の現状（2026-10-03、main `d6ca6ff`＋携行弾の修正。#196・#199・#206）
 
 本節はコードがしていることの記録で、上の設計（§5.1〜§5.4・§9）は変えていない。保存・URL の細かい形は [`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5〜§12.7。
 
-- **反映経路 — 神宮に確認中（未確認）**: 実装は、explore が帰還 URL（`hubWearHandoffUrl`、trade の「格納庫へ」の行き先）に `sortieId`・`wreckedMechInstanceIds`・`lostMechs`・`mechCurrentAmmo` を載せ、trade が読み込み時に `applySortieReport` を呼んで HubSave に反映する形。U9 で決めた「explore が結果確定時に HubSave へ直接反映」ではなく、採らなかった案 A に近い。`sortieId` による 1 回だけの反映（`appliedSortieIds`）は設計どおり。どちらに揃えるかは神宮の確認待ちで、本書では決めない。
+- **反映経路（U9）— 決定済み・実装待ち**: 2026-10-03 に神宮が設計どおり「Explore が出撃終了時に HubSave へ直接書く」と決定。実装は携行弾の修正（explore・trade）の後の別 PR で、trade は `sortieId`／`appliedSortieIds` で二重に反映しない。それまでの実装は、explore が帰還 URL（`hubWearHandoffUrl`、trade の「格納庫へ」の行き先）に `sortieId`・`wreckedMechInstanceIds`・`lostMechs`・`mechCurrentAmmo` を載せ、trade が読み込み時に `applySortieReport` を呼び、携行弾・バッテリーを機体に書き戻す形（採らなかった案 A に近く、「格納庫へ」以外を選ぶと反映されない）。帰還 URL は直接書く形になった後も互換のため読めるまま残してよい。
 - `SortieCircuitReport` に任意フィールドが加わった: `inventoryDrops`・`recoveredInventoryDropIds`（一般インベントリの落とし物。回路の `fieldDrops` とは別の `inventoryFieldDrops` に入る）、`wreckedMechInstanceIds`（大破機を `fleet` に `destroyed` で残す）、`lostMechs`（置き去りの機体の状態。`LostMechReturnState`）。
 - trade の反映では `cell: null`・`frontSeed: null`・`lostMechInstanceIds: []`・`recoveredDropIds: []`・`acquiredCircuits: []` が固定。**回路の落とし物の作成と、Explore での落とし物の出現・回収はまだない**（実装 F の残り）。Explore は `fieldDrops` を読んでいない。
 - **置き去りの僚機（§5.1・§5.3）**: 方針は設計どおり（機体を失い、回路はその場に落とし物として残る。2026-10-03 に神宮の設計として確認）。今の実装（#206）は、置き去りの機体を `fleet` から外して `hub.lostMechs` に記録するが、回路の落とし物は作らない。回路レコードは `circuits` に残り、装着先がないので正規化で倉庫に戻る。**暫定の動き**で、落とし物の作成は F の残りで入れる。§5.3 の「`LeftBehindEntry` に所有機の `instanceId` を足す」は、Explore 側でユニットの `instanceId` を引く形で入っている（`lostMechsFromWorld`）。
-- 回路以外に、機体ごとの携行弾 `OwnedMech.currentAmmo`（#201・#203）とバッテリー `OwnedMech.battery`（#204）が HubSave と受け渡しに加わった。回路データモデルの範囲外だが、帰還 URL と `lostMechs` を共有するので [`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5〜§12.7 に記録した。
+- 回路以外に、機体ごとの携行弾 `OwnedMech.currentAmmo`（#201・#203）とバッテリー `OwnedMech.battery`（#204）が HubSave と受け渡しに加わった。回路データモデルの範囲外だが、帰還 URL と `lostMechs` を共有するので [`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5〜§12.7 に記録した。携行弾が未設定の機体は出撃時に満タンとして扱う（暫定ルール、[`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。
 
 ---
 
