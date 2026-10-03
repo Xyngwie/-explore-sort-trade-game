@@ -32,6 +32,7 @@
 - **C の残り**: 装着中の回路の売却（U14: 自動で外して売る・確認あり）、`circuitBonuses` を装着中の回路だけで集計（U5。今の `hubCircuitBonuses` は全所持回路を集計）
 - **E の残り**: 小隊方針の「対象外」表示（C20。設計書でも E と同時にやるかは別判断）
 - **要判断（未確認）**: 下の「設計との差」の反映経路（U9）は神宮に確認中
+- **最優先: 携行弾の修正**（下の「既知の問題」。explore の修正 PR → trade の修正 PR）
 - **文書**: 2026-10-01〜03 に増えた保存・受け渡しの項目（下記）を `docs/HUB_SAVE_CONTRACT.md`・`CIRCUIT_DATA_MODEL_V0.md` に追記する（次の文書のみの PR で対応）。`docs/IMPLEMENTATION_PLAN.md` は 2026-09-26 のまま
 - **PR の整理**: 上の #190・#193・#194 の扱いを決める
 
@@ -98,5 +99,7 @@
 ## 既知の問題
 
 - **trade から出撃した機体が射撃しない可能性（2026-10-03 に手元で確認・実機は未確認）**: #203（2026-10-02 23:07 JST マージ・デプロイ済み）以降、Explore の射撃は機体ごとの `currentAmmo` だけを使い、`undefined` なら撃たない（`sim.ts` `tryFire`）。一方 trade には `OwnedMech.currentAmmo` を設定する処理がなく（旧来の `startingAmmo`／`ammoLoad` からの割り当て規則は #201 で意図的に未定義）、出撃 URL に `mechCurrentAmmo` が載らない。trade の URL 生成→explore の起動を手元でつなぐと `currentAmmo` は空で、射程内の敵がいても隊長機の弾は出ない（`currentAmmo` に 28 を入れると撃つ）。帰還 URL の `mechCurrentAmmo` を HubSave に書き戻す処理も trade にない。割り当て規則は神宮の判断が要る。詳細は `HUB_SAVE_CONTRACT.md` §12.5・§12.7（契約文書の PR）
+  - **暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**: 出撃時に `currentAmmo` が未設定の機体は満タン（その機体の上限＝今は 28）として扱う。`mechCurrentAmmo` に値がある機体はその値を使う（0 なら撃てない）。旧来の共有弾薬（`ammoLoad`）を機体ごとにどう配るかの本ルールは、神宮が経済タスクで決める。それまではこの暫定ルール
+  - 対応の順番（参謀の指示）: この STATUS の PR → explore の修正 PR（未設定は満タンで出撃）→ trade の修正 PR（帰還の `mechCurrentAmmo`・`mechBattery` を HubSave に書き戻し、次の出撃 URL に載せる）→ 契約文書の PR
 - ~~explore selftest が約 1 割の確率で失敗する~~ → **解消済み（2026-09-28, テスト側のみ）**。原因は、ランダムなカバー配置（`coverObjects.ts`）でコンテナ上の隊長がカバー中心へ吸着され回収半径から外れること（失敗 25/25 件で吸着範囲内にカバーあり）。`selftest.ts` で `Math.random` を固定シード（mulberry32）に差し替え、コンテナ上・直進テスト経路の近くのカバーをテスト内で除去（`clearCoverNear`）。本番コード・カバー挙動は無変更。同原因の潜在 flake（cargo 速度テスト）も同時に対処
 - ~~`.github/workflows/gemini-playtest.yml` の字下げ崩れで `main` への push のたびに失敗表示~~ → **解消（2026-09-28 に #144 で workflow ファイルを削除）**。Gemini の Actions 自動化は保留
