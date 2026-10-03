@@ -62,12 +62,11 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
   const fleet = world.deployedInstanceIds.map((id) => {
     const durability = world.deployedDurability[id] ?? 100;
     const currentAmmo = world.currentAmmo[id];
-    const battery = world.mechBattery[id];
     return createOwnedMech(
       "mech_gen1",
       currentAmmo == null
-        ? { instanceId: id, durability, ...(battery ? { battery } : {}) }
-        : { instanceId: id, durability, currentAmmo, ...(battery ? { battery } : {}) },
+        ? { instanceId: id, durability }
+        : { instanceId: id, durability, currentAmmo },
     );
   });
   const outcome = createExploreSortieOutcome({
@@ -163,7 +162,6 @@ export function hubWearHandoffUrl(world: World): string | null {
       sortieId: sortieIdForWorld(world, outcome.returnKind),
       wreckedMechInstanceIds,
       mechCurrentAmmo: outcome.mechCurrentAmmo,
-      mechBattery: outcome.mechBattery,
       lostMechs: lostMechsFromWorld(world),
     },
   );
