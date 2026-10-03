@@ -23,6 +23,40 @@ export const MECH_STATUS_LABEL_JA: Record<MechStatus, string> = {
 
 export const MECH_AMMO_BASE_CAPACITY = 28;
 
+export const MECH_BATTERY_DEFAULT_CAPACITY = 300;
+export const MECH_BATTERY_DEFAULT_ACTIVITY = 300;
+
+export type MechBatteryState = {
+  capacity: number;
+  activity: number;
+};
+
+export function normalizeBattery(
+  value: unknown,
+  defaults: MechBatteryState = {
+    capacity: MECH_BATTERY_DEFAULT_CAPACITY,
+    activity: MECH_BATTERY_DEFAULT_ACTIVITY,
+  },
+): MechBatteryState {
+  const obj =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const capacityRaw = obj.capacity;
+  const capacityNum =
+    typeof capacityRaw === "number" ? capacityRaw : Number(capacityRaw);
+  const capacity = Number.isFinite(capacityNum) && capacityNum > 0
+    ? Math.floor(capacityNum)
+    : Math.max(1, Math.floor(defaults.capacity));
+  const activityRaw = obj.activity;
+  const activityNum =
+    typeof activityRaw === "number" ? activityRaw : Number(activityRaw);
+  const activity = Number.isFinite(activityNum)
+    ? Math.max(0, Math.min(capacity, Math.floor(activityNum)))
+    : Math.max(0, Math.min(capacity, Math.floor(defaults.activity)));
+  return { capacity, activity };
+}
+
 export function normalizeCurrentAmmo(
   value: unknown,
   capacity = MECH_AMMO_BASE_CAPACITY,
@@ -45,6 +79,8 @@ export type OwnedMech = {
   /** Current carried ammunition; persisted independently by instanceId. */
   /** Undefined means this legacy fleet entry has no migration decision yet. */
   currentAmmo?: number;
+  /** Persistent per-mech battery state; legacy entries migrate to 300/300. */
+  battery: MechBatteryState;
 };
 
 /** Provisional balance — tune later; documented in docs/MECH_FLEET.md. */
@@ -155,6 +191,7 @@ export function createOwnedMech(
     ...(opts?.currentAmmo != null
       ? { currentAmmo: normalizeCurrentAmmo(opts.currentAmmo) }
       : {}),
+    battery: normalizeBattery(undefined),
   });
 }
 
@@ -400,6 +437,7 @@ export function normalizeOwnedMech(
   const currentAmmoRaw = (raw as Partial<OwnedMech>).currentAmmo;
   const currentAmmo =
     currentAmmoRaw == null ? undefined : normalizeCurrentAmmo(currentAmmoRaw);
+  const battery = normalizeBattery((raw as Partial<OwnedMech>).battery);
 
   const statusRaw =
     typeof (raw as OwnedMech).status === "string"
@@ -416,6 +454,7 @@ export function normalizeOwnedMech(
     durability,
     durabilityMax,
     ...(currentAmmo != null ? { currentAmmo } : {}),
+    battery,
   });
 }
 

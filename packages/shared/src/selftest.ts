@@ -85,6 +85,9 @@ import {
   applyWearReportsToFleet,
   MECH_AMMO_BASE_CAPACITY,
   normalizeCurrentAmmo,
+  MECH_BATTERY_DEFAULT_CAPACITY,
+  MECH_BATTERY_DEFAULT_ACTIVITY,
+  normalizeBattery,
   normalizeOwnedMech,
   normalizeFleet,
 } from "./mech-fleet";
@@ -1993,3 +1996,86 @@ console.log("shared circuit-effect selftest: ok");
   assert.equal(destroyed.fleet.find((m) => m.instanceId === "ammo-c")?.currentAmmo, 3);
 }
 console.log("shared instance-currentAmmo selftest: ok");
+
+// --- instanceId-scoped Battery persistence / handoff contract ---
+{
+  assert.equal(MECH_BATTERY_DEFAULT_CAPACITY, 300);
+  assert.equal(MECH_BATTERY_DEFAULT_ACTIVITY, 300);
+  assert.deepEqual(normalizeBattery(undefined), { capacity: 300, activity: 300 });
+  assert.deepEqual(
+    normalizeBattery({ capacity: 500, activity: 275 }),
+    { capacity: 500, activity: 275 },
+  );
+  assert.deepEqual(
+    normalizeBattery({ capacity: 300, activity: 450 }),
+    { capacity: 300, activity: 300 },
+  );
+
+  const legacyBattery = normalizeOwnedMech({
+    instanceId: "legacy-battery",
+    catalogId: "mech_gen1",
+    durability: 100,
+    durabilityMax: 100,
+  });
+  assert.ok(legacyBattery);
+  assert.deepEqual(legacyBattery!.battery, { capacity: 300, activity: 300 });
+
+  const batteryA = createOwnedMech("mech_gen1", {
+    instanceId: "battery-a",
+  });
+  const batteryB = createOwnedMech("mech_gen1", {
+    instanceId: "battery-b",
+  });
+  const batteryC = createOwnedMech("mech_gen2", {
+    instanceId: "battery-c",
+  });
+  const fleet = [
+    { ...batteryA, battery: { capacity: 300, activity: 210 } },
+    { ...batteryB, battery: { capacity: 450, activity: 330 } },
+    { ...batteryC, battery: { capacity: 300, activity: 90 } },
+  ];
+  const hub = normalizeHubSnapshot({ ...INITIAL_HUB, fleet });
+  const roundTrip = parseHubSave(createHubSave(hub));
+  assert.ok(roundTrip);
+  assert.deepEqual(
+    roundTrip!.hub.fleet.map((m) => [m.instanceId, m.battery]),
+    [
+      ["battery-a", { capacity: 300, activity: 210 }],
+      ["battery-b", { capacity: 450, activity: 330 }],
+      ["battery-c", { capacity: 300, activity: 90 }],
+    ],
+  );
+
+  const deploy = buildTradeToExplorePayloadFromFleet(fleet, 28, [
+    "battery-a",
+    "battery-b",
+    "battery-c",
+  ]);
+  assert.deepEqual(deploy.mechBattery, [
+    { instanceId: "battery-a", battery: { capacity: 300, activity: 210 } },
+    { instanceId: "battery-b", battery: { capacity: 450, activity: 330 } },
+    { instanceId: "battery-c", battery: { capacity: 300, activity: 90 } },
+  ]);
+  const deployUrl = buildTradeToExploreUrl(deploy);
+  const deployParsed = parseTradeToExploreSearch(new URL(deployUrl).search);
+  assert.deepEqual(deployParsed?.mechBattery, deploy.mechBattery);
+
+  const outcome = createExploreSortieOutcome({
+    result: createExpeditionState(),
+    returnKind: "extract",
+    fleet,
+    deployedInstanceIds: ["battery-a", "battery-b", "battery-c"],
+  });
+  assert.deepEqual(outcome.mechBattery, deploy.mechBattery);
+  const returnPayload = toExploreToHubWearPayload(
+    "extract",
+    [],
+    { mechBattery: outcome.mechBattery },
+  );
+  const returnUrl = buildExploreToHubWearUrl(returnPayload);
+  const returnParsed = parseExploreToHubWearSearch(new URL(returnUrl).search);
+  assert.deepEqual(returnParsed?.mechBattery, outcome.mechBattery);
+}
+console.log("shared instance-battery selftest: ok");
+
+

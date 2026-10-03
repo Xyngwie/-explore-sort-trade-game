@@ -5,6 +5,7 @@ import {
   type MechWearReport,
   type OwnedMech,
   type SortieReturnKind,
+  type MechBatteryState,
 } from "./mech-fleet";
 import type { YieldBag } from "./sort-yield";
 
@@ -97,6 +98,8 @@ export type ExploreSortieOutcome = ExploreResult & {
   mechWear: MechWearReport[];
   /** Canonical per-instance carried ammo snapshot. */
   mechCurrentAmmo: Array<{ instanceId: string; currentAmmo: number }>;
+  /** Canonical per-instance persistent battery snapshot. */
+  mechBattery: Array<{ instanceId: string; battery: MechBatteryState }>;
 };
 
 export function createExploreSortieOutcome(args: {
@@ -116,6 +119,10 @@ export function createExploreSortieOutcome(args: {
         : null;
     })
     .filter((row): row is { instanceId: string; currentAmmo: number } => row != null);
+  const mechBattery = deployedInstanceIds.map((instanceId) => ({
+    instanceId,
+    battery: byId.get(instanceId)!.battery,
+  }));
   return {
     ...args.result,
     returnKind: args.returnKind,
@@ -126,6 +133,7 @@ export function createExploreSortieOutcome(args: {
       args.returnKind,
     ),
     mechCurrentAmmo,
+    mechBattery,
   };
 }
 
