@@ -55,6 +55,7 @@ import {
   persistFrontSession,
   regenerateFrontSession,
 } from "./hub-persist";
+import { cellKey, lostMechSortieLineJa, lostMechTitleJa } from "./lost-mechs";
 import {
   ALL_DESTROYED_INTEL,
   armForcedLockHistory,
@@ -94,6 +95,8 @@ let skipped = selected == null;
 let lastBoardLog: string | null = initialSession.restored
   ? `前線進捗を HubSave から復元 — 敵 ${board.mineCount} · seed ${board.seed ?? "—"}`
   : `前線盤生成 — ${BOARD_SPAN}×${BOARD_SPAN} · 敵 ${board.mineCount} · HQ 開放 · seed ${board.seed ?? "—"}`;
+/** Left-behind mechs on this board per cell (HubSave.lostMechs; display only). */
+let lostByCell: Map<string, string[]> = initialSession.lostByCell;
 /** Flag-mode: next cell click toggles flag instead of open. */
 let flagMode = false;
 /** History trap armed for current forced-combat lock. */
@@ -129,8 +132,22 @@ function bindForcedHandoffLinks(scope: ParentNode): void {
   });
 }
 
-/** Single under-grid CTA cluster: 探索へ (+ engage chip) · 格納庫へ. */
+function lostIdsAt(sx: number, sy: number): string[] {
+  return lostByCell.get(cellKey(sx, sy)) ?? [];
+}
+
+/** Sortie bar + one line when left-behind mechs wait on the selected cell. */
 function cellSortieBarHtml(sel: SectorSel | null): string {
+  const html = cellSortieBarBaseHtml(sel);
+  const n = sel != null ? lostIdsAt(sel.sx, sel.sy).length : 0;
+  if (n === 0) return html;
+  const line = `<p class="muted lost-mech-line">${escapeHtml(lostMechSortieLineJa(n))}</p>`;
+  const at = html.indexOf("</p>");
+  return at < 0 ? html : html.slice(0, at + 4) + line + html.slice(at + 4);
+}
+
+/** Single under-grid CTA cluster: 探索へ (+ engage chip) · 格納庫へ. */
+function cellSortieBarBaseHtml(sel: SectorSel | null): string {
   if (sel == null) {
     return `<p class="muted cell-sortie-hint">セルを開く／旗すると、この直下から「${CTA_COPY.toExplore}」できます。</p>`;
   }
@@ -344,6 +361,14 @@ function statusJa(): string {
   return `偵察中 — ${exploredFeelLabelJa(feel.exploredFeel)}`;
 }
 
+/** Existing cell tooltip + " · " + the left-behind mech IDs (count when several). */
+function cellTitleWithLost(cell: ReturnType<typeof getCell>): string {
+  const base = cellTitle(cell);
+  if (!cell) return base;
+  const extra = lostMechTitleJa(lostIdsAt(cell.sx, cell.sy));
+  return extra ? `${base} · ${extra}` : base;
+}
+
 function cellTitle(cell: ReturnType<typeof getCell>): string {
   if (!cell) return "";
   if (cell.blocked) return `(${cell.sx},${cell.sy}) WALL d≥${SECTOR_WALL_DISTANCE}`;
@@ -376,6 +401,7 @@ function dangerLegendHtml(): string {
     <span class="danger-swatch flag"><span class="chip" aria-hidden="true"></span>旗</span>
     <span class="danger-swatch pending"><span class="chip" aria-hidden="true"></span>敵接触・未解決</span>
     <span class="danger-swatch resolved"><span class="chip" aria-hidden="true"></span>解決済・再出撃可</span>
+    <span class="danger-swatch lost-mech"><span class="chip" aria-hidden="true"></span>置き去り機</span>
     ${swatches}
   </div>
   <p class="muted" style="margin-top:0.35rem;font-size:0.72rem">未開マスの色は HQ からの距離帯（爆弾密度の手触り）。近傍薄 → 前線濃。</p>`;
@@ -418,6 +444,7 @@ function render(): void {
         c.open && !c.mine && !c.blocked && c.adjacent > 0 ? `n${c.adjacent}` : "",
         c.open && !c.mine && !c.blocked && c.adjacent === 0 ? "blank" : "",
         isSel ? "selected" : "",
+        lostIdsAt(sx, sy).length > 0 ? "lost-mech" : "",
         !c.blocked && !c.open ? "pickable" : "",
         c.open && !c.blocked ? "focusable" : "",
         ...feel,
@@ -426,7 +453,7 @@ function render(): void {
         .join(" ");
       const disabled = c.blocked ? "disabled" : "";
       cellsHtml.push(
-        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}" title="${escapeHtml(cellTitle(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</button>`,
+        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostIdsAt(sx, sy).length > 0 ? ` data-lost-count="${lostIdsAt(sx, sy).length}"` : ""} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</button>`,
       );
     }
   }
@@ -532,6 +559,7 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     const session = regenerateFrontSession();
     board = session.board;
     selected = session.focus;
+    lostByCell = session.lostByCell;
     skipped = false;
     flagMode = false;
     forcedLockHistoryArmed = false;

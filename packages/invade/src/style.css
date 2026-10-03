@@ -328,3 +328,22 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
   .cell-sortie-bar:has(.cta-cluster) p:first-child { display: none; }
   .cell-sortie-bar:has(.cta-cluster) .btn { padding: 0.25rem 0.5rem; font-size: 0.72rem; }
 }
+/* Left-behind mechs (HubSave.lostMechs) on this cell — display only.
+   右上の灰色の点（Explore の置き去り機の色 #8a9099）。凡例の見本も同じ見た目。 */
+.cell.lost-mech,
+.danger-swatch.lost-mech .chip { position: relative; }
+.cell.lost-mech::after,
+.danger-swatch.lost-mech .chip::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8a9099;
+  box-shadow: 0 0 0 1px #0d1014;
+  pointer-events: none;
+}
+.danger-swatch.lost-mech .chip { background: #21262d; border-color: #2a313c; }
+.danger-swatch.lost-mech .chip::after { top: -2px; right: -2px; width: 7px; height: 7px; }

@@ -22,13 +22,38 @@ import {
   restoreBoardFromProgress,
   type MsBoard,
 } from "./board";
+import { lostMechsByCell, placeLostOnFront, type FrontPlacementResult } from "./lost-mechs";
 
 export type FrontSession = {
   board: MsBoard;
   focus: FrontCellCoord | null;
   /** True when restored from HubSave.frontProgress. */
   restored: boolean;
+  /** Left-behind mechs on this board per cell ("sx,sy" → instanceIds). */
+  lostByCell: Map<string, string[]>;
+  /** What was moved / placed onto this board (lost-mechs.ts). */
+  placement: Omit<FrontPlacementResult, "hub">;
 };
+
+/**
+ * Put left-behind mechs / circuit field drops on this board (same coordinates
+ * from another board, start cell for rows without a place) and save when
+ * anything changed. Returns the marks for the board.
+ */
+export function syncLostMechsToBoard(
+  board: MsBoard,
+  storage?: Pick<Storage, "getItem" | "setItem"> | null,
+): Pick<FrontSession, "lostByCell" | "placement"> {
+  const hub = readHub(storage);
+  const empty = { changed: false, moved: [], placed: [], movedDrops: [], movedInventoryDrops: [] };
+  if (board.seed == null || !Number.isFinite(board.seed)) {
+    return { lostByCell: new Map(), placement: empty };
+  }
+  const res = placeLostOnFront(hub, board.seed, board.aoiHalf);
+  if (res.changed) saveHubSaveToLocalStorage(res.hub, storage ?? undefined);
+  const { hub: next, ...placement } = res;
+  return { lostByCell: lostMechsByCell(next, board.seed), placement };
+}
 
 function readHub(
   storage?: Pick<Storage, "getItem" | "setItem"> | null,
@@ -53,6 +78,7 @@ export function loadOrCreateFrontSession(
         // null focus = quick-battle skip (persisted intentionally)
         focus: restored.focus,
         restored: true,
+        ...syncLostMechsToBoard(restored.board, storage),
       };
     }
   }
@@ -61,7 +87,7 @@ export function loadOrCreateFrontSession(
   const board = generateBoard(AOI_HALF, seed);
   const focus: FrontCellCoord = { sx: 0, sy: 0 };
   persistFrontSession(board, focus, storage);
-  return { board, focus, restored: false };
+  return { board, focus, restored: false, ...syncLostMechsToBoard(board, storage) };
 }
 
 /** Write current board+focus into HubSave.frontProgress (merge with hub). */
@@ -94,7 +120,8 @@ export function regenerateFrontSession(
   const board = generateBoard(AOI_HALF, seed);
   const focus: FrontCellCoord = { sx: 0, sy: 0 };
   persistFrontSession(board, focus, storage);
-  return { board, focus, restored: false };
+  // left-behind mechs / circuit field drops move to the same coordinates on the new board
+  return { board, focus, restored: false, ...syncLostMechsToBoard(board, storage) };
 }
 
 export type { InvadeFrontProgress };
