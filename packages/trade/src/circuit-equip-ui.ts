@@ -4,8 +4,7 @@
  * equip/unequip for free. The actual slot rules live in shared/circuit-inventory.
  */
 import {
-  equipCircuit,
-  unequipCircuit,
+  hubVisibleCircuits,
   loadHubSaveWithStatus,
   mechSlotCapacity,
   saveHubSaveToLocalStorage,
@@ -13,6 +12,7 @@ import {
   type HubSnapshot,
 } from "@estg/shared";
 import { saveMigrationNotice } from "./save-migration-notice";
+import { equipHubCircuit, equipRefusalMessageJa, unequipHubCircuit } from "./lost-mech-circuits";
 
 const CARD_ID = "circuit-equip-panel";
 const SAVE_NOTICE_ID = "save-migration-notice";
@@ -74,7 +74,8 @@ function render(): void {
   const loaded = loadHub();
   if (!loaded) return;
   const hub = loaded;
-  const circuits = hub.circuits ?? [];
+  // circuits on a left-behind mech (lostMechs) stay in HubSave but are not shown here
+  const circuits = hubVisibleCircuits(hub);
   const fleet = hub.fleet ?? [];
 
   const card = document.createElement("div");
@@ -138,16 +139,11 @@ function render(): void {
     const current = loadHub();
     if (!current) return;
     const result = kind === "equip"
-      ? equipCircuit(current, circuitId, mechId)
-      : { hub: unequipCircuit(current, circuitId), ok: true as const };
+      ? equipHubCircuit(current, circuitId, mechId)
+      : unequipHubCircuit(current, circuitId);
 
     if (!result.ok) {
-      const message = result.reason === "slot_full"
-        ? "その機体の回路枠がいっぱいです。"
-        : result.reason === "no_mech"
-          ? "装備先の機体がありません。"
-          : "回路が見つかりません。";
-      window.alert(message);
+      window.alert(equipRefusalMessageJa(result.reason));
       return;
     }
     saveHubSaveToLocalStorage(result.hub);

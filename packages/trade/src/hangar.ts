@@ -10,6 +10,7 @@ import {
   HUB_LIMITS,
   resolveSortieSelection,
   setSortieSelection,
+  hubVisibleCircuits,
   MECH_FLEET_RULES,
   MECH_STATUS_LABEL_JA,
   addMechToHub,
@@ -87,6 +88,7 @@ import {
   type SortieReturnKind,
   type YieldBag,
 } from "@estg/shared";
+import { isHubCircuitOnLostMech } from "./lost-mech-circuits";
 import { backfillPerfectMaxSize } from "./junk-craft";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
@@ -338,16 +340,22 @@ export function circuitRecordToPayload(
   };
 }
 
-/** Prefer hub.circuits[0]; fall back to stash payload. */
+/** Prefer the first circuit the HUB shows (not on a left-behind mech); fall back to stash payload. */
 export function resolveActiveCircuit(
   hub: HubSnapshot,
   stashCircuit: RestoreToTradePayload | null,
 ): RestoreToTradePayload | null {
-  const head = hub.circuits?.[0];
+  const head = hubVisibleCircuits(hub)[0];
   if (head) return circuitRecordToPayload(head);
+  // a remembered circuit now on a left-behind mech is not the HUB's either
+  if (stashCircuit?.circuitId && isHubCircuitOnLostMech(hub, stashCircuit.circuitId)) return null;
   return stashCircuit;
 }
 
+/**
+ * A circuit the HUB shows (lostMechs recovery: circuits on a left-behind mech
+ * stay in HubSave but are not the HUB's to list / select / sell / re-equip).
+ */
 export function findHubCircuit(
   hub: HubSnapshot,
   circuitId: string | null | undefined,
@@ -355,8 +363,15 @@ export function findHubCircuit(
   if (!circuitId) return null;
   const id = circuitId.trim();
   if (!id) return null;
-  return hub.circuits.find((c) => c.circuitId === id) ?? null;
+  return hubVisibleCircuits(hub).find((c) => c.circuitId === id) ?? null;
 }
+
+export {
+  equipHubCircuit,
+  equipRefusalMessageJa,
+  isHubCircuitOnLostMech,
+  unequipHubCircuit,
+} from "./lost-mech-circuits";
 
 export function createInitialHangar(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
@@ -1017,8 +1032,8 @@ export function buildRestoreUrl(
       : circuitId
         ? null
         : state.lastCircuit ??
-          (state.hub.circuits[0]
-            ? circuitRecordToPayload(state.hub.circuits[0])
+          (hubVisibleCircuits(state.hub)[0]
+            ? circuitRecordToPayload(hubVisibleCircuits(state.hub)[0]!)
             : null);
 
   const editorName = sanitizeEditorName(state.craftSignature) ?? loadCraftSignature();
@@ -1480,6 +1495,12 @@ export function sellCircuit(
   state: HangarState,
   circuitId: string,
 ): HangarState {
+  // lostMechs recovery: a circuit on a left-behind mech is not the HUB's to
+  // sell — refused like a missing circuit (existing notice; it is not listed,
+  // so the UI cannot reach this).
+  if (isHubCircuitOnLostMech(state.hub, circuitId)) {
+    return { ...state, notice: "回路なし" };
+  }
   const rec = findHubCircuit(state.hub, circuitId);
   if (!rec) return { ...state, notice: "回路なし" };
 
@@ -1618,7 +1639,7 @@ export function buildNextSortieReturnDigest(
   const exploreJa =
     state.lastExploreReturn?.summaryJa ?? "探索帰還なし（出撃後に摩耗報告）";
   const invadeJa = formatInvadeIntelBrief(state.lastInvadeSector);
-  const circuits = formatCircuitHubBrief(state.hub.circuits, state.lastCircuit);
+  const circuits = formatCircuitHubBrief(hubVisibleCircuits(state.hub), state.lastCircuit);
   const restoreJa =
     state.lastCircuit != null
       ? `回路帰還 · ${circuits.summaryJa}`

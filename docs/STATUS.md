@@ -4,6 +4,7 @@
 
 ## 最終更新
 
+- 2026-10-03 JST / Cursor（Grok Bot）— 置き去りの機体の回路を HUB の回路一覧・数から外す（売却・付け替え不可、回収で戻る）と、回収の 2 本目（#218）のデプロイ記録を反映。`SORT_V2_RULES.md` に旧仕様の注記
 - 2026-10-03 JST / Cursor（Grok Bot）— 置き去りの機体の回収の 2 本目（explore: Invade を通った出撃の置き去りを場所付きで記録・同じマスで再出現・離昇時に搭乗円の内側なら回収、Invade を通らない出撃の置き去りは機体と回路を失う＝#206 の残り、Invade からの出撃も部隊を連れて出る）と、回収の 1 本目（#215）のデプロイ記録を反映
 - 2026-10-03 JST / Cursor（Grok Bot）— 置き去りの機体の回収の 1 本目（shared: `lostMechs` に場所・時刻・写し、`recoveredLostMechInstanceIds` で `fleet` に戻す、回路の二重化を修正）と文書の残り（「最大 3」の記述、最後のデプロイ記録）を反映
 - 2026-10-03 JST / Cursor（Grok Bot）— 項目15（機体数上限3の撤廃・格納庫で出撃機を最大3機まで選ぶ・再出撃も同じ選択を読む）を反映（計画の 5）
@@ -14,9 +15,9 @@
 
 ## 最後にデプロイ成功した main コミット
 
-- `cdba96f` — #215（置き去りの機体の回収の 1 本目: shared の `lostMechs` に場所・時刻・写し、`recoveredLostMechInstanceIds`、回路の二重化の修正）
-- `Deploy Modules Preview` run 37121157155：success（2026-10-03 20:54〜20:55 JST）。プレビューで確認済み（既存の流れと、二重化していた古いセーブの読み込み）。その前の #213（`31a3c70`）は run 37120458883：success（20:41〜20:42 JST。4 機以上の読み込み・4 機目は選べない・出撃と摩耗は選んだ機体だけ・選択の保存・再出撃＝格納庫の選択を確認）、#212（`a346a2d`）は run 37119522768：success（20:23 JST 頃）、#211（`fd4e859`）は run 37119019061：success（20:14 JST 開始）、#209（`fb8234f`）は run 37118268304：success（20:00 JST 開始）、#208（`26c8896`）は run 37117792158：success（19:51 JST 開始）
-- 2026-09-29 の #187（`0f2618d`）以降、`packages/**` を変える main への push はすべて success（#189・#191・#192・#195・#196・#197・#199・#201・#203・#204・#206・#208・#209・#211・#212・#213・#215）。文書だけのコミット（#198 `07b19b9`・#205 `6c3bf6d`・#207 `a8ee15e`・#210 `7f65334`・#214 `149e31d`・#216 `cd782c4`・#217 `bec5e58`）は workflow の `paths` に当たらないのでデプロイは走らない
+- `ed22e87` — #218（置き去りの機体の回収の 2 本目: Explore での置き去りの記録・同じマスでの再出現・離昇時の回収、Invade を通らない出撃では機体と回路を失う）
+- `Deploy Modules Preview` run 37122926841：success（2026-10-03 21:27〜21:28 JST）。プレビューで確認済み（Invade の盤から出撃して置き去り → 同じマスで再出現・回収せず帰ると同じ行を更新 → 降下地点で回収して部隊に復帰、格納庫からの直接出撃では機体と回路を失う、仕分へ・再出撃・格納庫へ）。その前の #215（`cdba96f`）は run 37121157155：success（20:54〜20:55 JST。既存の流れと、二重化していた古いセーブの読み込みを確認）、#213（`31a3c70`）は run 37120458883：success（20:41〜20:42 JST。4 機以上の読み込み・4 機目は選べない・出撃と摩耗は選んだ機体だけ・選択の保存・再出撃＝格納庫の選択を確認）、#212（`a346a2d`）は run 37119522768：success（20:23 JST 頃）、#211（`fd4e859`）は run 37119019061：success（20:14 JST 開始）、#209（`fb8234f`）は run 37118268304：success（20:00 JST 開始）、#208（`26c8896`）は run 37117792158：success（19:51 JST 開始）
+- 2026-09-29 の #187（`0f2618d`）以降、`packages/**` を変える main への push はすべて success（#189・#191・#192・#195・#196・#197・#199・#201・#203・#204・#206・#208・#209・#211・#212・#213・#215・#218）。文書だけのコミット（#198 `07b19b9`・#205 `6c3bf6d`・#207 `a8ee15e`・#210 `7f65334`・#214 `149e31d`・#216 `cd782c4`・#217 `bec5e58`・#219 `ec8079b`）は workflow の `paths` に当たらないのでデプロイは走らない
 - 直近の赤: 2026-09-28 16:39 JST の #166（`6d9cde0`）から 2026-09-29 17:21 JST の `f2928de` まで、main への push は `Build sort (Pages /sort/)` で failure（途中 1 件 cancelled）。#187（Sort の資源4分類移行の仕上げ、`0f2618d`、2026-09-29 19:26 JST）で復旧
 - 確認コマンド: `gh run list --workflow "Deploy Modules Preview" --branch main --limit 5`
 
@@ -39,7 +40,7 @@
 次にやること（回路データモデルの残り。順番は設計書 §8 の A → B・C・D・E → F → G。担当・着手順の確定はオーケストレーター）:
 
 - **F の残り**: 回路の落とし物（`fieldDrops`）の作成（Invade の出撃マスを `cell` に入れる。今の帰還は常に `cell: null`）、Explore での落とし物の出現と回収（`recoveredDropIds` は今は常に空）、背負えなかった大破機の喪失（`lostMechInstanceIds` は今は常に空）
-- **置き去りの機体（`lostMechs`）の World での発見・回収**: 決定済み（2026-10-03 神宮。下の「設計との差」）。**shared 部分は実装済み（回収の 1 本目の PR）**: `lostMechs` の任意項目 `frontSeed`・`cell`・`lostAt`・`lostSortieId`・`catalogId`・`durability`・`durabilityMax`・`status`、帰還の `recoveredLostMechInstanceIds` と `recoverLostMechs`（`fleet` に戻す。`instanceId`・携行弾・バッテリーを保ち、回路は付いたまま）、再度の置き去りは同じ項目を更新、回路の二重化を修正（`HUB_SAVE_CONTRACT.md` §12.5）。**Explore 部分も実装済み（回収の 2 本目の PR）**: Invade を通った出撃（セクター＋HubSave の `frontProgress.seed`）の置き去りは場所付きで `lostMechs` に残り、次に同じマスへ出撃すると降下地点の近くに止まって現れ、離昇時に搭乗円の内側にいれば回収（帰還の `recoveredLostMechInstanceIds`）。回収しなければ同じ行を更新。Invade を通らない出撃の置き去りは帰還の `abandonedMechInstanceIds` で機体と回路を失う（#206 の残り）。Invade からの出撃は HubSave の出撃機の選択で部隊を組む（`HUB_SAVE_CONTRACT.md` §12.6 末尾）。残り: Invade（`frontSeed` で盤に表示・作り直し時の移動）。trade の回路一覧・売却は置き去りの機体の回路を区別していない（装備先に機体 ID が出るだけ。売却もできてしまう。付け替えようとすると「回路が見つかりません」）
+- **置き去りの機体（`lostMechs`）の World での発見・回収**: 決定済み（2026-10-03 神宮。下の「設計との差」）。**shared 部分は実装済み（回収の 1 本目の PR）**: `lostMechs` の任意項目 `frontSeed`・`cell`・`lostAt`・`lostSortieId`・`catalogId`・`durability`・`durabilityMax`・`status`、帰還の `recoveredLostMechInstanceIds` と `recoverLostMechs`（`fleet` に戻す。`instanceId`・携行弾・バッテリーを保ち、回路は付いたまま）、再度の置き去りは同じ項目を更新、回路の二重化を修正（`HUB_SAVE_CONTRACT.md` §12.5）。**Explore 部分も実装済み（回収の 2 本目の PR）**: Invade を通った出撃（セクター＋HubSave の `frontProgress.seed`）の置き去りは場所付きで `lostMechs` に残り、次に同じマスへ出撃すると降下地点の近くに止まって現れ、離昇時に搭乗円の内側にいれば回収（帰還の `recoveredLostMechInstanceIds`）。回収しなければ同じ行を更新。Invade を通らない出撃の置き去りは帰還の `abandonedMechInstanceIds` で機体と回路を失う（#206 の残り）。Invade からの出撃は HubSave の出撃機の選択で部隊を組む（`HUB_SAVE_CONTRACT.md` §12.6 末尾）。残り: Invade（`frontSeed` で盤に表示・作り直し時の移動）。**置き去りの機体の回路の HUB での扱い（2026-10-03 神宮。この PR で実装）**: HubSave には残すが、HUB では所有から離れている扱い。trade の「保有回路」一覧・「回路装備」の選択肢と装備数・出撃パネルの回路の枚数に出さず、売却・付け替え・取り外しは処理の側でも断る（shared `hubVisibleCircuits`、trade `lost-mech-circuits.ts`）。回収すると、その機体に付いたまま一覧に戻る。回路のボーナス（`hubCircuitBonuses`：修理割引・作成倍率・耐久バッファ）とパーフェクト最大サイズの記録は従来どおり全回路から計算する（価格に関わるので変えていない。要判断）
 - **機体数上限3の撤廃と出撃機の選択**（項目15）— **実装済み（2026-10-03、項目15 の PR）**: 下の「設計との差」の項目15 を参照。#213（`31a3c70`）。残り: Invade からの出撃も部隊を連れて出る（未着手）。「最大 3」の記述は回収の 1 本目の PR で `MECH_FLEET.md`・`CIRCUIT_DATA_MODEL_V0.md`・`CIRCUIT_SQUAD_DESIGN_V0.md` を更新済み
 - **G**: Invade の盤で落とし物のあるマスに印を出す（未着手。2026-09-28 以降 `packages/invade` の変更なし）
 - **C の残り**: 装着中の回路の売却（U14: 自動で外して売る・確認あり）、`circuitBonuses` を装着中の回路だけで集計（U5。今の `hubCircuitBonuses` は全所持回路を集計）

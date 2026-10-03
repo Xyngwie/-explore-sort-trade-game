@@ -95,6 +95,7 @@ import {
   circuitSellPerfectSide,
   perfectCircuitSellBonusCredits,
   formatCircuitSellPriceJa,
+  resolveActiveCircuit,
 } from "./hangar";
 import { PIECES_PER_CONTAINER, circuitCraftCreditCost } from "@estg/shared";
 
@@ -1536,4 +1537,90 @@ console.log("trade hangar selftest: ok");
     assert.ok(mainSrc.includes(`'[data-act]:not([data-act="select"])'`), "sortie checkbox not re-rendered on click");
   }
   console.log("trade item15 fleet cap removal / sortie selection ok");
+}
+
+// lostMechs recovery follow-up (2026-10-03 神宮): a circuit on a left-behind
+// mech stays in HubSave but the HUB treats it as out of its hands — not listed,
+// not counted, not sellable, not re-equippable; it comes back with the mech.
+{
+  const shared = await import("@estg/shared");
+  const lostApi = await import("./lost-mech-circuits");
+  const store = memoryStorage();
+  let hs = loadPlaytestSeed(createInitialHangar(store), { storage: store, injectRate: 0, rng: () => 0 });
+  const wingId = hs.hub.fleet.find((m) => m.status === "operational" && m.instanceId !== hs.hub.fleet[0]!.instanceId)!.instanceId;
+  // a second circuit kept in the stash, to check the count drops only by the lost one
+  let hub = upsertCircuitIntoHub(hs.hub, {
+    circuitId: "lm_stash",
+    circuitBoard: createEmptyCircuitBoard(2, 2, "lm_stash") as never,
+    outcome: "offline",
+  } as never);
+  const eq = shared.equipCircuit(hub, SEED_CIRCUIT_ID, wingId);
+  assert.equal(eq.ok, true);
+  hub = eq.hub;
+  const totalBefore = hub.circuits.length;
+  // left behind via Invade (place known) → lostMechs, circuit stays on it
+  const lostRet = applyExploreReturnToHub(hub, {
+    returnKind: "extract", mechWear: [], sortieId: "lm_trade_lost",
+    lostMechs: [{ instanceId: wingId, currentAmmo: 9, battery: { capacity: 300, activity: 200 }, circuitIds: [SEED_CIRCUIT_ID], frontSeed: 77, cell: { sx: 1, sy: 2 } }],
+  });
+  assert.equal(lostRet.applied, true);
+  saveHubSaveToLocalStorage(lostRet.hub, store);
+  hs = createInitialHangar(store);
+  assert.equal(hs.hub.circuits.find((c) => c.circuitId === SEED_CIRCUIT_ID)?.equippedTo, wingId, "kept in HubSave on the lost mech");
+  assert.equal(hs.hub.circuits.length, totalBefore, "HubSave keeps every record");
+
+  // (1) not in the list nor the count
+  const visible = shared.hubVisibleCircuits(hs.hub);
+  assert.deepEqual(visible.map((c) => c.circuitId), ["lm_stash"]);
+  const brief = formatCircuitHubBrief(visible, hs.lastCircuit);
+  assert.ok(brief.summaryJa.startsWith("回路 1枚"), brief.summaryJa);
+  assert.ok(!buildNextSortieReturnDigest(hs).restoreJa.includes(SEED_CIRCUIT_ID), "hub digest ignores it");
+  assert.notEqual(hs.lastCircuit?.circuitId, SEED_CIRCUIT_ID, "not the active circuit");
+  {
+    // only the lost circuit left: the remembered selection does not bring it back
+    const only = shared.normalizeHubSnapshot({ ...hs.hub, circuits: hs.hub.circuits.filter((c) => c.circuitId === SEED_CIRCUIT_ID) });
+    const remembered = { circuitId: SEED_CIRCUIT_ID, circuitBoard: hs.hub.circuits.find((c) => c.circuitId === SEED_CIRCUIT_ID)!.circuitBoard, outcome: "offline" } as never;
+    assert.equal(resolveActiveCircuit(only, remembered), null);
+  }
+  assert.equal(selectCircuit(hs, SEED_CIRCUIT_ID).notice, "回路なし", "cannot be selected");
+  {
+    const { readFileSync } = await import("node:fs");
+    const mainSrc = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    const equipSrc = readFileSync(new URL("./circuit-equip-ui.ts", import.meta.url), "utf8");
+    assert.ok(mainSrc.includes("const list = hubVisibleCircuits(s.hub);"), "保有回路 list filtered");
+    assert.ok(mainSrc.includes("formatCircuitHubBrief(hubVisibleCircuits(s.hub)"), "sortie panel count filtered");
+    assert.ok(equipSrc.includes("const circuits = hubVisibleCircuits(hub);"), "回路装備 options / count filtered");
+    assert.ok(!equipSrc.includes("hub.circuits"), "equip UI never reads raw circuits");
+  }
+
+  // (2) sell and re-equip refused on the processing side
+  const sold = sellCircuit(hs, SEED_CIRCUIT_ID);
+  assert.equal(sold.notice, "回路なし", "refused like a missing circuit (existing notice)");
+  assert.equal(sold.hub, hs.hub, "hub unchanged");
+  assert.equal(shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub).circuits.length, totalBefore, "save unchanged");
+  const other = hs.hub.fleet.find((m) => m.status === "operational")!.instanceId;
+  const eqLost = lostApi.equipHubCircuit(hs.hub, SEED_CIRCUIT_ID, other);
+  assert.deepEqual([eqLost.ok, eqLost.reason], [false, "on_lost_mech"]);
+  const unLost = lostApi.unequipHubCircuit(hs.hub, SEED_CIRCUIT_ID);
+  assert.deepEqual([unLost.ok, unLost.reason], [false, "on_lost_mech"]);
+  assert.equal(lostApi.equipRefusalMessageJa("on_lost_mech"), "回路が見つかりません。", "existing text, no new wording");
+  assert.equal(lostApi.equipRefusalMessageJa("slot_full"), "その機体の回路枠がいっぱいです。");
+  assert.equal(lostApi.unequipHubCircuit(hs.hub, "lm_stash").ok, true, "stash circuit: unaffected");
+
+  // (3) recovered → back in the list, still on that mech, usable again
+  const rec = applyExploreReturnToHub(hs.hub, {
+    returnKind: "extract", mechWear: [], sortieId: "lm_trade_recover", recoveredLostMechInstanceIds: [wingId],
+  });
+  assert.equal(rec.applied, true);
+  saveHubSaveToLocalStorage(rec.hub, store);
+  hs = createInitialHangar(store);
+  const back = shared.hubVisibleCircuits(hs.hub);
+  assert.deepEqual(back.map((c) => c.circuitId).sort(), [SEED_CIRCUIT_ID, "lm_stash"].sort());
+  assert.equal(back.find((c) => c.circuitId === SEED_CIRCUIT_ID)?.equippedTo, wingId, "comes back on its mech");
+  assert.ok(formatCircuitHubBrief(back, hs.lastCircuit).summaryJa.startsWith("回路 2枚"));
+  assert.equal(selectCircuit(hs, SEED_CIRCUIT_ID).notice, `回路選択 ${SEED_CIRCUIT_ID}`);
+  assert.equal(lostApi.unequipHubCircuit(hs.hub, SEED_CIRCUIT_ID).ok, true, "can be unequipped again");
+  const soldBack = sellCircuit(hs, SEED_CIRCUIT_ID);
+  assert.ok(soldBack.notice.startsWith("回路売却"), "can be sold again");
+  console.log("trade lost-mech circuits hidden from the HUB ok");
 }
