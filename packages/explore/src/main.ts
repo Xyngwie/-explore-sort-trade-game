@@ -58,6 +58,7 @@ import {
   isWingmanMobileFor,
   type ExploreCommandId,
 } from "./game/commandUnlock";
+import { createPhaseWatcher } from "./game/phaseWatch";
 import { leftBehindResultHtml } from "./game/leftBehind";
 import {
   COMMAND_UNLOCK_MODE_LABEL,
@@ -87,6 +88,8 @@ if (boot.invadeSector != null) {
   }
 }
 let world: World = createWorld(boot);
+/** Last phase the DOM was rendered for; see game/phaseWatch.ts. */
+const phaseWatch = createPhaseWatcher(world.phase);
 
 const forcedEngageActive = world.invadeSector?.engage === "forced";
 if (forcedEngageActive) {
@@ -450,6 +453,7 @@ function logsHtml(): string {
 }
 
 function renderDom(): void {
+  phaseWatch.markRendered(world.phase);
   const result = world.phase === "result" ? toExploreResult(world) : null;
   const sortUrl = result ? sortHandoffUrl(world) : "";
   const wearUrl = world.phase === "result" ? hubWearHandoffUrl(world) : null;
@@ -833,7 +837,6 @@ function paintHudOnly(): void {
 function frame(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  const phaseBefore = world.phase;
   const logLen = world.logs.length;
 
   if (world.phase === "sortie") {
@@ -850,8 +853,11 @@ function frame(now: number): void {
     }
   }
 
-  if (world.phase !== phaseBefore) {
-    if (world.phase === "result" && forcedEngageActive) {
+  // Compare with the last rendered phase (not a per-frame snapshot) so a phase
+  // set between frames — 撤退 button — goes through the same path as X lift-off.
+  const changedTo = phaseWatch.takeChange(world.phase);
+  if (changedTo != null) {
+    if (changedTo === "result" && forcedEngageActive) {
       markExploreForcedHandoffIntent();
       // Any terminal outcome clears invade forced lock so re-entry is playable.
       clearInvadeForcedLockAfterResolve();
