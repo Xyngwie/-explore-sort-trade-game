@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import {
   INITIAL_HUB,
+  createHubSave,
+  deserializeHubSave,
+  serializeHubSave,
   type HubCircuitRecord,
 } from "./hub-save";
 import { createOwnedMech } from "./mech-fleet";
@@ -115,5 +118,54 @@ assert.equal(noFront.lostForever.length, 1);
 assert.equal(noFront.droppedToField.length, 0);
 assert.equal(noFront.hub.fieldDrops.length, 0);
 assert.equal(noFront.hub.circuits.length, 0);
+
+
+// Explore left-behind return state is persisted independently from wreck/field drops.
+{
+  const lostMech = createOwnedMech("mech_gen1", {
+    instanceId: "left-behind-mech",
+    currentAmmo: 11,
+    battery: { capacity: 300, activity: 221 },
+  });
+  const circuit: HubCircuitRecord = {
+    ...equippedCircuit,
+    circuitId: "left-behind-circuit",
+    equippedTo: lostMech.instanceId,
+  };
+  const base = {
+    ...INITIAL_HUB,
+    fleet: [lostMech],
+    circuits: [circuit],
+  };
+  const result = applySortieReport(base, {
+    sortieId: "sortie-left-behind",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    lostMechs: [{
+      instanceId: lostMech.instanceId,
+      currentAmmo: lostMech.currentAmmo,
+      battery: lostMech.battery,
+      circuitIds: [circuit.circuitId],
+    }],
+  });
+  assert.equal(result.applied, true);
+  assert.equal(result.hub.fleet.some((m) => m.instanceId === lostMech.instanceId), false);
+  assert.equal(result.hub.fieldDrops.length, 0);
+  assert.equal(result.hub.lostMechs.length, 1);
+  assert.deepEqual(result.hub.lostMechs[0], {
+    instanceId: lostMech.instanceId,
+    currentAmmo: 11,
+    battery: { capacity: 300, activity: 221 },
+    circuitIds: [circuit.circuitId],
+  });
+  assert.equal(result.hub.circuits.some((c) => c.circuitId === circuit.circuitId), true);
+  const roundTrip = deserializeHubSave(serializeHubSave(createHubSave(result.hub)))!.hub;
+  assert.deepEqual(roundTrip.lostMechs, result.hub.lostMechs);
+  assert.deepEqual(roundTrip.lostMechs[0]!.circuitIds, [circuit.circuitId]);
+}
 
 console.log("shared circuit sortie selftest: ok");
