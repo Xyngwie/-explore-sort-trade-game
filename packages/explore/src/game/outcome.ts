@@ -133,8 +133,8 @@ function lostMechsFromWorld(world: World): LostMechReturnState[] {
     const unit = world.wingmen.find((w) => w.id === entry.id);
     const instanceId = unit?.instanceId?.trim() ?? "";
     if (!instanceId || seen.has(instanceId)) continue;
-    const fallbackBattery = createOwnedMech("mech_gen1", { instanceId }).battery;
-    const battery = world.mechBattery[instanceId] ?? fallbackBattery;
+    const battery = world.mechBattery[instanceId];
+    if (!battery) continue;
     out.push({
       instanceId,
       currentAmmo: world.currentAmmo[instanceId],
