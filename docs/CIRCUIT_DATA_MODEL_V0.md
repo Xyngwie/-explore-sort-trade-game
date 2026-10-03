@@ -133,10 +133,10 @@ circuitActiveEffect(rec) = (rec.restoreState === "fully_awakened" || rec.restore
 | 機体の回路枠 | `mechSlotCapacity(mech, hub) = 1 + （装着中のコモンの枠拡張の合計）` | 基本枠 1（設計メモ §2）。枠拡張の値は対応表と一緒に未決なので、**当面は常に 1** を返す |
 | 部隊の回路上限 | `squadEquipCap(hub)` | 装着中の数だけ数える（旧 §8.2-9）。段位で増える（§3、項目3）。開始 0（§4、項目8）。値の出どころは項目3で決まる。**それまでの扱いは §9 U3** |
 | 装着できるか | `countEquipped(hub, mech) < mechSlotCapacity` かつ `countEquippedAll(hub) < squadEquipCap` | 付け替えは HUB のみ・無料（設計メモ §2）。出撃中は変えない |
-| 機体数 | 当面 3（`HUB_LIMITS.maxMechs = 3`、変えない） | 設計メモ §4.1 |
+| 機体数 | **上限なし**（2026-10-03 項目15 で `HUB_LIMITS.maxMechs` を撤廃）。出撃は最大 3 機（`HUB_LIMITS.maxSortieMechs`、格納庫で選ぶ） | 設計メモ §4.1 |
 
 - 装着・取り外しは shared の純関数（例 `equipCircuit(hub, circuitId, mechInstanceId)`・`unequipCircuit(hub, circuitId)`）にし、UI（trade）はそれを呼ぶだけにする。
-- 読み込み時の整合（§6.3）: `equippedTo` が存在しない機体を指していたら倉庫へ戻す。枠を超えていたら超えた分を倉庫へ戻す。
+- 読み込み時の整合（§6.3）: `equippedTo` が存在しない機体を指していたら倉庫へ戻す（**置き去りの機体 `lostMechs` を指す回路はそのまま。§5.6**）。枠を超えていたら超えた分を倉庫へ戻す。
 
 ---
 
@@ -344,9 +344,10 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 今の実装との関係（2026-10-03）:
 
 - #206 は置き去りの機体を `fleet` から外し、`lostMechs`（`instanceId`・残弾・バッテリー・`circuitIds`）に記録する。落とし物は作らない（ここは決定と合っている）。
-- World での発見・回収（離昇時の搭乗円での判定）、再出現時の項目の更新、Invade の盤への記録・表示、盤の作り直し時の移動、`lostMechs` への場所・時刻・写しの追加は未実装。
+- **回収の shared 部分（2026-10-03、回収の 1 本目の PR）— 実装済み**: `lostMechs` の項目に任意の `frontSeed`・`cell`・`lostAt`・`lostSortieId`・`catalogId`・`durability`・`durabilityMax`・`status` を足した。帰還に `recoveredLostMechInstanceIds` を足し、shared `recoverLostMechs`（`applySortieReport` → `applyExploreReturnToHub`）が `lostMechs` から外して `fleet` に戻す（`instanceId`・`currentAmmo`・`battery` を保ち、回路は付いたまま戻る）。再び現れてまた置き去りになった機体は同じ項目を更新する。詳細は [`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5。
+- 未実装: World での発見・回収（離昇時の搭乗円での判定）と帰還への `recoveredLostMechInstanceIds`・場所の記入（Explore）、Invade の盤への記録・表示、盤の作り直し時の移動（Invade）。
 - **既知の食い違い（Invade を通らない出撃）**: #206 は出撃マスの有無にかかわらず置き去りの機体を `lostMechs` に残す（今の trade の反映は常に `cell: null`）。決定では Invade を通らない出撃の置き去りは機体も回路も失い、`lostMechs` に残さない。コードは未修正（回収の実装で合わせる）。
-- **既知の食い違い**: 回路レコードは `circuits` に残るが、装着先が `fleet` にないので正規化（`enforceEquipIntegrity`）で倉庫（`equippedTo: null`）に戻る。`lostMechs[].circuitIds` には ID が残るので、同じ回路が倉庫にも失われた機体にもあるように見える（回路の二重化）。回収の実装と一緒に直す（それまで未修正。[`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5）。
+- ~~**既知の食い違い**: 回路の二重化（置き去りの機体の回路が正規化で倉庫に戻り、`lostMechs[].circuitIds` にも残る）~~ → **回収の 1 本目の PR で修正**: 置き去りの機体の回路は `equippedTo` がその機体のまま残り、`circuitIds` は毎回の正規化でその回路だけにそろえる。既存セーブで倉庫に戻っていた回路は、今ある場所（倉庫、または付け直した機体）に残し、`circuitIds` から外す（回路は消えも増えもしない。[`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5）。
 
 ---
 

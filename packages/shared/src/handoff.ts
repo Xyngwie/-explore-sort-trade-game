@@ -26,7 +26,7 @@ import {
   type CircuitOutcome,
   type CircuitRestoreState,
 } from "./circuit-board";
-import type { FieldInventoryDrop, LostMechReturnState } from "./hub-save";
+import { normalizeLostMechExtras, type FieldInventoryDrop, type LostMechReturnState } from "./hub-save";
 import {
   encodeCircuitBonusesCompact,
   parseCircuitBonusesCompact,
@@ -221,6 +221,8 @@ export type ExploreToHubWearPayload = {
   wreckedMechInstanceIds?: string[];
   /** Mechs left behind at Explore lift-off; not wrecks / field drops. */
   lostMechs?: LostMechReturnState[];
+  /** Left-behind mechs (`HubSave.lostMechs`) picked up at lift-off → back to the fleet. */
+  recoveredLostMechInstanceIds?: string[];
 };
 
 const SORTIE_RETURN_KINDS: readonly SortieReturnKind[] = [
@@ -675,6 +677,8 @@ function encodeLostMechs(raw: readonly LostMechReturnState[] | undefined): strin
         activity: Math.max(0, Math.min(capacity, Math.floor(m.battery.activity))),
       },
       circuitIds: [...new Set(m.circuitIds.map((id) => id.trim()).filter(Boolean))],
+      // optional location / time / copy (only keys that are set)
+      ...normalizeLostMechExtras(m as unknown as Record<string, unknown>),
     };
   }).filter((m) => m.instanceId.length > 0);
   return rows.length > 0 ? JSON.stringify(rows) : "";
@@ -712,6 +716,7 @@ function parseLostMechs(raw: string | null): LostMechReturnState[] {
           activity: Math.max(0, Math.min(Math.max(1, Math.floor(capacity)), Math.floor(activity))),
         },
         circuitIds,
+        ...normalizeLostMechExtras(obj),
       });
     }
     return out;
@@ -823,6 +828,8 @@ export function buildExploreToHubWearUrl(
   if (wrecked) u.searchParams.set("wreckedMechInstanceIds", wrecked);
   const lostMechs = encodeLostMechs(payload.lostMechs);
   if (lostMechs) u.searchParams.set("lostMechs", lostMechs);
+  const recoveredLost = encodeInstanceIdsCompact(payload.recoveredLostMechInstanceIds);
+  if (recoveredLost) u.searchParams.set("recoveredLostMechInstanceIds", recoveredLost);
   return u.toString();
 }
 
@@ -850,6 +857,9 @@ export function parseExploreToHubWearSearch(
     ...(parseLostMechs(p.get("lostMechs")).length > 0
       ? { lostMechs: parseLostMechs(p.get("lostMechs")) }
       : {}),
+    ...(parseInstanceIds(p.get("recoveredLostMechInstanceIds")).length > 0
+      ? { recoveredLostMechInstanceIds: parseInstanceIds(p.get("recoveredLostMechInstanceIds")) }
+      : {}),
   };
 }
 
@@ -866,6 +876,7 @@ export function toExploreToHubWearPayload(
     | "mechCurrentAmmo"
     | "mechBattery"
     | "lostMechs"
+    | "recoveredLostMechInstanceIds"
   >,
 ): ExploreToHubWearPayload {
   return {
@@ -889,6 +900,9 @@ export function toExploreToHubWearPayload(
       ? { wreckedMechInstanceIds: opts.wreckedMechInstanceIds }
       : {}),
     ...(opts?.lostMechs?.length ? { lostMechs: opts.lostMechs } : {}),
+    ...(opts?.recoveredLostMechInstanceIds?.length
+      ? { recoveredLostMechInstanceIds: opts.recoveredLostMechInstanceIds }
+      : {}),
   };
 }
 

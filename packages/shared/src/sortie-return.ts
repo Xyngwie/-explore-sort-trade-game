@@ -9,11 +9,32 @@ import { applySortieReport } from "./circuit-inventory";
 import type { ExploreToHubWearPayload } from "./handoff";
 import type { HubSnapshot } from "./hub-save";
 import {
+  MECH_FLEET_RULES,
   applyWearReportsToFleet,
   normalizeBattery,
   normalizeCurrentAmmo,
+  statusFromDurability,
   type OwnedMech,
 } from "./mech-fleet";
+
+/**
+ * The copy of a mech left behind in this sortie (rows with `lostSortieId ===
+ * sortieId`) takes this sortie's wear (`mechWear.durabilityAfter`), so a
+ * recovered mech comes back as it was when it was left.
+ */
+function withLostMechWear(hub: HubSnapshot, wear: ExploreToHubWearPayload): HubSnapshot {
+  if (!wear.sortieId || (hub.lostMechs ?? []).length === 0) return hub;
+  const after = new Map(wear.mechWear.map((w) => [w.instanceId, w.durabilityAfter]));
+  let changed = false;
+  const lostMechs = hub.lostMechs.map((m) => {
+    if (m.lostSortieId !== wear.sortieId || !after.has(m.instanceId) || m.durability == null) return m;
+    const max = m.durabilityMax ?? MECH_FLEET_RULES.defaultDurabilityMax;
+    const durability = Math.max(0, Math.min(max, Math.floor(after.get(m.instanceId)!)));
+    changed = true;
+    return { ...m, durability, status: statusFromDurability(durability) };
+  });
+  return changed ? { ...hub, lostMechs } : hub;
+}
 
 /**
  * Write returned per-mech carried ammo / battery into the fleet. 0 is written
@@ -74,11 +95,12 @@ export function applyExploreReturnToHub(
         recoveredInventoryDropIds: wear.recoveredInventoryDropIds ?? [],
         wreckedMechInstanceIds: wear.wreckedMechInstanceIds ?? [],
         lostMechs: wear.lostMechs ?? [],
+        recoveredLostMechInstanceIds: wear.recoveredLostMechInstanceIds ?? [],
       },
       at,
     );
     if (!report.applied) return { hub, applied: false };
-    next = report.hub;
+    next = withLostMechWear(report.hub, wear);
   }
   return {
     hub: {

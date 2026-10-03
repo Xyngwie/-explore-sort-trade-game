@@ -24,7 +24,13 @@ import {
   type LostMechReturnState,
 } from "./hub-save";
 import type { MechCircuitEntry } from "./handoff";
-import { syncMechStatus } from "./mech-fleet";
+import {
+  MECH_FLEET_RULES,
+  createOwnedMech,
+  normalizeBattery,
+  syncMechStatus,
+  type OwnedMech,
+} from "./mech-fleet";
 import { mergeYieldBags } from "./sort-yield";
 
 // ---------------------------------------------------------------------------
@@ -69,8 +75,17 @@ export function stashCircuits(hub: Pick<HubSnapshot, "circuits">): HubCircuitRec
 export type EquipResult = {
   hub: HubSnapshot;
   ok: boolean;
-  reason?: "no_circuit" | "no_mech" | "slot_full";
+  /** `on_lost_mech`: the circuit is attached to a left-behind mech (lostMechs) — it comes back only with the mech. */
+  reason?: "no_circuit" | "no_mech" | "slot_full" | "on_lost_mech";
 };
+
+/** True when the circuit is attached to a left-behind mech (`lostMechs`). */
+export function isCircuitOnLostMech(
+  hub: Pick<HubSnapshot, "lostMechs">,
+  rec: Pick<HubCircuitRecord, "equippedTo">,
+): boolean {
+  return rec.equippedTo != null && (hub.lostMechs ?? []).some((m) => m.instanceId === rec.equippedTo);
+}
 
 export function equipCircuit(
   hub: HubSnapshot,
@@ -79,6 +94,7 @@ export function equipCircuit(
 ): EquipResult {
   const rec = hub.circuits.find((c) => c.circuitId === circuitId);
   if (!rec) return { hub, ok: false, reason: "no_circuit" };
+  if (isCircuitOnLostMech(hub, rec)) return { hub, ok: false, reason: "on_lost_mech" };
   const mech = hub.fleet.find((m) => m.instanceId === mechInstanceId);
   if (!mech) return { hub, ok: false, reason: "no_mech" };
   if (rec.equippedTo === mechInstanceId) return { hub, ok: true };
@@ -93,9 +109,8 @@ export function equipCircuit(
 }
 
 export function unequipCircuit(hub: HubSnapshot, circuitId: string): HubSnapshot {
-  if (!hub.circuits.some((c) => c.circuitId === circuitId && c.equippedTo != null)) {
-    return hub;
-  }
+  const rec = hub.circuits.find((c) => c.circuitId === circuitId && c.equippedTo != null);
+  if (!rec || isCircuitOnLostMech(hub, rec)) return hub;
   const circuits = hub.circuits.map((c) =>
     c.circuitId === circuitId ? { ...c, equippedTo: null } : c,
   );
@@ -224,7 +239,8 @@ export type SortieCircuitReport = {
   wreckedMechInstanceIds?: string[];
   /** Explore return snapshots for mechs left behind; does not create field drops. */
   lostMechs?: LostMechReturnState[];
-
+  /** Left-behind mechs picked up this sortie → back to the fleet (`recoverLostMechs`). */
+  recoveredLostMechInstanceIds?: string[];
 };
 
 export type ApplySortieResult = {
@@ -241,7 +257,53 @@ export type ApplySortieResult = {
   acquired: string[];
   droppedInventoryToField: FieldInventoryDrop[];
   recoveredInventory: string[];
+  /** Left-behind mechs put back into the fleet this sortie. */
+  recoveredMechs: string[];
 };
+
+/**
+ * Durability for a recovered row without a copy (older saves): the lowest
+ * operational value — it can sortie, and nothing is invented beyond that.
+ */
+export const LOST_MECH_RECOVERY_FALLBACK_DURABILITY = MECH_FLEET_RULES.operationalMinDurability;
+
+/** Rebuild the fleet mech for a lostMechs row (instanceId / ammo / battery kept). */
+export function ownedMechFromLostMech(row: LostMechReturnState): OwnedMech {
+  const base = createOwnedMech(row.catalogId ?? "mech_gen1", {
+    instanceId: row.instanceId,
+    durability: row.durability ?? LOST_MECH_RECOVERY_FALLBACK_DURABILITY,
+    ...(row.durabilityMax != null ? { durabilityMax: row.durabilityMax } : {}),
+    ...(row.currentAmmo != null ? { currentAmmo: row.currentAmmo } : {}),
+  });
+  return syncMechStatus({ ...base, battery: normalizeBattery(row.battery) });
+}
+
+/**
+ * Recovery (CIRCUIT_DATA_MODEL_V0 §5.6): the listed left-behind mechs leave
+ * `lostMechs` and rejoin the fleet (appended) with the same instanceId,
+ * carried ammo and battery. Their circuits never left them (`equippedTo` is
+ * still the mech), so they come back equipped. Ids not in `lostMechs`, or
+ * already in the fleet, are ignored.
+ */
+export function recoverLostMechs(
+  hub: HubSnapshot,
+  instanceIds: readonly string[],
+): { hub: HubSnapshot; recovered: string[] } {
+  const want = new Set(instanceIds.map((id) => id.trim()).filter(Boolean));
+  if (want.size === 0) return { hub, recovered: [] };
+  const fleetIds = new Set(hub.fleet.map((m) => m.instanceId));
+  const back: OwnedMech[] = [];
+  const remaining: LostMechReturnState[] = [];
+  for (const row of hub.lostMechs ?? []) {
+    if (want.has(row.instanceId) && !fleetIds.has(row.instanceId)) back.push(ownedMechFromLostMech(row));
+    else remaining.push(row);
+  }
+  if (back.length === 0) return { hub, recovered: [] };
+  return {
+    hub: normalizeHubSnapshot({ ...hub, fleet: [...hub.fleet, ...back], lostMechs: remaining }),
+    recovered: back.map((m) => m.instanceId),
+  };
+}
 
 /**
  * Apply one Explore sortie report to the hub (pure, idempotent by sortieId).
@@ -263,29 +325,43 @@ export function applySortieReport(
     acquired: [],
     droppedInventoryToField: [],
     recoveredInventory: [],
+    recoveredMechs: [],
   };
   const sortieId = sanitizeSortieId(report.sortieId);
   if (!sortieId) return none;
   if ((hub.appliedSortieIds ?? []).includes(sortieId)) return none;
+
+  // Recovery first: picked-up mechs rejoin the fleet before this sortie's losses.
+  const recoveredMechsResult = recoverLostMechs(hub, report.recoveredLostMechInstanceIds ?? []);
+  hub = recoveredMechsResult.hub;
+  const recoveredMechIds = new Set(recoveredMechsResult.recovered);
 
   const lost = new Set(report.lostMechInstanceIds);
   const wrecked = new Set(
     (report.wreckedMechInstanceIds ?? []).filter((id) => !lost.has(id)),
   );
   const canonicalCircuitIds = new Set(hub.circuits.map((c) => c.circuitId));
-  const fleetIds = new Set(hub.fleet.map((m) => m.instanceId));
+  const fleetById = new Map(hub.fleet.map((m) => [m.instanceId, m]));
+  const existingLost = new Map((hub.lostMechs ?? []).map((m) => [m.instanceId, m]));
   const lostMechs = (report.lostMechs ?? [])
     .filter(
       (m, index, rows) =>
         m.instanceId.trim().length > 0 &&
-        fleetIds.has(m.instanceId) &&
+        // a fleet mech left behind, or a reappeared lost mech left again (updated in place)
+        (fleetById.has(m.instanceId) || existingLost.has(m.instanceId)) &&
+        !recoveredMechIds.has(m.instanceId) &&
         rows.findIndex((row) => row.instanceId === m.instanceId) === index &&
         !lost.has(m.instanceId) &&
         !wrecked.has(m.instanceId),
     )
-    .map((m) => ({
-      ...m,
-      circuitIds: [...new Set(m.circuitIds.filter((id) => canonicalCircuitIds.has(id)))],
+    .map((m) => lostMechRecord(m, {
+      fleetMech: fleetById.get(m.instanceId),
+      previous: existingLost.get(m.instanceId),
+      sortieId,
+      at,
+      cell: report.cell,
+      frontSeed: report.frontSeed,
+      canonicalCircuitIds,
     }));
   const lostMechIds = new Set(lostMechs.map((m) => m.instanceId));
   const droppedAt = at.toISOString();
@@ -348,9 +424,10 @@ export function applySortieReport(
   }
 
   if (lostMechs.length > 0) {
+    // newest first; a re-lost entry replaces its old row (same instanceId)
     next = {
       ...next,
-      lostMechs: [...lostMechs, ...(next.lostMechs ?? [])],
+      lostMechs: [...lostMechs, ...(next.lostMechs ?? []).filter((m) => !lostMechIds.has(m.instanceId))],
     };
   }
 
@@ -402,6 +479,56 @@ export function applySortieReport(
     acquired: acquired.map((c) => c.circuitId),
     droppedInventoryToField,
     recoveredInventory,
+    recoveredMechs: recoveredMechsResult.recovered,
+  };
+}
+
+/**
+ * One lostMechs row from a return row. Location comes from the row or the
+ * report (`frontSeed` + `cell`, i.e. a sortie via Invade). Only rows with a
+ * location get `lostAt` / `lostSortieId` and the copy (`catalogId` /
+ * `durability` / `durabilityMax` / `status`, taken from the fleet mech or the
+ * previous row): those are the mechs that can reappear and be recovered.
+ * Without a location (not via Invade) the row keeps its old shape — the
+ * decision is that such mechs are lost outright (Explore PR of the recovery
+ * work); until then they stay as before.
+ */
+function lostMechRecord(
+  row: LostMechReturnState,
+  ctx: {
+    fleetMech: OwnedMech | undefined;
+    previous: LostMechReturnState | undefined;
+    sortieId: string;
+    at: Date;
+    cell: FrontCellCoord | null;
+    frontSeed: number | null;
+    canonicalCircuitIds: ReadonlySet<string>;
+  },
+): LostMechReturnState {
+  const prev = ctx.previous;
+  const merged: LostMechReturnState = {
+    ...(prev ?? {}),
+    ...Object.fromEntries(Object.entries(row).filter(([, v]) => v !== undefined)),
+    instanceId: row.instanceId,
+    currentAmmo: row.currentAmmo ?? prev?.currentAmmo,
+    battery: row.battery,
+    circuitIds: [...new Set(row.circuitIds.filter((id) => ctx.canonicalCircuitIds.has(id)))],
+  };
+  const frontSeed =
+    row.frontSeed ?? (ctx.frontSeed != null && Number.isFinite(ctx.frontSeed) ? ctx.frontSeed >>> 0 : undefined);
+  const cell = row.cell ?? ctx.cell ?? undefined;
+  if (frontSeed == null || !cell) return merged;
+  const m = ctx.fleetMech;
+  return {
+    ...merged,
+    frontSeed,
+    cell: { sx: cell.sx, sy: cell.sy },
+    lostAt: ctx.at.toISOString(),
+    lostSortieId: ctx.sortieId,
+    catalogId: m?.catalogId ?? merged.catalogId ?? "mech_gen1",
+    durability: row.durability ?? m?.durability ?? merged.durability,
+    durabilityMax: m?.durabilityMax ?? merged.durabilityMax,
+    status: row.status ?? m?.status ?? merged.status,
   };
 }
 

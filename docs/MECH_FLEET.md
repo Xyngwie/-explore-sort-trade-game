@@ -67,7 +67,7 @@ type OwnedMech = {
 };
 ```
 
-`HubSnapshot.fleet` は **`OwnedMech[]`**（最大 `HUB_LIMITS.maxMechs` = 3）。  
+`HubSnapshot.fleet` は **`OwnedMech[]`**（**機体数の上限なし**。2026-10-03 項目15 で `HUB_LIMITS.maxMechs` と読み込み時の切り詰めを撤廃）。出撃は最大 3 機（`HUB_LIMITS.maxSortieMechs`）で、格納庫で選んだ機体（`HubSnapshot.sortieSelection`、shared `resolveSortieSelection`）だけが出撃し、摩耗する。  
 旧 `MechId[]` はロード時にマイグレーションする（下記）。
 
 ### 4.1 携行弾（`currentAmmo`）— 未設定の扱い（暫定）
