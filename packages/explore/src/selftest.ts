@@ -2272,12 +2272,11 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
       e.hp = 0;
     }
     w.leader.pos = { x: 700, y: 400 };
-    w.wingmen[0]!.pos = { x: 1300, y: 400 };
+    w.wingmen[0]!.pos = { x: 700, y: 400 };
     w.wingmen[1]!.pos = { x: 700, y: 400 };
-    assert.ok(requestExtract(w));
-    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 1 && w.phase === "sortie"; t += 0.1) {
-      tickWorld(w, 0.1, idleInput());
-    }
+    extract(w, () => {
+      w.wingmen[0]!.pos = { x: 1300, y: 400 };
+    });
     assert.equal(w.extracted, true);
     assert.deepEqual(w.leftBehind, [
       { id: w.wingmen[0]!.id, name: "僚機A", reason: "outside_circle" },
