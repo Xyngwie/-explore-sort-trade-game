@@ -14,6 +14,7 @@ import {
   HUB_SAVE_STORAGE_KEY,
 } from "./constants";
 import {
+  canDeploy,
   createOwnedMech,
   normalizeBattery,
   normalizeFleet,
@@ -202,6 +203,12 @@ export type HubSnapshot = {
   lostMechs: LostMechReturnState[];
   /** HubSave v3: recently applied Explore sortie ids (apply-once guard). */
   appliedSortieIds?: string[];
+  /**
+   * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
+   * hangar (instanceIds, at most `HUB_LIMITS.maxSortieMechs`). Trade's deploy
+   * URL and Explore's 再出撃 both read it via `resolveSortieSelection`.
+   */
+  sortieSelection?: string[];
 };
 
 /** @deprecated Prefer HubSaveV2 — kept for migration typing. */
@@ -256,7 +263,11 @@ export const INITIAL_HUB: HubSnapshot = {
 };
 
 export const HUB_LIMITS = {
-  maxMechs: 3,
+  /**
+   * Mechs per sortie (leader + 2 wingmen). The fleet itself has no cap
+   * (2026-10-03 item 15: the old `maxMechs: 3` and load-time truncation are gone).
+   */
+  maxSortieMechs: 3,
   maxAmmo: 100,
   materialUnitPrice: 10,
   /**
@@ -741,7 +752,7 @@ export function normalizeHubSnapshot(
   const fleetIn = Array.isArray((raw as HubSnapshot | undefined)?.fleet)
     ? (raw as HubSnapshot).fleet
     : fallback.fleet;
-  const fleet = normalizeFleet(fleetIn, HUB_LIMITS.maxMechs);
+  const fleet = normalizeFleet(fleetIn);
 
   const ammoLoad: AmmoLoad = emptyAmmoLoad();
   const src =
@@ -800,6 +811,10 @@ export function normalizeHubSnapshot(
   const appliedSortieIds = normalizeAppliedSortieIds(
     rawRec?.appliedSortieIds ?? fallback.appliedSortieIds ?? [],
   );
+  const sortieSelection = normalizeSortieSelection(
+    rawRec?.sortieSelection ?? fallback.sortieSelection ?? [],
+    fleet,
+  );
   const frontProgress = normalizeFrontProgress(
     rawRec?.frontProgress ?? rawRec?.invadeBoard,
     fallback.frontProgress ?? null,
@@ -836,7 +851,47 @@ export function normalizeHubSnapshot(
     inventoryFieldDrops,
     lostMechs,
     appliedSortieIds,
+    sortieSelection,
   };
+}
+
+/** Unique instanceIds that exist in the fleet, at most maxSortieMechs. */
+function normalizeSortieSelection(raw: unknown, fleet: readonly OwnedMech[]): string[] {
+  if (!Array.isArray(raw)) return [];
+  const ids = new Set(fleet.map((m) => m.instanceId));
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const id = item.trim();
+    if (!id || !ids.has(id) || out.includes(id)) continue;
+    out.push(id);
+    if (out.length >= HUB_LIMITS.maxSortieMechs) break;
+  }
+  return out;
+}
+
+/**
+ * The squad for the next sortie: the saved selection's mechs that can still
+ * sortie (left-behind mechs are no longer in `fleet`; wrecked / needs_repair
+ * cannot deploy), in fleet order. When nothing of the selection remains (or
+ * there is no selection yet), the first `maxSortieMechs` deployable mechs.
+ */
+export function resolveSortieSelection(hub: Pick<HubSnapshot, "fleet" | "sortieSelection">): string[] {
+  const chosen = new Set(hub.sortieSelection ?? []);
+  const deployable = hub.fleet.filter(canDeploy);
+  const kept = deployable.filter((m) => chosen.has(m.instanceId)).map((m) => m.instanceId);
+  if (kept.length > 0) return kept.slice(0, HUB_LIMITS.maxSortieMechs);
+  return deployable.slice(0, HUB_LIMITS.maxSortieMechs).map((m) => m.instanceId);
+}
+
+/** Save the hangar's sortie selection (deployable mechs only, at most maxSortieMechs, fleet order). */
+export function setSortieSelection(hub: HubSnapshot, ids: readonly string[]): HubSnapshot {
+  const want = new Set(ids);
+  const sortieSelection = hub.fleet
+    .filter((m) => canDeploy(m) && want.has(m.instanceId))
+    .map((m) => m.instanceId)
+    .slice(0, HUB_LIMITS.maxSortieMechs);
+  return { ...hub, sortieSelection };
 }
 
 export function createHubSave(hub: HubSnapshot, at = new Date()): HubSaveV3 {
@@ -1299,13 +1354,12 @@ export function clearFrontProgressHitMine(
   return setFrontProgressInHub(hub, { ...fp, hitMine: false }, at);
 }
 
-/** Purchase / add a fresh owned mech if under cap. */
+/** Purchase / add a fresh owned mech (no fleet cap since 2026-10-03, item 15). */
 export function addMechToHub(
   hub: HubSnapshot,
   catalogId: MechId,
 ): HubSnapshot | null {
   if (!isMechId(catalogId)) return null;
-  if (hub.fleet.length >= HUB_LIMITS.maxMechs) return null;
   return normalizeHubSnapshot({
     ...hub,
     fleet: [...hub.fleet, createOwnedMech(catalogId)],

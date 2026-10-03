@@ -383,7 +383,8 @@ export function applyScrap(
 /** Migrate legacy hub fleet entries (catalog ids) into owned instances. */
 export function migrateLegacyFleetIds(
   legacy: readonly unknown[],
-  maxMechs: number,
+  /** Optional limit (the hub no longer caps its fleet; item 15). */
+  maxMechs = Number.POSITIVE_INFINITY,
 ): OwnedMech[] {
   const out: OwnedMech[] = [];
   for (const raw of legacy) {
@@ -460,7 +461,8 @@ export function normalizeOwnedMech(
 
 export function normalizeFleet(
   raw: unknown,
-  maxMechs: number,
+  /** Optional limit (the hub no longer caps its fleet; item 15). */
+  maxMechs = Number.POSITIVE_INFINITY,
 ): OwnedMech[] {
   if (!Array.isArray(raw)) return [];
   // Legacy: string MechId[]

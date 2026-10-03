@@ -72,6 +72,7 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .status-dd { color: #f85149; }
 .fleet-row { margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #2a313c; }
 .fleet-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.fleet-list { max-height: 70vh; overflow-y: auto; }
 label.check { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
 
 .rare-tag { background: #3d2a1a; color: #d29922; margin-left: 0.25rem; }
