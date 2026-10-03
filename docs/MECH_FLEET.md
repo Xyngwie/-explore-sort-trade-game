@@ -11,6 +11,8 @@
 
 **カタログ ID（`MechId`）は機種、ハンガーの各スロットは所有インスタンス（耐久と状態を持つ）。帰還で摩耗し、要修理は資材／クレジットで直し、大破や不要機は解体して少し戻す。**
 
+- **機体は全機同じ性能。差は回路でつける（[`PRODUCT_VISION.md`](./PRODUCT_VISION.md) §2.1.1）。** 上位機体・機体の世代による性能差は設けない。
+
 ---
 
 ## 2. ライフサイクル
@@ -58,7 +60,7 @@ operationalMinDurability   = 41    # 41以上で健在
 ```ts
 type OwnedMech = {
   instanceId: string;   // セーブ内で一意
-  catalogId: MechId;    // mech_gen1 | mech_gen2
+  catalogId: MechId;    // mech_gen1 | mech_gen2（mech_gen2 の扱いは経済タスクで決める。§1）
   status: MechStatus;
   durability: number;   // 0 .. durabilityMax
   durabilityMax: number;
@@ -121,7 +123,7 @@ repairMaterials = 30
 | 要修理 `needs_repair` | 20 | 10 |
 | 大破 `destroyed` | 10 | 5 |
 
-`mech_gen2` はボーナス `+10 credits / +5 materials`（仮）。
+`mech_gen2` はボーナス `+10 credits / +5 materials`（仮）。※ 機体は全機同じ性能（§1）なので、`mech_gen2` の扱い（見た目だけの違いにするか、廃止するか）は経済タスクで決める。それまでは現行のまま。
 
 ヘルパ: `scrapYield` / `applyScrap`。
 
