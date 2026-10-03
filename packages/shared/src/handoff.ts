@@ -26,7 +26,7 @@ import {
   type CircuitOutcome,
   type CircuitRestoreState,
 } from "./circuit-board";
-import type { FieldInventoryDrop } from "./hub-save";
+import type { FieldInventoryDrop, LostMechReturnState } from "./hub-save";
 import {
   encodeCircuitBonusesCompact,
   parseCircuitBonusesCompact,
@@ -219,6 +219,8 @@ export type ExploreToHubWearPayload = {
   inventoryDrops?: FieldInventoryDrop[];
   recoveredInventoryDropIds?: string[];
   wreckedMechInstanceIds?: string[];
+  /** Mechs left behind at Explore lift-off; not wrecks / field drops. */
+  lostMechs?: LostMechReturnState[];
 };
 
 const SORTIE_RETURN_KINDS: readonly SortieReturnKind[] = [
@@ -662,6 +664,62 @@ function encodeInstanceIdsCompact(ids: readonly string[] | undefined): string {
   return (ids ?? []).map((id) => id.trim()).filter(Boolean).join(",");
 }
 
+function encodeLostMechs(raw: readonly LostMechReturnState[] | undefined): string {
+  const rows = (raw ?? []).map((m) => {
+    const capacity = Math.max(1, Math.floor(m.battery.capacity));
+    return {
+      instanceId: m.instanceId.trim(),
+      ...(m.currentAmmo == null ? {} : { currentAmmo: Math.max(0, Math.floor(m.currentAmmo)) }),
+      battery: {
+        capacity,
+        activity: Math.max(0, Math.min(capacity, Math.floor(m.battery.activity))),
+      },
+      circuitIds: [...new Set(m.circuitIds.map((id) => id.trim()).filter(Boolean))],
+    };
+  }).filter((m) => m.instanceId.length > 0);
+  return rows.length > 0 ? JSON.stringify(rows) : "";
+}
+
+function parseLostMechs(raw: string | null): LostMechReturnState[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const out: LostMechReturnState[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const obj = item as Record<string, unknown>;
+      const instanceId = typeof obj.instanceId === "string" ? obj.instanceId.trim() : "";
+      if (!instanceId || seen.has(instanceId)) continue;
+      const currentAmmo = obj.currentAmmo == null ? undefined : Number(obj.currentAmmo);
+      if (currentAmmo != null && !Number.isFinite(currentAmmo)) continue;
+      const batteryRaw = obj.battery && typeof obj.battery === "object" && !Array.isArray(obj.battery)
+        ? (obj.battery as Record<string, unknown>)
+        : {};
+      const capacity = Number(batteryRaw.capacity);
+      const activity = Number(batteryRaw.activity);
+      if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(activity)) continue;
+      const circuitIds = Array.isArray(obj.circuitIds)
+        ? [...new Set(obj.circuitIds.filter((id): id is string => typeof id === "string").map((id) => id.trim()).filter(Boolean))]
+        : [];
+      seen.add(instanceId);
+      out.push({
+        instanceId,
+        currentAmmo: currentAmmo == null ? undefined : Math.max(0, Math.floor(currentAmmo)),
+        battery: {
+          capacity: Math.max(1, Math.floor(capacity)),
+          activity: Math.max(0, Math.min(Math.max(1, Math.floor(capacity)), Math.floor(activity))),
+        },
+        circuitIds,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function encodeMechBatteryCompact(
   rows: readonly MechBatteryRow[],
   onlyInstanceIds?: readonly string[],
@@ -763,6 +821,8 @@ export function buildExploreToHubWearUrl(
   if (recovered) u.searchParams.set("recoveredInventoryDropIds", recovered);
   const wrecked = encodeInstanceIdsCompact(payload.wreckedMechInstanceIds);
   if (wrecked) u.searchParams.set("wreckedMechInstanceIds", wrecked);
+  const lostMechs = encodeLostMechs(payload.lostMechs);
+  if (lostMechs) u.searchParams.set("lostMechs", lostMechs);
   return u.toString();
 }
 
@@ -824,6 +884,7 @@ export function toExploreToHubWearPayload(
     ...(opts?.wreckedMechInstanceIds?.length
       ? { wreckedMechInstanceIds: opts.wreckedMechInstanceIds }
       : {}),
+    ...(opts?.lostMechs?.length ? { lostMechs: opts.lostMechs } : {}),
   };
 }
 
@@ -1315,3 +1376,5 @@ export function stripHandoffParams(
   }
   return u.pathname + (qs ? `?${qs}` : "") + u.hash;
 }
+
+export type { LostMechReturnState } from "./hub-save";
