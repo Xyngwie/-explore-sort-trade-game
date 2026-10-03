@@ -239,7 +239,9 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 `applySortieReport`（`circuit-inventory.ts`）の追加の動き:
 
 - `wreckedMechInstanceIds` の機体（`lostMechInstanceIds` に入っていないもの）は `fleet` に **残したまま** `durability 0`・`status "destroyed"` にする（#199）。
-- `lostMechs` は、`fleet` にいて `lostMechInstanceIds`・`wreckedMechInstanceIds` に入っていない機体だけを受け付け、その機体を `fleet` から外して `hub.lostMechs` に記録する。`circuitIds` は `circuits` に実在する ID だけ残す。**回路の落とし物（`fieldDrops`）は作らない**。回路レコードは `circuits` に残り、装着先の機体が `fleet` にないので、正規化（12.3「`equippedTo` が存在しない機体 → 倉庫へ」）で倉庫に戻る（#206）。置き去りの僚機の回路は設計どおり落とし物にする方針で、実装 F の残りで入れる（それまでの暫定の動き）。
+- `lostMechs` は、`fleet` にいて `lostMechInstanceIds`・`wreckedMechInstanceIds` に入っていない機体だけを受け付け、その機体を `fleet` から外して `hub.lostMechs` に記録する。`circuitIds` は `circuits` に実在する ID だけ残す。**回路の落とし物（`fieldDrops`）は作らない**。回路レコードは `circuits` に残り、装着先の機体が `fleet` にないので、正規化（12.3「`equippedTo` が存在しない機体 → 倉庫へ」）で倉庫（`equippedTo: null`）に戻る（#206）。
+  - **決定（2026-10-03 神宮）・実装は未着手**: 置き去りの僚機の回路は落とし物（`fieldDrops`）にしない。回路は失われた機体（`lostMechs` の項目）に付いたままで、`circuitIds` も変えない。失われた機体が戻るのは、プレイヤーが World で見つけて回収したときだけ（回収の処理は Explore が持ち、今ある帰還の反映に乗せる）。自動で部隊に戻ることはない。回収したら `instanceId`・`currentAmmo`・`battery`・`circuitIds` をそのまま保ち、`lostMechs` から外す。再び現れて回収されなかった場合は、同じ `lostMechs` の項目を最新の状態で更新する。残骸化・敵化の条件は未定（バッテリーの活動量 0 はその条件ではない）。回収した機体は通常の部隊として出撃し、`lostMechs` の機体が直接出撃することはない。World での発見・回収の処理は未実装。
+  - **既知の食い違い**: 上の正規化で回路が倉庫に戻る今の動きは、この決定（回路は失われた機体に付いたまま）と食い違う。`lostMechs[].circuitIds` には ID が残るので、同じ回路が倉庫にも失われた機体にもあるように見える。コードは未修正。
 - `sortieId` がない・不正（`/^[a-zA-Z0-9_.:-]{1,64}$/` 以外）、または `appliedSortieIds` に既にあるときは何もしない（`applied: false`）。反映したら `appliedSortieIds` の末尾に足し、直近 20 件（`HUB_LIMITS.maxAppliedSortieIds`）に切り詰める。
 
 ### 12.6 受け渡し URL のキー（2026-10-01〜03 の追加）

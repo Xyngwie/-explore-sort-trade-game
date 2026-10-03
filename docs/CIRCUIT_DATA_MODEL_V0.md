@@ -15,7 +15,7 @@
 - 回路は **1 枚ずつのレコード** として HubSave に持ち、**どの機体に付いているか（または倉庫か）**、**入手元（白／中古）**、**成果状態（未 Restore を含む 4 値）** を持たせる。サイズは盤の `cols`（＝`rows`）、評価値は盤から **毎回計算** する（保存しない）。
 - HubSave は **`v: 3` に上げ、保存キーも `wreckline.hubSave.v3` に分ける**。旧キー（中身 v1/v2）は読み込み元として使い、消さずにバックアップとして残す。
 - trade→explore に **機体ごとの装備回路** を渡す任意キー `mechCircuits` を足す。既存キーは変えない。
-- 落とし物（置き去り僚機の回路を含む）は HubSave の **`fieldDrops`**（Invade の盤のマスに紐づく）に記録する。Explore は結果確定時に「失った機体・回収した落とし物」を HubSave に反映する（§9 U9 で決定）。
+- 落とし物（背負えなかった大破機の回路。置き去りの僚機の回路は 2026-10-03 の決定で含まない。§5.5）は HubSave の **`fieldDrops`**（Invade の盤のマスに紐づく）に記録する。Explore は結果確定時に「失った機体・回収した落とし物」を HubSave に反映する（§9 U9 で決定）。
 - パーフェクト最大サイズは HubSave の **`perfectMaxSize`** に持ち、ジャンク作成は **2×2〜`min(20, max(2, perfectMaxSize+1))`** の正方形から選ぶ（20×20 が天井、U12）。
 
 ---
@@ -243,6 +243,7 @@ type TradeToExplorePayload = 既存 & {
 
 - 背負えなかった大破機は機体を失い、**回路はやられた場所に確定で落ちて出撃をまたいで残る**。Invade の盤面に「どのマスで何を落としたか」を記録する。
 - 置き去りの僚機も同じ扱い（旧 §8.2-4）。救助撤退でも回路はその場に落ちる（§7）。
+  - **2026-10-03 変更（神宮）**: 置き去りの僚機はこの扱いから外れた。回路は落とさず失われた機体（`lostMechs`）に付いたままで、World で見つけて回収したときだけ戻る（§5.5）。本節の他の記述（背負えなかった大破機など）は変えない
 - 落ちた回路は所有権を失い、部隊上限から外れる。
 - **回収した自分の落とし物の回路は元の状態のまま戻す**（旧 §8.4-3）。
 - 置き去りは運び出せなかった残骸と同じ扱い。機体そのものは落とし物として残らない（回路だけが落ちる）。
@@ -310,7 +311,8 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 - **反映経路（U9）— 決定済み・実装待ち**: 2026-10-03 に神宮が設計どおり「Explore が出撃終了時に HubSave へ直接書く」と決定。実装は携行弾の修正（explore・trade）の後の別 PR で、trade は `sortieId`／`appliedSortieIds` で二重に反映しない。それまでの実装は、explore が帰還 URL（`hubWearHandoffUrl`、trade の「格納庫へ」の行き先）に `sortieId`・`wreckedMechInstanceIds`・`lostMechs`・`mechCurrentAmmo` を載せ、trade が読み込み時に `applySortieReport` を呼び、携行弾・バッテリーを機体に書き戻す形（採らなかった案 A に近く、「格納庫へ」以外を選ぶと反映されない）。帰還 URL は直接書く形になった後も互換のため読めるまま残してよい。
 - `SortieCircuitReport` に任意フィールドが加わった: `inventoryDrops`・`recoveredInventoryDropIds`（一般インベントリの落とし物。回路の `fieldDrops` とは別の `inventoryFieldDrops` に入る）、`wreckedMechInstanceIds`（大破機を `fleet` に `destroyed` で残す）、`lostMechs`（置き去りの機体の状態。`LostMechReturnState`）。
 - trade の反映では `cell: null`・`frontSeed: null`・`lostMechInstanceIds: []`・`recoveredDropIds: []`・`acquiredCircuits: []` が固定。**回路の落とし物の作成と、Explore での落とし物の出現・回収はまだない**（実装 F の残り）。Explore は `fieldDrops` を読んでいない。
-- **置き去りの僚機（§5.1・§5.3）**: 方針は設計どおり（機体を失い、回路はその場に落とし物として残る。2026-10-03 に神宮の設計として確認）。今の実装（#206）は、置き去りの機体を `fleet` から外して `hub.lostMechs` に記録するが、回路の落とし物は作らない。回路レコードは `circuits` に残り、装着先がないので正規化で倉庫に戻る。**暫定の動き**で、落とし物の作成は F の残りで入れる。§5.3 の「`LeftBehindEntry` に所有機の `instanceId` を足す」は、Explore 側でユニットの `instanceId` を引く形で入っている（`lostMechsFromWorld`）。
+- **置き去りの僚機（§5.1・§5.3）— 決定済み（2026-10-03 19:47 神宮。同日先に「設計どおり落とし物にする」と確認していたのを撤回）・実装は未着手**: 置き去りの僚機の回路は落とし物（`fieldDrops`）にしない。回路は失われた機体（`lostMechs` の項目）に付いたままで、`circuitIds` も変えない。失われた機体が戻るのは、プレイヤーが World で見つけて回収したときだけ（回収の処理は Explore が持ち、今ある帰還の反映に乗せる）。自動で部隊に戻ることはない。回収したら `instanceId`・`currentAmmo`・`battery`・`circuitIds` をそのまま保ち、`lostMechs` から外す。再び現れて回収されなかった場合は、同じ `lostMechs` の項目を最新の状態で更新する。残骸化・敵化の条件は未定（バッテリーの活動量 0 はその条件ではない）。回収した機体は通常の部隊として出撃し、`lostMechs` の機体が直接出撃することはない。World での発見・回収の処理は未実装で、§5.3 の流れ（失った機体の回路を `fieldDrops` に入れる）は置き去りの僚機には当てはまらなくなる。今の実装（#206）は、置き去りの機体を `fleet` から外して `hub.lostMechs`（`instanceId`・残弾・バッテリー・`circuitIds`）に記録し、回路の落とし物は作らない。§5.3 の「`LeftBehindEntry` に所有機の `instanceId` を足す」は、Explore 側でユニットの `instanceId` を引く形で入っている（`lostMechsFromWorld`）。
+  - **既知の食い違い**: 回路レコードは `circuits` に残るが、装着先が `fleet` にないので正規化（`enforceEquipIntegrity`）で倉庫（`equippedTo: null`）に戻る。上の決定（回路は失われた機体に付いたまま）と食い違う（コードは未修正。[`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5）。
 - 回路以外に、機体ごとの携行弾 `OwnedMech.currentAmmo`（#201・#203）とバッテリー `OwnedMech.battery`（#204）が HubSave と受け渡しに加わった。回路データモデルの範囲外だが、帰還 URL と `lostMechs` を共有するので [`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5〜§12.7 に記録した。携行弾が未設定の機体は出撃時に満タンとして扱う（暫定ルール、[`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。
 
 ---
