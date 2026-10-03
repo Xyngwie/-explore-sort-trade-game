@@ -483,6 +483,7 @@ export function ingestLocationSearch(
         inventoryDrops: wear.inventoryDrops ?? [],
         recoveredInventoryDropIds: wear.recoveredInventoryDropIds ?? [],
         wreckedMechInstanceIds: wear.wreckedMechInstanceIds ?? [],
+        lostMechs: wear.lostMechs ?? [],
       });
       if (!apply.applied) {
         log = pushLog(log, `帰還 sortieId=${wear.sortieId} は既適用のため無視`);
