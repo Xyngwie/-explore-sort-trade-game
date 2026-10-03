@@ -163,6 +163,8 @@ export function hubWearHandoffUrl(world: World): string | null {
       sortieId: sortieIdForWorld(world, outcome.returnKind),
       wreckedMechInstanceIds,
       mechCurrentAmmo: outcome.mechCurrentAmmo,
+      mechBattery: outcome.mechBattery,
+      lostMechs: lostMechsFromWorld(world),
     },
   );
   return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));
