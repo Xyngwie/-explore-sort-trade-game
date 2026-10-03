@@ -21,6 +21,7 @@ import {
   type FrontCellCoord,
   type HubCircuitRecord,
   type HubSnapshot,
+  type LostMechReturnState,
 } from "./hub-save";
 import type { MechCircuitEntry } from "./handoff";
 import { syncMechStatus } from "./mech-fleet";
@@ -221,6 +222,8 @@ export type SortieCircuitReport = {
   inventoryDrops?: FieldInventoryDrop[];
   recoveredInventoryDropIds?: string[];
   wreckedMechInstanceIds?: string[];
+  /** Explore return snapshots for mechs left behind; does not create field drops. */
+  lostMechs?: LostMechReturnState[];
 
 };
 
@@ -269,6 +272,22 @@ export function applySortieReport(
   const wrecked = new Set(
     (report.wreckedMechInstanceIds ?? []).filter((id) => !lost.has(id)),
   );
+  const canonicalCircuitIds = new Set(hub.circuits.map((c) => c.circuitId));
+  const fleetIds = new Set(hub.fleet.map((m) => m.instanceId));
+  const lostMechs = (report.lostMechs ?? [])
+    .filter(
+      (m, index, rows) =>
+        m.instanceId.trim().length > 0 &&
+        fleetIds.has(m.instanceId) &&
+        rows.findIndex((row) => row.instanceId === m.instanceId) === index &&
+        !lost.has(m.instanceId) &&
+        !wrecked.has(m.instanceId),
+    )
+    .map((m) => ({
+      ...m,
+      circuitIds: [...new Set(m.circuitIds.filter((id) => canonicalCircuitIds.has(id)))],
+    }));
+  const lostMechIds = new Set(lostMechs.map((m) => m.instanceId));
   const droppedAt = at.toISOString();
   const droppedToField: FieldCircuitDrop[] = [];
   const lostForever: HubCircuitRecord[] = [];
@@ -298,7 +317,7 @@ export function applySortieReport(
   let next: HubSnapshot = {
     ...hub,
     fleet: hub.fleet
-      .filter((m) => !lost.has(m.instanceId))
+      .filter((m) => !lost.has(m.instanceId) && !lostMechIds.has(m.instanceId))
       .map((m) =>
         wrecked.has(m.instanceId)
           ? syncMechStatus({ ...m, durability: 0, status: "destroyed" })
@@ -325,6 +344,13 @@ export function applySortieReport(
         ...next.inventoryFieldDrops,
         ...droppedInventoryToField,
       ],
+    };
+  }
+
+  if (lostMechs.length > 0) {
+    next = {
+      ...next,
+      lostMechs: [...lostMechs, ...(next.lostMechs ?? [])],
     };
   }
 

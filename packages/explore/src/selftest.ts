@@ -49,7 +49,7 @@ import {
   isShortcutsOverlayHidden,
   setShortcutsOverlayHidden,
 } from "./game/keyboardOverlay";
-import { DEFAULT_EXPEDITION_LOADOUT } from "@estg/shared";
+import { DEFAULT_EXPEDITION_LOADOUT, parseExploreToHubWearSearch } from "@estg/shared";
 import { getCoverObjects } from "./game/coverObjects";
 import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
 import { buildSortieOutcome, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
@@ -1569,6 +1569,31 @@ function advancePinned(
   assert.ok(url.includes("wreckedMechInstanceIds="));
 }
 
+// --- lostMechs: missing Battery snapshot is omitted; no fabricated 300/300 fallback ---
+{
+  const world = createWorld(
+    bootstrapFromSearch(
+      "?deployedInstanceIds=lost_leader,lost_wing_a,lost_wing_b&deployableMechs=3&startingAmmo=30&mechBattery=lost_leader:300:300;lost_wing_a:300:212;lost_wing_b:300:180",
+    ),
+  );
+  startSortie(world);
+  const leftBehind = world.wingmen[0]!;
+  world.leftBehind = [
+    { id: leftBehind.id, name: leftBehind.name, reason: "outside_circle" },
+  ];
+  delete world.mechBattery[leftBehind.instanceId!];
+  world.phase = "result";
+  world.extracted = true;
+
+  const returnPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(world)!).search);
+  assert.ok(returnPayload);
+  assert.equal(
+    returnPayload!.lostMechs,
+    undefined,
+    "lostMech without a real Battery snapshot must be omitted",
+  );
+}
+
 console.log("explore selftest: ok");
 
 // --- forced engage browser-back wipe helper ---
@@ -2186,7 +2211,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     const res = JSON.stringify(toExploreResult(w));
     const out = JSON.stringify(buildSortieOutcome(w));
     for (const blob of [res, out, hubWearHandoffUrl(w) ?? "", sortHandoffUrl(w)]) {
-      assert.ok(!blob.includes("leftBehind") && !blob.includes("置き去り") && !blob.includes("no_circuit"), "left-behind stays explore-internal");
+      assert.ok(!blob.includes("leftBehind") && !blob.includes("置き去り") && !blob.includes("no_circuit"), "left-behind UI state stays Explore-internal");
     }
     assert.deepEqual(buildSortieOutcome(w)!.mechWear.map((m) => m.instanceId), ["m1", "m2", "m3"], "wear shape unchanged");
   };
@@ -2257,6 +2282,38 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.equal(w.phase, "result");
     assert.deepEqual(leftBehindResultLines(w), []);
     assert.equal(leftBehindResultHtml({}), "", "missing field → no line");
+  }
+  // Return contract captures the existing left-behind source state without changing
+  // the Explore-local display record or inventing wreck/enemy semantics.
+  {
+    const w = createWorld(
+      bootstrapFromSearch(
+        "?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30&mechCurrentAmmo=m1:12;m2:7;m3:9&mechBattery=m1:300:250;m2:300:212;m3:300:180&mechCircuits=m2~circuit_lost*fa*5",
+      ),
+    );
+    startSortie(w);
+    for (const e of w.enemies) {
+      e.alive = false;
+      e.hp = 0;
+    }
+    w.leader.pos = { x: 700, y: 400 };
+    w.wingmen[0]!.pos = { x: 700, y: 400 };
+    w.wingmen[1]!.pos = { x: 700, y: 400 };
+    extract(w, () => {
+      w.wingmen[0]!.pos = { x: 1300, y: 400 };
+    });
+    assert.equal(w.extracted, true);
+    assert.deepEqual(w.leftBehind, [
+      { id: w.wingmen[0]!.id, name: "僚機A", reason: "outside_circle" },
+    ]);
+    const returnPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(w)!).search);
+    assert.ok(returnPayload);
+    assert.deepEqual(returnPayload!.lostMechs, [{
+      instanceId: "m2",
+      currentAmmo: 7,
+      battery: { capacity: 300, activity: 212 },
+      circuitIds: ["circuit_lost"],
+    }]);
   }
   console.log("explore left-behind result line ok");
 }

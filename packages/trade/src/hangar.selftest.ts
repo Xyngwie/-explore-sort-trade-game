@@ -14,6 +14,7 @@ import {
   buildRestoreToTradeUrl,
   createEmptyCircuitBoard,
   parseHubSave,
+  parseExploreToHubWearSearch,
   deserializeHubSave,
   normalizeHubSnapshot,
   toExploreToHubWearPayload,
@@ -1285,6 +1286,48 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     fieldDrops: [],
   });
   assert.deepEqual(legacy.inventoryFieldDrops, []);
+}
+
+
+// Lost-mech return handoff survives URL parsing and reaches applySortieReport/HubSave.
+{
+  const payload = toExploreToHubWearPayload(
+    "extract",
+    [{ instanceId: "lost-return-1", durabilityAfter: 73 }],
+    {
+      sortieId: "sortie_lost_return_1",
+      lostMechs: [{
+        instanceId: "lost-return-1",
+        currentAmmo: 7,
+        battery: { capacity: 300, activity: 212 },
+        circuitIds: ["circuit_lost_1", "circuit_lost_2"],
+      }],
+    },
+  );
+  const parsed = parseExploreToHubWearSearch(new URL(buildExploreToHubWearUrl(payload)).search);
+  assert.ok(parsed);
+  assert.deepEqual(parsed!.lostMechs, payload.lostMechs);
+
+  const base = grantStarterFleet(resetHangar(memoryStorage())).hub;
+  const targetId = base.fleet[0]!.instanceId;
+  const applied = applySortieReport(base, {
+    sortieId: "sortie_lost_return_1",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    lostMechs: [{
+      instanceId: targetId,
+      currentAmmo: 7,
+      battery: { capacity: 300, activity: 212 },
+      circuitIds: ["circuit_lost_1"],
+    }],
+  });
+  assert.equal(applied.applied, true);
+  assert.equal(applied.hub.fleet.some((m) => m.instanceId === targetId), false);
+  assert.equal(applied.hub.lostMechs.some((m) => m.instanceId === targetId), true);
 }
 
 console.log("trade hangar selftest: ok");

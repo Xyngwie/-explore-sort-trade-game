@@ -15,7 +15,9 @@ import {
 } from "./constants";
 import {
   createOwnedMech,
+  normalizeBattery,
   normalizeFleet,
+  type MechBatteryState,
   type OwnedMech,
 } from "./mech-fleet";
 import {
@@ -122,6 +124,15 @@ export type FieldInventoryDrop = {
   droppedAt: string;
 };
 
+/** Persistent snapshot of a mech left behind during Explore return. */
+export type LostMechReturnState = {
+  instanceId: string;
+  currentAmmo: number | undefined;
+  battery: MechBatteryState;
+  /** Circuit ids only; HubCircuitRecord remains the circuit source of truth. */
+  circuitIds: string[];
+};
+
 /**
  * Invade front minesweeper progress (Module 4).
  * Additive on HubSave v2 — missing / invalid → null.
@@ -187,6 +198,8 @@ export type HubSnapshot = {
   fieldDrops: FieldCircuitDrop[];
   /** General inventory lost on the battlefield; separate from Circuit fieldDrops. */
   inventoryFieldDrops: FieldInventoryDrop[];
+  /** HubSave v3: Explore mechs left behind; not wrecks / field drops. */
+  lostMechs: LostMechReturnState[];
   /** HubSave v3: recently applied Explore sortie ids (apply-once guard). */
   appliedSortieIds?: string[];
 };
@@ -238,6 +251,7 @@ export const INITIAL_HUB: HubSnapshot = {
   perfectMaxSize: 0,
   fieldDrops: [],
   inventoryFieldDrops: [],
+  lostMechs: [],
   appliedSortieIds: [],
 };
 
@@ -595,6 +609,44 @@ function isFieldDropCause(x: unknown): x is FieldDropCause {
   return typeof x === "string" && (FIELD_DROP_CAUSES as readonly string[]).includes(x);
 }
 
+/** Normalize persisted Explore left-behind mech snapshots. Invalid rows are dropped individually. */
+export function normalizeLostMechs(
+  raw: unknown,
+  fallback: LostMechReturnState[] = [],
+): LostMechReturnState[] {
+  if (raw == null) return fallback.map((m) => ({ ...m, battery: { ...m.battery }, circuitIds: [...m.circuitIds] }));
+  if (!Array.isArray(raw)) return fallback.map((m) => ({ ...m, battery: { ...m.battery }, circuitIds: [...m.circuitIds] }));
+  const out: LostMechReturnState[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const obj = item as Record<string, unknown>;
+    const instanceId = typeof obj.instanceId === "string" ? obj.instanceId.trim() : "";
+    if (!instanceId || seen.has(instanceId)) continue;
+    const currentAmmo =
+      obj.currentAmmo == null
+        ? undefined
+        : Math.max(0, Math.floor(Number(obj.currentAmmo)));
+    if (obj.currentAmmo != null && !Number.isFinite(Number(obj.currentAmmo))) continue;
+    const batteryRaw = obj.battery;
+    if (!batteryRaw || typeof batteryRaw !== "object" || Array.isArray(batteryRaw)) continue;
+    const batteryObj = batteryRaw as Record<string, unknown>;
+    const capacity = Number(batteryObj.capacity);
+    const activity = Number(batteryObj.activity);
+    if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(activity)) continue;
+    const battery: MechBatteryState = {
+      capacity: Math.floor(capacity),
+      activity: Math.max(0, Math.min(Math.floor(capacity), Math.floor(activity))),
+    };
+    const circuitIds = Array.isArray(obj.circuitIds)
+      ? [...new Set(obj.circuitIds.filter((id): id is string => typeof id === "string").map((id) => id.trim()).filter(Boolean))]
+      : [];
+    seen.add(instanceId);
+    out.push({ instanceId, currentAmmo, battery, circuitIds });
+  }
+  return out;
+}
+
 /** Normalize one field drop; null when unusable (dropped individually). */
 export function normalizeFieldDrop(raw: unknown): FieldCircuitDrop | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -744,6 +796,7 @@ export function normalizeHubSnapshot(
   const inventoryFieldDrops = normalizeInventoryFieldDrops(
     rawRec?.inventoryFieldDrops ?? fallback.inventoryFieldDrops ?? [],
   );
+  const lostMechs = normalizeLostMechs(rawRec?.lostMechs ?? fallback.lostMechs ?? []);
   const appliedSortieIds = normalizeAppliedSortieIds(
     rawRec?.appliedSortieIds ?? fallback.appliedSortieIds ?? [],
   );
@@ -781,6 +834,7 @@ export function normalizeHubSnapshot(
     perfectMaxSize,
     fieldDrops,
     inventoryFieldDrops,
+    lostMechs,
     appliedSortieIds,
   };
 }

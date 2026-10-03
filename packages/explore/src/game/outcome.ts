@@ -12,6 +12,7 @@ import {
   type ExploreResult,
   type ExploreSortieOutcome,
   type SortieReturnKind,
+  type LostMechReturnState,
 } from "@estg/shared";
 import type { World } from "./types";
 
@@ -125,6 +126,26 @@ function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
   return `explore_${(hash >>> 0).toString(16)}`;
 }
 
+function lostMechsFromWorld(world: World): LostMechReturnState[] {
+  const out: LostMechReturnState[] = [];
+  const seen = new Set<string>();
+  for (const entry of world.leftBehind ?? []) {
+    const unit = world.wingmen.find((w) => w.id === entry.id);
+    const instanceId = unit?.instanceId?.trim() ?? "";
+    if (!instanceId || seen.has(instanceId)) continue;
+    const battery = world.mechBattery[instanceId];
+    if (!battery) continue;
+    out.push({
+      instanceId,
+      currentAmmo: world.currentAmmo[instanceId],
+      battery: { ...battery },
+      circuitIds: [...(world.circuitIdsByUnit[entry.id] ?? [])],
+    });
+    seen.add(instanceId);
+  }
+  return out;
+}
+
 export function hubWearHandoffUrl(world: World): string | null {
   const outcome = buildSortieOutcome(world);
   if (!outcome) return null;
@@ -141,6 +162,7 @@ export function hubWearHandoffUrl(world: World): string | null {
       sortieId: sortieIdForWorld(world, outcome.returnKind),
       wreckedMechInstanceIds,
       mechCurrentAmmo: outcome.mechCurrentAmmo,
+      lostMechs: lostMechsFromWorld(world),
     },
   );
   return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));

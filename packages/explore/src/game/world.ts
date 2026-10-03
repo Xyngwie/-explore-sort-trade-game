@@ -3,6 +3,7 @@ import {
   parseInvadeToExploreSearch,
   parseTradeToExploreSearch,
   wingmanCountFromMechs,
+  type MechBatteryState,
 } from "@estg/shared";
 import {
   BALANCE,
@@ -183,6 +184,10 @@ export type SortieBootstrap = {
   circuitCraftMultiplier: number;
   /** Canonical carried ammo snapshot grouped by OwnedMech.instanceId. */
   mechCurrentAmmo: Array<{ instanceId: string; currentAmmo: number }>;
+  /** Canonical persistent battery snapshot keyed by deployed instanceId. */
+  mechBattery: Record<string, MechBatteryState>;
+  /** All equipped circuit ids grouped by Explore unit id for return-state capture. */
+  circuitIdsByUnit: Record<string, string[]>;
   /** Active circuit ids grouped by Explore unit id. */
   equippedByUnit: EquippedByUnit;
   /** Parsed invade→explore sector; null when keys absent. */
@@ -219,6 +224,17 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     for (const row of inbound.deployedDurability) {
       deployedDurability[row.instanceId] = row.durability;
     }
+  }
+  const mechBattery: Record<string, MechBatteryState> = {};
+  for (const row of inbound?.mechBattery ?? []) {
+    mechBattery[row.instanceId] = { ...row.battery };
+  }
+  const circuitIdsByUnit: Record<string, string[]> = {};
+  const unitIds = ["leader", "wing-a", "wing-b"];
+  for (let i = 0; i < Math.min(unitIds.length, deployedInstanceIds.length); i += 1) {
+    const entries = inbound?.mechCircuits?.[deployedInstanceIds[i]!] ?? [];
+    const ids = [...new Set(entries.map((entry) => entry.circuitId.trim()).filter(Boolean))];
+    if (ids.length > 0) circuitIdsByUnit[unitIds[i]!] = ids;
   }
   const craftFromIds = deployedInstanceIds.length;
   const wingmanCount =
@@ -281,6 +297,8 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     deployedInstanceIds,
     deployedDurability,
     mechCurrentAmmo: inbound?.mechCurrentAmmo ? inbound.mechCurrentAmmo.map((row) => ({ instanceId: row.instanceId, currentAmmo: row.currentAmmo })) : [],
+    mechBattery,
+    circuitIdsByUnit,
     equippedByUnit: buildEquippedByUnit(deployedInstanceIds, inbound?.mechCircuits),
     circuitDurabilityBuffer,
     circuitCraftMultiplier,
@@ -361,6 +379,10 @@ export function createWorld(boot: SortieBootstrap): World {
     salvaged: 0,
     carrierCapacity,
     ammoStock: boot.ammoStock,
+    mechBattery: { ...boot.mechBattery },
+    circuitIdsByUnit: Object.fromEntries(
+      Object.entries(boot.circuitIdsByUnit).map(([unitId, ids]) => [unitId, [...ids]]),
+    ),
     currentAmmo: Object.fromEntries(
       boot.deployedInstanceIds.map((instanceId) => {
         const row = boot.mechCurrentAmmo.find((entry) => entry.instanceId === instanceId);
