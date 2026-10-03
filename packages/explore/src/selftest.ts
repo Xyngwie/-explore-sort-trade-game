@@ -2,6 +2,8 @@
  * Explore behavior selftest — run via `npm run test -w @estg/explore`
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createPhaseWatcher } from "./game/phaseWatch";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
 import {
   applyOrder,
@@ -2367,3 +2369,49 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   console.log("explore left-behind result line ok");
 }
 
+
+// 撤退 button → result screen. The button sets phase between frames; the frame
+// loop must still see the change (same path as X lift-off) and draw the result.
+{
+  const search = "?deployedInstanceIds=m1,m2&deployableMechs=2&mechDurability=m1:100;m2:80";
+  // (a) 撤退 between frames
+  {
+    const w = createWorld(bootstrapFromSearch(search));
+    const watch = createPhaseWatcher(w.phase);
+    startSortie(w);
+    watch.markRendered(w.phase); // btn-start renders the sortie screen
+    tickWorld(w, 0.05, idleInput());
+    assert.equal(watch.takeChange(w.phase), null, "no change while in sortie");
+    assert.equal(executeExploreCommand(w, { id: "abort" }).status, "done"); // 撤退 click
+    assert.equal(w.phase, "result");
+    // next frame: sortie branch is skipped (phase is result), the change is still seen once
+    assert.equal(watch.takeChange(w.phase), "result", "撤退 → frame sees the switch to result");
+    assert.equal(watch.takeChange(w.phase), null, "handled once");
+    assert.ok(toExploreResult(w), "result screen has a result");
+    assert.equal(toExploreResult(w)!.isExtracted, false);
+    assert.ok(hubWearHandoffUrl(w)?.includes("returnKind=abort"), "result screen offers the hangar return (abort)");
+  }
+  // (b) X lift-off inside a tick goes through the same watcher
+  {
+    const w = createWorld(bootstrapFromSearch(search));
+    const watch = createPhaseWatcher(w.phase);
+    startSortie(w);
+    watch.markRendered(w.phase);
+    for (const e of w.enemies) { e.alive = false; e.hp = 0; }
+    assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+    let seen: string | null = null;
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 2 && seen == null; t += 0.1) {
+      if (w.phase === "sortie") tickWorld(w, 0.1, idleInput());
+      seen = watch.takeChange(w.phase);
+    }
+    assert.equal(seen, "result", "X lift-off → result through the same path");
+  }
+  // (c) main.ts frame uses the watcher (not a per-frame phase snapshot)
+  {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    assert.ok(main.includes("phaseWatch.takeChange(world.phase)"), "frame checks the last rendered phase");
+    assert.ok(main.includes("phaseWatch.markRendered(world.phase)"), "renderDom records the rendered phase");
+    assert.ok(!main.includes("phaseBefore"), "no per-frame phase snapshot");
+  }
+  console.log("explore retreat → result screen ok");
+}
