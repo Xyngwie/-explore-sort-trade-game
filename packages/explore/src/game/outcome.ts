@@ -13,6 +13,7 @@ import {
   type ExploreSortieOutcome,
   type SortieReturnKind,
   type LostMechReturnState,
+  type ExploreToHubWearPayload,
 } from "@estg/shared";
 import type { World } from "./types";
 
@@ -62,19 +63,27 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
   const fleet = world.deployedInstanceIds.map((id) => {
     const durability = world.deployedDurability[id] ?? 100;
     const currentAmmo = world.currentAmmo[id];
-    return createOwnedMech(
+    const mech = createOwnedMech(
       "mech_gen1",
       currentAmmo == null
         ? { instanceId: id, durability }
         : { instanceId: id, durability, currentAmmo },
     );
+    // Carry the deployed battery through (Explore does not consume it yet);
+    // never report createOwnedMech's default 300/300 for a mech we were not given.
+    const battery = world.mechBattery[id];
+    return battery ? { ...mech, battery: { ...battery } } : mech;
   });
-  const outcome = createExploreSortieOutcome({
+  const created = createExploreSortieOutcome({
     result,
     returnKind: kind,
     fleet,
     deployedInstanceIds: world.deployedInstanceIds,
   });
+  const outcome: ExploreSortieOutcome = {
+    ...created,
+    mechBattery: (created.mechBattery ?? []).filter((row) => world.mechBattery[row.instanceId] != null),
+  };
   const buffer = Math.max(0, Math.floor(world.circuitDurabilityBuffer ?? 0));
   if (buffer <= 0) return outcome;
   // Absorb circuit durability buffer from flat returnKind wear (per mech).
@@ -117,6 +126,7 @@ function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
     elapsed: Math.round(world.elapsed * 1000),
     salvaged: world.salvaged,
     ammo: JSON.stringify(world.currentAmmo),
+    nonce: world.sortieNonce ?? "",
   });
   let hash = 2166136261;
   for (let i = 0; i < source.length; i += 1) {
@@ -146,7 +156,12 @@ function lostMechsFromWorld(world: World): LostMechReturnState[] {
   return out;
 }
 
-export function hubWearHandoffUrl(world: World): string | null {
+/**
+ * The sortie return (U9). Explore writes it to HubSave at sortie end
+ * (`hubDirectSave.ts`) and also puts it in the 格納庫 return URL, which trade
+ * still reads (applied once by sortieId; skipped when already saved).
+ */
+export function exploreReturnPayload(world: World): ExploreToHubWearPayload | null {
   const outcome = buildSortieOutcome(world);
   if (!outcome) return null;
   const wreckedMechInstanceIds = outcome.mechWear
@@ -162,8 +177,15 @@ export function hubWearHandoffUrl(world: World): string | null {
       sortieId: sortieIdForWorld(world, outcome.returnKind),
       wreckedMechInstanceIds,
       mechCurrentAmmo: outcome.mechCurrentAmmo,
+      mechBattery: outcome.mechBattery,
       lostMechs: lostMechsFromWorld(world),
     },
   );
+  return payload;
+}
+
+export function hubWearHandoffUrl(world: World): string | null {
+  const payload = exploreReturnPayload(world);
+  if (!payload) return null;
   return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));
 }
