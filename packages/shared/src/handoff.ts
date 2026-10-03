@@ -813,6 +813,9 @@ export function toExploreToHubWearPayload(
     ...(opts?.mechCurrentAmmo?.length
       ? { mechCurrentAmmo: opts.mechCurrentAmmo }
       : {}),
+    ...(opts?.mechBattery?.length
+      ? { mechBattery: opts.mechBattery }
+      : {}),
     ...(opts?.sortieId ? { sortieId: opts.sortieId } : {}),
     ...(opts?.inventoryDrops?.length ? { inventoryDrops: opts.inventoryDrops } : {}),
     ...(opts?.recoveredInventoryDropIds?.length
