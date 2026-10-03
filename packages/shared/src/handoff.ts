@@ -847,6 +847,9 @@ export function parseExploreToHubWearSearch(
     inventoryDrops: parseInventoryDrops(p.get("inventoryDrops")),
     recoveredInventoryDropIds: parseInstanceIds(p.get("recoveredInventoryDropIds")),
     wreckedMechInstanceIds: parseInstanceIds(p.get("wreckedMechInstanceIds")),
+    ...(parseLostMechs(p.get("lostMechs")).length > 0
+      ? { lostMechs: parseLostMechs(p.get("lostMechs")) }
+      : {}),
   };
 }
 
@@ -862,6 +865,7 @@ export function toExploreToHubWearPayload(
     | "wreckedMechInstanceIds"
     | "mechCurrentAmmo"
     | "mechBattery"
+    | "lostMechs"
   >,
 ): ExploreToHubWearPayload {
   return {
