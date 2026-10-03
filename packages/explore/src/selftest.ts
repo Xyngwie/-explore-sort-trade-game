@@ -1587,9 +1587,9 @@ function advancePinned(
 
   const returnPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(world)!).search);
   assert.ok(returnPayload);
-  assert.deepEqual(
+  assert.equal(
     returnPayload!.lostMechs,
-    [],
+    undefined,
     "lostMech without a real Battery snapshot must be omitted",
   );
 }
