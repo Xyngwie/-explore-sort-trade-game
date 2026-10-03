@@ -4,11 +4,14 @@
 
 ## 現在の宣言
 
+- 作業中の宣言はなし（2026-10-03 確認。以下の宣言は PR #191 のマージで完了）。
+
 ### Codex（ChatGPT）の一員・実行隊長
 - **役割:** 実行隊長
 - **担当:** 小〜中規模の実装、CI/ビルド障害の修正、既存タスクの分割、PR作成、Actions確認、マージ後Deploy確認。
-- **現在の目的:** Sort の `refine-legacy` 周辺が巨大化して並行開発の障害になっているため、既存挙動を変えずに責務ごとの小さなモジュールへ分割する。
-- **現在の作業:** `refactor/sort-refine-board-v3` ブランチで公開ヘルパーを `refine-board.ts` / `refine-matching.ts` へ移行し、`refine-legacy.ts` への依存を減らしている。
+- **目的（完了）:** Sort の `refine-legacy` 周辺が巨大化して並行開発の障害になっていたため、既存挙動を変えずに責務ごとの小さなモジュールへ分割する。
+- **作業（完了）:** `refactor/sort-refine-board-v3` ブランチで公開ヘルパーを `refine-board.ts` / `refine-matching.ts` へ移行し、`refine-legacy.ts` への依存を減らした。
+- **状態:** 完了 — PR #191 マージ済み（merge commit `4d7fcf867535a50b6877f22681b7f8f5e773549f`、2026-09-30 08:38 JST）。マージ後の `Deploy Modules Preview` は success。
 - **触らない範囲:** `packages/shared/**` の契約変更、HUB実装、他エージェントが宣言済みの作業。
 - **完了条件:** 分割後も既存テスト／selftest／Buildが通り、変更範囲をPRとして独立してレビュー・マージできる状態にする。
 
