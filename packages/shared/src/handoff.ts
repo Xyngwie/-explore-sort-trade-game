@@ -13,6 +13,7 @@ import {
   filterToDeployableIds,
   selectDeployableInstanceIds,
   normalizeCurrentAmmo,
+  type MechBatteryState,
   type OwnedMech,
   type SortieReturnKind,
 } from "./mech-fleet";
