@@ -14,6 +14,8 @@ import {
   applyRepair,
   applyScrap,
   applyWearReportsToFleet,
+  normalizeBattery,
+  normalizeCurrentAmmo,
   buildTradeToExplorePayloadFromFleet,
   buildMechCircuitsForDeploy,
   buildTradeToExploreUrl,
@@ -77,10 +79,12 @@ import {
   type CircuitEffectBreakdown,
   type CircuitOutcome,
   type CircuitRestoreState,
+  type ExploreToHubWearPayload,
   type HubCircuitRecord,
   type HubSnapshot,
   type InvadeToTradePayload,
   type MechId,
+  type OwnedMech,
   type RestoreToTradePayload,
   type SortieReturnKind,
   type YieldBag,
@@ -511,7 +515,10 @@ export function ingestLocationSearch(
     const beforeById = new Map(hub.fleet.map((m) => [m.instanceId, m.durability]));
     hub = {
       ...hub,
-      fleet: applyWearReportsToFleet(hub.fleet, wear.mechWear),
+      fleet: applyReturnedMechState(
+        applyWearReportsToFleet(hub.fleet, wear.mechWear),
+        wear,
+      ),
     };
     hub = normalizeHubSnapshot(hub);
     const detail = wear.mechWear
@@ -628,6 +635,37 @@ export function ingestLocationSearch(
         : "ハンドオフを取り込みました",
   };
   return { state: persistHangar(next), consumed: true };
+}
+
+/**
+ * Write the per-mech carried ammo / battery reported on an Explore return
+ * back into the owned mechs (by instanceId). Mechs not in the report keep
+ * their stored values. The next deploy URL re-sends them via
+ * buildTradeToExplorePayloadFromFleet (mechCurrentAmmo / mechBattery).
+ * Only called when the return is applied (a sortieId already in
+ * appliedSortieIds returns early above), so a stale URL never overwrites.
+ */
+export function applyReturnedMechState(
+  fleet: readonly OwnedMech[],
+  wear: Pick<ExploreToHubWearPayload, "mechCurrentAmmo" | "mechBattery">,
+): OwnedMech[] {
+  const ammo = new Map(
+    (wear.mechCurrentAmmo ?? []).map((row) => [row.instanceId, row.currentAmmo]),
+  );
+  const battery = new Map(
+    (wear.mechBattery ?? []).map((row) => [row.instanceId, row.battery]),
+  );
+  if (ammo.size === 0 && battery.size === 0) return [...fleet];
+  return fleet.map((m) => {
+    let next = m;
+    if (ammo.has(m.instanceId)) {
+      next = { ...next, currentAmmo: normalizeCurrentAmmo(ammo.get(m.instanceId)) };
+    }
+    if (battery.has(m.instanceId)) {
+      next = { ...next, battery: normalizeBattery(battery.get(m.instanceId)) };
+    }
+    return next;
+  });
 }
 
 export function clearHandoffFromUrl(): void {

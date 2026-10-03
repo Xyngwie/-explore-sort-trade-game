@@ -1330,4 +1330,84 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(applied.hub.lostMechs.some((m) => m.instanceId === targetId), true);
 }
 
+// Explore return carries per-mech ammo / battery → HubSave updated → next
+// deploy URL re-sends them (mechCurrentAmmo / mechBattery). A stale return
+// URL (sortieId already applied) never overwrites newer values.
+{
+  const rtStorage = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = rtStorage;
+  let rt = grantStarterFleet(resetHangar(rtStorage));
+  const [idA, idB] = rt.hub.fleet.map((m) => m.instanceId);
+  assert.ok(idA && idB, "starter fleet has two mechs");
+  rt = { ...rt, selectedDeployIds: [idA!, idB!] };
+
+  // Fresh fleet: no currentAmmo yet → first deploy carries no mechCurrentAmmo.
+  const firstDeploy = parseTradeToExploreSearch(new URL(buildDeployUrl(rt)!).search)!;
+  assert.equal(firstDeploy.mechCurrentAmmo, undefined);
+  assert.deepEqual(
+    firstDeploy.mechBattery?.map((r) => [r.instanceId, r.battery.capacity, r.battery.activity]),
+    [[idA, 300, 300], [idB, 300, 300]],
+  );
+
+  const durA = rt.hub.fleet.find((m) => m.instanceId === idA)!.durability;
+  const durB = rt.hub.fleet.find((m) => m.instanceId === idB)!.durability;
+  const returnUrl = buildExploreToHubWearUrl(
+    toExploreToHubWearPayload(
+      "extract",
+      [
+        { instanceId: idA!, durabilityAfter: durA },
+        { instanceId: idB!, durabilityAfter: durB },
+      ],
+      {
+        sortieId: "sortie_ammo_battery_rt_1",
+        mechCurrentAmmo: [
+          { instanceId: idA!, currentAmmo: 11 },
+          { instanceId: idB!, currentAmmo: 0 },
+        ],
+        mechBattery: [{ instanceId: idA!, battery: { capacity: 300, activity: 123 } }],
+      },
+    ),
+  );
+  const applied = ingestLocationSearch(rt, new URL(returnUrl).search);
+  assert.equal(applied.consumed, true);
+  const mechA = applied.state.hub.fleet.find((m) => m.instanceId === idA)!;
+  const mechB = applied.state.hub.fleet.find((m) => m.instanceId === idB)!;
+  assert.equal(mechA.currentAmmo, 11);
+  assert.equal(mechB.currentAmmo, 0, "0 is written back as 0, not unset");
+  assert.deepEqual(mechA.battery, { capacity: 300, activity: 123 });
+  assert.deepEqual(mechB.battery, { capacity: 300, activity: 300 }, "unreported battery unchanged");
+  assert.ok(applied.state.hub.appliedSortieIds?.includes("sortie_ammo_battery_rt_1"));
+
+  // Persisted: a reload from storage sees the same values.
+  const reloadedRt = createInitialHangar(rtStorage);
+  const savedA = reloadedRt.hub.fleet.find((m) => m.instanceId === idA)!;
+  assert.equal(savedA.currentAmmo, 11);
+  assert.deepEqual(savedA.battery, { capacity: 300, activity: 123 });
+  assert.equal(reloadedRt.hub.fleet.find((m) => m.instanceId === idB)!.currentAmmo, 0);
+
+  // Next deploy URL re-sends them; startingAmmo is omitted once mechCurrentAmmo is present.
+  const nextUrl = new URL(buildDeployUrl({ ...reloadedRt, selectedDeployIds: [idA!, idB!] })!);
+  const nextDeploy = parseTradeToExploreSearch(nextUrl.search)!;
+  assert.deepEqual(nextDeploy.mechCurrentAmmo, [
+    { instanceId: idA, currentAmmo: 11 },
+    { instanceId: idB, currentAmmo: 0 },
+  ]);
+  assert.deepEqual(
+    nextDeploy.mechBattery?.map((r) => [r.instanceId, r.battery.capacity, r.battery.activity]),
+    [[idA, 300, 123], [idB, 300, 300]],
+  );
+  assert.equal(nextUrl.searchParams.has("startingAmmo"), false);
+
+  // Re-opening the same return URL is ignored (already applied) and does not overwrite.
+  const changed = {
+    ...applied.state,
+    hub: {
+      ...applied.state.hub,
+      fleet: applied.state.hub.fleet.map((m) => (m.instanceId === idA ? { ...m, currentAmmo: 5 } : m)),
+    },
+  };
+  const again = ingestLocationSearch(changed, new URL(returnUrl).search);
+  assert.equal(again.state.hub.fleet.find((m) => m.instanceId === idA)!.currentAmmo, 5);
+}
+
 console.log("trade hangar selftest: ok");
