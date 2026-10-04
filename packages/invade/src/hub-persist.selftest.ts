@@ -101,6 +101,8 @@ function memStorage(initial: Record<string, string> = {}): Storage {
   const session = loadOrCreateFrontSession(store);
   assert.equal(session.restored, false);
   assert.ok(session.board.seed != null);
+  assert.ok(session.dropsByCell instanceof Map);
+  assert.ok(session.lostByCell instanceof Map);
 
   const raw = store.getItem(HUB_SAVE_STORAGE_KEY);
   assert.ok(raw);

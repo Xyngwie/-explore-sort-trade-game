@@ -55,7 +55,13 @@ import {
   persistFrontSession,
   regenerateFrontSession,
 } from "./hub-persist";
-import { cellKey, lostMechSortieLineJa, lostMechTitleJa } from "./lost-mechs";
+import {
+  cellKey,
+  fieldDropSortieLineJa,
+  fieldDropTitleJa,
+  lostMechSortieLineJa,
+  lostMechTitleJa,
+} from "./lost-mechs";
 import {
   ALL_DESTROYED_INTEL,
   armForcedLockHistory,
@@ -97,6 +103,8 @@ let lastBoardLog: string | null = initialSession.restored
   : `前線盤生成 — ${BOARD_SPAN}×${BOARD_SPAN} · 敵 ${board.mineCount} · HQ 開放 · seed ${board.seed ?? "—"}`;
 /** Left-behind mechs on this board per cell (HubSave.lostMechs; display only). */
 let lostByCell: Map<string, string[]> = initialSession.lostByCell;
+/** Circuit field drops on this board per cell (HubSave.fieldDrops; display only). */
+let dropsByCell: Map<string, string[]> = initialSession.dropsByCell;
 /** Flag-mode: next cell click toggles flag instead of open. */
 let flagMode = false;
 /** History trap armed for current forced-combat lock. */
@@ -136,14 +144,27 @@ function lostIdsAt(sx: number, sy: number): string[] {
   return lostByCell.get(cellKey(sx, sy)) ?? [];
 }
 
-/** Sortie bar + one line when left-behind mechs wait on the selected cell. */
+function dropCircuitIdsAt(sx: number, sy: number): string[] {
+  return dropsByCell.get(cellKey(sx, sy)) ?? [];
+}
+
+/** Sortie bar + lines when left-behind mechs or circuit field drops wait on the selected cell. */
 function cellSortieBarHtml(sel: SectorSel | null): string {
   const html = cellSortieBarBaseHtml(sel);
-  const n = sel != null ? lostIdsAt(sel.sx, sel.sy).length : 0;
-  if (n === 0) return html;
-  const line = `<p class="muted lost-mech-line">${escapeHtml(lostMechSortieLineJa(n))}</p>`;
+  if (sel == null) return html;
+  const lostN = lostIdsAt(sel.sx, sel.sy).length;
+  const dropN = dropCircuitIdsAt(sel.sx, sel.sy).length;
+  const lines: string[] = [];
+  if (lostN > 0) {
+    lines.push(`<p class="muted lost-mech-line">${escapeHtml(lostMechSortieLineJa(lostN))}</p>`);
+  }
+  if (dropN > 0) {
+    lines.push(`<p class="muted field-drop-line">${escapeHtml(fieldDropSortieLineJa(dropN))}</p>`);
+  }
+  if (lines.length === 0) return html;
+  const extra = lines.join("");
   const at = html.indexOf("</p>");
-  return at < 0 ? html : html.slice(0, at + 4) + line + html.slice(at + 4);
+  return at < 0 ? html + extra : html.slice(0, at + 4) + extra + html.slice(at + 4);
 }
 
 /** Single under-grid CTA cluster: 探索へ (+ engage chip) · 格納庫へ. */
@@ -361,12 +382,16 @@ function statusJa(): string {
   return `偵察中 — ${exploredFeelLabelJa(feel.exploredFeel)}`;
 }
 
-/** Existing cell tooltip + " · " + the left-behind mech IDs (count when several). */
+/** Existing cell tooltip + " · " + the left-behind mech IDs and circuit field drops. */
 function cellTitleWithLost(cell: ReturnType<typeof getCell>): string {
   const base = cellTitle(cell);
   if (!cell) return base;
-  const extra = lostMechTitleJa(lostIdsAt(cell.sx, cell.sy));
-  return extra ? `${base} · ${extra}` : base;
+  const extras: string[] = [];
+  const lostExtra = lostMechTitleJa(lostIdsAt(cell.sx, cell.sy));
+  if (lostExtra) extras.push(lostExtra);
+  const dropExtra = fieldDropTitleJa(dropCircuitIdsAt(cell.sx, cell.sy));
+  if (dropExtra) extras.push(dropExtra);
+  return extras.length > 0 ? `${base} · ${extras.join(" · ")}` : base;
 }
 
 function cellTitle(cell: ReturnType<typeof getCell>): string {
@@ -402,6 +427,7 @@ function dangerLegendHtml(): string {
     <span class="danger-swatch pending"><span class="chip" aria-hidden="true"></span>敵接触・未解決</span>
     <span class="danger-swatch resolved"><span class="chip" aria-hidden="true"></span>解決済・再出撃可</span>
     <span class="danger-swatch lost-mech"><span class="chip" aria-hidden="true"></span>置き去り機</span>
+    <span class="danger-swatch field-drop"><span class="chip" aria-hidden="true"></span>落とし物</span>
     ${swatches}
   </div>
   <p class="muted" style="margin-top:0.35rem;font-size:0.72rem">未開マスの色は HQ からの距離帯（爆弾密度の手触り）。近傍薄 → 前線濃。</p>`;
@@ -432,6 +458,8 @@ function render(): void {
       const c = getCell(board, sx, sy)!;
       const isSel =
         selected != null && selected.sx === sx && selected.sy === sy;
+      const lostCount = lostIdsAt(sx, sy).length;
+      const dropCount = dropCircuitIdsAt(sx, sy).length;
       const feel = cellFeelClasses(c, board);
       const cls = [
         "cell",
@@ -444,7 +472,8 @@ function render(): void {
         c.open && !c.mine && !c.blocked && c.adjacent > 0 ? `n${c.adjacent}` : "",
         c.open && !c.mine && !c.blocked && c.adjacent === 0 ? "blank" : "",
         isSel ? "selected" : "",
-        lostIdsAt(sx, sy).length > 0 ? "lost-mech" : "",
+        lostCount > 0 ? "lost-mech" : "",
+        dropCount > 0 ? "field-drop" : "",
         !c.blocked && !c.open ? "pickable" : "",
         c.open && !c.blocked ? "focusable" : "",
         ...feel,
@@ -452,8 +481,10 @@ function render(): void {
         .filter(Boolean)
         .join(" ");
       const disabled = c.blocked ? "disabled" : "";
+      const lostAttr = lostCount > 0 ? ` data-lost-count="${lostCount}"` : "";
+      const dropAttr = dropCount > 0 ? ` data-drop-count="${dropCount}"` : "";
       cellsHtml.push(
-        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostIdsAt(sx, sy).length > 0 ? ` data-lost-count="${lostIdsAt(sx, sy).length}"` : ""} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</button>`,
+        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostAttr}${dropAttr} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</button>`,
       );
     }
   }
@@ -560,6 +591,7 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     board = session.board;
     selected = session.focus;
     lostByCell = session.lostByCell;
+    dropsByCell = session.dropsByCell;
     skipped = false;
     flagMode = false;
     forcedLockHistoryArmed = false;
