@@ -319,9 +319,13 @@ export function recoverLostMechs(
 
 /**
  * Apply one Explore sortie report to the hub (pure, idempotent by sortieId).
- * Lost mechs leave the fleet; their equipped circuits become field drops on
- * the sortie cell (or are lost when `cell` is null, U7). Recovered drops go
- * back to the stash unchanged; acquired circuits are added to the stash.
+ * Mechs in `lostMechInstanceIds` leave the fleet. Their circuits, and the
+ * circuits of wrecked mechs that were not left behind (`wreckedMechInstanceIds`,
+ * cause `wreck_not_carried`), become field drops on the sortie cell — or are
+ * lost with no record when `cell` is null (U7). A wrecked hull stays in the
+ * fleet as `destroyed`. Left-behind `lostMechs` keep their circuits.
+ * Recovered drops go back to the stash unchanged; acquired circuits are added
+ * to the stash.
  */
 export function applySortieReport(
   hub: HubSnapshot,
@@ -348,9 +352,17 @@ export function applySortieReport(
   hub = recoveredMechsResult.hub;
   const recoveredMechIds = new Set(recoveredMechsResult.recovered);
 
-  const lost = new Set(report.lostMechInstanceIds);
+  const lost = new Set(report.lostMechInstanceIds.map((id) => id.trim()).filter(Boolean));
+  // A left-behind row wins over a wreck of the same mech: the mech stays in
+  // lostMechs with its circuits. Only a wreck that was not left behind drops
+  // its circuits (背負えなかった大破機).
+  const reportedLostIds = new Set(
+    (report.lostMechs ?? []).map((m) => m.instanceId.trim()).filter(Boolean),
+  );
   const wrecked = new Set(
-    (report.wreckedMechInstanceIds ?? []).filter((id) => !lost.has(id)),
+    (report.wreckedMechInstanceIds ?? [])
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0 && !lost.has(id) && !reportedLostIds.has(id)),
   );
   const canonicalCircuitIds = new Set(hub.circuits.map((c) => c.circuitId));
   const fleetById = new Map(hub.fleet.map((m) => [m.instanceId, m]));
@@ -380,19 +392,23 @@ export function applySortieReport(
   const droppedToField: FieldCircuitDrop[] = [];
   const lostForever: HubCircuitRecord[] = [];
   const keep: HubCircuitRecord[] = [];
+  const dropping = new Set<string>([...lost, ...wrecked]);
   for (const c of hub.circuits) {
-    if (c.equippedTo == null || !lost.has(c.equippedTo)) {
+    if (c.equippedTo == null || !dropping.has(c.equippedTo)) {
       keep.push(c);
       continue;
     }
     const circuit: HubCircuitRecord = { ...c, equippedTo: null };
+    const cause = lost.has(c.equippedTo)
+      ? (report.lostCause[c.equippedTo] ?? "left_behind")
+      : "wreck_not_carried";
     if (report.cell && report.frontSeed != null && Number.isFinite(report.frontSeed)) {
       const drop: FieldCircuitDrop = {
         dropId: `drop_${sortieId}_${c.circuitId}`,
         frontSeed: report.frontSeed >>> 0,
         cell: { sx: report.cell.sx, sy: report.cell.sy },
         circuit,
-        cause: report.lostCause[c.equippedTo] ?? "wreck_not_carried",
+        cause,
         fromMechInstanceId: c.equippedTo,
         droppedAt,
       };

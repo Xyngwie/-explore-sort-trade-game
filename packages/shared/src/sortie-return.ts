@@ -86,8 +86,8 @@ export function applyExploreReturnToHub(
       hub,
       {
         sortieId: wear.sortieId,
-        cell: null,
-        frontSeed: null,
+        cell: wear.cell ?? null,
+        frontSeed: wear.frontSeed ?? null,
         // Left behind outside Invade: lost outright. With cell null their
         // circuits are lost too (lostForever), never moved to the stash.
         lostMechInstanceIds: abandoned,

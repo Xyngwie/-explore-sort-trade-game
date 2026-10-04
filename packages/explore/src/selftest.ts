@@ -66,7 +66,7 @@ import { getCoverObjects } from "./game/coverObjects";
 import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
 import { attachLostMechContext, recoverStrandedAtLiftOff, sortieLocationFor, strandedMechsFor, STRANDED_RING_RADIUS } from "./game/lostMechs";
 import { invadeSquadSearch } from "./game/invadeSquad";
-import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, sortHandoffUrl, toExploreResult } from "./game/outcome";
+import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, sortHandoffUrl, toExploreResult, wreckCircuitResultHtml, wreckCircuitResultLines } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
   QUIRK_LABEL,
@@ -2368,6 +2368,8 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     // not via Invade (#206 leftover): lost outright with its circuits, not kept in lostMechs
     assert.equal(returnPayload!.lostMechs, undefined, "direct sortie: no lostMechs row");
     assert.deepEqual(returnPayload!.abandonedMechInstanceIds, ["m2"], "direct sortie: abandoned");
+    assert.equal(returnPayload!.frontSeed, undefined, "direct sortie: no drop place");
+    assert.equal(returnPayload!.cell, undefined, "direct sortie: no drop cell");
   }
   // Via Invade (sector + HubSave front seed): the left-behind wingman keeps its place.
   {
@@ -2401,6 +2403,9 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
       cell: { sx: 2, sy: -1 },
     }]);
     assert.equal(returnPayload!.abandonedMechInstanceIds, undefined, "via Invade: nothing abandoned");
+    assert.equal(returnPayload!.frontSeed, 4242, "via Invade: drop place on the return");
+    assert.deepEqual(returnPayload!.cell, { sx: 2, sy: -1 });
+    assert.ok(new URL(hubWearHandoffUrl(w)!).searchParams.get("dropCell") === "2,-1");
     assert.ok(leftBehindResultHtml(w).includes("前線マス (2, -1) に残る"), "via Invade: fate line");
   }
   console.log("explore left-behind result line ok");
@@ -2621,6 +2626,130 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.ok(main.includes("resortiePlan(bootSearch, world, payload)") && main.includes("resortieSearch(bootSearch, plan.hub, plan.ids)"), "再出撃 rebuilds from HubSave (hangar selection)");
   }
   console.log("explore U9 direct save / re-sortie ok");
+}
+
+// Uncarried wreck: its circuits fall on the Invade cell, or are lost when the
+// sortie did not go through Invade (U7). A wreck that was also left behind
+// keeps its circuits on the lostMechs row. The hull of an uncarried wreck
+// stays in the fleet as destroyed (#199). Carry is unimplemented.
+{
+  const memStore = () => {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+  };
+  const makeHub = () => {
+    const mk = (id: string, durability: number) => ({
+      ...shared.createOwnedMech("mech_gen1", { instanceId: id, durability }),
+      battery: { capacity: 300, activity: 200 },
+    });
+    let hub = shared.normalizeHubSnapshot({
+      ...shared.INITIAL_HUB,
+      fleet: [mk("m1", 100), mk("m3", 10)],
+      frontProgress: { seed: 4242, cols: 8, rows: 8, cleared: [], mined: [] },
+    });
+    hub = shared.upsertCircuitIntoHub(hub, {
+      circuitId: "c_wreck",
+      circuitBoard: shared.createEmptyCircuitBoard(4, 4, "wreck_drop") as never,
+      outcome: "bypass",
+    } as never);
+    const eq = shared.equipCircuit(hub, "c_wreck", "m3") as unknown as { hub?: typeof hub };
+    return eq.hub ?? hub;
+  };
+  const deploySearch = (viaInvade: boolean) => {
+    const url = new URL("https://estg.invalid/explore/");
+    if (viaInvade) {
+      url.searchParams.set("sectorX", "2");
+      url.searchParams.set("sectorY", "-1");
+      url.searchParams.set("density", "0.3");
+    }
+    url.searchParams.set("deployedInstanceIds", "m1,m3");
+    url.searchParams.set("deployableMechs", "2");
+    url.searchParams.set("mechDurability", "m1:100;m3:10");
+    url.searchParams.set("mechBattery", "m1:300:200;m3:300:200");
+    url.searchParams.set("mechCircuits", "m3~c_wreck*by*4");
+    return url.search;
+  };
+  const extractHome = (search: string, hub: ReturnType<typeof makeHub>, leaveWingman: boolean) => {
+    const w = attachLostMechContext(createWorld(bootstrapFromSearch(search)), hub);
+    startSortie(w);
+    for (const e of w.enemies) {
+      e.alive = false;
+      e.hp = 0;
+    }
+    w.leader.pos = { x: 700, y: 400 };
+    for (const u of w.wingmen) u.pos = { x: 700, y: 400 };
+    assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 2 && w.phase === "sortie"; t += 0.1) {
+      if (leaveWingman && w.balance.boardingLiftOffDelaySec - boardingElapsed(w) <= 0.3) {
+        w.wingmen[0]!.pos = { x: 1300, y: 400 };
+      }
+      tickWorld(w, 0.1, idleInput());
+    }
+    assert.equal(w.phase, "result");
+    return w;
+  };
+
+  const directHub = makeHub();
+  const directStore = memStore();
+  assert.ok(shared.saveHubSaveToLocalStorage(directHub, directStore));
+  const direct = extractHome(deploySearch(false), directHub, false);
+  assert.equal(direct.sortieLocation, null);
+  assert.deepEqual(wreckCircuitResultLines(direct), [
+    "Invade を通らない出撃のため、大破した m3 の回路（c_wreck）は失われた",
+  ]);
+  assert.ok(wreckCircuitResultHtml(direct).includes('id="result-wreck-circuits"'));
+  const directSave = saveSortieResultToHub(direct, directStore);
+  assert.equal(directSave.status, "saved");
+  const directSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(directStore)!.hub);
+  assert.equal(directSaved.fieldDrops.length, 0, "no cell → no field drop");
+  assert.equal(directSaved.circuits.some((c) => c.circuitId === "c_wreck"), false, "circuit lost (U7)");
+  assert.equal(directSaved.fleet.find((m) => m.instanceId === "m3")!.status, "destroyed");
+  assert.equal(exploreReturnPayload(direct)?.frontSeed, undefined);
+
+  const viaHub = makeHub();
+  const viaStore = memStore();
+  assert.ok(shared.saveHubSaveToLocalStorage(viaHub, viaStore));
+  const via = extractHome(deploySearch(true), viaHub, false);
+  assert.deepEqual(via.sortieLocation, { frontSeed: 4242, cell: { sx: 2, sy: -1 } });
+  assert.deepEqual(wreckCircuitResultLines(via), [
+    "大破した m3 の回路（c_wreck）は前線マス (2, -1) に落ちた",
+  ]);
+  const viaPayload = exploreReturnPayload(via)!;
+  assert.equal(viaPayload.frontSeed, 4242);
+  assert.deepEqual(viaPayload.cell, { sx: 2, sy: -1 });
+  assert.deepEqual(viaPayload.wreckedMechInstanceIds, ["m3"]);
+  const viaSave = saveSortieResultToHub(via, viaStore);
+  assert.equal(viaSave.status, "saved");
+  const viaSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(viaStore)!.hub);
+  const hull = viaSaved.fleet.find((m) => m.instanceId === "m3")!;
+  assert.equal(hull.status, "destroyed", "hull stays");
+  assert.equal(hull.durability, 0);
+  assert.equal(viaSaved.circuits.some((c) => c.circuitId === "c_wreck"), false);
+  assert.equal(viaSaved.fieldDrops.length, 1);
+  assert.equal(viaSaved.fieldDrops[0]!.cause, "wreck_not_carried");
+  assert.equal(viaSaved.fieldDrops[0]!.fromMechInstanceId, "m3");
+  assert.equal(viaSaved.fieldDrops[0]!.frontSeed, 4242);
+  assert.deepEqual(viaSaved.fieldDrops[0]!.cell, { sx: 2, sy: -1 });
+  assert.equal(viaSaved.fieldDrops[0]!.circuit.equippedTo, null);
+  assert.equal(viaSaved.fieldDrops[0]!.circuit.circuitId, "c_wreck");
+
+  const leftHub = makeHub();
+  const leftStore = memStore();
+  assert.ok(shared.saveHubSaveToLocalStorage(leftHub, leftStore));
+  const left = extractHome(deploySearch(true), leftHub, true);
+  assert.equal(wreckCircuitResultLines(left).length, 0, "left-behind wreck keeps its circuits");
+  const leftSave = saveSortieResultToHub(left, leftStore);
+  assert.equal(leftSave.status, "saved");
+  const leftSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(leftStore)!.hub);
+  assert.equal(leftSaved.fieldDrops.length, 0);
+  assert.equal(leftSaved.fleet.some((m) => m.instanceId === "m3"), false);
+  assert.equal(leftSaved.lostMechs[0]!.instanceId, "m3");
+  assert.equal(leftSaved.circuits.find((c) => c.circuitId === "c_wreck")!.equippedTo, "m3");
+  console.log("explore wreck circuit drops ok");
 }
 
 // lostMechs recovery PR 2: via Invade the left-behind mech stays on its front

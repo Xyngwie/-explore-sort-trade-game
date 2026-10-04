@@ -19,7 +19,7 @@ import {
   hubVisibleCircuits,
 } from "./circuit-inventory";
 import { applyExploreReturnToHub } from "./sortie-return";
-import { buildExploreToHubWearUrl, parseExploreToHubWearSearch } from "./handoff";
+import { buildExploreToHubWearUrl, parseExploreToHubWearSearch, toExploreToHubWearPayload } from "./handoff";
 import { normalizeHubSnapshot } from "./hub-save";
 
 const board = createEmptyCircuitBoard(2, 2, "sortie-circuit-1");
@@ -469,6 +469,158 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   assert.equal(h.circuits.length, 3, "kept in the save");
   assert.deepEqual(hubVisibleCircuits(h).map((c) => c.circuitId), ["c-here", "c-stash"]);
   assert.deepEqual(hubVisibleCircuits({ lostMechs: [] }), [], "no circuits field → []");
+}
+
+// (J) wreck not carried, with an Invade cell: circuits become field drops;
+// the hull stays in the fleet as destroyed.
+{
+  const wreck = createOwnedMech("mech_gen1", { instanceId: "wreck-1", durability: 10 });
+  const stay = createOwnedMech("mech_gen1", { instanceId: "stay-1" });
+  const h = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    fleet: [wreck, stay],
+    circuits: [mkCircuit("c-wreck", "wreck-1"), mkCircuit("c-stay", "stay-1")],
+  });
+  const at = new Date("2026-10-04T01:00:00.000Z");
+  const r = applySortieReport(h, {
+    sortieId: "s-wreck-drop",
+    cell: { sx: 2, sy: -1 },
+    frontSeed: 4242,
+    lostMechInstanceIds: [],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: ["wreck-1"],
+  }, at);
+  assert.equal(r.applied, true);
+  assert.equal(r.lostForever.length, 0);
+  const hull = r.hub.fleet.find((m) => m.instanceId === "wreck-1")!;
+  assert.equal(hull.status, "destroyed");
+  assert.equal(hull.durability, 0);
+  assert.equal(r.hub.fleet.some((m) => m.instanceId === "stay-1"), true);
+  assert.equal(r.hub.circuits.some((c) => c.circuitId === "c-wreck"), false);
+  assert.equal(r.hub.circuits.find((c) => c.circuitId === "c-stay")!.equippedTo, "stay-1");
+  assert.equal(r.droppedToField.length, 1);
+  const drop = r.hub.fieldDrops[0]!;
+  assert.equal(drop.dropId, "drop_s-wreck-drop_c-wreck");
+  assert.equal(drop.cause, "wreck_not_carried");
+  assert.equal(drop.fromMechInstanceId, "wreck-1");
+  assert.equal(drop.frontSeed, 4242);
+  assert.deepEqual(drop.cell, { sx: 2, sy: -1 });
+  assert.equal(drop.circuit.circuitId, "c-wreck");
+  assert.equal(drop.circuit.equippedTo, null);
+  assert.equal(drop.droppedAt, at.toISOString());
+  placesOk(r.hub);
+}
+
+// (K) wreck not carried, no Invade cell: the circuit is lost (U7); the hull stays.
+{
+  const wreck = createOwnedMech("mech_gen1", { instanceId: "wreck-2" });
+  const h = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    fleet: [wreck],
+    circuits: [mkCircuit("c-gone", "wreck-2"), mkCircuit("c-stash", null)],
+  });
+  const r = applySortieReport(h, {
+    sortieId: "s-wreck-lost",
+    cell: null,
+    frontSeed: null,
+    lostMechInstanceIds: [],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: ["wreck-2"],
+  });
+  assert.equal(r.droppedToField.length, 0);
+  assert.equal(r.hub.fieldDrops.length, 0);
+  assert.deepEqual(r.lostForever.map((c) => c.circuitId), ["c-gone"]);
+  assert.equal(r.hub.circuits.find((c) => c.circuitId === "c-stash")!.equippedTo, null);
+  assert.equal(r.hub.fleet.find((m) => m.instanceId === "wreck-2")!.status, "destroyed");
+  placesOk(r.hub);
+}
+
+// (L) the same mech is wrecked and left behind: the lostMechs row wins.
+// No drop, the circuit stays equipped, the hull leaves the fleet.
+{
+  const wing = {
+    ...createOwnedMech("mech_gen1", { instanceId: "wing-b", durability: 8, currentAmmo: 4 }),
+    battery: { capacity: 300, activity: 180 },
+  };
+  const h = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    fleet: [wing],
+    circuits: [mkCircuit("c-b", "wing-b")],
+  });
+  const r = applySortieReport(h, {
+    sortieId: "s-wreck-left",
+    cell: { sx: 1, sy: 1 },
+    frontSeed: 9,
+    lostMechInstanceIds: [],
+    lostCause: {},
+    recoveredDropIds: [],
+    acquiredCircuits: [],
+    wreckedMechInstanceIds: ["wing-b"],
+    lostMechs: [{
+      instanceId: "wing-b",
+      currentAmmo: 4,
+      battery: { capacity: 300, activity: 180 },
+      circuitIds: ["c-b"],
+      frontSeed: 9,
+      cell: { sx: 1, sy: 1 },
+    }],
+  });
+  assert.equal(r.droppedToField.length, 0);
+  assert.equal(r.lostForever.length, 0);
+  assert.equal(r.hub.fieldDrops.length, 0);
+  assert.equal(r.hub.fleet.some((m) => m.instanceId === "wing-b"), false);
+  assert.equal(r.hub.lostMechs[0]!.instanceId, "wing-b");
+  assert.equal(r.hub.circuits.find((c) => c.circuitId === "c-b")!.equippedTo, "wing-b");
+  placesOk(r.hub);
+}
+
+// (M) frontSeed + dropCell round-trip, and applyExploreReturnToHub uses them.
+// A partial pair is ignored.
+{
+  const wreck = createOwnedMech("mech_gen1", { instanceId: "wreck-1" });
+  const h = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    fleet: [wreck],
+    circuits: [mkCircuit("c-wreck", "wreck-1")],
+  });
+  const url = buildExploreToHubWearUrl({
+    returnKind: "fail",
+    mechWear: [{ instanceId: "wreck-1", durabilityAfter: 0 }],
+    sortieId: "s-place",
+    wreckedMechInstanceIds: ["wreck-1"],
+    frontSeed: 4242,
+    cell: { sx: 2, sy: -1 },
+  }, "https://estg.invalid/trade/");
+  const parsed = new URL(url);
+  assert.equal(parsed.searchParams.get("frontSeed"), "4242");
+  assert.equal(parsed.searchParams.get("dropCell"), "2,-1");
+  const payload = parseExploreToHubWearSearch(parsed.search)!;
+  assert.equal(payload.frontSeed, 4242);
+  assert.deepEqual(payload.cell, { sx: 2, sy: -1 });
+  const applied = normalizeHubSnapshot(applyExploreReturnToHub(h, payload).hub);
+  assert.equal(applied.fieldDrops.length, 1);
+  assert.equal(applied.fieldDrops[0]!.cause, "wreck_not_carried");
+  assert.equal(applied.fleet.find((m) => m.instanceId === "wreck-1")!.status, "destroyed");
+  assert.equal(applied.circuits.length, 0);
+
+  const seedOnly = toExploreToHubWearPayload("fail", [], { frontSeed: 5 });
+  assert.equal(seedOnly.frontSeed, undefined);
+  assert.equal(seedOnly.cell, undefined);
+  assert.equal(new URL(buildExploreToHubWearUrl(seedOnly, "https://estg.invalid/trade/")).searchParams.has("frontSeed"), false);
+  const cellOnly = toExploreToHubWearPayload("fail", [], { cell: { sx: 1, sy: 1 } });
+  assert.equal(cellOnly.frontSeed, undefined);
+  assert.equal(new URL(buildExploreToHubWearUrl(cellOnly, "https://estg.invalid/trade/")).searchParams.has("dropCell"), false);
+  const badCell = parseExploreToHubWearSearch("?returnKind=fail&mechWear=&frontSeed=1&dropCell=99,0")!;
+  assert.equal(badCell.frontSeed, undefined);
+  assert.equal(badCell.cell, undefined);
+  const badSeed = parseExploreToHubWearSearch("?returnKind=fail&mechWear=&frontSeed=-1&dropCell=1,1")!;
+  assert.equal(badSeed.frontSeed, undefined);
+  const oneSided = parseExploreToHubWearSearch("?returnKind=fail&mechWear=&frontSeed=4")!;
+  assert.equal(oneSided.cell, undefined);
 }
 
 console.log("shared lostMechs recovery selftest: ok");
