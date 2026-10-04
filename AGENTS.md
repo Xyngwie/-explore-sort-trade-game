@@ -54,3 +54,15 @@ PR 本文の冒頭に次の形式で記載する。
 **調査 → 実装 → 検証 → commit → PR → Actions/CI確認 → レビュー → マージ → デプロイ確認 → 実際に動かせる状態 → 神宮のスマートフォンで実機確認**
 
 までつなげる。神宮の判断・権限・実機操作が必要な地点だけを具体的に切り出す。
+
+## Cursor Cloud specific instructions
+
+- 依存関係はリポジトリルートで `npm ci`（Node.js 20 以上、npm workspaces）。`npm run typecheck` と `npm test` が確認コマンド。本番ビルドは `npm run build:explore` / `build:sort` / `build:trade` / `build:invade` / `build:restore`。
+- Cloud Agent の `start` は次の Vite 開発サーバーを tmux セッション `estg_explore` / `estg_sort` / `estg_trade` / `estg_invade` / `estg_restore` で起動し、応答を待って終了する。既にセッションがあるときは作り直さない。
+  - explore `http://localhost:5173/`
+  - sort `http://localhost:5174/`
+  - trade（格納庫） `http://localhost:5175/`
+  - invade `http://localhost:5176/`
+  - restore `http://localhost:5177/`
+- ページのホストが `localhost` または `127.0.0.1` のとき、モジュール間リンクは上のポートになる（`packages/shared/src/constants.ts` の `LOCAL_DEV_MODULE_URLS`）。
+- 動作確認: 格納庫で「シード読込」→ 艦隊が 3 機になる →「探索へ」→ Explore の「出撃」。
