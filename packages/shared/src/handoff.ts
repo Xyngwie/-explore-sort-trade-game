@@ -229,6 +229,13 @@ export type ExploreToHubWearPayload = {
    * (CIRCUIT_DATA_MODEL_V0 §5.6, #206 leftover).
    */
   abandonedMechInstanceIds?: string[];
+  /**
+   * Invade front this sortie launched from. Both are set, or neither.
+   * Wrecked mechs' circuits become `fieldDrops` here; without them those
+   * circuits are lost (U7).
+   */
+  frontSeed?: number;
+  cell?: { sx: number; sy: number };
 };
 
 const SORTIE_RETURN_KINDS: readonly SortieReturnKind[] = [
@@ -838,6 +845,14 @@ export function buildExploreToHubWearUrl(
   if (recoveredLost) u.searchParams.set("recoveredLostMechInstanceIds", recoveredLost);
   const abandoned = encodeInstanceIdsCompact(payload.abandonedMechInstanceIds);
   if (abandoned) u.searchParams.set("abandonedMechInstanceIds", abandoned);
+  if (
+    payload.cell &&
+    payload.frontSeed != null &&
+    Number.isFinite(payload.frontSeed)
+  ) {
+    u.searchParams.set("frontSeed", String(payload.frontSeed >>> 0));
+    u.searchParams.set("dropCell", `${Math.trunc(payload.cell.sx)},${Math.trunc(payload.cell.sy)}`);
+  }
   return u.toString();
 }
 
@@ -871,7 +886,26 @@ export function parseExploreToHubWearSearch(
     ...(parseInstanceIds(p.get("abandonedMechInstanceIds")).length > 0
       ? { abandonedMechInstanceIds: parseInstanceIds(p.get("abandonedMechInstanceIds")) }
       : {}),
+    ...parseSortiePlace(p.get("frontSeed"), p.get("dropCell")),
   };
+}
+
+/** Both frontSeed and dropCell, or neither. A partial pair is ignored. */
+function parseSortiePlace(
+  seedRaw: string | null,
+  cellRaw: string | null,
+): { frontSeed: number; cell: { sx: number; sy: number } } | Record<string, never> {
+  if (seedRaw == null || seedRaw.trim() === "" || cellRaw == null || cellRaw.trim() === "") {
+    return {};
+  }
+  const seed = Number.parseInt(seedRaw, 10);
+  const parts = cellRaw.split(",");
+  if (parts.length !== 2 || !Number.isFinite(seed) || seed < 0) return {};
+  const sx = Number.parseInt(parts[0]!, 10);
+  const sy = Number.parseInt(parts[1]!, 10);
+  if (!Number.isFinite(sx) || !Number.isFinite(sy)) return {};
+  if (Math.abs(sx) > 32 || Math.abs(sy) > 32) return {};
+  return { frontSeed: seed >>> 0, cell: { sx, sy } };
 }
 
 /** Compact wear list from full MechWearReport-like rows. */
@@ -889,6 +923,8 @@ export function toExploreToHubWearPayload(
     | "lostMechs"
     | "recoveredLostMechInstanceIds"
     | "abandonedMechInstanceIds"
+    | "frontSeed"
+    | "cell"
   >,
 ): ExploreToHubWearPayload {
   return {
@@ -917,6 +953,9 @@ export function toExploreToHubWearPayload(
       : {}),
     ...(opts?.abandonedMechInstanceIds?.length
       ? { abandonedMechInstanceIds: opts.abandonedMechInstanceIds }
+      : {}),
+    ...(opts?.cell && opts.frontSeed != null && Number.isFinite(opts.frontSeed)
+      ? { frontSeed: opts.frontSeed >>> 0, cell: { sx: opts.cell.sx, sy: opts.cell.sy } }
       : {}),
   };
 }

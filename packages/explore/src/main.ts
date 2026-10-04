@@ -78,6 +78,7 @@ import {
   toExploreResult,
   returnKindFromWorld,
   exploreReturnPayload,
+  wreckCircuitResultHtml,
 } from "./game/outcome";
 import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
 import { resortiePlan, resortieSearch } from "./game/resortie";
@@ -598,6 +599,7 @@ function renderDom(): void {
           result.isExtracted ? "生還" : `失敗（${world.failReason ?? "abort"}）`
         }</p>
         ${leftBehindResultHtml(world)}
+        ${wreckCircuitResultHtml(world)}
         <table>
           <tr><td>returnKind</td><td>${returnKindFromWorld(world)}</td></tr>
           <tr><td>isExtracted</td><td>${String(result.isExtracted)}</td></tr>

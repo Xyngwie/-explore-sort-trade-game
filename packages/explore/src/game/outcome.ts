@@ -205,6 +205,7 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
   const wreckedMechInstanceIds = outcome.mechWear
     .filter((w) => w.durabilityAfter <= 0)
     .map((w) => w.instanceId);
+  const loc = world.sortieLocation ?? null;
   const payload = toExploreToHubWearPayload(
     outcome.returnKind,
     outcome.mechWear.map((w) => ({
@@ -219,9 +220,55 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
       lostMechs: lostMechsFromWorld(world),
       abandonedMechInstanceIds: abandonedFromWorld(world),
       recoveredLostMechInstanceIds: [...(world.recoveredLostMechIds ?? [])],
+      ...(loc
+        ? { frontSeed: loc.frontSeed, cell: { sx: loc.cell.sx, sy: loc.cell.sy } }
+        : {}),
     },
   );
   return payload;
+}
+
+const WRECK_UNIT_IDS = ["leader", "wing-a", "wing-b"] as const;
+
+function escapeResultText(s: string): string {
+  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+/**
+ * Result-screen lines for circuits of wrecked mechs that were not left behind.
+ * Carry is unimplemented, so every such wreck counts as not carried: with an
+ * Invade cell the circuits fall there; without one they are lost (U7).
+ * A wreck that is also a left-behind row keeps its circuits, so it has no line.
+ */
+export function wreckCircuitResultLines(world: World): string[] {
+  const outcome = buildSortieOutcome(world);
+  if (!outcome) return [];
+  const kept = new Set([
+    ...lostMechsFromWorld(world).map((m) => m.instanceId),
+    ...abandonedFromWorld(world),
+  ]);
+  const loc = world.sortieLocation ?? null;
+  const lines: string[] = [];
+  for (const wear of outcome.mechWear) {
+    if (wear.durabilityAfter > 0 || kept.has(wear.instanceId)) continue;
+    const idx = world.deployedInstanceIds.indexOf(wear.instanceId);
+    const unitId = idx >= 0 ? WRECK_UNIT_IDS[idx] : undefined;
+    const ids = unitId ? (world.circuitIdsByUnit[unitId] ?? []) : [];
+    if (ids.length === 0) continue;
+    const list = ids.join("、");
+    lines.push(
+      loc
+        ? `大破した ${wear.instanceId} の回路（${list}）は前線マス (${loc.cell.sx}, ${loc.cell.sy}) に落ちた`
+        : `Invade を通らない出撃のため、大破した ${wear.instanceId} の回路（${list}）は失われた`,
+    );
+  }
+  return lines;
+}
+
+export function wreckCircuitResultHtml(world: World): string {
+  const lines = wreckCircuitResultLines(world);
+  if (lines.length === 0) return "";
+  return `<ul class="wreck-circuits" id="result-wreck-circuits">${lines.map((l) => `<li>${escapeResultText(l)}</li>`).join("")}</ul>`;
 }
 
 export function hubWearHandoffUrl(world: World): string | null {
