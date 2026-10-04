@@ -281,6 +281,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 | `wreckedMechInstanceIds` | `id,id` | 載せる（帰還後の耐久が 0 以下の機体） | 大破で `fleet` に残す |
 | `lostMechs` | JSON 配列（`LostMechReturnState`。任意の `frontSeed`・`cell`・`lostAt`・`lostSortieId`・写しも、値があるものだけ載る） | **Invade を通った出撃だけ**載せる（回収の 2 本目の PR）: 離昇時の置き去りの僚機（`instanceId` と受け取ったバッテリーがあるもの。回路 ID は出撃時に受け取った `mechCircuits` の全 ID）と、再出現したが回収しなかった機体（HubSave の行の値のまま）。どちらも `frontSeed`＋`cell` を付ける。`lostAt`・`lostSortieId`・写しは shared が付ける | `fleet` から外して `lostMechs` に記録（場所があれば時刻・写しも）。既にある行は同じ行を更新 |
 | `recoveredLostMechInstanceIds` | `id,id` | 載せる（回収の 2 本目の PR。離昇時に搭乗円の内側にいた再出現機） | `lostMechs` から外して `fleet` に戻す（`recoverLostMechs`） |
+| `recoveredDropIds` | `id,id` | 載せる（F の回収。離昇時に搭乗円の内側にいた落とし物の回路） | `fieldDrops` から外して `circuits` に `equippedTo: null` で戻す（`recoverFieldDrops`。既に持っている `circuitId` は場に残す） |
 | `abandonedMechInstanceIds` | `id,id` | 載せる（回収の 2 本目の PR。**Invade を通らない出撃**で離昇時に置き去りにした僚機） | 機体と装着していた回路を失う（`lostMechs` に残さない、倉庫に戻さない。§12.5） |
 | `frontSeed` | 非負整数 | **Invade を通った出撃だけ**載せる（`dropCell` と両方あるときだけ） | 背負えなかった大破機の回路を、この盤の `fieldDrops` にする |
 | `dropCell` | `sx,sy`（整数。絶対値 32 以下） | 同じ。片方だけでは載せない。読んだときも片方が欠けていれば無視する | 出撃マス |
@@ -289,9 +290,9 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 | `inventoryDrops` | JSON 配列（`FieldInventoryDrop`） | 載せない（今の Explore には表せる一般インベントリの落とし物がない。#199 の PR 本文） | `inventoryFieldDrops` に追加 |
 | `recoveredInventoryDropIds` | `id,id` | 載せない | `inventoryFieldDrops` から回収 |
 
-- trade の帰還の反映（と Explore の直接保存。どちらも `applyExploreReturnToHub`）は、帰還に `frontSeed` と `cell`（`dropCell`）が両方あるとき、背負えなかった大破機の装着回路をそのマスの `fieldDrops` にする（下）。片方でも欠ける出撃では、その回路は落とし物にも倉庫にもならず失う（U7）。`recoveredDropIds`・`acquiredCircuits` はまだ空（Explore での拾得は未実装）。`lostMechInstanceIds` は帰還の `abandonedMechInstanceIds`。
+- trade の帰還の反映（と Explore の直接保存。どちらも `applyExploreReturnToHub`）は、帰還に `frontSeed` と `cell`（`dropCell`）が両方あるとき、背負えなかった大破機の装着回路をそのマスの `fieldDrops` にする（下）。片方でも欠ける出撃では、その回路は落とし物にも倉庫にもならず失う（U7）。帰還の `recoveredDropIds` は `recoverFieldDrops` で倉庫（`equippedTo: null`）に戻す。既に持っている `circuitId` は場に残す。`acquiredCircuits` はまだ空。`lostMechInstanceIds` は帰還の `abandonedMechInstanceIds`。
 - **背負えなかった大破機の回路**: `wreckedMechInstanceIds` のうち `lostMechs` に入っていない機体の装着回路。背負って帰る処理は未実装なので、置き去りでない大破はすべてこれにあたる。`cause` は `wreck_not_carried`。機体そのものは `destroyed`・耐久 0 で `fleet` に残す（#199）。同時に置き去り（`lostMechs`）なら、回路は落とさずその機体に付いたまま。結果画面は、マスがあれば「前線マス (x, y) に落ちた」、なければ「失われた」と出す。
-- `HANDOFF_QUERY_KEYS.exploreToHubWear` は `returnKind`・`mechWear`・`mechCurrentAmmo`・`recoveredLostMechInstanceIds`（回収の 1 本目の PR で追加）・`abandonedMechInstanceIds`（2 本目で追加）・`frontSeed`・`dropCell`。trade が取り込んだ後に URL から消すのはこれら（と他の受け渡しのキー）なので、`sortieId` などは URL に残る（`returnKind`・`mechWear` が消えるので再読み込みで再反映はされない）。`tradeToExplore` にも `mechBattery` は入っていない。
+- `HANDOFF_QUERY_KEYS.exploreToHubWear` は `returnKind`・`mechWear`・`mechCurrentAmmo`・`recoveredLostMechInstanceIds`（回収の 1 本目の PR で追加）・`abandonedMechInstanceIds`（2 本目で追加）・`recoveredDropIds`（F の回収で追加）・`frontSeed`・`dropCell`。trade が取り込んだ後に URL から消すのはこれら（と他の受け渡しのキー）なので、`sortieId` などは URL に残る（`returnKind`・`mechWear` が消えるので再読み込みで再反映はされない）。`tradeToExplore` にも `mechBattery` は入っていない。
 - **直接保存（U9、設計 §5.4・§9 U9）**: Explore は結果画面を最初に描くとき（どの結果ボタンを押すより前）に、この帰還と同じ内容を HubSave に書く（`explore/src/game/hubDirectSave.ts`）。「Sort へ」「再出撃」「格納庫へ」のどれを選んでも、大破・置き去り（`lostMechs`）・摩耗・携行弾・バッテリーは 1 回だけ記録される。HubSave がない（ローカル開発で explore :5173 と trade :5175 の `localStorage` が別、または Explore を直接開いた）ときは書かず、「格納庫へ」の帰還 URL で trade が反映する。
 - trade は帰還 URL を開いたとき、Explore が保存済みの帰還（`sortieId` が `appliedSortieIds` にある）なら再適用せず「探索帰還 … · 反映済み（Explore が出撃終了時に保存）」と出す。帰還 URL だけの場合（旧来・ローカル開発）は 1 回だけ反映する。
 - **再出撃（2026-10-03 参謀の決定・案 A）**: 結果画面の「再出撃」は、直接保存した HubSave から部隊を組み直す（`explore/src/game/resortie.ts`）。出撃機は「前回の出撃機のうちまだ出撃できる機体」（`canDeploy`。置き去りの機体は `fleet` にいない、大破は `destroyed`）で、保存した携行弾・耐久・バッテリーを使う。回路と回路ボーナス・Invade のセクターは前回の出撃 URL から引き継ぐ（前回の出撃にいなかった機体＝回収したばかりの機体や新しく選んだ機体の回路は HubSave の装着から載せる。回収の 2 本目の PR）。出撃できる機体がいなければ再出撃せず結果画面に注記を出す。HubSave にこの帰還がないとき（保存できなかった）は、前回の出撃 URL の機体に同じ帰還をメモリ上で当てて組み直す。**項目15（2026-10-03）以降、HubSave から組み直すときの出撃機は格納庫の選択**（`sortieSelection` を `resolveSortieSelection` で解決した機体。§12.5）で、格納庫に表示される選択と同じになる（`resortiePlan`）。置き去り（`fleet` にいない）・大破・要修理の機体は除き、選んだ機体がどれも出撃できなければ先頭から出撃できる 3 機。trade の出撃リンクは押したときに出撃した機体を `sortieSelection` に保存するので、通常は「前回の出撃機のうちまだ出撃できる機体」と一致する。HubSave にこの帰還がないときは従来どおり前回の出撃 URL の機体。
@@ -303,6 +304,11 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
   - **回収**: 離昇時（隊長が搭乗している＝離昇が成立したとき）に、再出現機のうち搭乗円の内側にいるものを回収する（`World.recoveredLostMechIds` → 帰還の `recoveredLostMechInstanceIds`）。撤退・全滅では回収しない。回収した機体は HubSave の行の写し・携行弾・バッテリー・回路のまま `fleet` に戻る（§12.5）。
   - **回収しなかった再出現機**: 出撃が終わったとき（離昇・撤退・全滅とも）に、その行を帰還の `lostMechs` に同じ場所で載せ直す。shared が同じ `instanceId` の行を `lostAt`・`lostSortieId` 付きで更新するので、行は増えない。
   - **置き去り**: Invade を通った出撃では帰還の `lostMechs`（場所付き）、通らない出撃では `abandonedMechInstanceIds`。結果画面にどちらになったか（「前線マス (x, y) に残る」／「回路ごと失われる」）と、再出現機を回収したかを出す。
+- **Explore での落とし物の再出現・回収（F の回収。`explore/src/game/circuitDrops.ts`・`outcome.ts`）**:
+  - **再出現**: 出撃開始時に、HubSave の `fieldDrops` のうち今の出撃マス（`frontSeed` と `cell`）のものを降下地点の近傍（半径 55 の円周上）に出す（`World.strandedDrops`）。別マスの落とし物は出さない。URL キーは足さず HubSave を読む（U19）。
+  - **回収**: 離昇時（隊長搭乗）に、搭乗円の内側にある落とし物を回収（`World.recoveredDropIds` → 帰還の `recoveredDropIds`）。
+  - **反映**: 直接保存と帰還 URL の両方で `applyExploreReturnToHub` が `recoverFieldDrops` を実行し、回収した回路を `circuits` に `equippedTo: null`（倉庫）で戻す。既に同じ `circuitId` を持っている場合は場に残り、倉庫には戻らない。
+  - **結果画面**: 倉庫へ戻した回路だけを出す（既に持っていて場に残ったものは出さない）。
 - **出撃 URL（項目15）**: trade の出撃 URL（`deployedInstanceIds`・`mechDurability` など）には選んだ出撃機（最大 3 機）だけを載せる。摩耗・携行弾・バッテリーの書き戻しも、帰還に載った機体（＝出撃した機体）だけに当たる。
 
 ### 12.7 explore での使い方（#203・#206・携行弾の修正・U9）

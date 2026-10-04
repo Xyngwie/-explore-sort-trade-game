@@ -218,6 +218,8 @@ export type ExploreToHubWearPayload = {
   sortieId?: string;
   inventoryDrops?: FieldInventoryDrop[];
   recoveredInventoryDropIds?: string[];
+  /** Dropped circuits recovered at lift-off (CIRCUIT_DATA_MODEL_V0 §5.1, U18/U19). */
+  recoveredDropIds?: string[];
   wreckedMechInstanceIds?: string[];
   /** Mechs left behind at Explore lift-off; not wrecks / field drops. */
   lostMechs?: LostMechReturnState[];
@@ -837,6 +839,8 @@ export function buildExploreToHubWearUrl(
   if (inventoryDrops) u.searchParams.set("inventoryDrops", inventoryDrops);
   const recovered = encodeDropIds(payload.recoveredInventoryDropIds);
   if (recovered) u.searchParams.set("recoveredInventoryDropIds", recovered);
+  const recoveredDrops = encodeDropIds(payload.recoveredDropIds);
+  if (recoveredDrops) u.searchParams.set("recoveredDropIds", recoveredDrops);
   const wrecked = encodeInstanceIdsCompact(payload.wreckedMechInstanceIds);
   if (wrecked) u.searchParams.set("wreckedMechInstanceIds", wrecked);
   const lostMechs = encodeLostMechs(payload.lostMechs);
@@ -876,6 +880,9 @@ export function parseExploreToHubWearSearch(
       : {}),
     inventoryDrops: parseInventoryDrops(p.get("inventoryDrops")),
     recoveredInventoryDropIds: parseInstanceIds(p.get("recoveredInventoryDropIds")),
+    ...(parseInstanceIds(p.get("recoveredDropIds")).length > 0
+      ? { recoveredDropIds: parseInstanceIds(p.get("recoveredDropIds")) }
+      : {}),
     wreckedMechInstanceIds: parseInstanceIds(p.get("wreckedMechInstanceIds")),
     ...(parseLostMechs(p.get("lostMechs")).length > 0
       ? { lostMechs: parseLostMechs(p.get("lostMechs")) }
@@ -917,6 +924,7 @@ export function toExploreToHubWearPayload(
     | "sortieId"
     | "inventoryDrops"
     | "recoveredInventoryDropIds"
+    | "recoveredDropIds"
     | "wreckedMechInstanceIds"
     | "mechCurrentAmmo"
     | "mechBattery"
@@ -943,6 +951,9 @@ export function toExploreToHubWearPayload(
     ...(opts?.inventoryDrops?.length ? { inventoryDrops: opts.inventoryDrops } : {}),
     ...(opts?.recoveredInventoryDropIds?.length
       ? { recoveredInventoryDropIds: opts.recoveredInventoryDropIds }
+      : {}),
+    ...(opts?.recoveredDropIds?.length
+      ? { recoveredDropIds: opts.recoveredDropIds }
       : {}),
     ...(opts?.wreckedMechInstanceIds?.length
       ? { wreckedMechInstanceIds: opts.wreckedMechInstanceIds }

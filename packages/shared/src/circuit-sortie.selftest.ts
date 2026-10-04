@@ -623,5 +623,66 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   assert.equal(oneSided.cell, undefined);
 }
 
+// (N) recoveredDropIds round-trip and applyExploreReturnToHub recovery.
+{
+  const c1 = mkCircuit("c-rec-1", null);
+  const cDup = mkCircuit("c-dup", null);
+  const h = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    fleet: [createOwnedMech("mech_gen1", { instanceId: "m1" })],
+    circuits: [cDup],
+    fieldDrops: [
+      {
+        dropId: "drop-1",
+        frontSeed: 100,
+        cell: { sx: 1, sy: 1 },
+        circuit: c1,
+        cause: "wreck_not_carried",
+        droppedAt: "2026-10-04T00:00:00.000Z",
+      },
+      {
+        dropId: "drop-dup",
+        frontSeed: 100,
+        cell: { sx: 1, sy: 1 },
+        circuit: { ...cDup, customName: "重複回路" },
+        cause: "wreck_not_carried",
+        droppedAt: "2026-10-04T00:00:00.000Z",
+      },
+    ],
+  });
+
+  const url = buildExploreToHubWearUrl({
+    returnKind: "extract",
+    mechWear: [{ instanceId: "m1", durabilityAfter: 100 }],
+    sortieId: "s-rec-drop",
+    recoveredDropIds: ["drop-1", "drop-dup"],
+    frontSeed: 100,
+    cell: { sx: 1, sy: 1 },
+  }, "https://estg.invalid/trade/");
+
+  const parsed = new URL(url);
+  assert.equal(parsed.searchParams.get("recoveredDropIds"), "drop-1,drop-dup");
+  const payload = parseExploreToHubWearSearch(parsed.search)!;
+  assert.deepEqual(payload.recoveredDropIds, ["drop-1", "drop-dup"]);
+
+  const res = applyExploreReturnToHub(h, payload);
+  assert.equal(res.applied, true);
+  assert.deepEqual(res.recoveredCircuitIds, ["c-rec-1"]);
+  const applied = normalizeHubSnapshot(res.hub);
+
+  // c-rec-1 is back in stash (equippedTo null); c-dup is NOT recovered because circuitId already exists
+  assert.equal(applied.circuits.length, 2);
+  const back = applied.circuits.find((c) => c.circuitId === "c-rec-1")!;
+  assert.ok(back);
+  assert.equal(back.equippedTo, null);
+  // drop-dup stayed on the field; drop-1 was removed
+  assert.equal(applied.fieldDrops.length, 1);
+  assert.equal(applied.fieldDrops[0]!.dropId, "drop-dup");
+
+  // Idempotency: same sortieId applied again does nothing
+  const dup = applyExploreReturnToHub(applied, payload);
+  assert.equal(dup.applied, false);
+}
+
 console.log("shared lostMechs recovery selftest: ok");
 console.log("shared circuit sortie selftest: ok");

@@ -79,6 +79,7 @@ import {
   returnKindFromWorld,
   exploreReturnPayload,
   wreckCircuitResultHtml,
+  recoveredCircuitResultHtml,
 } from "./game/outcome";
 import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
 import { resortiePlan, resortieSearch } from "./game/resortie";
@@ -600,6 +601,7 @@ function renderDom(): void {
         }</p>
         ${leftBehindResultHtml(world)}
         ${wreckCircuitResultHtml(world)}
+        ${recoveredCircuitResultHtml(world)}
         <table>
           <tr><td>returnKind</td><td>${returnKindFromWorld(world)}</td></tr>
           <tr><td>isExtracted</td><td>${String(result.isExtracted)}</td></tr>

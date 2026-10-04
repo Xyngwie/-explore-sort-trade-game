@@ -65,6 +65,7 @@ import {
 import { getCoverObjects } from "./game/coverObjects";
 import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
 import { attachLostMechContext, recoverStrandedAtLiftOff, sortieLocationFor, strandedMechsFor, STRANDED_RING_RADIUS } from "./game/lostMechs";
+import { recoverStrandedDropsAtLiftOff, recoveredCircuitResultHtml, recoveredCircuitResultLines, strandedDropsFor, STRANDED_DROP_RING_RADIUS } from "./game/circuitDrops";
 import { invadeSquadSearch } from "./game/invadeSquad";
 import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, sortHandoffUrl, toExploreResult, wreckCircuitResultHtml, wreckCircuitResultLines } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
@@ -2928,4 +2929,127 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const away = shared.parseTradeToExploreSearch(invadeSquadSearch(link, lost.hub)!);
   assert.equal(away?.circuitBonuses, undefined, "mech left behind → no circuit bonuses from its circuit");
   console.log("explore invade sortie bonuses exclude lost-mech circuits ok");
+}
+
+// circuit field drops recovery PR: fieldDrops on this front cell appear near drop zone
+// and are recovered inside the boarding circle at lift-off, returning to the stash.
+{
+  const mkMech = (instanceId: string) => shared.createOwnedMech("mech_gen1", { instanceId, durability: 100, currentAmmo: 10 });
+  const mkCircuit = (circuitId: string): shared.HubCircuitRecord => ({
+    circuitId,
+    circuitBoard: { ...shared.createEmptyCircuitBoard(4, 4, circuitId), outcome: "fully_awakened" } as never,
+    restoreState: "fully_awakened",
+    outcome: "fully_awakened",
+    origin: "crafted",
+    locked: true,
+  });
+
+  const cField1 = mkCircuit("c_field_1");
+  const cField2 = mkCircuit("c_field_2");
+  const cOtherCell = mkCircuit("c_other_cell");
+  const cDup = mkCircuit("c_already_owned");
+
+  let hub = shared.normalizeHubSnapshot({
+    ...shared.INITIAL_HUB,
+    fleet: [mkMech("m1"), mkMech("m2")],
+    circuits: [cDup],
+    frontProgress: { seed: 555, cols: 8, rows: 8, cleared: [], mined: [] },
+    fieldDrops: [
+      {
+        dropId: "drop_f1",
+        frontSeed: 555,
+        cell: { sx: 2, sy: 3 },
+        circuit: cField1,
+        cause: "wreck_not_carried",
+        droppedAt: "2026-10-04T00:00:00.000Z",
+      },
+      {
+        dropId: "drop_dup",
+        frontSeed: 555,
+        cell: { sx: 2, sy: 3 },
+        circuit: { ...cDup, customName: "重複" },
+        cause: "wreck_not_carried",
+        droppedAt: "2026-10-04T00:00:00.000Z",
+      },
+      {
+        dropId: "drop_other",
+        frontSeed: 555,
+        cell: { sx: 0, sy: 0 },
+        circuit: cOtherCell,
+        cause: "wreck_not_carried",
+        droppedAt: "2026-10-04T00:00:00.000Z",
+      },
+    ],
+  });
+
+  // (1) Filtered to this front cell only; other cells are excluded
+  const loc = { frontSeed: 555, cell: { sx: 2, sy: 3 } };
+  const spawn = { x: 100, y: 100 };
+  const drops = strandedDropsFor(hub, loc, spawn);
+  assert.equal(drops.length, 2, "only 2 drops on cell (2, 3)");
+  assert.deepEqual(drops.map((d) => d.dropId), ["drop_f1", "drop_dup"]);
+  for (const d of drops) {
+    const dFromSpawn = Math.hypot(d.pos.x - spawn.x, d.pos.y - spawn.y);
+    assert.ok(dFromSpawn >= STRANDED_DROP_RING_RADIUS - 1 && dFromSpawn <= STRANDED_DROP_RING_RADIUS + 20, "near spawn");
+  }
+
+  // Without Invade sector (direct sortie): no drops
+  assert.equal(strandedDropsFor(hub, null, spawn).length, 0);
+
+  // (2) World creation attaches stranded drops and initialOwnedCircuitIds
+  const boot = bootstrapFromSearch("?sectorX=2&sectorY=3&density=0.2&deployedInstanceIds=m1,m2&deployableMechs=2");
+  const w = attachLostMechContext(createWorld(boot), hub);
+  assert.equal(w.strandedDrops?.length, 2);
+  assert.deepEqual(w.recoveredDropIds, []);
+  assert.deepEqual(w.initialOwnedCircuitIds, ["c_already_owned"]);
+
+  // (3) Lift-off: inside boarding circle recovers, but captain must be aboard
+  const boardingInside = { center: { ...w.leader.pos }, radius: 110, requestedAt: 0, cargoArrived: true };
+  // Captain outside circle -> nothing recovered
+  assert.deepEqual(recoverStrandedDropsAtLiftOff(w, boardingInside, false), []);
+  // Captain aboard -> recovered
+  assert.deepEqual(recoverStrandedDropsAtLiftOff(w, boardingInside, true), ["drop_f1", "drop_dup"]);
+  assert.deepEqual(w.recoveredDropIds, ["drop_f1", "drop_dup"]);
+
+  // (4) Return payload includes recoveredDropIds
+  w.phase = "result";
+  w.extracted = true;
+  const payload = exploreReturnPayload(w);
+  assert.ok(payload);
+  assert.deepEqual(payload.recoveredDropIds, ["drop_f1", "drop_dup"]);
+
+  // (5) Result lines: c_field_1 is recovered to stash, c_already_owned is already owned so not returned
+  const lines = recoveredCircuitResultLines(w);
+  assert.deepEqual(lines, ["落とし物の回路 c_field_1 を回収（倉庫へ戻る）"]);
+  const html = recoveredCircuitResultHtml(w);
+  assert.ok(html.includes("result-recovered-circuits"));
+  assert.ok(html.includes("落とし物の回路 c_field_1 を回収（倉庫へ戻る）"));
+  assert.ok(!html.includes("c_already_owned"), "already owned circuit is not shown as recovered");
+
+  // (6) Direct save to Hub: c_field_1 returns to stash (equippedTo null), drop_f1 removed, drop_dup stays
+  const mStore = new Map<string, string>();
+  const storage = {
+    getItem: (k: string) => mStore.get(k) ?? null,
+    setItem: (k: string, v: string) => void mStore.set(k, v),
+    removeItem: (k: string) => void mStore.delete(k),
+  };
+  assert.ok(shared.saveHubSaveToLocalStorage(hub, storage));
+  const saveResult = saveSortieResultToHub(w, storage);
+  assert.equal(saveResult.status, "saved");
+  const savedHub = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(storage)!.hub);
+  assert.equal(savedHub.circuits.length, 2);
+  const recInHub = savedHub.circuits.find((c) => c.circuitId === "c_field_1")!;
+  assert.ok(recInHub);
+  assert.equal(recInHub.equippedTo, null);
+  assert.equal(recInHub.restoreState, "fully_awakened");
+  assert.equal(recInHub.origin, "crafted");
+  assert.equal(recInHub.locked, true);
+
+  // drop_dup stayed on the field; drop_f1 was recovered
+  assert.equal(savedHub.fieldDrops.length, 2);
+  assert.ok(savedHub.fieldDrops.some((d) => d.dropId === "drop_dup"));
+  assert.ok(savedHub.fieldDrops.some((d) => d.dropId === "drop_other"));
+  assert.ok(!savedHub.fieldDrops.some((d) => d.dropId === "drop_f1"));
+
+  console.log("explore field drops reappear / recover ok");
 }

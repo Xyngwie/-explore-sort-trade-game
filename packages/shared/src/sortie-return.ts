@@ -67,6 +67,8 @@ export type ApplyExploreReturnResult = {
   hub: HubSnapshot;
   /** false when `sortieId` was already applied (hub unchanged). */
   applied: boolean;
+  /** Circuit IDs returned to the stash from fieldDrops (recoverFieldDrops). */
+  recoveredCircuitIds?: string[];
 };
 
 /**
@@ -80,6 +82,7 @@ export function applyExploreReturnToHub(
   at = new Date(),
 ): ApplyExploreReturnResult {
   let next = hub;
+  let recoveredCircuitIds: string[] | undefined;
   const abandoned = [...new Set((wear.abandonedMechInstanceIds ?? []).map((id) => id.trim()).filter(Boolean))];
   if (wear.sortieId) {
     const report = applySortieReport(
@@ -92,7 +95,7 @@ export function applyExploreReturnToHub(
         // circuits are lost too (lostForever), never moved to the stash.
         lostMechInstanceIds: abandoned,
         lostCause: Object.fromEntries(abandoned.map((id) => [id, "left_behind" as const])),
-        recoveredDropIds: [],
+        recoveredDropIds: wear.recoveredDropIds ?? [],
         acquiredCircuits: [],
         inventoryDrops: wear.inventoryDrops ?? [],
         recoveredInventoryDropIds: wear.recoveredInventoryDropIds ?? [],
@@ -103,6 +106,7 @@ export function applyExploreReturnToHub(
       at,
     );
     if (!report.applied) return { hub, applied: false };
+    recoveredCircuitIds = report.recovered;
     next = withLostMechWear(report.hub, wear);
   }
   return {
@@ -114,5 +118,6 @@ export function applyExploreReturnToHub(
       ),
     },
     applied: true,
+    ...(recoveredCircuitIds != null ? { recoveredCircuitIds } : {}),
   };
 }

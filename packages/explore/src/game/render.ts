@@ -231,6 +231,20 @@ export function renderWorld(
     ctx.fillText(`${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
   }
 
+  // Dropped circuits waiting on this front cell (circuitDrops.ts): recovered at
+  // lift-off when inside the boarding circle; hidden once recovered.
+  const recoveredDrops = new Set(world.recoveredDropIds ?? []);
+  for (const d of world.strandedDrops ?? []) {
+    if (recoveredDrops.has(d.dropId)) continue;
+    ctx.fillStyle = "#e2b842";
+    ctx.fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
+    ctx.strokeStyle = "#ffeaa7";
+    ctx.strokeRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
+    ctx.fillStyle = "#ffeaa7";
+    ctx.font = "11px sans-serif";
+    ctx.fillText(`落とし物 回路 ${d.circuitId}`, tx(d.pos.x) - 30, ty(d.pos.y) - 10);
+  }
+
   // Wingmen
   for (const w of world.wingmen) {
     if (!w.alive) continue;

@@ -220,6 +220,7 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
       lostMechs: lostMechsFromWorld(world),
       abandonedMechInstanceIds: abandonedFromWorld(world),
       recoveredLostMechInstanceIds: [...(world.recoveredLostMechIds ?? [])],
+      recoveredDropIds: [...(world.recoveredDropIds ?? [])],
       ...(loc
         ? { frontSeed: loc.frontSeed, cell: { sx: loc.cell.sx, sy: loc.cell.sy } }
         : {}),
@@ -276,3 +277,8 @@ export function hubWearHandoffUrl(world: World): string | null {
   if (!payload) return null;
   return buildExploreToHubWearUrl(payload, resolveModuleBaseUrl("trade"));
 }
+
+export {
+  recoveredCircuitResultLines,
+  recoveredCircuitResultHtml,
+} from "./circuitDrops";
