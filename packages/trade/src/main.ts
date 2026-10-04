@@ -422,7 +422,7 @@ function nextSortiePanel(s: HangarState): string {
             ? `<p class="muted sortie-line effect-breakdown">${escapeHtml(activeBreakdown)}</p>`
             : ""
         }
-        <p class="muted sortie-line">回路ボーナス: ${escapeHtml(bonuses)}</p>
+        <p class="muted sortie-line">回路ボーナス（装着中）: ${escapeHtml(bonuses)}</p>
       </div>
       <div class="sortie-grid">
         <div>

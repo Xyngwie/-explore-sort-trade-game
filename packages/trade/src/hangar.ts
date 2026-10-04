@@ -976,7 +976,12 @@ export function selectAllDeployable(state: HangarState): HangarState {
  * separate and still counts every circuit.
  */
 export function hubCircuitBonuses(hub: HubSnapshot): AggregatedCircuitBonuses {
-  return aggregateCircuitBonuses(hubVisibleCircuits(hub));
+  // U5: only circuits equipped on a mech the HUB still holds. Stash circuits
+  // do not count. Circuits on a left-behind mech are already hidden by
+  // hubVisibleCircuits (they count again once that mech is recovered).
+  return aggregateCircuitBonuses(
+    hubVisibleCircuits(hub).filter((c) => c.equippedTo != null),
+  );
 }
 
 /** Sortie panel line under the sortie mech list; null when no mech is left behind (hidden). */

@@ -24,6 +24,7 @@ import {
   resolveSizedTruePuzzle,
   encodeEdgeState,
   upsertCircuitIntoHub,
+  equipCircuit,
   addMechToHub,
   saveHubSaveToLocalStorage,
   HUB_LIMITS,
@@ -481,6 +482,13 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
       }),
     ).search,
   ).state;
+  const stashed = hubCircuitBonuses(hs.hub);
+  assert.equal(stashed.durabilityBuffer, 0, "stash circuit does not count (U5)");
+  assert.equal(stashed.repairDiscount, 0);
+  const mechId = hs.hub.fleet.find((m) => m.status === "operational")!.instanceId;
+  const eq = equipCircuit(hs.hub, "bonus_awake", mechId);
+  assert.equal(eq.ok, true, eq.reason ?? "equip");
+  hs = { ...hs, hub: eq.hub };
   const bonuses = hubCircuitBonuses(hs.hub);
   assert.equal(bonuses.durabilityBuffer, 10);
   assert.ok(Math.abs(bonuses.repairDiscount - 0.2) < 1e-9);
@@ -1658,8 +1666,10 @@ console.log("trade hangar selftest: ok");
   hs = createInitialHangar(store);
   assert.equal(hs.hub.circuits.find((c) => c.circuitId === "lb_awake")?.equippedTo, wingId, "still in HubSave on the lost mech");
   const lost = hubCircuitBonuses(hs.hub);
-  const visibleOnly = shared.aggregateCircuitBonuses(shared.hubVisibleCircuits(hs.hub));
-  assert.deepEqual(lost, visibleOnly, "bonuses = visible circuits only");
+  const equippedOnly = shared.aggregateCircuitBonuses(
+    shared.hubVisibleCircuits(hs.hub).filter((c) => c.equippedTo != null),
+  );
+  assert.deepEqual(lost, equippedOnly, "bonuses = equipped circuits only (U5)");
   assert.equal(lost.durabilityBuffer, before.durabilityBuffer - 10, "durability buffer drops by the lost circuit");
   assert.ok(lost.repairDiscount < before.repairDiscount, "repair discount drops");
   assert.ok(lost.craftMultiplier <= before.craftMultiplier, "craft multiplier never rises");

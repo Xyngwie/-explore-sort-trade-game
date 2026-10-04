@@ -35,8 +35,11 @@ export function invadeSquadSearch(search: string, hub: HubSnapshot | null): stri
   if ((payload.deployedInstanceIds ?? []).length === 0) return null;
   const mechCircuits = buildMechCircuitsForDeploy(hub, payload.deployedInstanceIds ?? []);
   if (Object.keys(mechCircuits).length > 0) payload.mechCircuits = mechCircuits;
-  // circuits on a left-behind mech do not count (same as trade's hubCircuitBonuses)
-  const bonuses = aggregateCircuitBonuses(hubVisibleCircuits(hub));
+  // U5, same as trade's hubCircuitBonuses: equipped circuits only.
+  // Stash circuits do not count. Lost-mech circuits are already hidden.
+  const bonuses = aggregateCircuitBonuses(
+    hubVisibleCircuits(hub).filter((c) => c.equippedTo != null),
+  );
   if (bonuses.durabilityBuffer > 0 || bonuses.craftMultiplier > 1 || bonuses.repairDiscount > 0) {
     payload.circuitBonuses = {
       craftMultiplier: bonuses.craftMultiplier,
