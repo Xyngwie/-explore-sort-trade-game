@@ -9,6 +9,7 @@ import {
   type YieldItemId,
   HUB_LIMITS,
   hubVisibleCircuits,
+  bindEditorNameInput,
 } from "@estg/shared";
 import {
   EXAMPLE_TYPED_REPAIR_COST,
@@ -466,7 +467,20 @@ function nextSortiePanel(s: HangarState): string {
     </div>`;
 }
 
+let signatureComposing = false;
+let renderDeferred = false;
+
 function render() {
+  if (signatureComposing) {
+    renderDeferred = true;
+    return;
+  }
+  const sigBefore = document.getElementById("input-signature") as HTMLInputElement | null;
+  const keepSigFocus =
+    sigBefore != null && document.activeElement === sigBefore && !sigBefore.disabled;
+  const sigCaret = keepSigFocus ? sigBefore.selectionStart : null;
+  const sigDraft = keepSigFocus ? sigBefore.value : null;
+  renderDeferred = false;
   const ready = buildNextSortieReadiness(state);
   const typedCost = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
   const typedCostText = Object.entries(typedCost)
@@ -546,9 +560,9 @@ function render() {
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">署名（刻印）</h2>
       <div class="row" style="align-items:center;margin-top:0.35rem">
-        <input type="text" id="input-signature" maxlength="32" placeholder="署名" value="${escapeHtml(state.craftSignature)}" ${
+        <input type="text" id="input-signature" placeholder="署名" value="${escapeHtml(sigDraft ?? state.craftSignature)}" ${
           isCraftSignatureLocked() ? "disabled" : ""
-        } class="sig-input" />
+        } class="sig-input" autocomplete="off" enterkeyhint="done" />
         <button type="button" id="btn-signature" ${
           isCraftSignatureLocked() ? "disabled" : ""
         }>確定</button>
@@ -585,6 +599,39 @@ function render() {
     state = setCraftSignature(state, input?.value ?? "");
     render();
   });
+  const signatureInput = document.getElementById("input-signature") as HTMLInputElement | null;
+  if (signatureInput && !signatureInput.disabled) {
+    bindEditorNameInput(signatureInput, () => {
+      /* Confirm reads the field. Draft stays in the input until then. */
+    });
+    signatureInput.addEventListener("compositionstart", () => {
+      signatureComposing = true;
+    });
+    signatureInput.addEventListener("compositionend", () => {
+      signatureComposing = false;
+    });
+    signatureInput.addEventListener("blur", () => {
+      signatureComposing = false;
+      // Wait past the click that caused the blur. Rendering inside blur
+      // removes the button before its click runs.
+      if (!renderDeferred) return;
+      setTimeout(() => {
+        if (!signatureComposing && renderDeferred && document.activeElement !== signatureInput) {
+          render();
+        }
+      }, 400);
+    });
+    if (keepSigFocus) {
+      signatureInput.focus();
+      if (sigCaret != null) {
+        try {
+          signatureInput.setSelectionRange(sigCaret, sigCaret);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
   document.getElementById("btn-seed")?.addEventListener("click", () => {
     const injectRate = resolveHangarPerfectInjectRate({
       search: window.location.search,

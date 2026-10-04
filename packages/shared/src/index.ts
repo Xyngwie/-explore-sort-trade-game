@@ -9,6 +9,7 @@ export * from "./sort-yield";
 export * from "./sort-resources";
 export * from "./sector-density";
 export * from "./circuit-board";
+export * from "./editor-name-input";
 export * from "./circuit-bonuses";
 export * from "./perfect-circuit-seed";
 export * from "./perfect-circuit-sized";
