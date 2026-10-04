@@ -14,6 +14,9 @@ import { loadOrCreateFrontSession, persistFrontSession, regenerateFrontSession }
 import {
   FRONT_START_CELL,
   clampToFront,
+  fieldDropSortieLineJa,
+  fieldDropTitleJa,
+  fieldDropsByCell,
   lostMechSortieLineJa,
   lostMechTitleJa,
   lostMechsByCell,
@@ -87,6 +90,54 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
   assert.equal(lostMechTitleJa(["m2"]), "置き去り機 m2");
   assert.equal(lostMechTitleJa(["m2", "m3"]), "置き去り機 2 機: m2, m3");
   assert.equal(lostMechSortieLineJa(2), "置き去り機 2 機：出撃して離陸すれば回収");
+
+  // field drops marks
+  const dropMarks = fieldDropsByCell(res.hub, 10);
+  assert.deepEqual(dropMarks.get("4,4"), ["c1"]);
+  assert.equal(fieldDropsByCell(res.hub, 11).size, 0, "other seed → no drop marks");
+  // multiple field drops on same cell
+  const hubMultiDrop = normalizeHubSnapshot({
+    ...res.hub,
+    fieldDrops: [
+      ...res.hub.fieldDrops,
+      {
+        dropId: "drop_b",
+        frontSeed: 10,
+        cell: { sx: 4, sy: 4 },
+        cause: "wreck_not_carried",
+        droppedAt: "2026-10-03T00:00:00.000Z",
+        circuit: {
+          circuitId: "c2",
+          circuitBoard: { v: 1, cols: 2, rows: 2, edgeState: "" },
+          outcome: "offline",
+          restoreState: "offline",
+          equippedTo: null,
+        },
+      } as never,
+    ],
+  });
+  assert.deepEqual(fieldDropsByCell(hubMultiDrop, 10).get("4,4"), ["c1", "c2"]);
+  // field drop tooltip / bar text
+  assert.equal(fieldDropTitleJa([]), "");
+  assert.equal(fieldDropTitleJa(["c1"]), "落とし物 c1");
+  assert.equal(fieldDropTitleJa(["c1", "c2"]), "落とし物 2: c1, c2");
+  assert.equal(fieldDropTitleJa(["c1", "c2", "c3"]), "落とし物 3: c1, c2, c3");
+  assert.equal(fieldDropSortieLineJa(1), "落とし物 1：出撃して離陸すれば回収");
+  assert.equal(fieldDropSortieLineJa(2), "落とし物 2：出撃して離陸すれば回収");
+  assert.equal(fieldDropSortieLineJa(3), "落とし物 3：出撃して離陸すれば回収");
+
+  // null / empty / fallback handling
+  assert.equal(fieldDropsByCell(null, 10).size, 0);
+  assert.equal(fieldDropsByCell(res.hub, null).size, 0);
+  assert.equal(fieldDropsByCell(res.hub, NaN).size, 0);
+  const fallbackDrop = {
+    fieldDrops: [{
+      dropId: "fallback_id",
+      frontSeed: 10,
+      cell: { sx: 2, sy: 2 },
+    } as never],
+  };
+  assert.deepEqual(fieldDropsByCell(fallbackDrop, 10).get("2,2"), ["fallback_id"]);
 }
 
 // inventoryFieldDrops: same rule as lostMechs / fieldDrops (same coordinates, clamped; this board kept)
@@ -120,6 +171,20 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
     ...load(st),
     fleet: [mech],
     lostMechs: [row("legacy"), row("placed", { frontSeed: seed1, cell: { sx: 1, sy: 1 } })],
+    fieldDrops: [{
+      dropId: "drop_coexist",
+      frontSeed: seed1,
+      cell: { sx: 1, sy: 1 },
+      cause: "wreck_not_carried",
+      droppedAt: "2026-10-03T00:00:00.000Z",
+      circuit: {
+        circuitId: "c_placed",
+        circuitBoard: { v: 1, cols: 2, rows: 2, edgeState: "" },
+        outcome: "offline",
+        restoreState: "offline",
+        equippedTo: null,
+      },
+    }],
   });
   assert.ok(saveHubSaveToLocalStorage(hub0, st));
   const s1 = loadOrCreateFrontSession(st);
@@ -127,6 +192,7 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
   assert.deepEqual(s1.placement.placed, ["legacy"]);
   assert.deepEqual(s1.lostByCell.get("0,0"), ["legacy"]);
   assert.deepEqual(s1.lostByCell.get("1,1"), ["placed"]);
+  assert.deepEqual(s1.dropsByCell.get("1,1"), ["c_placed"], "fieldDrops on same cell as lostMech");
   const saved1 = load(st);
   assert.deepEqual(saved1.lostMechs.find((m) => m.instanceId === "legacy")!.cell, FRONT_START_CELL, "written back to HubSave");
   assert.equal(saved1.lostMechs.find((m) => m.instanceId === "legacy")!.frontSeed, seed1);
@@ -150,6 +216,7 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
   assert.deepEqual(s2.placement.moved.sort(), ["legacy", "placed"]);
   assert.deepEqual(s2.lostByCell.get("0,0"), ["legacy"]);
   assert.deepEqual(s2.lostByCell.get("1,1"), ["placed"]);
+  assert.deepEqual(s2.dropsByCell.get("1,1"), ["c_placed"], "fieldDrops on same cell preserved after regen");
   const saved2 = load(st);
   assert.ok(saved2.lostMechs.every((m) => m.frontSeed === seed2), "frontSeed rewritten to the new board");
   assert.equal(saved2.frontProgress?.seed, seed2);

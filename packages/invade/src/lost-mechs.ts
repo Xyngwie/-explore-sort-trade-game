@@ -131,3 +131,36 @@ export function lostMechTitleJa(ids: readonly string[]): string {
 export function lostMechSortieLineJa(count: number): string {
   return `置き去り機 ${count} 機：出撃して離陸すれば回収`;
 }
+
+/** Circuit IDs of circuit field drops per cell ("sx,sy") on the board with `seed`. */
+export function fieldDropsByCell(
+  hub: Pick<HubSnapshot, "fieldDrops"> | null,
+  seed: number | null | undefined,
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  if (!hub || seed == null || !Number.isFinite(seed)) return out;
+  const s = seed >>> 0;
+  for (const row of hub.fieldDrops ?? []) {
+    if (row.frontSeed !== s || row.cell == null) continue;
+    const key = cellKey(row.cell.sx, row.cell.sy);
+    const list = out.get(key) ?? [];
+    const cid = row.circuit?.circuitId ?? row.dropId;
+    list.push(cid);
+    out.set(key, list);
+  }
+  return out;
+}
+
+/** Tooltip addition: the circuit IDs of field drops (and the count when more than one). */
+export function fieldDropTitleJa(circuitIds: readonly string[]): string {
+  if (circuitIds.length === 0) return "";
+  return circuitIds.length === 1
+    ? `落とし物 ${circuitIds[0]}`
+    : `落とし物 ${circuitIds.length}: ${circuitIds.join(", ")}`;
+}
+
+/** Sortie-bar line for a selected cell with circuit field drops (隊長指示「落とし物 N：出撃して離陸すれば回収」). */
+export function fieldDropSortieLineJa(count: number): string {
+  return `落とし物 ${count}：出撃して離陸すれば回収`;
+}
+

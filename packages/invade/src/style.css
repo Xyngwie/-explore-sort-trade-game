@@ -347,3 +347,24 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
 }
 .danger-swatch.lost-mech .chip { background: #21262d; border-color: #2a313c; }
 .danger-swatch.lost-mech .chip::after { top: -2px; right: -2px; width: 7px; height: 7px; }
+
+/* Circuit field drops (HubSave.fieldDrops) on this cell — display only.
+   左上の琥珀色の点（#f59e0b）。置き去り機（右上・灰色）と重なっても両方表示。凡例の見本も同じ見た目。 */
+.cell.field-drop,
+.danger-swatch.field-drop .chip { position: relative; }
+.cell.field-drop::before,
+.danger-swatch.field-drop .chip::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 1px #0d1014;
+  pointer-events: none;
+}
+.danger-swatch.field-drop .chip { background: #21262d; border-color: #2a313c; }
+.danger-swatch.field-drop .chip::before { top: -2px; left: -2px; width: 7px; height: 7px; }
+
