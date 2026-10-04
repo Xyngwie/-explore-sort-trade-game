@@ -602,6 +602,11 @@ import {
   type EdgeMark,
 } from "./circuit-board";
 import {
+  clampEditorNameDraft,
+  editorNameDraftFromClipboard,
+  insertEditorNamePaste,
+} from "./editor-name-input";
+import {
   VERIFY_TRUE_PUZZLE_ID,
   VERIFY_TRUE_CIRCUIT_ID,
   VERIFY_PERFECT_CIRCUIT_ID,
@@ -1217,6 +1222,22 @@ console.log("shared hub-unopened selftest: ok");
 {
   assert.equal(sanitizeEditorName("  職人A  "), "職人A");
   assert.equal(sanitizeEditorName(""), undefined);
+  assert.equal(
+    editorNameDraftFromClipboard("一行目\n二行目\r\n三行目"),
+    "一行目二行目三行目",
+  );
+  assert.equal(editorNameDraftFromClipboard("がぱ|"), "がぱ");
+  {
+    const inserted = insertEditorNamePaste("あい", 1, 1, "う\nえ");
+    assert.equal(inserted.value, "あうえい");
+    assert.equal(inserted.caret, 3);
+  }
+  assert.equal(clampEditorNameDraft(`が${"あ".repeat(40)}`), `が${"あ".repeat(31)}`);
+  assert.equal(clampEditorNameDraft("整備班・葵"), "整備班・葵");
+  assert.equal(
+    insertEditorNamePaste("", 0, 0, `${"あ".repeat(20)}\n${"い".repeat(20)}`).value,
+    `${"あ".repeat(20)}${"い".repeat(12)}`,
+  );
   assert.equal(
     isPerfectCircuitClearance({
       outcome: "fully_awakened",
