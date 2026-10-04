@@ -5,6 +5,7 @@ import type { CoverObject } from "./coverObjects";
 import type { CommandUnlockState } from "./commandUnlock";
 import type { LeftBehindEntry } from "./leftBehind";
 import type { SortieLocation, StrandedMech } from "./lostMechs";
+import type { StrandedCircuitDrop } from "./circuitDrops";
 
 export type Stance = "patrol" | "escort" | "recover" | "raid";
 export const STANCE_LABEL: Record<Stance, string> = { patrol: "哨戒", escort: "帯同", recover: "回収", raid: "遊撃" };
@@ -36,5 +37,11 @@ export type World = { balance: Balance; phase: Phase; timeLeft: number; operatio
   /** HubSave lostMechs left on this front cell, waiting near the drop zone (recovered if inside the boarding circle at lift-off). */
   strandedMechs?: StrandedMech[];
   /** instanceIds of reappeared mechs recovered at lift-off this sortie. */
-  recoveredLostMechIds?: string[]; };
+  recoveredLostMechIds?: string[];
+  /** HubSave fieldDrops left on this front cell, waiting near the drop zone (recovered if inside the boarding circle at lift-off). */
+  strandedDrops?: StrandedCircuitDrop[];
+  /** dropIds of circuit drops recovered at lift-off this sortie. */
+  recoveredDropIds?: string[];
+  /** Owned circuitIds at deploy time (used to filter out circuits already owned from recovered result lines). */
+  initialOwnedCircuitIds?: string[]; };
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };

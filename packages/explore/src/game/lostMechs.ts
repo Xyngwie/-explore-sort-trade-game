@@ -20,6 +20,7 @@ import {
 } from "@estg/shared";
 import { dist, type Vec2 } from "./math";
 import type { BoardingState, InvadeSectorContext, World } from "./types";
+import { strandedDropsFor } from "./circuitDrops";
 
 /** FrontCellCoord bound (shared `normalizeFrontCoord`). */
 const FRONT_COORD_MAX = 32;
@@ -84,12 +85,15 @@ export function strandedMechsFor(
   });
 }
 
-/** Attach the front place and reappeared mechs to a freshly created world. */
+/** Attach the front place, reappeared mechs, and circuit drops to a freshly created world. */
 export function attachLostMechContext(world: World, hub: HubSnapshot | null): World {
   const location = sortieLocationFor(world.invadeSector, hub);
   world.sortieLocation = location;
   world.strandedMechs = strandedMechsFor(hub, location, world.deployedInstanceIds, world.leader.pos);
   world.recoveredLostMechIds = [];
+  world.strandedDrops = strandedDropsFor(hub, location, world.leader.pos);
+  world.recoveredDropIds = [];
+  world.initialOwnedCircuitIds = hub ? hub.circuits.map((c) => c.circuitId) : [];
   return world;
 }
 
