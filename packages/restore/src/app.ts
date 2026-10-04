@@ -7,6 +7,7 @@ import {
   encodeEdgeState,
   isPerfectCircuitDebugContext,
   sanitizeEditorName,
+  bindEditorNameInput,
   type CircuitOutcome,
   type EdgeMark,
 } from "@estg/shared";
@@ -494,7 +495,34 @@ function applyFitZoom(): number {
   return z;
 }
 
+let editorComposing = false;
+let renderDeferred = false;
+
+function syncEditorNameDisplay(): void {
+  const shown = sanitizeEditorName(editorName) ?? "—";
+  root.querySelectorAll<HTMLElement>("[data-editor-name]").forEach((el) => {
+    el.textContent = shown;
+  });
+  const link = root.querySelector<HTMLAnchorElement>("#link-return-trade");
+  if (!link || locked) return;
+  const classified = play();
+  link.href = returnUrl(
+    classified.outcome,
+    classified.perfectClearance,
+    locked || classified.perfectClearance,
+  );
+}
+
 function render(): void {
+  if (editorComposing) {
+    renderDeferred = true;
+    return;
+  }
+  const editorBefore = root.querySelector<HTMLInputElement>("#inp-editor");
+  const keepEditorFocus =
+    editorBefore != null && document.activeElement === editorBefore;
+  const editorCaret = keepEditorFocus ? editorBefore.selectionStart : null;
+  renderDeferred = false;
   const prevView = snapshotView();
   const classified = play();
   const {
@@ -655,7 +683,7 @@ function render(): void {
 
   const editorHtml = !locked
     ? `<label class="editor-field">最終編集者名（刻印スタブ）
-        <input type="text" id="inp-editor" maxlength="32" value="${escapeHtml(editorName)}" placeholder="例: 整備班・葵" />
+        <input type="text" id="inp-editor" value="${escapeHtml(editorName)}" placeholder="例: 整備班・葵" autocomplete="off" enterkeyhint="done" />
       </label>`
     : `<p class="muted">刻印 <span class="engraved">${escapeHtml(displayName)}</span></p>`;
 
@@ -680,7 +708,7 @@ function render(): void {
   const handoffTableHtml = `<p class="muted">restore → trade（HANDOFF_M45 · <span class="mono">buildRestoreToTradeUrl</span>）</p>
       <table>
         <tr><td>circuitOutcome</td><td class="mono">${escapeHtml(status)}</td></tr>
-        <tr><td>lastEditorName</td><td class="engraved">${escapeHtml(sanitizeEditorName(editorName) ?? "—")}</td></tr>
+        <tr><td>lastEditorName</td><td class="engraved" data-editor-name>${escapeHtml(sanitizeEditorName(editorName) ?? "—")}</td></tr>
         <tr><td>return URL</td><td class="mono">${escapeHtml(hubUrl)}</td></tr>
       </table>`;
 
@@ -752,12 +780,40 @@ function render(): void {
   restoreView(prevView, large ? zoomFactor(zoomMode, lastFitZoom) : 1);
 
   if (!locked) {
-    root.querySelector("#inp-editor")?.addEventListener("input", (ev) => {
-      editorName = (ev.target as HTMLInputElement).value;
-    });
-    root.querySelector("#inp-editor")?.addEventListener("change", () => {
-      render();
-    });
+    const editorInput = root.querySelector<HTMLInputElement>("#inp-editor");
+    if (editorInput) {
+      bindEditorNameInput(editorInput, (value) => {
+        editorName = value;
+        syncEditorNameDisplay();
+      });
+      editorInput.addEventListener("compositionstart", () => {
+        editorComposing = true;
+      });
+      editorInput.addEventListener("compositionend", () => {
+        editorComposing = false;
+      });
+      editorInput.addEventListener("blur", () => {
+        editorComposing = false;
+        // Wait past the click that caused the blur. Rendering inside blur
+        // removes the button before its click runs.
+        if (!renderDeferred) return;
+        setTimeout(() => {
+          if (!editorComposing && renderDeferred && document.activeElement !== editorInput) {
+            render();
+          }
+        }, 400);
+      });
+      if (keepEditorFocus) {
+        editorInput.focus();
+        if (editorCaret != null) {
+          try {
+            editorInput.setSelectionRange(editorCaret, editorCaret);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
 
     root.querySelector("#btn-commit-awaken")?.addEventListener("click", () => {
       if (!canAwaken) return;
