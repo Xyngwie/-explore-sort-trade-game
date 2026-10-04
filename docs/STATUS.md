@@ -4,7 +4,7 @@
 
 ## 最終更新
 
-- 2026-10-04 JST / Cursor（Grok Bot）— 背負えなかった大破機の回路を、Invade を通った出撃では出撃マスの `fieldDrops`（`wreck_not_carried`）にし、通らない出撃では失う（U7）。機体は `destroyed` で格納庫に残す（#199）。置き去りの僚機が大破していても回路は `lostMechs` の機体に付けたまま。結果画面に落ちたか失われたかを出す。Explore での拾得と Invade の落とし物の印は別
+- 2026-10-04 JST / Cursor（Grok Bot）— 背負えなかった大破機の回路を、Invade を通った出撃では出撃マスの `fieldDrops`（`wreck_not_carried`）にし、通らない出撃では失う（U7）。機体は `destroyed` で格納庫に残す（#199）。置き去りの僚機が大破していても回路は `lostMechs` の機体に付けたまま。結果画面に落ちたか失われたかを出す。Explore での拾得と Invade の落とし物の印は別（#228）
 - 2026-10-03 JST / Cursor（Grok Bot）— 格納庫の出撃パネルに置き去り数を表示し、回路ボーナス（修理割引・作成倍率・耐久バッファ）から置き去り機の回路を外す（trade・Invade からの出撃とも）。回収の 3 本目（#221）のデプロイ記録を反映
 - 2026-10-03 JST / Cursor（Grok Bot）— 置き去りの機体の回収の 3 本目（invade: 置き去り機のいるマスに印・ツールチップ・出撃バーの 1 行、盤の作り直しで同じ座標へ移す、場所のない古い行は開始地点へ）と、#220 のデプロイ記録を反映
 - 2026-10-03 JST / Cursor（Grok Bot）— 置き去りの機体の回路を HUB の回路一覧・数から外す（売却・付け替え不可、回収で戻る）と、回収の 2 本目（#218）のデプロイ記録を反映。`SORT_V2_RULES.md` に旧仕様の注記
@@ -42,7 +42,7 @@
 
 次にやること（回路データモデルの残り。順番は設計書 §8 の A → B・C・D・E → F → G。担当・着手順の確定はオーケストレーター）:
 
-- **F の残り**: 背負えなかった大破機の回路の落とし物は実装済み（ブランチ `cursor/wreck-circuit-drops-75dd`。Invade の出撃マスを帰還の `frontSeed`・`dropCell` に入れ、`fieldDrops` を作る。通らない出撃は失う＝U7。結果画面に出す。機体は `destroyed` で残す。置き去りの僚機の回路は落とさない）。残り: Explore での落とし物の出現と回収（`recoveredDropIds` は今は常に空）、Invade の盤の印（G）
+- **F の残り**: 背負えなかった大破機の回路の落とし物は実装済み（#228。Invade の出撃マスを帰還の `frontSeed`・`dropCell` に入れ、`fieldDrops` を作る。通らない出撃は失う＝U7。結果画面に出す。機体は `destroyed` で残す。置き去りの僚機の回路は落とさない）。残り: Explore での落とし物の出現と回収（`recoveredDropIds` は今は常に空）、Invade の盤の印（G）
 - **置き去りの機体（`lostMechs`）の World での発見・回収**: 決定済み（2026-10-03 神宮。下の「設計との差」）。**shared 部分は実装済み（回収の 1 本目の PR）**: `lostMechs` の任意項目 `frontSeed`・`cell`・`lostAt`・`lostSortieId`・`catalogId`・`durability`・`durabilityMax`・`status`、帰還の `recoveredLostMechInstanceIds` と `recoverLostMechs`（`fleet` に戻す。`instanceId`・携行弾・バッテリーを保ち、回路は付いたまま）、再度の置き去りは同じ項目を更新、回路の二重化を修正（`HUB_SAVE_CONTRACT.md` §12.5）。**Explore 部分も実装済み（回収の 2 本目の PR）**: Invade を通った出撃（セクター＋HubSave の `frontProgress.seed`）の置き去りは場所付きで `lostMechs` に残り、次に同じマスへ出撃すると降下地点の近くに止まって現れ、離昇時に搭乗円の内側にいれば回収（帰還の `recoveredLostMechInstanceIds`）。回収しなければ同じ行を更新。Invade を通らない出撃の置き去りは帰還の `abandonedMechInstanceIds` で機体と回路を失う（#206 の残り）。Invade からの出撃は HubSave の出撃機の選択で部隊を組む（`HUB_SAVE_CONTRACT.md` §12.6 末尾）。**Invade 部分も実装済み（回収の 3 本目の PR。2026-10-03 神宮の決定どおり）**: 置き去り機のいるマス（今の盤の `frontSeed` の行）に印（右上の灰色の点。凡例に「置き去り機」の見本）を付け、ツールチップに機体 ID（複数なら数も）を出す。印のあるマスを選ぶと出撃バーに「置き去り機 N 機：出撃して離陸すれば回収」。印は表示だけで、地雷・開閉の判定には関わらない。盤を作り直すと、置き去り機は新しい盤の同じ座標へ移る（`frontSeed` を書き換え、範囲外は範囲内へ）。回路の落とし物（`fieldDrops`）と一般インベントリの落とし物（`inventoryFieldDrops`）も同じルールで移す。場所のない古い行は Invade を開いたときに今の盤の開始地点（HQ 0,0）へ置いて HubSave に書き戻す。**格納庫の置き去り数と回路ボーナス（回収の後続 PR）**: trade の出撃パネルの「配備予定」の下に「置き去り N 機（Invade の盤に表示）」（0 機なら出さない。数だけ）。回路ボーナス（`hubCircuitBonuses`：修理割引・作成倍率・耐久バッファ）は置き去り機の回路を除いて計算する（`hubVisibleCircuits` から集計。Invade からの出撃の `invadeSquadSearch` も同じ）。回収すると、また数える。パーフェクト最大サイズの記録は今のまま（置き去り機の回路も数える。神宮の決定）。**置き去りの機体の回路の HUB での扱い（2026-10-03 神宮。この PR で実装）**: HubSave には残すが、HUB では所有から離れている扱い。trade の「保有回路」一覧・「回路装備」の選択肢と装備数・出撃パネルの回路の枚数に出さず、売却・付け替え・取り外しは処理の側でも断る（shared `hubVisibleCircuits`、trade `lost-mech-circuits.ts`）。回収すると、その機体に付いたまま一覧に戻る。回路のボーナスは後続 PR で置き去り機の回路を外した（上）。パーフェクト最大サイズの記録は従来どおり全回路から計算する（神宮の決定）
 - **機体数上限3の撤廃と出撃機の選択**（項目15）— **実装済み（2026-10-03、項目15 の PR）**: 下の「設計との差」の項目15 を参照。#213（`31a3c70`）。残り: Invade からの出撃も部隊を連れて出る（未着手）。「最大 3」の記述は回収の 1 本目の PR で `MECH_FLEET.md`・`CIRCUIT_DATA_MODEL_V0.md`・`CIRCUIT_SQUAD_DESIGN_V0.md` を更新済み
 - **G**: Invade の盤で落とし物のあるマスに印を出す（未着手。置き去り機の印は回収の 3 本目の PR で入った）
