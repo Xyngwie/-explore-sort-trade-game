@@ -124,6 +124,8 @@ invade で選んだセクターは `sectorX` / `sectorY` / `density` / `intelFla
 
 定数は `packages/explore/src/game/balance.ts`。trade→explore の配備キーとは衝突しない。
 
+> **段位による敵の強さ（2026-10-07 神宮の決定・未実装）:** 敵の攻撃力と HP に **1.01^(挑戦中の段)** を掛ける（段 0 は ×1。×2.3 ＝段 84 前後）。報酬は段で増やさない。段位の全体は [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md) §3。
+
 ## 5.3 invade → explore 交戦ハンドオフ（forced / raid）
 
 invade マインスイーパから探索へ渡す戦闘モード。キー契約は invade PR / `HANDOFF_M45_V0` / `@estg/shared` と揃える。
@@ -149,6 +151,8 @@ invade マインスイーパから探索へ渡す戦闘モード。キー契約�
 ## 5.4 積載遅延と仮設キャンプ（cargo camp）
 
 **ステータス:** 薄実装済
+
+> **背負い・積載（2026-10-06〜07 神宮の決定・未実装）:** 積載はコンテナ 1・大破機 2・大破していない僚機 2。速度は積載の合計で決まり、積載 0〜6 で 120／75／60／45／30／15／0。積載上限は回路で増やせる。大破機を背負えるのは回収コマンドを解放した機体だけ。上限を超えた分はそのマスの落とし物になる。詳細は [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md) §6。下の `cargoSpeedMul` は今の仮実装。
 
 | 項目 | 挙動 |
 |---|---|
