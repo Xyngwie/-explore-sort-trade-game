@@ -1689,3 +1689,102 @@ console.log("trade hangar selftest: ok");
   assert.equal(lostMechCountLineJa(hs.hub), null, "recovered → line hidden");
   console.log("trade lost-mech circuits excluded from bonuses + count line ok");
 }
+
+// U14 (2026-10-07 神宮): selling an equipped circuit unequips first (slot empty),
+// same price as warehouse, perfectMaxSize unchanged, bonuses drop like a warehouse
+// sale; lost-mech still refused; confirm + list wording in main.ts.
+{
+  const shared = await import("@estg/shared");
+  const store = memoryStorage();
+  let hs = loadPlaytestSeed(createInitialHangar(store), { storage: store, injectRate: 0, rng: () => 0 });
+  const mechId = hs.hub.fleet.find((m) => m.status === "operational")!.instanceId;
+  // awake circuit on the mech (counts toward bonuses)
+  let hub = upsertCircuitIntoHub(hs.hub, {
+    circuitId: "u14_awake",
+    circuitBoard: { ...createEmptyCircuitBoard(8, 8, "u14_awake"), outcome: "fully_awakened" } as never,
+    outcome: "fully_awakened",
+  } as never);
+  const eq = shared.equipCircuit(hub, "u14_awake", mechId);
+  assert.equal(eq.ok, true, `equip: ${eq.reason}`);
+  hub = eq.hub;
+  // also a warehouse twin with the same board (same effect) for price comparison
+  hub = upsertCircuitIntoHub(hub, {
+    circuitId: "u14_stash",
+    circuitBoard: { ...createEmptyCircuitBoard(8, 8, "u14_stash"), outcome: "fully_awakened" } as never,
+    outcome: "fully_awakened",
+  } as never);
+  assert.equal(hub.circuits.find((c) => c.circuitId === "u14_stash")!.equippedTo, null);
+  saveHubSaveToLocalStorage(hub, store);
+  hs = createInitialHangar(store);
+  const equipped = hs.hub.circuits.find((c) => c.circuitId === "u14_awake")!;
+  assert.equal(equipped.equippedTo, mechId);
+  const perfectBefore = hs.hub.perfectMaxSize;
+  const bonusesBefore = hubCircuitBonuses(hs.hub);
+  assert.ok(bonusesBefore.durabilityBuffer >= 10, "awakened circuit counts while equipped");
+
+  // same price whether equipped or in the warehouse
+  const sideEq = circuitSellPerfectSide(equipped);
+  const sideSt = circuitSellPerfectSide(hs.hub.circuits.find((c) => c.circuitId === "u14_stash")!);
+  let effectEq = 0;
+  try { effectEq = computeCircuitEffectForBoard(equipped.circuitBoard, { perfect: equipped.circuitBoard.perfect ?? equipped.locked }).effect; } catch { effectEq = 0; }
+  let effectSt = 0;
+  const stash = hs.hub.circuits.find((c) => c.circuitId === "u14_stash")!;
+  try { effectSt = computeCircuitEffectForBoard(stash.circuitBoard, { perfect: stash.circuitBoard.perfect ?? stash.locked }).effect; } catch { effectSt = 0; }
+  // boards differ, so compare the formula path: equipped sell uses the same helpers as warehouse
+  const priceEq = circuitSellPriceCredits(effectEq, { perfectSide: sideEq });
+  const creditsBefore = hs.hub.credits;
+  const soldEq = sellCircuit(hs, "u14_awake");
+  assert.ok(soldEq.notice.startsWith("回路売却"), soldEq.notice);
+  assert.ok(!soldEq.notice.includes("から外した"), "notice has no unequip suffix");
+  assert.equal(soldEq.hub.credits, creditsBefore + priceEq, "credits += equipped sell price");
+  assert.equal(soldEq.hub.circuits.some((c) => c.circuitId === "u14_awake"), false, "record removed");
+  assert.equal(
+    soldEq.hub.circuits.filter((c) => c.equippedTo === mechId).length,
+    0,
+    "mech slot empty after sale",
+  );
+  assert.equal(soldEq.hub.perfectMaxSize, perfectBefore, "perfectMaxSize not lowered");
+  const bonusesAfter = hubCircuitBonuses(soldEq.hub);
+  assert.equal(bonusesAfter.durabilityBuffer, bonusesBefore.durabilityBuffer - 10, "bonus drops like warehouse sale");
+  assert.ok(bonusesAfter.repairDiscount < bonusesBefore.repairDiscount);
+
+  // warehouse twin still sells at its own formula price (no equip surcharge path)
+  const priceSt = circuitSellPriceCredits(effectSt, { perfectSide: sideSt });
+  const soldSt = sellCircuit(soldEq, "u14_stash");
+  assert.equal(soldSt.hub.credits, soldEq.hub.credits + priceSt);
+  assert.ok(soldSt.notice.startsWith("回路売却"));
+
+  // lost-mech circuit still refused
+  {
+    let h2 = loadPlaytestSeed(createInitialHangar(store), { storage: store, injectRate: 0, rng: () => 0 }).hub;
+    const wing = h2.fleet.find((m) => m.status === "operational" && m.instanceId !== h2.fleet[0]!.instanceId)!.instanceId;
+    h2 = upsertCircuitIntoHub(h2, {
+      circuitId: "u14_lost",
+      circuitBoard: createEmptyCircuitBoard(2, 2, "u14_lost") as never,
+      outcome: "offline",
+    } as never);
+    const e2 = shared.equipCircuit(h2, "u14_lost", wing);
+    assert.equal(e2.ok, true);
+    const lost = applyExploreReturnToHub(e2.hub, {
+      returnKind: "extract", mechWear: [], sortieId: "u14_lost_sortie",
+      lostMechs: [{ instanceId: wing, currentAmmo: 1, battery: { capacity: 300, activity: 1 }, circuitIds: ["u14_lost"], frontSeed: 1, cell: { sx: 0, sy: 0 } }],
+    });
+    assert.equal(lost.applied, true);
+    saveHubSaveToLocalStorage(lost.hub, store);
+    const hsLost = createInitialHangar(store);
+    const refused = sellCircuit(hsLost, "u14_lost");
+    assert.equal(refused.notice, "回路なし");
+    assert.equal(refused.hub, hsLost.hub);
+  }
+
+  // source: confirm unequip line + list 「装備:」 wording
+  {
+    const { readFileSync } = await import("node:fs");
+    const mainSrc = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    assert.ok(mainSrc.includes("装備: ${equippedTo} から外して売却します"), "confirm unequip line");
+    assert.ok(mainSrc.includes("装備: ${c.equippedTo}"), "list shows 装備: <id>");
+    assert.ok(mainSrc.includes("data-equipped-to="), "sell button carries equippedTo");
+    assert.ok(mainSrc.includes("売却 仮"), "button keeps 売却 仮 wording via price helper path");
+  }
+  console.log("trade U14 sell equipped circuit ok");
+}

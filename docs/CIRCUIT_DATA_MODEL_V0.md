@@ -420,7 +420,7 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 |---|---|---|---|---|---|
 | A | 保存契約 v3 と受け渡しキー | `shared`（＋`docs/HUB_SAVE_CONTRACT.md`・`HANDOFF` 系の追記） | 1・2・14 | `HubSaveV3`・新キーと読み込み順・v1/v2→v3 移行・壊れたセーブの退避・切り詰め廃止（`maxCircuits` は deprecated で残す）・§2〜§5・§7 の純関数・`mechCircuits` の build/parse・`HANDOFF_QUERY_KEYS` 追加・selftest | 本書の承認（済） |
 | B | ジャンク作成サイズとコスト | `trade` | 14 | サイズ選択（2×2〜`craftMaxSize`）、コスト 2N＋round(4×1.5^N)（shared の関数）、`unrestored`／`crafted`、restore 取込で `perfectMaxSize` 更新、`maxCircuits` 参照の削除 | A |
-| C | 倉庫と付け替え | `trade` | 1（＋7 の付け替え） | 倉庫一覧・機体ごとの装着 UI（HUB のみ・無料）、装着中の回路の売却・Restore の扱い（U14）、`circuitBonuses` の集計対象（U5）、移行の案内 | A |
+| C | 倉庫と付け替え | `trade` | 1（＋7 の付け替え） | 倉庫一覧・機体ごとの装着 UI（HUB のみ・無料）、装着中の回路の売却・Restore の扱い（U14・実装済み）、`circuitBonuses` の集計対象（U5・方針変更済み）、移行の案内 | A |
 | D | 出撃 URL に装着回路 | `trade` | 2 | `buildDeployUrl` に `mechCircuits` を載せる | A（C があると実データが入る） |
 | E | explore の機体ごと判定 | `explore` | 1・2 | `equippedByUnit`、隊長／僚機ごとの判定、FA・Bypass だけ有効。小隊方針の対象外表示（C20）を同時にやるかは別判断 | A（D がなくても `[]` で動く） |
 | F | 落とし物の記録と回収 | `explore`（＋`shared` は A に入っている純関数を使うだけ） | 2・6 | `LeftBehindEntry` に `instanceId`、結果確定時の `applySortieReport`、落とし物の出現と回収 | A、U7〜U9 の決定。背負い（4）・救助撤退（5）の喪失はそれぞれの PR で報告に足す |
@@ -452,7 +452,7 @@ U7 は神宮の決定。ほかは起草時の推奨どおりに決定。
 | U11 | 移行時の `perfectMaxSize` の初期値 | 既存のパーフェクト回路の最大サイズ | 既に達成した人が後退しない。検証用の「既に完璧」盤（2×2）を受け取っていると 2 になる点は許容 |
 | U12 | 作成サイズの天井 | Restore が扱える最大サイズで頭打ち＝**20×20**（2026-09-28 神宮の決定） | Restore の最大も 20×20。`RESTORE_MAX_SIDE = 20`・`craftMaxSize` の既定の天井は実装済み、trade の作成画面は実装 B |
 | U13 | 非正方形の既存盤のサイズ | `min(cols, rows)` | 今の生成経路は正方形のみなので実害は小さい |
-| U14 | 装着中の回路を売る・Restore に出す | 売却は自動で外して売る（確認あり）。Restore は装着したまま可（2026-10-07 時点: ほぼ実装済み。装着中の回路の売却は外して倉庫の回路と同じ値段で売れ、Restore にも装着したまま出せる。残りは売却の確認に「装着中」と出すことだけ。STATUS「実装の予定順」1） | どちらも HUB 内の操作 |
+| U14 | 装着中の回路を売る・Restore に出す | **実装済み（U14 の PR）**: 売却は自動で外して売る（確認あり。確認に「装備: <機体ID> から外して売却します」。保有回路一覧にも「装備: <機体ID>」）。売値は倉庫の回路と同じ。枠は空のまま。perfectMaxSize は下がらない。置き去り機の回路は売れない（#220）。Restore は装着したまま可 | どちらも HUB 内の操作 |
 | U15 | 隊長機の指定 | 今どおり `deployedInstanceIds` の先頭 | 選ぶ UI は項目7で検討 |
 | U16 | 機体を解体したときの装着回路 | 倉庫へ戻す | HUB 内の操作なので落とし物にはしない |
 | U17 | 評価値を保存するか | 保存せず毎回計算。手がかり生成の互換テストを置く | 手がかり生成を変える PR は既存 `puzzleId` の手がかり（＝既存回路の評価値）を変えないことをテストで固定する |

@@ -254,6 +254,11 @@ function circuitRows(s: HangarState): string {
         .map((c) => {
           const active =
             s.lastCircuit?.circuitId === c.circuitId ? " · 選択中" : "";
+          const equipLabel =
+            c.equippedTo != null ? `装備: ${c.equippedTo}` : "";
+          const metaLine = equipLabel
+            ? equipLabel + active
+            : active.trim();
           const url = buildRestoreUrl(s, c.circuitId);
           const locked = isCircuitLocked(c);
           const editor =
@@ -278,7 +283,7 @@ function circuitRows(s: HangarState): string {
                   ? `<div class="mono muted">${escapeHtml(c.circuitBoard.puzzleId)}</div>`
                   : ""
               }
-              <div class="muted" style="font-size:0.75rem">${escapeHtml(active.trim())}</div>
+              <div class="muted" style="font-size:0.75rem">${escapeHtml(metaLine)}</div>
             </td>
             <td>
               ${escapeHtml(circuitRestoreStateLabelJa(c.restoreState))}
@@ -294,7 +299,7 @@ function circuitRows(s: HangarState): string {
               <div class="row" style="margin:0;justify-content:flex-end">
                 <button type="button" class="secondary" data-act="select-circuit" data-id="${escapeHtml(c.circuitId)}">選択</button>
                 <a class="btn secondary" href="${escapeHtml(url)}" target="_top" rel="noopener" data-circuit-open="${escapeHtml(c.circuitId)}">${locked ? CTA_COPY.view : CTA_COPY.toRestore}</a>
-                <button type="button" class="secondary sell-circuit" data-act="sell-circuit" data-id="${escapeHtml(c.circuitId)}" data-price="${price}" data-price-detail="${escapeHtml(priceBrk.detailJa)}" title="${escapeHtml(priceBrk.detailJa)} で売却">${escapeHtml(priceBrk.buttonJa)}</button>
+                <button type="button" class="secondary sell-circuit" data-act="sell-circuit" data-id="${escapeHtml(c.circuitId)}" data-price="${price}" data-price-detail="${escapeHtml(priceBrk.detailJa)}"${c.equippedTo != null ? ` data-equipped-to="${escapeHtml(c.equippedTo)}"` : ""} title="${escapeHtml(priceBrk.detailJa)} で売却">${escapeHtml(priceBrk.buttonJa)}</button>
               </div>
             </td>
           </tr>`;
@@ -750,8 +755,12 @@ function render() {
       else if (act === "sell-circuit") {
         const price = el.dataset.price ?? "?";
         const detail = el.dataset.priceDetail ?? "";
+        const equippedTo = el.dataset.equippedTo ?? "";
         const confirmExtra = detail ? `\n${detail}` : "";
-        if (!window.confirm(`回路を売却しますか？\n${id}\n仮 +${price}c${confirmExtra}`)) return;
+        const unequipLine = equippedTo
+          ? `\n装備: ${equippedTo} から外して売却します`
+          : "";
+        if (!window.confirm(`回路を売却しますか？\n${id}\n仮 +${price}c${confirmExtra}${unequipLine}`)) return;
         state = sellCircuit(state, id);
       }
       else if (act === "scrap") {

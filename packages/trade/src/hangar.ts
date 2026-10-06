@@ -65,6 +65,7 @@ import {
   upsertCircuitIntoHub,
   recordPerfectSize,
   removeCircuitFromHub,
+  unequipCircuit,
   aggregateCircuitBonuses,
   applyRepairDiscountToCost,
   applyDurabilityBufferToWear,
@@ -1500,6 +1501,8 @@ export { UNOPENED_CONTAINER_PRICE_CREDITS };
  * floor(effect) × {@link CIRCUIT_SELL_CREDITS_PER_EFFECT} (仮 · 最低+出来栄え)
  * + 完璧ボーナス 2 × round(4 × 1.5^N) only for Perfect (Fully Awakened) circuits
  * (N = max(cols, rows); see {@link circuitSellPerfectSide}).
+ * U14: if equipped, unequip first (slot stays empty), then remove. Same price
+ * as a warehouse circuit. Does not lower perfectMaxSize.
  * Removes from inventory, credits wallet, clears active selection if needed.
  * Effect 0 → +25c (最低額 only; still allowed).
  */
@@ -1529,7 +1532,11 @@ export function sellCircuit(
   const perfectSide = circuitSellPerfectSide(rec);
   const brk = formatCircuitSellPriceJa(effect, { perfectSide });
   const gained = circuitSellPriceCredits(effect, { perfectSide });
-  const without = removeCircuitFromHub(state.hub, rec.circuitId);
+  // U14: explicit unequip so the mech's slot is empty before the record goes
+  // (same net effect as remove alone; clarifies the "外して売る" decision).
+  const hubForRemove =
+    rec.equippedTo != null ? unequipCircuit(state.hub, rec.circuitId) : state.hub;
+  const without = removeCircuitFromHub(hubForRemove, rec.circuitId);
   const hub = normalizeHubSnapshot({
     ...without,
     credits: without.credits + gained,
