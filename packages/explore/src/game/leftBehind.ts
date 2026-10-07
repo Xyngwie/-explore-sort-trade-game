@@ -44,9 +44,13 @@ export function leftBehindFateLine(world: LeftBehindWorld): string | null {
 export function strandedResultLines(world: LeftBehindWorld): string[] {
   const recovered = new Set(world.recoveredLostMechIds ?? []);
   return (world.strandedMechs ?? []).map((m) =>
-    recovered.has(m.instanceId)
-      ? `置き去りだった機体 ${m.instanceId} を回収（部隊に復帰）`
-      : `置き去りだった機体 ${m.instanceId} は回収できず（同じ場所に残る）`,
+    m.wreck
+      ? recovered.has(m.instanceId)
+        ? `残骸 ${m.instanceId} を回収（大破のまま格納庫へ）`
+        : `残骸 ${m.instanceId} は回収できず（同じ場所に残る）`
+      : recovered.has(m.instanceId)
+        ? `置き去りだった機体 ${m.instanceId} を回収（部隊に復帰）`
+        : `置き去りだった機体 ${m.instanceId} は回収できず（同じ場所に残る）`,
   );
 }
 

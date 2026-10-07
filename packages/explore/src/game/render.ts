@@ -1,4 +1,5 @@
 import { extractionProgressPct } from "../extractProgress";
+import { wreckLabel } from "./wrecks";
 import { getCoverObjects } from "./coverObjects";
 import { STANCE_LABEL, type World } from "./types";
 import { isWingmanMobileFor } from "./commandUnlock";
@@ -229,7 +230,17 @@ export function renderWorld(
     drawCraft(ctx, tx(m.pos.x), ty(m.pos.y), 9 * sx, "#8a9099", Math.PI / 2);
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
-    ctx.fillText(`${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+    ctx.fillText(m.wreck ? m.name : `${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+  }
+
+  // 項目5-1b W6: this sortie's wrecks stay where they were destroyed (gray, 「残骸 僚機A」).
+  for (const u of [world.leader, ...world.wingmen]) {
+    if (u.alive || !u.instanceId) continue;
+    if ((world.recoveredWreckUnitIds ?? []).includes(u.id)) continue;
+    drawCraft(ctx, tx(u.pos.x), ty(u.pos.y), u.radius * sx, "#8a9099", u.heading);
+    ctx.fillStyle = "#c3c8cf";
+    ctx.font = "11px sans-serif";
+    ctx.fillText(wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(u.pos.x) - 30, ty(u.pos.y) - u.radius * sy - 8);
   }
 
   // Dropped circuits waiting on this front cell (circuitDrops.ts): recovered at

@@ -13,6 +13,9 @@
  * - Sortie not via Invade (direct deploy from the hangar): a left-behind
  *   wingman is lost outright with its circuits (`abandonedMechInstanceIds`;
  *   not kept in lostMechs).
+ * - 項目5-1b: a `kind: "wreck"` row (shot down, circuits inside) reappears at
+ *   its saved position in Explore (`pos`), not on the drop-zone ring, and is
+ *   recovered the same way (it comes back destroyed, W7 A). See wrecks.ts.
  */
 import {
   type HubSnapshot,
@@ -21,6 +24,7 @@ import {
 import { dist, type Vec2 } from "./math";
 import type { BoardingState, InvadeSectorContext, World } from "./types";
 import { strandedDropsFor } from "./circuitDrops";
+import { placeWreckInWorld, wreckLabel } from "./wrecks";
 
 /** FrontCellCoord bound (shared `normalizeFrontCoord`). */
 const FRONT_COORD_MAX = 32;
@@ -33,6 +37,8 @@ export type StrandedMech = {
   pos: Vec2;
   /** The HubSave lostMechs row it came from (ammo / battery / circuits / copy). */
   row: LostMechReturnState;
+  /** 項目5-1b: a wreck (shot down, circuits inside) rather than a left-behind mech. */
+  wreck?: boolean;
 };
 
 /** Place of this sortie on the Invade front; null when not via Invade (or no saved front seed). */
@@ -73,14 +79,35 @@ export function strandedMechsFor(
       m.cell.sx === location.cell.sx &&
       m.cell.sy === location.cell.sy,
   );
-  return rows.map((row, i) => {
+  // Left-behind mechs wait on the ring around the drop zone; a wreck with a
+  // saved position stays where it was destroyed (項目5-1b W3 C).
+  let ringIndex = 0;
+  return rows.map((row) => {
+    const copy: LostMechReturnState = {
+      ...row,
+      battery: { ...row.battery },
+      circuitIds: [...row.circuitIds],
+      ...(row.pos ? { pos: { ...row.pos } } : {}),
+      ...(row.cell ? { cell: { ...row.cell } } : {}),
+    };
+    if (row.kind === "wreck" && row.pos) {
+      return {
+        instanceId: row.instanceId,
+        name: wreckLabel(row.instanceId),
+        pos: { x: row.pos.x, y: row.pos.y },
+        row: copy,
+        wreck: true,
+      };
+    }
+    const i = ringIndex++;
     const angle = Math.PI * 0.75 + i * 0.55;
     const r = STRANDED_RING_RADIUS + 18 * Math.floor(i / 6);
     return {
       instanceId: row.instanceId,
-      name: `置き去り機 ${row.instanceId}`,
+      name: row.kind === "wreck" ? wreckLabel(row.instanceId) : `置き去り機 ${row.instanceId}`,
       pos: { x: spawn.x + Math.cos(angle) * r, y: spawn.y - Math.sin(angle) * r },
-      row: { ...row, battery: { ...row.battery }, circuitIds: [...row.circuitIds] },
+      row: copy,
+      ...(row.kind === "wreck" ? { wreck: true } : {}),
     };
   });
 }
@@ -89,8 +116,11 @@ export function strandedMechsFor(
 export function attachLostMechContext(world: World, hub: HubSnapshot | null): World {
   const location = sortieLocationFor(world.invadeSector, hub);
   world.sortieLocation = location;
-  world.strandedMechs = strandedMechsFor(hub, location, world.deployedInstanceIds, world.leader.pos);
+  world.strandedMechs = strandedMechsFor(hub, location, world.deployedInstanceIds, world.leader.pos).map((m) =>
+    m.wreck && m.row.pos ? { ...m, pos: placeWreckInWorld(world, m.pos) } : m,
+  );
   world.recoveredLostMechIds = [];
+  world.recoveredWreckUnitIds = [];
   world.strandedDrops = strandedDropsFor(hub, location, world.leader.pos);
   world.recoveredDropIds = [];
   world.initialOwnedCircuitIds = hub ? hub.circuits.map((c) => c.circuitId) : [];

@@ -1,6 +1,7 @@
 import { decideWingman } from "./brain";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
 import { recoverStrandedDropsAtLiftOff } from "./circuitDrops";
+import { recoverSortieWrecksAtLiftOff, sortieWreckUnits } from "./wrecks";
 import {
   applyOrder,
   campDamageTakenMul,
@@ -277,8 +278,18 @@ function resolveBoardingLiftOff(world: World): void {
     .map((u) => ({ id: u.id, name: u.name, reason: isWingmanMobileFor(world, u.id) ? "outside_circle" : "no_circuit" }));
   if (outside.length > 0) pushLog(world, `置き去り：${outside.map((u) => u.name).join("・")}（搭乗円外のため回収せず）。`);
   if (inside.length > 0) pushLog(world, `回収完了：${inside.map((u) => u.name).join("・")}。`);
+  const strandedById = new Map((world.strandedMechs ?? []).map((m) => [m.instanceId, m]));
   const recoveredLost = recoverStrandedAtLiftOff(world, boarding, captainIn);
-  if (recoveredLost.length > 0) pushLog(world, `置き去りだった機体を回収：${recoveredLost.join("・")}（部隊に復帰）。`);
+  const recoveredLostMechs = recoveredLost.filter((id) => !strandedById.get(id)?.wreck);
+  const recoveredOldWrecks = recoveredLost.filter((id) => strandedById.get(id)?.wreck);
+  if (recoveredLostMechs.length > 0) pushLog(world, `置き去りだった機体を回収：${recoveredLostMechs.join("・")}（部隊に復帰）。`);
+  // 項目5-1b W2 B: wrecks inside the circle (this sortie's and earlier ones) come home destroyed.
+  const recoveredWrecks = recoverSortieWrecksAtLiftOff(world, boarding, captainIn);
+  const wreckNames = [
+    ...sortieWreckUnits(world).filter((u) => recoveredWrecks.includes(u.id)).map((u) => u.name),
+    ...recoveredOldWrecks,
+  ];
+  if (wreckNames.length > 0) pushLog(world, `残骸を回収：${wreckNames.join("・")}（大破のまま格納庫へ）。`);
   const recoveredDrops = recoverStrandedDropsAtLiftOff(world, boarding, captainIn);
   if (recoveredDrops.length > 0) pushLog(world, `落とし物の回路を回収：${recoveredDrops.length}件。`);
   world.boarding = null; world.camp = null; world.phase = "result";

@@ -324,6 +324,7 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 - 盤の作り直し（W3 C）: Invade が別の盤を開くと、その盤の `frontSeed` でない残骸の行は回路ごと消える（`removeWreckRows`、回路の記録も消す）。置き去りの行は今どおり同じ座標へ移る。
 - 古いセーブ（W9 B）: 読み込み（`normalizeHubSnapshot`）のとき、`fieldDrops` のうち `cause: "wreck_not_carried"` の回路を倉庫へ戻し（`equippedTo: null`）、その落とし物を消す。同じ回路がすでにあれば落とし物を消すだけ（二重にしない）。何度読んでも同じ。他の原因の落とし物はそのまま。
 - 残骸の回路は HUB の一覧・数・ボーナスに出ない（`hubVisibleCircuits` が `lostMechs` の機体の回路を外す。W5 A）。
+- Explore（5-1b②、`packages/explore/src/game/wrecks.ts`）: `Unit.alive=false` の配備機が残骸。離昇のとき隊長が搭乗円の中で、残骸も円の中なら `wreckedMechInstanceIds`（耐久 0）だけで返し、`fleet` に `destroyed` で残る。円の外は Invade を通った出撃なら `lostMechs` に `kind: "wreck"`・`pos`（0.1 単位に丸める）・`frontSeed`・`cell` の行、通らない出撃なら `abandonedMechInstanceIds`。前の出撃の残骸は `pos` に現れ（カバー物と重なるときだけ表示の位置を外へずらす）、回収されなければ保存の `pos` のまま行を書き直す。
 
 §5.1〜§5.3 の「置き去りの僚機も背負われなかった大破機と同じ扱い（回路はその場に落ちる）」は、次の決定で置き換わる。背負えなかった大破機の扱い（回路は落とし物になる）は変えない。
 
