@@ -237,7 +237,7 @@ export type BoardingRequirementsHud = { active: boolean; liftOffEta: number | nu
 
 export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
   const mustBeIn = "隊長が搭乗円内";
-  if (!world.boarding) return { active: false, liftOffEta: null, cargoEta: null, cargoArrived: false, mustBeIn, captainInside: false, aliveCount: friendlyUnits(world).filter((u) => u.alive).length, insideCount: 0, outsideCount: 0, outsideNames: [], insideNames: [], lines: ["EXTRACT / 帰還要件", "未要請 — X で搭乗円を展開", `必須: ${mustBeIn}（離昇時）`, `貨物 ${world.balance.boardingCargoDelaySec}s → 離昇 ${world.balance.boardingLiftOffDelaySec}s`] };
+  if (!world.boarding) return { active: false, liftOffEta: null, cargoEta: null, cargoArrived: false, mustBeIn, captainInside: false, aliveCount: friendlyUnits(world).filter((u) => u.alive).length, insideCount: 0, outsideCount: 0, outsideNames: [], insideNames: [], lines: ["帰還要件", "未要請 — X で搭乗円を展開", `必須: ${mustBeIn}（離昇時）`, `貨物 ${world.balance.boardingCargoDelaySec}s → 離昇 ${world.balance.boardingLiftOffDelaySec}s`] };
   const alive = friendlyUnits(world).filter((u) => u.alive);
   const inside = alive.filter((u) => isInsideBoarding(world, u));
   const outside = alive.filter((u) => !isInsideBoarding(world, u));
@@ -245,21 +245,21 @@ export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
   const liftOffEta = boardingLiftOffEta(world);
   const cargoEta = boardingCargoEta(world);
   const cargoArrived = world.boarding.cargoArrived;
-  const lines = ["EXTRACT / 帰還要件", liftOffEta != null ? `離昇まで ${liftOffEta.toFixed(1)}s` : "離昇直前", `必須: ${mustBeIn} → ${captainInside ? "円内 OK" : "円外！戻れ"}`, `円内 ${inside.length} / 生存 ${alive.length}` + (outside.length > 0 ? `（円外: ${outside.map((u) => u.name).join("・")}）` : "（全員円内）")];
+  const lines = ["帰還要件", liftOffEta != null ? `離昇まで ${liftOffEta.toFixed(1)}s` : "離昇直前", `必須: ${mustBeIn} → ${captainInside ? "円内 OK" : "円外！戻れ"}`, `円内 ${inside.length} / 生存 ${alive.length}` + (outside.length > 0 ? `（円外: ${outside.map((u) => u.name).join("・")}）` : "（全員円内）")];
   if (!cargoArrived && cargoEta != null) lines.splice(2, 0, `貨物到着まで ${cargoEta.toFixed(1)}s`); else if (cargoArrived) lines.splice(2, 0, "貨物到着済 — 円内で離昇待機");
   return { active: true, liftOffEta, cargoEta, cargoArrived, mustBeIn, captainInside, aliveCount: alive.length, insideCount: inside.length, outsideCount: outside.length, outsideNames: outside.map((u) => u.name), insideNames: inside.map((u) => u.name), lines };
 }
 
 export function requestExtract(world: World): boolean {
   if (world.phase !== "sortie" || !world.leader.alive) return false;
-  if (isOperationTimedOut(world)) { pushLog(world, "時間切れのため新規抽出不可。進行中の搭乗円のみ継続／撤退または戦闘決着。"); return false; }
-  if (world.boarding) { pushLog(world, "抽出シーケンス進行中。キャンセル不可。"); return false; }
+  if (isOperationTimedOut(world)) { pushLog(world, "時間切れのため新規の帰還要請は不可。進行中の搭乗円のみ継続／撤退または戦闘で決着。"); return false; }
+  if (world.boarding) { pushLog(world, "帰還シーケンス進行中。キャンセル不可。"); return false; }
   const center = { ...world.leader.pos };
   const radius = world.balance.boardingRadius;
   world.boarding = { center, radius, requestedAt: world.elapsed, cargoArrived: false };
   world.extract = { pos: { ...center }, radius };
   for (const w of world.wingmen) if (w.alive) applyOrder(world, w, "patrol", { waypoint: center });
-  pushLog(world, `抽出要請。搭乗円展開（半径 ${radius}）。僚機は円中心を哨戒。貨物 ${world.balance.boardingCargoDelaySec}s／離昇 ${world.balance.boardingLiftOffDelaySec}s。`);
+  pushLog(world, `帰還要請。搭乗円展開（半径 ${radius}）。僚機は円中心を哨戒。貨物 ${world.balance.boardingCargoDelaySec}s／離昇 ${world.balance.boardingLiftOffDelaySec}s。`);
   return true;
 }
 
@@ -289,8 +289,8 @@ function resolveBoardingLiftOff(world: World): void {
       if (dist(c.pos, boarding.center) <= boarding.radius) { c.taken = true; c.discovered = true; c.glowT = 0; circleCrates += 1; world.salvaged += 1; }
     }
     world.extracted = true; world.failReason = null;
-    pushLog(world, circleCrates > 0 ? `脱出成功（隊長搭乗）。搭乗円内コンテナ ${circleCrates} を全回収（合計サルベージ ${world.salvaged}）。` : `脱出成功（隊長搭乗）。サルベージ ${world.salvaged} を保持。`);
-  } else { world.extracted = false; world.failReason = "extract_missed"; world.salvaged = 0; pushLog(world, "脱出失敗：隊長が搭乗円外のため離昇せず。"); }
+    pushLog(world, circleCrates > 0 ? `帰還成功（隊長搭乗）。搭乗円内コンテナ ${circleCrates} を全回収（合計サルベージ ${world.salvaged}）。` : `帰還成功（隊長搭乗）。サルベージ ${world.salvaged} を保持。`);
+  } else { world.extracted = false; world.failReason = "extract_missed"; world.salvaged = 0; pushLog(world, "帰還失敗：隊長が搭乗円外のため離昇せず。"); }
 }
 
 function updateBoarding(world: World): void {

@@ -33,8 +33,6 @@ import {
   resolveExploreForcedBackWipe,
 } from "./game/forcedBackWipe";
 import {
-  campDefenseHudModel,
-  campDrHudFragment,
   campDrPercent,
   inCampAura,
   isOperationTimedOut,
@@ -63,6 +61,13 @@ import {
 } from "./game/commandUnlock";
 import { createPhaseWatcher } from "./game/phaseWatch";
 import { leftBehindResultHtml } from "./game/leftBehind";
+import {
+  briefingHelpText,
+  campHudText,
+  isCampUnlocked,
+  timeUpHelpSentence,
+  timeoutLockBannerHtmlFor,
+} from "./game/campVisibility";
 import { attachLostMechContext } from "./game/lostMechs";
 import { invadeSquadSearch } from "./game/invadeSquad";
 import {
@@ -226,7 +231,7 @@ function extractReqHudHtml(): string {
   // Top-edge HUD: compact when idle so the map center stays playable.
   if (!hud.active) {
     return `<div class="extract-req-hud idle top-edge" id="extract-req-hud" aria-live="polite">
-      <div class="erq-title">EXTRACT</div>
+      <div class="erq-title">帰還</div>
       <div class="erq-seconds">未要請 · X で展開 · 必須:${hud.mustBeIn}</div>
     </div>`;
   }
@@ -252,7 +257,7 @@ function extractReqHudHtml(): string {
       ? `貨物 ${hud.cargoEta.toFixed(1)}s`
       : "";
   return `<div class="${cls}" id="extract-req-hud" aria-live="polite">
-    <div class="erq-title">EXTRACT / 帰還</div>
+    <div class="erq-title">帰還</div>
     <div class="erq-seconds" id="erq-seconds">${seconds}${sub ? " · " + sub : ""}</div>
     <div class="erq-must" id="erq-must">${must}</div>
     <div class="erq-count" id="erq-count">${count}</div>
@@ -261,17 +266,7 @@ function extractReqHudHtml(): string {
 
 
 function timeoutLockBannerHtml(): string {
-  const model = campDefenseHudModel(world);
-  if (!model.active) return "";
-  const boardingNote = world.boarding
-    ? "進行中の搭乗円は継続（円内なら離昇可）。"
-    : "円外なら移動不可のため新規脱出は不可 — キャンプ防衛／カバー／撤退で決着。";
-  return `<div class="timeout-lock-banner camp-defense" id="timeout-lock-banner" role="status" aria-live="polite">
-    <strong>${model.title}</strong>
-    <span>時間切れ · 移動・積み下ろしロック · 戦闘継続</span>
-    <span class="defense-focus">${model.stockLine} · ${model.coverHint}</span>
-    <span class="defense-note">${boardingNote}</span>
-  </div>`;
+  return timeoutLockBannerHtmlFor(world, isCampUnlocked(cmdLocked));
 }
 
 /** Shared post-command UI feedback (toast for unload, repaint). */
@@ -335,7 +330,7 @@ function sortieHelpText(): string {
     squadKeys.length === 0
       ? ""
       : `僚機方針は ${squadKeys.length === SQUAD_ORDER_KEYS.length ? "1–4" : squadKeys.join("・")}。`;
-  return `未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。${keys}。時間切れ後はキャンプ防衛フォーカス（移動ロック・戦闘継続）。マップ上端の EXTRACT HUD。${squad}僚機に軽い癖（密着／囮／遠射）。`;
+  return `未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。${keys}。${timeUpHelpSentence(isCampUnlocked(cmdLocked))}マップ上端の帰還 HUD。${squad}僚機に軽い癖（密着／囮／遠射）。`;
 }
 
 function debugUnlockToggleHtml(): string {
@@ -590,7 +585,7 @@ function renderDom(): void {
           }
         </table>
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
-        <p class="help">WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 抽出要請 · C キャンプ設置 · U 荷下ろし · G キャンプから積込 · V カバー · 右パネルで僚機命令（画面外も可）</p>
+        <p class="help">${briefingHelpText(cmdLocked)}</p>
       </div>`;
     bindDebugUnlockToggle();
     document.getElementById("btn-start")?.addEventListener("click", () => {
@@ -701,12 +696,7 @@ function renderDom(): void {
         ? "速度 軽装キャンプ圏"
         : "速度 100%"
       : `速度 ${Math.round(speedMul * 100)}%（積載遅延）`;
-  const drFrag = campDrHudFragment(world);
-  const campHud = world.camp
-    ? world.camp.stashedCount > 0
-      ? `キャンプ 置場${world.camp.stashedCount}·防衛 ${drFrag}`
-      : `キャンプ 置場${world.camp.stashedCount}`
-    : "キャンプ 未設置";
+  const campHud = campHudText(world, isCampUnlocked(cmdLocked));
   const coverHud = world.leader.inCover ? "カバー ON" : "カバー OFF";
   root.innerHTML = `
     <p class="pill">MODULE 1 · SORTIE</p>
@@ -719,9 +709,9 @@ function renderDom(): void {
       <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
       <span>実弾 <strong id="hud-ammo">${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
-      <span>抽出 <strong id="hud-boarding">${extractHud}</strong></span>
+      <span>帰還 <strong id="hud-boarding">${extractHud}</strong></span>
       <span><strong id="hud-speed">${speedHud}</strong></span>
-      <span><strong id="hud-camp">${campHud}</strong></span>
+      ${campHud == null ? "" : `<span><strong id="hud-camp">${campHud}</strong></span>`}
       <span><strong id="hud-cover" class="${world.leader.inCover ? "cover-on" : ""}">${coverHud}</strong></span>
     </div>
     <div class="toast" id="camp-toast" hidden></div>
@@ -733,7 +723,7 @@ function renderDom(): void {
           ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden(), isLocked: cmdLocked })}
         </div>
         <div class="row">
-          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) ? "disabled" : ""} title="どこからでも抽出要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。">${boardingActive ? "抽出シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・抽出ロック" : "抽出要請（搭乗円）"}</button>
+          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) ? "disabled" : ""} title="どこからでも帰還要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。">${boardingActive ? "帰還シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・帰還要請不可" : "帰還要請（搭乗円）"}</button>
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
           ${gatedButtonHtml("btn-purge", "purge", "secondary", "パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。", "パージ／キャンプへ降ろす")}
@@ -879,10 +869,10 @@ function paintHudOnly(): void {
     const active = world.boarding != null;
     extractBtn.disabled = active || timedOut;
     extractBtn.textContent = active
-      ? "抽出シーケンス中…"
+      ? "帰還シーケンス中…"
       : timedOut
-        ? "時間切れ・抽出ロック"
-        : "抽出要請（搭乗円）";
+        ? "時間切れ・帰還要請不可"
+        : "帰還要請（搭乗円）";
   }
   for (const [id, cmd] of GATED_BUTTONS) {
     const btn = document.getElementById(id) as HTMLButtonElement | null;
@@ -901,12 +891,8 @@ function paintHudOnly(): void {
   }
   const campEl = document.getElementById("hud-camp");
   if (campEl) {
-    const dr = campDrHudFragment(world);
-    campEl.textContent = world.camp
-      ? world.camp.stashedCount > 0
-        ? `キャンプ 置場${world.camp.stashedCount}·防衛 ${dr}`
-        : `キャンプ 置場${world.camp.stashedCount}`
-      : "キャンプ 未設置";
+    const campText = campHudText(world, isCampUnlocked(cmdLocked));
+    if (campText != null) campEl.textContent = campText;
   }
   const coverEl = document.getElementById("hud-cover");
   if (coverEl) {

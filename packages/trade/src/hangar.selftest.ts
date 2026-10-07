@@ -30,6 +30,7 @@ import {
   type CircuitOutcome,
 } from "@estg/shared";
 import {
+  exploreReturnHeadJa,
   EXAMPLE_TYPED_REPAIR_COST,
   HUB_M45_STASH_STORAGE_KEY,
   SEED_CIRCUIT_ID,
@@ -1787,4 +1788,48 @@ console.log("trade hangar selftest: ok");
     assert.ok(mainSrc.includes("売却 仮"), "button keeps 売却 仮 wording via price helper path");
   }
   console.log("trade U14 sell equipped circuit ok");
+}
+
+// 2026-10-07 神宮: 「探索帰還」 summaries drop the English 「EXTRACT」 and say
+// 「撤退」 (not 「中断」) for abort. Display only — returnKind values are unchanged.
+// resourceHistory parses hangar log lines by prefix (/^帰還ウェア/); those lines
+// (and their returnKind words) are unchanged, so old saved lines still parse and
+// so do lines written after this change.
+{
+  assert.equal(exploreReturnHeadJa("extract"), "探索帰還");
+  assert.equal(exploreReturnHeadJa("abort"), "探索帰還 撤退");
+  assert.equal(exploreReturnHeadJa("fail"), "探索帰還 失敗");
+
+  const oldSavedLines = [
+    "帰還ウェア extract ×2 · e1 70→60(ok)",
+    "帰還ウェア abort ×1 · e1 60→40(needs_repair)",
+    "帰還ウェア fail ×3",
+  ];
+  for (const line of oldSavedLines) {
+    const e = parseResourceHistoryLine(line);
+    assert.ok(e, `old saved line still parses: ${line}`);
+    assert.equal(e!.source, "explore");
+    assert.equal(e!.title, "探索帰還（摩耗）");
+  }
+  assert.equal(resourceHistoryFromLog(["デモ初期化", ...oldSavedLines]).length, 3, "old lines in a log history");
+
+  // New wording end to end: summary + log line written now still parse / show no EXTRACT・中断.
+  for (const kind of ["extract", "abort", "fail"] as const) {
+    const base = loadPlaytestSeed(resetHangar());
+    const target = base.hub.fleet.find((m) => m.status === "operational")!;
+    const search = new URL(
+      buildExploreToHubWearUrl(
+        toExploreToHubWearPayload(kind, [{ instanceId: target.instanceId, durabilityAfter: Math.max(0, target.durability - 1) }]),
+      ),
+    ).search;
+    const got = ingestLocationSearch(base, search).state;
+    const summary = got.lastExploreReturn!.summaryJa;
+    assert.ok(summary.startsWith(exploreReturnHeadJa(kind) + " · "), `summary head (${kind}): ${summary}`);
+    assert.ok(!summary.includes("EXTRACT") && !summary.includes("中断"), `no EXTRACT / 中断 (${kind}): ${summary}`);
+    const wearLine = got.log.find((l) => l.startsWith("帰還ウェア"));
+    assert.ok(wearLine && parseResourceHistoryLine(wearLine)?.source === "explore", `new log line parses (${kind})`);
+    const sim = simulateReturn(base, kind);
+    assert.equal(sim.lastExploreReturn!.summaryJa.split(" · ")[0], exploreReturnHeadJa(kind), `sim summary head (${kind})`);
+  }
+  console.log("trade explore return wording + old saved log lines ok");
 }
