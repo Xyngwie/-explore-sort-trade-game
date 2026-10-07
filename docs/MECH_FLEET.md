@@ -102,6 +102,8 @@ type OwnedMech = {
 ヘルパ: `wearAfterSortie` / `wearFleetAfterSortie`。  
 既に大破の機体はこれ以上減らさない。
 
+→ 変更（10/7・神宮）: 出撃中に撃破された機体は、帰還種別に関係なく大破（`destroyed`）で戻る（項目5-1。Explore の `outcome.ts`）。上の表の減り方は生き残った機体だけ。
+
 explore 側は当面 `deployableMechs` 件数ハンドオフのままでよい。  
 **どの instanceId が出たか**を trade←→explore で渡すのは後続（非ゴール）。
 

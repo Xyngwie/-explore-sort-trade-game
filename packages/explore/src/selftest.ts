@@ -81,7 +81,7 @@ import { leftBehindResultHtml, leftBehindResultLines } from "./game/leftBehind";
 import { attachLostMechContext, recoverStrandedAtLiftOff, sortieLocationFor, strandedMechsFor, STRANDED_RING_RADIUS } from "./game/lostMechs";
 import { recoverStrandedDropsAtLiftOff, recoveredCircuitResultHtml, recoveredCircuitResultLines, strandedDropsFor, STRANDED_DROP_RING_RADIUS } from "./game/circuitDrops";
 import { invadeSquadSearch } from "./game/invadeSquad";
-import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, sortHandoffUrl, toExploreResult, wreckCircuitResultHtml, wreckCircuitResultLines } from "./game/outcome";
+import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, returnKindFromWorld, sortHandoffUrl, toExploreResult, wreckCircuitResultHtml, wreckCircuitResultLines } from "./game/outcome";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
   QUIRK_LABEL,
@@ -3318,4 +3318,182 @@ import {
   assert.ok(!savedHub.fieldDrops.some((d) => d.dropId === "drop_f1"));
 
   console.log("explore field drops reappear / recover ok");
+}
+
+// 項目5-1: a mech shot down during the sortie (Unit.alive=false at the end)
+// comes back destroyed whatever the ending (extract / abort / fail). The flat
+// returnKind wear applies to the surviving mechs only, with today's values.
+// Its circuits follow the wreck rule (Invade cell drop, or lost); applied to
+// the hub once per sortieId.
+{
+  const memStore = () => {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+  };
+  const makeHub = () => {
+    const mk = (id: string) => ({
+      ...shared.createOwnedMech("mech_gen1", { instanceId: id, durability: 100 }),
+      battery: { capacity: 300, activity: 200 },
+    });
+    let hub = shared.normalizeHubSnapshot({
+      ...shared.INITIAL_HUB,
+      fleet: [mk("m1"), mk("m2"), mk("m3")],
+      frontProgress: { seed: 4242, cols: 8, rows: 8, cleared: [], mined: [] },
+    });
+    hub = shared.upsertCircuitIntoHub(hub, {
+      circuitId: "c_down",
+      circuitBoard: shared.createEmptyCircuitBoard(4, 4, "item5_1_down") as never,
+      outcome: "bypass",
+    } as never);
+    const eq = shared.equipCircuit(hub, "c_down", "m2") as unknown as { hub?: typeof hub };
+    return eq.hub ?? hub;
+  };
+  const deploySearch = (viaInvade: boolean) => {
+    const url = new URL("https://estg.invalid/explore/");
+    if (viaInvade) {
+      url.searchParams.set("sectorX", "2");
+      url.searchParams.set("sectorY", "-1");
+      url.searchParams.set("density", "0.3");
+    }
+    url.searchParams.set("deployedInstanceIds", "m1,m2,m3");
+    url.searchParams.set("deployableMechs", "3");
+    url.searchParams.set("mechDurability", "m1:100;m2:100;m3:100");
+    url.searchParams.set("mechBattery", "m1:300:200;m2:300:200;m3:300:200");
+    url.searchParams.set("mechCircuits", "m2~c_down*by*4");
+    return url.search;
+  };
+  const begin = (viaInvade: boolean, hub = makeHub()) => {
+    const w = attachLostMechContext(createWorld(bootstrapFromSearch(deploySearch(viaInvade))), hub);
+    startSortie(w);
+    for (const e of w.enemies) { e.alive = false; e.hp = 0; }
+    return w;
+  };
+  const shootDown = (u: Unit) => { u.alive = false; u.hp = 0; };
+  const wear = (w: ReturnType<typeof createWorld>) =>
+    Object.fromEntries(exploreReturnPayload(w)!.mechWear.map((r) => [r.instanceId, r.durabilityAfter]));
+  const extractHome = (w: ReturnType<typeof createWorld>) => {
+    w.leader.pos = { x: 700, y: 400 };
+    for (const u of w.wingmen) u.pos = { x: 700, y: 400 };
+    assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 2 && w.phase === "sortie"; t += 0.1) tickWorld(w, 0.1, idleInput());
+    assert.equal(w.phase, "result");
+  };
+  assert.deepEqual(begin(false).wingmen.map((u) => u.instanceId), ["m2", "m3"], "wing-a = m2, wing-b = m3");
+
+  // (1) wingman shot down, then 撤退 (abort): it is destroyed, the others keep today's flat wear
+  const baseAbort = begin(false);
+  assert.equal(executeExploreCommand(baseAbort, { id: "abort" }).status, "done");
+  assert.deepEqual(wear(baseAbort), { m1: 80, m2: 80, m3: 80 }, "no death: flat abort wear (20) as today");
+  const abortW = begin(false);
+  shootDown(abortW.wingmen[0]!);
+  assert.equal(executeExploreCommand(abortW, { id: "abort" }).status, "done");
+  const abortPayload = exploreReturnPayload(abortW)!;
+  assert.equal(abortPayload.returnKind, "abort");
+  assert.deepEqual(wear(abortW), { m1: 80, m2: 0, m3: 80 }, "survivors unchanged vs today");
+  assert.deepEqual(abortPayload.wreckedMechInstanceIds, ["m2"]);
+  const m2Wear = buildSortieOutcome(abortW)!.mechWear.find((r) => r.instanceId === "m2")!;
+  assert.deepEqual(
+    [m2Wear.durabilityBefore, m2Wear.durabilityAfter, m2Wear.wearApplied, m2Wear.statusAfter],
+    [100, 0, 100, "destroyed"],
+  );
+
+  // (2) leader shot down: today's immediate fail stays, and the leader mech comes back destroyed
+  const leaderW = begin(false);
+  shootDown(leaderW.leader);
+  tickWorld(leaderW, 0.05, idleInput());
+  assert.equal(leaderW.phase, "result");
+  assert.equal(leaderW.failReason, "leader_down");
+  assert.equal(returnKindFromWorld(leaderW), "fail");
+  assert.deepEqual(wear(leaderW), { m1: 0, m2: 65, m3: 65 }, "leader destroyed, survivors flat fail wear (35)");
+  assert.deepEqual(exploreReturnPayload(leaderW)!.wreckedMechInstanceIds, ["m1"]);
+  assert.ok(leaderW.logs.some((l) => l.text === "隊長撃破。作戦失敗。"), "same fail log as today");
+
+  // (3) 帰還 (extract) with a shot-down wingman: destroyed; not a left-behind row
+  const baseExtract = begin(false);
+  extractHome(baseExtract);
+  assert.deepEqual(wear(baseExtract), { m1: 85, m2: 85, m3: 85 }, "no death: flat extract wear (15) as today");
+  const extractW = begin(false);
+  shootDown(extractW.wingmen[1]!);
+  extractHome(extractW);
+  assert.equal(extractW.extracted, true);
+  assert.deepEqual(wear(extractW), { m1: 85, m2: 85, m3: 0 });
+  assert.deepEqual(exploreReturnPayload(extractW)!.wreckedMechInstanceIds, ["m3"]);
+  assert.deepEqual(extractW.leftBehind ?? [], [], "a wreck is not left behind");
+
+  // (4) circuit durability buffer still only softens the survivors' wear
+  const bufW = begin(false);
+  bufW.circuitDurabilityBuffer = 10;
+  const bufBase = begin(false);
+  bufBase.circuitDurabilityBuffer = 10;
+  assert.equal(executeExploreCommand(bufBase, { id: "abort" }).status, "done");
+  shootDown(bufW.wingmen[0]!);
+  assert.equal(executeExploreCommand(bufW, { id: "abort" }).status, "done");
+  const bufBaseWear = wear(bufBase);
+  assert.deepEqual(wear(bufW), { m1: bufBaseWear.m1, m2: 0, m3: bufBaseWear.m3 }, "buffer: survivors as today, wreck 0");
+  assert.ok(bufBaseWear.m1! > 80, "buffer reduced the flat wear");
+
+  // (5) via Invade: the destroyed mech's circuit drops on the sortie cell, hull stays destroyed
+  const viaStore = memStore();
+  const viaHub = makeHub();
+  assert.ok(shared.saveHubSaveToLocalStorage(viaHub, viaStore));
+  const via = begin(true, viaHub);
+  assert.deepEqual(via.sortieLocation, { frontSeed: 4242, cell: { sx: 2, sy: -1 } });
+  shootDown(via.wingmen[0]!);
+  assert.equal(executeExploreCommand(via, { id: "abort" }).status, "done");
+  assert.deepEqual(wreckCircuitResultLines(via), ["大破した m2 の回路（c_down）は前線マス (2, -1) に落ちた"]);
+  const viaSave = saveSortieResultToHub(via, viaStore);
+  assert.equal(viaSave.status, "saved");
+  const viaSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(viaStore)!.hub);
+  const hull = viaSaved.fleet.find((m) => m.instanceId === "m2")!;
+  assert.equal(hull.status, "destroyed");
+  assert.equal(hull.durability, 0);
+  assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m1")!.durability, 80);
+  assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m3")!.status, "operational");
+  assert.equal(viaSaved.circuits.some((c) => c.circuitId === "c_down"), false);
+  assert.equal(viaSaved.fieldDrops.length, 1);
+  assert.equal(viaSaved.fieldDrops[0]!.cause, "wreck_not_carried");
+  assert.equal(viaSaved.fieldDrops[0]!.fromMechInstanceId, "m2");
+  assert.equal(viaSaved.fieldDrops[0]!.frontSeed, 4242);
+  assert.deepEqual(viaSaved.fieldDrops[0]!.cell, { sx: 2, sy: -1 });
+  assert.equal(viaSaved.fieldDrops[0]!.circuit.circuitId, "c_down");
+  assert.deepEqual(viaSaved.lostMechs, []);
+
+  // not via Invade: the circuit is lost (U7), hull destroyed
+  const directStore = memStore();
+  assert.ok(shared.saveHubSaveToLocalStorage(makeHub(), directStore));
+  const direct = begin(false);
+  shootDown(direct.wingmen[0]!);
+  assert.equal(executeExploreCommand(direct, { id: "abort" }).status, "done");
+  assert.deepEqual(wreckCircuitResultLines(direct), ["Invade を通らない出撃のため、大破した m2 の回路（c_down）は失われた"]);
+  assert.equal(saveSortieResultToHub(direct, directStore).status, "saved");
+  const directSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(directStore)!.hub);
+  assert.equal(directSaved.fleet.find((m) => m.instanceId === "m2")!.status, "destroyed");
+  assert.equal(directSaved.fieldDrops.length, 0);
+  assert.equal(directSaved.circuits.some((c) => c.circuitId === "c_down"), false);
+
+  // (6) once per sortieId: direct save again, then trade's 格納庫 URL path → no change
+  const before = viaStore.getItem(shared.HUB_SAVE_STORAGE_KEY);
+  assert.equal(saveSortieResultToHub(via, viaStore).status, "already_applied");
+  assert.equal(viaStore.getItem(shared.HUB_SAVE_STORAGE_KEY), before);
+  const viaPayload = exploreReturnPayload(via)!;
+  const urlPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(via)!).search)!;
+  assert.equal(urlPayload.sortieId, viaPayload.sortieId);
+  assert.deepEqual(urlPayload.wreckedMechInstanceIds, ["m2"]);
+  assert.equal(shared.applyExploreReturnToHub(viaSaved, urlPayload).applied, false);
+  // trade path first on a fresh hub: applied once, then skipped
+  const fresh = makeHub();
+  const first = shared.applyExploreReturnToHub(fresh, urlPayload);
+  assert.equal(first.applied, true);
+  assert.equal(first.hub.fleet.find((m) => m.instanceId === "m2")!.status, "destroyed");
+  assert.equal(shared.applyExploreReturnToHub(first.hub, urlPayload).applied, false);
+
+  // (7) re-sortie from the save leaves the destroyed mech out (existing rule)
+  const re = resortieSearch(deploySearch(true), viaSaved, via.deployedInstanceIds);
+  assert.ok(re);
+  assert.equal(re!.deployedInstanceIds.includes("m2"), false);
+  console.log("explore 項目5-1 sortie wrecks ok");
 }

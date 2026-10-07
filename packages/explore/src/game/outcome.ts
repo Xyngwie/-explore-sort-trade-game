@@ -53,8 +53,9 @@ export function toExploreResult(world: World): ExploreResult {
 }
 
 /**
- * I/O v2 scaffold: flat returnKind wear via shared helpers.
- * Per-hit wear accumulation is deferred (see EXPLORE_BEHAVIOR_V0 §9).
+ * I/O v2 scaffold: flat returnKind wear via shared helpers for the mechs
+ * that survived; a mech shot down during the sortie returns destroyed
+ * (項目5-1). Per-hit wear accumulation is deferred (see EXPLORE_BEHAVIOR_V0 §9).
  */
 export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
   if (world.deployedInstanceIds.length === 0) return null;
@@ -86,22 +87,53 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
     mechBattery: (created.mechBattery ?? []).filter((row) => world.mechBattery[row.instanceId] != null),
   };
   const buffer = Math.max(0, Math.floor(world.circuitDurabilityBuffer ?? 0));
-  if (buffer <= 0) return outcome;
+  const downed = downedInstanceIds(world);
   // Absorb circuit durability buffer from flat returnKind wear (per mech).
+  const buffered =
+    buffer <= 0
+      ? outcome.mechWear
+      : outcome.mechWear.map((w) => {
+          const reduced = applyDurabilityBufferToWear(w.wearApplied, buffer);
+          const durabilityAfter = w.durabilityBefore - reduced;
+          const after = Math.max(0, durabilityAfter);
+          return {
+            ...w,
+            durabilityAfter: after,
+            wearApplied: reduced,
+            statusAfter: statusFromDurability(after),
+          };
+        });
+  if (buffer <= 0 && downed.size === 0) return outcome;
+  // 項目5-1: a mech shot down during the sortie (Unit.alive=false) comes back
+  // destroyed whatever the ending; the flat returnKind wear above stays for
+  // the surviving mechs only (their values are unchanged).
   return {
     ...outcome,
-    mechWear: outcome.mechWear.map((w) => {
-      const reduced = applyDurabilityBufferToWear(w.wearApplied, buffer);
-      const durabilityAfter = w.durabilityBefore - reduced;
-      const after = Math.max(0, durabilityAfter);
-      return {
-        ...w,
-        durabilityAfter: after,
-        wearApplied: reduced,
-        statusAfter: statusFromDurability(after),
-      };
-    }),
+    mechWear: buffered.map((w) =>
+      downed.has(w.instanceId)
+        ? {
+            ...w,
+            durabilityAfter: 0,
+            wearApplied: Math.max(0, w.durabilityBefore),
+            statusAfter: statusFromDurability(0),
+          }
+        : w,
+    ),
   };
+}
+
+/**
+ * Deployed mechs whose Unit was shot down this sortie (`alive=false` at the
+ * end): leader and wingmen alike (項目5-1). They return as wrecks.
+ */
+export function downedInstanceIds(world: World): Set<string> {
+  const deployed = new Set(world.deployedInstanceIds);
+  const out = new Set<string>();
+  for (const u of [world.leader, ...world.wingmen]) {
+    const id = u.instanceId?.trim() ?? "";
+    if (id && !u.alive && deployed.has(id)) out.add(id);
+  }
+  return out;
 }
 
 export function sortHandoffUrl(world: World): string {
