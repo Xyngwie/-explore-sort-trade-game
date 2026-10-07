@@ -9,8 +9,10 @@ export const SHORTCUTS_HIDDEN_KEY = "estg.explore.shortcutsHidden";
 export const EXPLORE_SHORTCUTS: ReadonlyArray<{
   keys: ReadonlyArray<string>;
   label: string;
-  /** Commands issued by this row (for circuit lock display). Omit → never locked. */
+  /** Commands issued by this row (hidden when all are locked). Omit → always shown. */
   commands?: ReadonlyArray<ExploreCommandId>;
+  /** Per-command key (same order as `commands`); a partly locked row lists only the unlocked keys. */
+  commandKeys?: ReadonlyArray<string>;
 }> = [
   { keys: ["WASD"], label: "移動", commands: ["move"] },
   { keys: ["Space", "F"], label: "射撃", commands: ["fire"] },
@@ -20,7 +22,7 @@ export const EXPLORE_SHORTCUTS: ReadonlyArray<{
   { keys: ["U"], label: "荷下ろし", commands: ["camp_unload"] },
   { keys: ["G"], label: "積込", commands: ["camp_pickup"] },
   { keys: ["P"], label: "パージ", commands: ["purge"] },
-  { keys: ["1–4"], label: "僚機方針", commands: ["wing_escort", "wing_patrol", "wing_recover", "wing_raid"] },
+  { keys: ["1–4"], label: "僚機方針", commands: ["wing_escort", "wing_patrol", "wing_recover", "wing_raid"], commandKeys: ["1", "2", "3", "4"] },
   { keys: ["?"], label: "この表示" },
 ];
 
@@ -90,7 +92,11 @@ export function setShortcutsOverlayHidden(
 
 export function buildKeyboardShortcutsOverlayHtml(opts?: {
   hidden?: boolean;
-  /** Circuit lock predicate; a row is shown locked when ALL its commands are locked. */
+  /**
+   * Circuit lock predicate. C20-a (2026-10-07 神宮): locked commands are not
+   * shown — a row whose commands are ALL locked is omitted; a partly locked row
+   * with `commandKeys` lists only the unlocked keys.
+   */
   isLocked?: (id: ExploreCommandId) => boolean;
 }): string {
   const hidden = opts?.hidden === true;
@@ -101,16 +107,17 @@ export function buildKeyboardShortcutsOverlayHtml(opts?: {
   }
   const isLocked = opts?.isLocked;
   const rows = EXPLORE_SHORTCUTS.map((row) => {
-    const locked =
-      isLocked != null &&
-      row.commands != null &&
-      row.commands.length > 0 &&
-      row.commands.every((id) => isLocked(id));
-    const cls = locked ? "kb-row locked" : "kb-row";
-    const label = locked ? `🔒 ${row.label}（回路）` : row.label;
-    return `<div class="${cls}"><span class="kb-keys">${row.keys
+    let keys = row.keys;
+    if (isLocked != null && row.commands != null && row.commands.length > 0) {
+      const open = row.commands.map((id) => !isLocked(id));
+      if (open.every((o) => !o)) return "";
+      if (row.commandKeys != null && open.some((o) => !o)) {
+        keys = row.commandKeys.filter((_, i) => open[i]);
+      }
+    }
+    return `<div class="kb-row"><span class="kb-keys">${keys
       .map((k) => `<kbd>${k}</kbd>`)
-      .join("")}</span><span class="kb-label">${label}</span></div>`;
+      .join("")}</span><span class="kb-label">${row.label}</span></div>`;
   }).join("");
   return `<div class="kb-overlay" id="kb-overlay" role="region" aria-label="キーボードショートカット">
     <div class="kb-head">

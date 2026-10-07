@@ -19,7 +19,6 @@ import {
 import { requestExtract } from "./sim";
 import {
   isCommandUnlockedFor,
-  lockedCommandMessage,
   type ExploreCommandId,
 } from "./commandUnlock";
 import type { Stance, World } from "./types";
@@ -83,10 +82,11 @@ export function isExploreCommandAvailable(
   return isCommandUnlockedFor(world, id, wingId);
 }
 
-function denyLocked(world: World, id: ExploreCommandId): ExploreCommandOutcome {
-  const msg = lockedCommandMessage(id);
-  // Avoid flooding the log on key repeat.
-  if (world.logs[0]?.text !== msg) pushLog(world, msg);
+/**
+ * C20-a (2026-10-07 神宮): locked commands are not shown to the player, so a
+ * locked request does nothing and logs nothing (no 🔒 message).
+ */
+function denyLocked(_world: World, id: ExploreCommandId): ExploreCommandOutcome {
   return { status: "locked", id };
 }
 
@@ -180,5 +180,7 @@ export function dispatchExploreKey(
   const req = commandRequestForKey(key);
   if (!req) return null;
   if (opts?.repeat === true && SQUAD_KEYS.has(key)) return null;
+  // C20-a: a locked key does nothing (no command, no log).
+  if (!isExploreCommandAvailable(world, req.id)) return null;
   return executeExploreCommand(world, req);
 }
