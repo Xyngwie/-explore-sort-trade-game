@@ -471,8 +471,10 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   assert.deepEqual(hubVisibleCircuits({ lostMechs: [] }), [], "no circuits field → []");
 }
 
-// (J) wreck not carried, with an Invade cell: circuits become field drops;
-// the hull stays in the fleet as destroyed.
+// (J) ~~wreck not carried, with an Invade cell: circuits become field drops;
+// the hull stays in the fleet as destroyed.~~ → 項目5-1b W8 A: a mech brought
+// to durability 0 by wear (wreckedMechInstanceIds, brought home) stays in the
+// fleet as destroyed WITH its circuits attached; no field drop.
 {
   const wreck = createOwnedMech("mech_gen1", { instanceId: "wreck-1", durability: 10 });
   const stay = createOwnedMech("mech_gen1", { instanceId: "stay-1" });
@@ -498,22 +500,15 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   assert.equal(hull.status, "destroyed");
   assert.equal(hull.durability, 0);
   assert.equal(r.hub.fleet.some((m) => m.instanceId === "stay-1"), true);
-  assert.equal(r.hub.circuits.some((c) => c.circuitId === "c-wreck"), false);
+  assert.equal(r.hub.circuits.find((c) => c.circuitId === "c-wreck")!.equippedTo, "wreck-1", "W8: circuit stays attached");
   assert.equal(r.hub.circuits.find((c) => c.circuitId === "c-stay")!.equippedTo, "stay-1");
-  assert.equal(r.droppedToField.length, 1);
-  const drop = r.hub.fieldDrops[0]!;
-  assert.equal(drop.dropId, "drop_s-wreck-drop_c-wreck");
-  assert.equal(drop.cause, "wreck_not_carried");
-  assert.equal(drop.fromMechInstanceId, "wreck-1");
-  assert.equal(drop.frontSeed, 4242);
-  assert.deepEqual(drop.cell, { sx: 2, sy: -1 });
-  assert.equal(drop.circuit.circuitId, "c-wreck");
-  assert.equal(drop.circuit.equippedTo, null);
-  assert.equal(drop.droppedAt, at.toISOString());
+  assert.equal(r.droppedToField.length, 0);
+  assert.equal(r.hub.fieldDrops.length, 0);
   placesOk(r.hub);
 }
 
-// (K) wreck not carried, no Invade cell: the circuit is lost (U7); the hull stays.
+// (K) ~~wreck not carried, no Invade cell: the circuit is lost (U7); the hull stays.~~
+// → 項目5-1b W8 A: brought home at durability 0 → destroyed, circuit attached.
 {
   const wreck = createOwnedMech("mech_gen1", { instanceId: "wreck-2" });
   const h = normalizeHubSnapshot({
@@ -533,7 +528,8 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   });
   assert.equal(r.droppedToField.length, 0);
   assert.equal(r.hub.fieldDrops.length, 0);
-  assert.deepEqual(r.lostForever.map((c) => c.circuitId), ["c-gone"]);
+  assert.deepEqual(r.lostForever, []);
+  assert.equal(r.hub.circuits.find((c) => c.circuitId === "c-gone")!.equippedTo, "wreck-2");
   assert.equal(r.hub.circuits.find((c) => c.circuitId === "c-stash")!.equippedTo, null);
   assert.equal(r.hub.fleet.find((m) => m.instanceId === "wreck-2")!.status, "destroyed");
   placesOk(r.hub);
@@ -602,10 +598,9 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
   assert.equal(payload.frontSeed, 4242);
   assert.deepEqual(payload.cell, { sx: 2, sy: -1 });
   const applied = normalizeHubSnapshot(applyExploreReturnToHub(h, payload).hub);
-  assert.equal(applied.fieldDrops.length, 1);
-  assert.equal(applied.fieldDrops[0]!.cause, "wreck_not_carried");
+  assert.equal(applied.fieldDrops.length, 0, "項目5-1b: no circuit-only drop");
   assert.equal(applied.fleet.find((m) => m.instanceId === "wreck-1")!.status, "destroyed");
-  assert.equal(applied.circuits.length, 0);
+  assert.equal(applied.circuits.find((c) => c.circuitId === "c-wreck")!.equippedTo, "wreck-1");
 
   const seedOnly = toExploreToHubWearPayload("fail", [], { frontSeed: 5 });
   assert.equal(seedOnly.frontSeed, undefined);
@@ -637,7 +632,7 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
         frontSeed: 100,
         cell: { sx: 1, sy: 1 },
         circuit: c1,
-        cause: "wreck_not_carried",
+        cause: "left_behind",
         droppedAt: "2026-10-04T00:00:00.000Z",
       },
       {
@@ -645,7 +640,7 @@ const placesOk = (h: ReturnType<typeof normalizeHubSnapshot>) => {
         frontSeed: 100,
         cell: { sx: 1, sy: 1 },
         circuit: { ...cDup, customName: "重複回路" },
-        cause: "wreck_not_carried",
+        cause: "left_behind",
         droppedAt: "2026-10-04T00:00:00.000Z",
       },
     ],

@@ -2895,8 +2895,10 @@ import {
   console.log("explore U9 direct save / re-sortie ok");
 }
 
-// Uncarried wreck: its circuits fall on the Invade cell, or are lost when the
-// sortie did not go through Invade (U7). A wreck that was also left behind
+// ~~Uncarried wreck: its circuits fall on the Invade cell, or are lost when the
+// sortie did not go through Invade (U7).~~ → 項目5-1b W8 A: m3 here is brought
+// home at durability 0 by wear — destroyed in the hangar WITH its circuit, no
+// drop and no result line (the old 「…の回路…に落ちた」 line is gone). A wreck that was also left behind
 // keeps its circuits on the lostMechs row. The hull of an uncarried wreck
 // stays in the fleet as destroyed (#199). Carry is unimplemented.
 {
@@ -2965,15 +2967,13 @@ import {
   assert.ok(shared.saveHubSaveToLocalStorage(directHub, directStore));
   const direct = extractHome(deploySearch(false), directHub, false);
   assert.equal(direct.sortieLocation, null);
-  assert.deepEqual(wreckCircuitResultLines(direct), [
-    "Invade を通らない出撃のため、大破した m3 の回路（c_wreck）は失われた",
-  ]);
-  assert.ok(wreckCircuitResultHtml(direct).includes('id="result-wreck-circuits"'));
+  assert.deepEqual(wreckCircuitResultLines(direct), [], "項目5-1b: old line gone");
+  assert.equal(wreckCircuitResultHtml(direct), "");
   const directSave = saveSortieResultToHub(direct, directStore);
   assert.equal(directSave.status, "saved");
   const directSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(directStore)!.hub);
   assert.equal(directSaved.fieldDrops.length, 0, "no cell → no field drop");
-  assert.equal(directSaved.circuits.some((c) => c.circuitId === "c_wreck"), false, "circuit lost (U7)");
+  assert.equal(directSaved.circuits.find((c) => c.circuitId === "c_wreck")!.equippedTo, "m3", "W8: circuit stays attached");
   assert.equal(directSaved.fleet.find((m) => m.instanceId === "m3")!.status, "destroyed");
   assert.equal(exploreReturnPayload(direct)?.frontSeed, undefined);
 
@@ -2982,9 +2982,7 @@ import {
   assert.ok(shared.saveHubSaveToLocalStorage(viaHub, viaStore));
   const via = extractHome(deploySearch(true), viaHub, false);
   assert.deepEqual(via.sortieLocation, { frontSeed: 4242, cell: { sx: 2, sy: -1 } });
-  assert.deepEqual(wreckCircuitResultLines(via), [
-    "大破した m3 の回路（c_wreck）は前線マス (2, -1) に落ちた",
-  ]);
+  assert.deepEqual(wreckCircuitResultLines(via), []);
   const viaPayload = exploreReturnPayload(via)!;
   assert.equal(viaPayload.frontSeed, 4242);
   assert.deepEqual(viaPayload.cell, { sx: 2, sy: -1 });
@@ -2995,14 +2993,8 @@ import {
   const hull = viaSaved.fleet.find((m) => m.instanceId === "m3")!;
   assert.equal(hull.status, "destroyed", "hull stays");
   assert.equal(hull.durability, 0);
-  assert.equal(viaSaved.circuits.some((c) => c.circuitId === "c_wreck"), false);
-  assert.equal(viaSaved.fieldDrops.length, 1);
-  assert.equal(viaSaved.fieldDrops[0]!.cause, "wreck_not_carried");
-  assert.equal(viaSaved.fieldDrops[0]!.fromMechInstanceId, "m3");
-  assert.equal(viaSaved.fieldDrops[0]!.frontSeed, 4242);
-  assert.deepEqual(viaSaved.fieldDrops[0]!.cell, { sx: 2, sy: -1 });
-  assert.equal(viaSaved.fieldDrops[0]!.circuit.equippedTo, null);
-  assert.equal(viaSaved.fieldDrops[0]!.circuit.circuitId, "c_wreck");
+  assert.equal(viaSaved.circuits.find((c) => c.circuitId === "c_wreck")!.equippedTo, "m3", "W8: circuit stays attached");
+  assert.equal(viaSaved.fieldDrops.length, 0, "no circuit-only drop");
 
   const leftHub = makeHub();
   const leftStore = memStore();
@@ -3226,7 +3218,7 @@ import {
         frontSeed: 555,
         cell: { sx: 2, sy: 3 },
         circuit: cField1,
-        cause: "wreck_not_carried",
+        cause: "left_behind",
         droppedAt: "2026-10-04T00:00:00.000Z",
       },
       {
@@ -3234,7 +3226,7 @@ import {
         frontSeed: 555,
         cell: { sx: 2, sy: 3 },
         circuit: { ...cDup, customName: "重複" },
-        cause: "wreck_not_carried",
+        cause: "left_behind",
         droppedAt: "2026-10-04T00:00:00.000Z",
       },
       {
@@ -3242,7 +3234,7 @@ import {
         frontSeed: 555,
         cell: { sx: 0, sy: 0 },
         circuit: cOtherCell,
-        cause: "wreck_not_carried",
+        cause: "left_behind",
         droppedAt: "2026-10-04T00:00:00.000Z",
       },
     ],
@@ -3436,7 +3428,9 @@ import {
   assert.deepEqual(wear(bufW), { m1: bufBaseWear.m1, m2: 0, m3: bufBaseWear.m3 }, "buffer: survivors as today, wreck 0");
   assert.ok(bufBaseWear.m1! > 80, "buffer reduced the flat wear");
 
-  // (5) via Invade: the destroyed mech's circuit drops on the sortie cell, hull stays destroyed
+  // (5) ~~via Invade: the destroyed mech's circuit drops on the sortie cell, hull stays destroyed~~
+  // → 項目5-1b①: the circuit never falls out (no drop, no old result line);
+  // the field wreck itself comes with 項目5-1b② (until then: destroyed hull with its circuit)
   const viaStore = memStore();
   const viaHub = makeHub();
   assert.ok(shared.saveHubSaveToLocalStorage(viaHub, viaStore));
@@ -3444,7 +3438,7 @@ import {
   assert.deepEqual(via.sortieLocation, { frontSeed: 4242, cell: { sx: 2, sy: -1 } });
   shootDown(via.wingmen[0]!);
   assert.equal(executeExploreCommand(via, { id: "abort" }).status, "done");
-  assert.deepEqual(wreckCircuitResultLines(via), ["大破した m2 の回路（c_down）は前線マス (2, -1) に落ちた"]);
+  assert.deepEqual(wreckCircuitResultLines(via), []);
   const viaSave = saveSortieResultToHub(via, viaStore);
   assert.equal(viaSave.status, "saved");
   const viaSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(viaStore)!.hub);
@@ -3453,14 +3447,8 @@ import {
   assert.equal(hull.durability, 0);
   assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m1")!.durability, 80);
   assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m3")!.status, "operational");
-  assert.equal(viaSaved.circuits.some((c) => c.circuitId === "c_down"), false);
-  assert.equal(viaSaved.fieldDrops.length, 1);
-  assert.equal(viaSaved.fieldDrops[0]!.cause, "wreck_not_carried");
-  assert.equal(viaSaved.fieldDrops[0]!.fromMechInstanceId, "m2");
-  assert.equal(viaSaved.fieldDrops[0]!.frontSeed, 4242);
-  assert.deepEqual(viaSaved.fieldDrops[0]!.cell, { sx: 2, sy: -1 });
-  assert.equal(viaSaved.fieldDrops[0]!.circuit.circuitId, "c_down");
-  assert.deepEqual(viaSaved.lostMechs, []);
+  assert.equal(viaSaved.circuits.find((c) => c.circuitId === "c_down")!.equippedTo, "m2");
+  assert.equal(viaSaved.fieldDrops.length, 0);
 
   // not via Invade: the circuit is lost (U7), hull destroyed
   const directStore = memStore();
@@ -3468,12 +3456,11 @@ import {
   const direct = begin(false);
   shootDown(direct.wingmen[0]!);
   assert.equal(executeExploreCommand(direct, { id: "abort" }).status, "done");
-  assert.deepEqual(wreckCircuitResultLines(direct), ["Invade を通らない出撃のため、大破した m2 の回路（c_down）は失われた"]);
+  assert.deepEqual(wreckCircuitResultLines(direct), []);
   assert.equal(saveSortieResultToHub(direct, directStore).status, "saved");
   const directSaved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(directStore)!.hub);
   assert.equal(directSaved.fleet.find((m) => m.instanceId === "m2")!.status, "destroyed");
   assert.equal(directSaved.fieldDrops.length, 0);
-  assert.equal(directSaved.circuits.some((c) => c.circuitId === "c_down"), false);
 
   // (6) once per sortieId: direct save again, then trade's 格納庫 URL path → no change
   const before = viaStore.getItem(shared.HUB_SAVE_STORAGE_KEY);

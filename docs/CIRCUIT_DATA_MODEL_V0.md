@@ -317,6 +317,14 @@ applySortieReport(hub, report): HubSnapshotV3  // 純関数。appliedSortieIds �
 
 ### 5.6 置き去りの僚機（2026-10-03 神宮の決定。実装は未着手）
 
+**→ 変更（10/7・神宮、項目5-1b。実装: 5-1b① shared）:** `lostMechs` の行は置き去りの機体と**残骸**の両方を持つ。
+- 行に `kind`（`"left_behind"` ／ `"wreck"`。無い行は置き去り＝古いセーブ）と `pos`（Explore の中の座標 `{ x, y }`）を足す。残骸の行は常に `durability: 0`・`status: "destroyed"`。回路は残骸の中（`equippedTo` = その機体）のまま。
+- 帰還の反映（`applySortieReport`）: `kind: "wreck"` の行は置き去りと同じく `fleet` から外れ、回路を付けたまま `lostMechs` に入る。場所の無い残骸の行（Invade を通らない出撃）は機体も回路も失う（W4 A）。`wreckedMechInstanceIds` だけの機体（摩耗で耐久 0・持ち帰った）は `fleet` に `destroyed` で残り、回路は付いたまま（W8 A）。**回路だけの落とし物（`wreck_not_carried`）はもう作らない。**
+- 回収（`recoverLostMechs`）: 残骸は `destroyed`・耐久 0 で回路ごと `fleet` に戻る（W7 A）。解体すると回路は倉庫へ（読み込み時の整合）。
+- 盤の作り直し（W3 C）: Invade が別の盤を開くと、その盤の `frontSeed` でない残骸の行は回路ごと消える（`removeWreckRows`、回路の記録も消す）。置き去りの行は今どおり同じ座標へ移る。
+- 古いセーブ（W9 B）: 読み込み（`normalizeHubSnapshot`）のとき、`fieldDrops` のうち `cause: "wreck_not_carried"` の回路を倉庫へ戻し（`equippedTo: null`）、その落とし物を消す。同じ回路がすでにあれば落とし物を消すだけ（二重にしない）。何度読んでも同じ。他の原因の落とし物はそのまま。
+- 残骸の回路は HUB の一覧・数・ボーナスに出ない（`hubVisibleCircuits` が `lostMechs` の機体の回路を外す。W5 A）。
+
 §5.1〜§5.3 の「置き去りの僚機も背負われなかった大破機と同じ扱い（回路はその場に落ちる）」は、次の決定で置き換わる。背負えなかった大破機の扱い（回路は落とし物になる）は変えない。
 
 決定済み:

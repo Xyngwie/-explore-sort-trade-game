@@ -59,7 +59,7 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
       row("legacy"),
     ],
     fieldDrops: [{
-      dropId: "drop_a", frontSeed: 9, cell: { sx: 4, sy: 4 }, cause: "wreck_not_carried", fromMechInstanceId: "x", droppedAt: "2026-10-03T00:00:00.000Z",
+      dropId: "drop_a", frontSeed: 9, cell: { sx: 4, sy: 4 }, cause: "left_behind", fromMechInstanceId: "x", droppedAt: "2026-10-03T00:00:00.000Z",
       circuit: { circuitId: "c1", circuitBoard: { v: 1, cols: 2, rows: 2, edgeState: "" }, outcome: "offline", restoreState: "offline", equippedTo: null },
     } as never],
   } as HubSnapshot);
@@ -104,7 +104,7 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
         dropId: "drop_b",
         frontSeed: 10,
         cell: { sx: 4, sy: 4 },
-        cause: "wreck_not_carried",
+        cause: "left_behind",
         droppedAt: "2026-10-03T00:00:00.000Z",
         circuit: {
           circuitId: "c2",
@@ -175,7 +175,7 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
       dropId: "drop_coexist",
       frontSeed: seed1,
       cell: { sx: 1, sy: 1 },
-      cause: "wreck_not_carried",
+      cause: "left_behind",
       droppedAt: "2026-10-03T00:00:00.000Z",
       circuit: {
         circuitId: "c_placed",
@@ -225,6 +225,51 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
   assert.ok(getCell(s2.board, 1, 1));
   persistFrontSession(s2.board, { sx: 0, sy: 0 }, st);
   assert.equal(deserializeHubSave(st.getItem(HUB_SAVE_STORAGE_KEY)!)!.hub.lostMechs.length, 2);
+}
+
+// 項目5-1b W3 C (2026-10-07 神宮): a wreck stays on its own board (same cell,
+// same Explore coordinates) and vanishes with its circuits when the board is
+// regenerated. Left-behind mechs still move to the new board.
+{
+  const st = memStorage();
+  const first = loadOrCreateFrontSession(st);
+  const seed1 = first.board.seed!;
+  const circuit = (id: string, equippedTo: string) => ({
+    circuitId: id, circuitBoard: { v: 1, cols: 2, rows: 2, edgeState: "" }, outcome: "offline", restoreState: "offline", equippedTo,
+  });
+  const hub0 = normalizeHubSnapshot({
+    ...load(st),
+    fleet: [createOwnedMech("mech_gen1", { instanceId: "keep" })],
+    circuits: [circuit("c_wreck", "wreck-1"), circuit("c_left", "left-1")] as never,
+    lostMechs: [
+      { ...row("wreck-1", { frontSeed: seed1, cell: { sx: 2, sy: 1 } }), circuitIds: ["c_wreck"], kind: "wreck", pos: { x: 640, y: 410 } },
+      { ...row("left-1", { frontSeed: seed1, cell: { sx: 1, sy: 1 } }), circuitIds: ["c_left"] },
+    ],
+  } as never);
+  assert.ok(saveHubSaveToLocalStorage(hub0, st));
+  // same board re-opened: the wreck is kept as it is
+  const s1 = loadOrCreateFrontSession(st);
+  assert.equal(s1.placement.removedWrecks, undefined);
+  const h1 = load(st);
+  const w = h1.lostMechs.find((m) => m.instanceId === "wreck-1")!;
+  assert.equal(w.kind, "wreck");
+  assert.deepEqual(w.pos, { x: 640, y: 410 });
+  assert.deepEqual(w.cell, { sx: 2, sy: 1 });
+  assert.equal(h1.circuits.find((c) => c.circuitId === "c_wreck")!.equippedTo, "wreck-1");
+  // regenerate: the wreck and its circuit are gone; the left-behind mech moves
+  const s2 = regenerateFrontSession(st);
+  assert.notEqual(s2.board.seed, seed1);
+  assert.deepEqual(s2.placement.removedWrecks, ["wreck-1"]);
+  const h2 = load(st);
+  assert.deepEqual(h2.lostMechs.map((m) => m.instanceId), ["left-1"]);
+  assert.equal(h2.lostMechs[0]!.frontSeed, s2.board.seed! >>> 0);
+  assert.equal(h2.circuits.some((c) => c.circuitId === "c_wreck"), false, "wreck circuit gone (not stashed)");
+  assert.equal(h2.circuits.find((c) => c.circuitId === "c_left")!.equippedTo, "left-1");
+  assert.deepEqual(h2.fleet.map((m) => m.instanceId), ["keep"]);
+  // a wreck without a place (cannot happen from Explore) is removed too, never put on HQ
+  const odd = placeLostOnFront(normalizeHubSnapshot({ ...h2, lostMechs: [...h2.lostMechs, { ...row("wreck-x"), kind: "wreck" }] } as never), s2.board.seed!, AOI_HALF);
+  assert.deepEqual(odd.removedWrecks, ["wreck-x"]);
+  assert.deepEqual(odd.placed, []);
 }
 
 console.log("invade lost-mechs selftest: ok");

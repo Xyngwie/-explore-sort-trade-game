@@ -268,34 +268,13 @@ function escapeResultText(s: string): string {
 }
 
 /**
- * Result-screen lines for circuits of wrecked mechs that were not left behind.
- * Carry is unimplemented, so every such wreck counts as not carried: with an
- * Invade cell the circuits fall there; without one they are lost (U7).
- * A wreck that is also a left-behind row keeps its circuits, so it has no line.
+ * ~~Result-screen lines for circuits of wrecked mechs that were not left behind
+ * (「大破した … の回路（…）は前線マス (x, y) に落ちた」).~~ → 項目5-1b
+ * (2026-10-07 神宮): circuits always stay inside the wreck and never fall out,
+ * so this line is gone. The wreck line of 項目5-1b② replaces it.
  */
-export function wreckCircuitResultLines(world: World): string[] {
-  const outcome = buildSortieOutcome(world);
-  if (!outcome) return [];
-  const kept = new Set([
-    ...lostMechsFromWorld(world).map((m) => m.instanceId),
-    ...abandonedFromWorld(world),
-  ]);
-  const loc = world.sortieLocation ?? null;
-  const lines: string[] = [];
-  for (const wear of outcome.mechWear) {
-    if (wear.durabilityAfter > 0 || kept.has(wear.instanceId)) continue;
-    const idx = world.deployedInstanceIds.indexOf(wear.instanceId);
-    const unitId = idx >= 0 ? WRECK_UNIT_IDS[idx] : undefined;
-    const ids = unitId ? (world.circuitIdsByUnit[unitId] ?? []) : [];
-    if (ids.length === 0) continue;
-    const list = ids.join("、");
-    lines.push(
-      loc
-        ? `大破した ${wear.instanceId} の回路（${list}）は前線マス (${loc.cell.sx}, ${loc.cell.sy}) に落ちた`
-        : `Invade を通らない出撃のため、大破した ${wear.instanceId} の回路（${list}）は失われた`,
-    );
-  }
-  return lines;
+export function wreckCircuitResultLines(_world: World): string[] {
+  return [];
 }
 
 export function wreckCircuitResultHtml(world: World): string {
