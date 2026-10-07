@@ -518,17 +518,7 @@ button.cover-active {
   gap: 0.4rem;
 }
 
-/* Circuit command unlock (foundation) — locked commands + preview DEBUG mode bar */
-button.cmd-locked,
-button.cmd-locked:disabled {
-  opacity: 0.55;
-  border-style: dashed;
-  background: #1b1d22;
-  color: #8a93a3;
-  cursor: not-allowed;
-}
-.kb-row.locked .kb-label { color: #8a93a3; }
-.kb-row.locked kbd { opacity: 0.5; }
+/* Circuit command unlock — preview DEBUG mode bar (C20-a: locked commands are not rendered) */
 .debug-unlock-bar {
   display: flex;
   flex-wrap: wrap;
@@ -553,8 +543,7 @@ button.cmd-locked:disabled {
 .debug-unlock-bar.mode-release .debug-tag { background: #f59e0b; }
 .debug-unlock-bar .debug-unlock-toggle { padding: 0.15rem 0.5rem; font-size: 0.78rem; }
 
-/* wing_mobility locked: wingman stands still, self-defense only */
-.wing-immobile { margin-top: 0.2rem; font-size: 0.78rem; color: #f59e0b; }
+/* wing_mobility locked: wingman stands still, self-defense only (badge 「自衛のみ」) */
 .left-behind, .wreck-circuits, .recovered-circuits { margin: 0.35rem 0 0.6rem; padding-left: 1.1rem; color: #f59e0b; font-size: 0.9rem; }
 .recovered-circuits { color: #34d399; }
 .wing-card.immobile { border-style: dashed; }

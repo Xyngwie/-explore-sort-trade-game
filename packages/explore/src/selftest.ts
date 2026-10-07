@@ -1831,7 +1831,9 @@ import {
 
 const TEST_ONLY_TABLE: CircuitCommandUnlockTable = {
   "test-circuit-camp": ["camp_set", "camp_unload", "camp_pickup"],
-  "test-circuit-squad": ["wing_escort", "wing_patrol", "wing_recover", "wing_raid", "scatter_search", "purge"],
+  "test-circuit-squad": ["wing_escort", "wing_patrol", "wing_recover", "wing_raid", "scatter_search", "purge", "wing_mobility"],
+  // C20-a: the four squad stances without wing_mobility (they stay locked).
+  "test-circuit-stances-only": ["wing_escort", "wing_patrol", "wing_recover", "wing_raid"],
 };
 const CIRCUIT_IDS = EXPLORE_COMMANDS.filter((d) => d.tier === "circuit").map((d) => d.id);
 
@@ -1938,17 +1940,16 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   }
   assert.equal(executeExploreCommand(w, { id: "wing_escort", wingId: w.wingmen[0]!.id, rally: true }).status, "locked", "召還 locked");
   assert.deepEqual(w.wingmen.map((x) => x.stance), stances, "stances unchanged when locked");
-  // Key input path
+  // Key input path — C20-a (2026-10-07 神宮): a locked key does nothing and logs nothing.
+  const logsBeforeKeys = w.logs.length;
   for (const key of ["c", "u", "g", "p", "1", "2", "3", "4"]) {
     const r = dispatchExploreKey(w, key);
-    assert.equal(r?.status, "locked", `key ${key} blocked in release`);
+    assert.equal(r, null, `key ${key} does nothing in release`);
   }
   assert.equal(w.camp, null);
-  assert.ok(w.logs.some((l) => l.text.includes("🔒")), "lock message logged");
-  const lockLogs = w.logs.filter((l) => l.text.includes("🔒 キャンプ設置")).length;
-  dispatchExploreKey(w, "c");
-  dispatchExploreKey(w, "c");
-  assert.equal(w.logs.filter((l) => l.text.includes("🔒 キャンプ設置")).length, lockLogs + 1, "repeat lock log deduped");
+  assert.equal(w.logs.length, logsBeforeKeys, "locked keys add no log line");
+  assert.ok(!w.logs.some((l) => l.text.includes("🔒") || l.text.includes("ロック中")), "no lock message logged (commands or keys)");
+  assert.deepEqual(w.wingmen.map((x) => x.stance), stances, "stances unchanged after locked keys");
   assert.equal(commandRequestForKey("v"), null, "V cover not a command (object-based cover)");
   assert.equal(commandRequestForKey("?"), null, "overlay toggle out of scope");
   // Basic 4 still work in release w/o circuits
@@ -1990,7 +1991,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.ok(w.camp, "camp set via unlocked key");
   assert.equal(executeExploreCommand(w, { id: "camp_unload" }).status, "done");
   assert.equal(executeExploreCommand(w, { id: "purge" }).status, "locked", "purge still locked (not in row)");
-  assert.equal(dispatchExploreKey(w, "3")?.status, "locked");
+  assert.equal(dispatchExploreKey(w, "3"), null, "locked key 3 does nothing");
   for (const unitId of ["leader", "wing-a", "wing-b"] as const) {
     w.commandUnlock.equippedByUnit[unitId]!.push("test-circuit-squad");
   }
@@ -2005,16 +2006,73 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   console.log("explore command unlock provisional circuit execution ok");
 }
 
+// C20-a (2026-10-07 神宮): 帯同・哨戒・回収・遊撃・召還 need wing_mobility on the
+// same wingman; the squad-level check counts only alive wingmen; nothing is logged.
+{
+  const w = unlockWorld("release", ["test-circuit-stances-only"], TEST_ONLY_TABLE);
+  const [wa, wb] = [w.wingmen[0]!, w.wingmen[1]!];
+  assert.equal(wa.id, "wing-a");
+  assert.equal(wb.id, "wing-b");
+  const SQUAD = ["wing_escort", "wing_patrol", "wing_recover", "wing_raid"] as const;
+  for (const id of SQUAD) {
+    assert.equal(isCommandUnlockedFor(w, id), false, `${id}: stance circuit without mobility stays locked (squad)`);
+    assert.equal(isCommandUnlockedFor(w, id, wa.id), false, `${id}: stance circuit without mobility stays locked (wing)`);
+  }
+  const logs0 = w.logs.length;
+  assert.equal(executeExploreCommand(w, { id: "wing_escort", wingId: wa.id, rally: true }).status, "locked", "召還 needs mobility");
+  assert.equal(executeExploreCommand(w, { id: "wing_recover", wingId: wa.id }).status, "locked", "回収 needs mobility");
+  assert.equal(w.logs.length, logs0, "locked commands log nothing");
+  // wing A gets mobility (+ stances) → A only
+  w.commandUnlock.equippedByUnit["wing-a"]!.push("test-circuit-squad");
+  for (const id of SQUAD) {
+    assert.equal(isCommandUnlockedFor(w, id, wa.id), true, `${id}: unlocked for mobile wing A`);
+    assert.equal(isCommandUnlockedFor(w, id, wb.id), false, `${id}: still locked for immobile wing B`);
+    assert.equal(isCommandUnlockedFor(w, id), true, `${id}: squad-level open via alive wing A`);
+  }
+  // mixed squad order: main's behaviour (A applies, B silently unchanged), no lock-ish line
+  wb.stance = "escort";
+  const logs1 = w.logs.length;
+  assert.equal(executeExploreCommand(w, { id: "wing_patrol" }).status, "done");
+  assert.equal(wa.stance, "patrol");
+  assert.equal(wb.stance, "escort", "locked wing B unchanged");
+  const added = w.logs.slice(0, w.logs.length - logs1).map((l) => l.text);
+  assert.ok(added.some((t) => t.startsWith(`${wa.name}：哨戒`)), "A keeps its own line");
+  assert.ok(!added.some((t) => /🔒|ロック|未解放|対象外|回路/.test(t)), `no lock wording: ${JSON.stringify(added)}`);
+  // only ALIVE wingmen count for the squad-level check
+  wa.alive = false;
+  for (const id of SQUAD) assert.equal(isCommandUnlockedFor(w, id), false, `${id}: dead wing A no longer opens the squad order`);
+  const logs2 = w.logs.length;
+  assert.equal(dispatchExploreKey(w, "2"), null, "key 2 does nothing once the only unlocked wing is dead");
+  assert.equal(executeExploreCommand(w, { id: "wing_patrol" }).status, "locked");
+  assert.equal(w.logs.length, logs2, "nothing logged");
+  // holders without wingmen keep the circuit-list fallback
+  assert.equal(isCommandUnlockedFor({ commandUnlock: w.commandUnlock }, "wing_patrol"), true, "no wingmen → circuit lists");
+  console.log("explore C20-a mobility prerequisite + alive-only squad check ok");
+}
+
 // UI: keyboard overlay marks locked rows only when locked
 {
   const all = unlockWorld("all_unlocked");
   const rel = unlockWorld("release");
   const htmlAll = buildKeyboardShortcutsOverlayHtml({ hidden: false, isLocked: (id: ExploreCommandId) => !isCommandUnlockedFor(all, id) });
   const htmlRel = buildKeyboardShortcutsOverlayHtml({ hidden: false, isLocked: (id: ExploreCommandId) => !isCommandUnlockedFor(rel, id) });
-  assert.ok(!htmlAll.includes("🔒"), "no lock marks in all_unlocked");
-  assert.ok(htmlRel.includes("🔒 キャンプ"), "camp row locked in release");
-  assert.ok(htmlRel.includes("🔒 僚機方針"), "squad row locked in release");
-  assert.ok(!htmlRel.includes("🔒 移動") && !htmlRel.includes("🔒 射撃") && !htmlRel.includes("🔒 抽出要請"), "basic rows never locked");
+  // C20-a (2026-10-07 神宮): locked rows are not shown at all.
+  assert.ok(!htmlAll.includes("🔒") && !htmlRel.includes("🔒"), "no lock marks in either mode");
+  assert.equal(htmlAll, buildKeyboardShortcutsOverlayHtml({ hidden: false }), "all_unlocked overlay unchanged");
+  for (const label of ["キャンプ", "荷下ろし", "積込", "パージ", "僚機方針"]) {
+    assert.ok(htmlAll.includes(`>${label}<`), `${label} row in all_unlocked`);
+    assert.ok(!htmlRel.includes(`>${label}<`), `${label} row hidden in release`);
+  }
+  assert.ok(htmlAll.includes("<kbd>1–4</kbd>"));
+  for (const label of ["移動", "射撃", "回収（任意）", "抽出要請", "この表示"]) {
+    assert.ok(htmlRel.includes(`>${label}<`), `basic row ${label} always shown`);
+  }
+  // partly unlocked squad row lists only the unlocked keys
+  const part = unlockWorld("release", ["test-circuit-part"], {
+    "test-circuit-part": ["wing_patrol", "wing_raid", "wing_mobility"],
+  });
+  const htmlPart = buildKeyboardShortcutsOverlayHtml({ hidden: false, isLocked: (id: ExploreCommandId) => !isCommandUnlockedFor(part, id) });
+  assert.ok(htmlPart.includes("<kbd>2</kbd><kbd>4</kbd></span><span class=\"kb-label\">僚機方針<"), `partial squad keys: ${htmlPart}`);
   console.log("explore command unlock overlay ok");
 }
 
@@ -2284,8 +2342,8 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
       { id: w.wingmen[1]!.id, name: "僚機B", reason: "no_circuit" },
     ]);
     assert.deepEqual(leftBehindResultLines(w), [
-      "僚機Aを置き去り（回路なし・搭乗円の外）",
-      "僚機Bを置き去り（回路なし・搭乗円の外）",
+      "僚機Aを置き去り（搭乗円の外・自衛のみ）",
+      "僚機Bを置き去り（搭乗円の外・自衛のみ）",
     ]);
     const html = leftBehindResultHtml(w);
     assert.ok(html.includes('id="result-left-behind"') && (html.match(/<li>/g) ?? []).length === 3);
@@ -2299,7 +2357,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     w.leader.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
     w.wingmen[1]!.pos = { x: w.leader.pos.x + 20, y: w.leader.pos.y };
     extract(w);
-    assert.deepEqual(leftBehindResultLines(w), ["僚機Aを置き去り（回路なし・搭乗円の外）"]);
+    assert.deepEqual(leftBehindResultLines(w), ["僚機Aを置き去り（搭乗円の外・自衛のみ）"]);
   }
 
   // (2) circuit present (mobile), but outside the circle at lift-off → plain "搭乗円の外"
@@ -2313,7 +2371,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.deepEqual(w.leftBehind, [{ id: wa.id, name: "僚機A", reason: "outside_circle" }], label);
     const lines = leftBehindResultLines(w);
     assert.deepEqual(lines, ["僚機Aを置き去り（搭乗円の外）"], label);
-    assert.ok(!lines[0]!.includes("回路なし"), `${label}: distinguished from no-circuit`);
+    assert.ok(!lines[0]!.includes("自衛のみ"), `${label}: distinguished from the immobile (self-defense only) case`);
     noLeak(w);
   }
 

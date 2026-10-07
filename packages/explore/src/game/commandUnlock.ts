@@ -160,15 +160,32 @@ function isWingCommand(commandId: ExploreCommandId): commandId is CircuitCommand
 }
 
 /**
+ * Squad stances (and 召還 = `wing_escort`) that also need `wing_mobility` on the
+ * same wingman (C20-a, 2026-10-07 神宮: 帯同・哨戒・遊撃・回収・召還 require
+ * the wingman to be able to move).
+ */
+const MOBILITY_GATED_WING_COMMANDS: ReadonlySet<ExploreCommandId> = new Set([
+  "wing_escort",
+  "wing_patrol",
+  "wing_recover",
+  "wing_raid",
+]);
+
+/**
  * Unlock check against an Explore World-ish holder.
  * - Captain commands use the leader's circuit list.
- * - Wing commands with a target use that wing's list.
- * - Squad-level wing commands are available when at least one live-target
- *   circuit list unlocks them; execution filters locked wingmen separately.
+ * - Wing commands with a target use that wing's list. 帯同・哨戒・回収・遊撃
+ *   (and 召還) also need that wing's `wing_mobility`.
+ * - Squad-level wing commands are available when at least one ALIVE wingman
+ *   passes the per-wing check; execution filters locked wingmen separately.
+ *   Holders without `wingmen` fall back to every `wing-*` circuit list.
  * Missing command state preserves the legacy all-unlocked behavior.
  */
 export function isCommandUnlockedFor(
-  holder: { commandUnlock?: CommandUnlockState | null },
+  holder: {
+    commandUnlock?: CommandUnlockState | null;
+    wingmen?: ReadonlyArray<{ id: string; alive: boolean }>;
+  },
   commandId: ExploreCommandId,
   unitId?: string,
 ): boolean {
@@ -176,27 +193,25 @@ export function isCommandUnlockedFor(
   if (!st) return true;
   if (st.mode === "all_unlocked") return true;
   if (isWingCommand(commandId)) {
-    if (unitId != null) {
-      return isCommandUnlocked(commandId, circuitsForUnit(st.equippedByUnit, unitId), {
-        mode: st.mode,
-        table: st.table,
-      });
-    }
-    return Object.entries(st.equippedByUnit)
-      .filter(([id]) => id.startsWith("wing-"))
-      .some(([, circuits]) =>
-        isCommandUnlocked(commandId, circuits, { mode: st.mode, table: st.table }),
-      );
+    const opts = { mode: st.mode, table: st.table };
+    const unlockedForWing = (wingId: string): boolean => {
+      const circuits = circuitsForUnit(st.equippedByUnit, wingId);
+      if (!isCommandUnlocked(commandId, circuits, opts)) return false;
+      if (MOBILITY_GATED_WING_COMMANDS.has(commandId) && !isWingmanMobilityUnlocked(wingId, circuits, opts)) {
+        return false;
+      }
+      return true;
+    };
+    if (unitId != null) return unlockedForWing(unitId);
+    if (holder.wingmen) return holder.wingmen.some((wing) => wing.alive && unlockedForWing(wing.id));
+    return Object.keys(st.equippedByUnit)
+      .filter((id) => id.startsWith("wing-"))
+      .some(unlockedForWing);
   }
   return isCommandUnlocked(commandId, circuitsForUnit(st.equippedByUnit, "leader"), {
     mode: st.mode,
     table: st.table,
   });
-}
-
-/** JA lock message used in logs / tooltips. */
-export function lockedCommandMessage(commandId: ExploreCommandId): string {
-  return `🔒 ${commandDef(commandId).label}：回路未装備のためロック中（基本の 移動・射撃・回収・帰還 は常時可）。`;
 }
 
 /**
@@ -227,4 +242,3 @@ export function isWingmanMobileFor(
   });
 }
 
-export const WINGMAN_IMMOBILE_LABEL = "回路なし：自衛のみ";

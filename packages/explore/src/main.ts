@@ -57,7 +57,7 @@ import {
   type ExploreCommandOutcome,
 } from "./game/commands";
 import {
-  WINGMAN_IMMOBILE_LABEL,
+  EXPLORE_COMMANDS,
   isWingmanMobileFor,
   type ExploreCommandId,
 } from "./game/commandUnlock";
@@ -297,18 +297,45 @@ function rally(wingId: string): void {
   afterCommand(executeExploreCommand(world, { id: "wing_escort", wingId, rally: true }));
 }
 
-function cmdLocked(id: ExploreCommandId): boolean {
-  return !isExploreCommandAvailable(world, id);
+// C20-a (2026-10-07 神宮): 未解放のコマンドは見せない。Locked buttons / keys /
+// overlay rows / help items are not rendered at all (no 🔒, no tooltip).
+function cmdLocked(id: ExploreCommandId, wingId?: string): boolean {
+  return !isExploreCommandAvailable(world, id, wingId);
 }
 
-const LOCK_TITLE = "🔒 回路で解放（未装備）";
+const CIRCUIT_COMMAND_IDS: readonly ExploreCommandId[] = EXPLORE_COMMANDS.filter(
+  (d) => d.tier === "circuit",
+).map((d) => d.id);
 
-/** Class / disabled / label decoration for a circuit-gated button. */
-function lockDeco(id: ExploreCommandId): { locked: boolean; cls: string; attr: string; prefix: string } {
-  const locked = cmdLocked(id);
-  return locked
-    ? { locked, cls: " cmd-locked", attr: ` disabled data-cmd-locked="1" aria-disabled="true"`, prefix: "🔒 " }
-    : { locked, cls: "", attr: "", prefix: "" };
+/** Squad-level availability of every circuit command; a change re-renders the sortie DOM. */
+function unlockSignature(): string {
+  return CIRCUIT_COMMAND_IDS.map((id) => (cmdLocked(id) ? "0" : "1")).join("");
+}
+let renderedUnlockSignature = "";
+
+const SQUAD_ORDER_KEYS: ReadonlyArray<{ stance: Stance; key: string }> = [
+  { stance: "escort", key: "1" },
+  { stance: "patrol", key: "2" },
+  { stance: "recover", key: "3" },
+  { stance: "raid", key: "4" },
+];
+
+/** Help line under the map — lists only unlocked commands (same text as before when all are unlocked). */
+function sortieHelpText(): string {
+  const keyItems: Array<[ExploreCommandId | null, string]> = [
+    ["camp_set", "C キャンプ"],
+    ["camp_unload", "U 小隊荷下ろし"],
+    ["purge", "P パージ"],
+    ["camp_pickup", "G 取り上げ"],
+    [null, "V カバー"],
+  ];
+  const keys = keyItems.filter(([id]) => id == null || !cmdLocked(id)).map(([, t]) => t).join("・");
+  const squadKeys = SQUAD_ORDER_KEYS.filter(({ stance }) => !cmdLocked(WING_COMMAND_FOR_STANCE[stance])).map(({ key }) => key);
+  const squad =
+    squadKeys.length === 0
+      ? ""
+      : `僚機方針は ${squadKeys.length === SQUAD_ORDER_KEYS.length ? "1–4" : squadKeys.join("・")}。`;
+  return `未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。${keys}。時間切れ後はキャンプ防衛フォーカス（移動ロック・戦闘継続）。マップ上端の EXTRACT HUD。${squad}僚機に軽い癖（密着／囮／遠射）。`;
 }
 
 function debugUnlockToggleHtml(): string {
@@ -360,25 +387,19 @@ function gatedButtonHtml(
   title: string,
   label: string,
 ): string {
-  const d = lockDeco(cmd);
-  const disabled = d.locked || isOperationTimedOut(world) ? " disabled" : "";
-  const lockAttrs = d.locked ? ` data-cmd-locked="1" aria-disabled="true"` : "";
-  const t = d.locked ? `${LOCK_TITLE} — ${title}` : title;
-  return `<button type="button" class="${baseCls}${d.cls}" id="${domId}"${disabled}${lockAttrs} title="${t}">${d.prefix}${label}</button>`;
+  if (cmdLocked(cmd)) return "";
+  const disabled = isOperationTimedOut(world) ? " disabled" : "";
+  return `<button type="button" class="${baseCls}" id="${domId}"${disabled} title="${title}">${label}</button>`;
 }
 
 function squadOrderBarHtml(): string {
-  const items: Array<{ stance: Stance; key: string }> = [
-    { stance: "escort", key: "1" },
-    { stance: "patrol", key: "2" },
-    { stance: "recover", key: "3" },
-    { stance: "raid", key: "4" },
-  ];
+  const items = SQUAD_ORDER_KEYS.filter(({ stance }) => !cmdLocked(WING_COMMAND_FOR_STANCE[stance]));
+  // C20-a: no unlocked squad order → no bar at all.
+  if (items.length === 0) return "";
   const btns = items
     .map(({ stance, key }) => {
-      const d = lockDeco(WING_COMMAND_FOR_STANCE[stance]);
-      const title = d.locked ? LOCK_TITLE : `全僚機へ${STANCE_LABEL[stance]}（${key}）`;
-      return `<button type="button" class="stance-${stance} squad-order${d.cls}" data-squad-order="${stance}" title="${title}"${d.attr}><span class="hotkey">${key}</span>${d.prefix}${STANCE_LABEL[stance]}</button>`;
+      const title = `全僚機へ${STANCE_LABEL[stance]}（${key}）`;
+      return `<button type="button" class="stance-${stance} squad-order" data-squad-order="${stance}" title="${title}"><span class="hotkey">${key}</span>${STANCE_LABEL[stance]}</button>`;
     })
     .join("");
   return `<div class="squad-order-bar" role="group" aria-label="小隊方針">
@@ -425,23 +446,29 @@ function wingPanelHtml(): string {
   const cards = world.wingmen
     .map((w) => {
       const stances: Stance[] = ["escort", "patrol", "recover", "raid"];
+      // C20-a: decided per wingman; locked stances / 召還 are not rendered.
       const btns = stances
+        .filter((s) => !cmdLocked(WING_COMMAND_FOR_STANCE[s], w.id))
         .map((s) => {
           const active = w.stance === s ? "active-stance" : "";
-          const d = lockDeco(WING_COMMAND_FOR_STANCE[s]);
-          const title = d.locked ? ` title="${LOCK_TITLE}"` : "";
-          return `<button type="button" class="stance-${s} ${active}${d.cls}" data-order="${w.id}:${s}"${title}${d.attr}>${d.prefix}${STANCE_LABEL[s]}</button>`;
+          return `<button type="button" class="stance-${s} ${active}" data-order="${w.id}:${s}">${STANCE_LABEL[s]}</button>`;
         })
         .join("");
+      const rallyBtn = cmdLocked("wing_escort", w.id)
+        ? ""
+        : `<button type="button" class="secondary" data-rally="${w.id}">召還</button>`;
+      const orderRow =
+        rallyBtn || btns
+          ? `<div class="row wing-order-row">
+          ${rallyBtn}
+          ${btns}
+        </div>`
+          : "";
       const quirk =
         w.quirk != null
           ? ` · 癖:${QUIRK_LABEL[w.quirk]}`
           : "";
       const cover = w.inCover ? " · カバー" : "";
-      const immobile =
-        w.alive && !isWingmanMobileFor(world, w.id)
-          ? `<div class="wing-immobile" title="移動は回路で解放（未装備）。その場で射程内の敵だけ撃つ。">🔒 ${WINGMAN_IMMOBILE_LABEL}</div>`
-          : "";
       const status = wingCombatStatus(w);
       const hpPct = w.maxHp > 0 ? Math.max(0, Math.min(100, (w.hp / w.maxHp) * 100)) : 0;
       const hpPulse = w.hitWarnT > 0 ? " pulse" : w.engageWarnT > 0 ? " engage-pulse" : "";
@@ -454,14 +481,7 @@ function wingPanelHtml(): string {
           <div class="wing-hp-fill" style="width:${hpPct.toFixed(1)}%"></div>
         </div>
         <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}${quirk}${cover}</div>
-        ${immobile}
-        <div class="row wing-order-row">
-          ${(() => {
-            const d = lockDeco("wing_escort");
-            return `<button type="button" class="secondary${d.cls}" data-rally="${w.id}"${d.locked ? ` title="${LOCK_TITLE}"` : ""}${d.attr}>${d.prefix}召還</button>`;
-          })()}
-          ${btns}
-        </div>
+        ${orderRow}
       </div>`;
     })
     .join("");
@@ -505,6 +525,7 @@ function directSaveNoteText(res: DirectSaveResult | null): string {
 
 function renderDom(): void {
   phaseWatch.markRendered(world.phase);
+  renderedUnlockSignature = unlockSignature();
   // U9: record the sortie result before any result button can be pressed.
   const directSave = ensureDirectSave();
   const result = world.phase === "result" ? toExploreResult(world) : null;
@@ -722,7 +743,7 @@ function renderDom(): void {
           <button type="button" class="secondary" id="btn-abort">撤退</button>
         </div>
         ${squadOrderBarHtml()}
-        <p class="help">未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。C キャンプ・U 小隊荷下ろし・P パージ・G 取り上げ・V カバー。時間切れ後はキャンプ防衛フォーカス（移動ロック・戦闘継続）。マップ上端の EXTRACT HUD。僚機方針は 1–4。僚機に軽い癖（密着／囮／遠射）。</p>
+        <p class="help">${sortieHelpText()}</p>
       </div>
       <div>
         <div class="card" style="margin:0">
@@ -916,6 +937,9 @@ function frame(now: number): void {
   if (world.phase === "sortie") {
     syncMoveFromKeys();
     tickWorld(world, dt, input);
+    // C20-a: squad-level availability can change mid-sortie (only alive
+    // wingmen count) → rebuild so hidden / shown commands stay in sync.
+    if (unlockSignature() !== renderedUnlockSignature) renderDom();
     if (canvas) {
       const ctx = canvas.getContext("2d");
       if (ctx) renderWorld(ctx, world, canvas.width, canvas.height);

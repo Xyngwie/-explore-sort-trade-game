@@ -20,7 +20,7 @@ export type LeftBehindEntry = { id: string; name: string; reason: LeftBehindReas
 
 export function leftBehindResultLine(entry: LeftBehindEntry): string {
   return entry.reason === "no_circuit"
-    ? `${entry.name}を置き去り（回路なし・搭乗円の外）`
+    ? `${entry.name}を置き去り（搭乗円の外・自衛のみ）` // C20-a: no 「回路なし」 hint (10/7 神宮)
     : `${entry.name}を置き去り（搭乗円の外）`;
 }
 
