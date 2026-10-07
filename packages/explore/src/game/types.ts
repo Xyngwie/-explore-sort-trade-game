@@ -39,6 +39,8 @@ export type World = { balance: Balance; phase: Phase; timeLeft: number; operatio
   strandedMechs?: StrandedMech[];
   /** instanceIds of reappeared mechs recovered at lift-off this sortie. */
   recoveredLostMechIds?: string[];
+  /** 項目5-1b: unit ids of this sortie's wrecks recovered at lift-off (inside the boarding circle). */
+  recoveredWreckUnitIds?: string[];
   /** HubSave fieldDrops left on this front cell, waiting near the drop zone (recovered if inside the boarding circle at lift-off). */
   strandedDrops?: StrandedCircuitDrop[];
   /** dropIds of circuit drops recovered at lift-off this sortie. */

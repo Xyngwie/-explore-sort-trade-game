@@ -17,6 +17,7 @@ import {
 } from "@estg/shared";
 import type { World } from "./types";
 import { strandedNotRecovered } from "./lostMechs";
+import { abandonedWreckInstanceIds, sortieWreckRows } from "./wrecks";
 
 export function returnKindFromWorld(world: World): SortieReturnKind {
   if (world.extracted) return "extract";
@@ -205,6 +206,11 @@ function lostMechsFromWorld(world: World): LostMechReturnState[] {
       ...place,
     });
   }
+  // 項目5-1b: this sortie's wrecks left on the field (kind "wreck" + pos).
+  for (const row of sortieWreckRows(world)) {
+    if (out.some((m) => m.instanceId === row.instanceId)) continue;
+    out.push(row);
+  }
   const seen = new Set(out.map((m) => m.instanceId));
   for (const m of strandedNotRecovered(world)) {
     if (seen.has(m.instanceId)) continue;
@@ -214,6 +220,9 @@ function lostMechsFromWorld(world: World): LostMechReturnState[] {
       currentAmmo: m.row.currentAmmo,
       battery: { ...m.row.battery },
       circuitIds: [...m.row.circuitIds],
+      // a reappeared wreck stays a wreck at its saved coordinates (W3 C)
+      ...(m.row.kind ? { kind: m.row.kind } : {}),
+      ...(m.row.pos ? { pos: { x: m.row.pos.x, y: m.row.pos.y } } : {}),
       ...place,
     });
   }
@@ -223,7 +232,10 @@ function lostMechsFromWorld(world: World): LostMechReturnState[] {
 /** Not via Invade: the wingmen left behind are lost outright with their circuits (#206 leftover). */
 function abandonedFromWorld(world: World): string[] {
   if (world.sortieLocation) return [];
-  return leftBehindInstanceIds(world).map((r) => r.instanceId);
+  const ids = leftBehindInstanceIds(world).map((r) => r.instanceId);
+  // 項目5-1b W4 A: wrecks of a sortie not via Invade are lost with their circuits.
+  for (const id of abandonedWreckInstanceIds(world)) if (!ids.includes(id)) ids.push(id);
+  return ids;
 }
 
 /**
@@ -261,27 +273,7 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
   return payload;
 }
 
-const WRECK_UNIT_IDS = ["leader", "wing-a", "wing-b"] as const;
-
-function escapeResultText(s: string): string {
-  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-}
-
-/**
- * ~~Result-screen lines for circuits of wrecked mechs that were not left behind
- * (「大破した … の回路（…）は前線マス (x, y) に落ちた」).~~ → 項目5-1b
- * (2026-10-07 神宮): circuits always stay inside the wreck and never fall out,
- * so this line is gone. The wreck line of 項目5-1b② replaces it.
- */
-export function wreckCircuitResultLines(_world: World): string[] {
-  return [];
-}
-
-export function wreckCircuitResultHtml(world: World): string {
-  const lines = wreckCircuitResultLines(world);
-  if (lines.length === 0) return "";
-  return `<ul class="wreck-circuits" id="result-wreck-circuits">${lines.map((l) => `<li>${escapeResultText(l)}</li>`).join("")}</ul>`;
-}
+export { wreckResultLines, wreckResultHtml } from "./wrecks";
 
 export function hubWearHandoffUrl(world: World): string | null {
   const payload = exploreReturnPayload(world);

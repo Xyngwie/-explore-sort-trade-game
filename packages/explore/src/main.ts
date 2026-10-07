@@ -83,7 +83,7 @@ import {
   toExploreResult,
   returnKindFromWorld,
   exploreReturnPayload,
-  wreckCircuitResultHtml,
+  wreckResultHtml,
   recoveredCircuitResultHtml,
 } from "./game/outcome";
 import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
@@ -616,7 +616,7 @@ function renderDom(): void {
           result.isExtracted ? "生還" : `失敗（${world.failReason ?? "abort"}）`
         }</p>
         ${leftBehindResultHtml(world)}
-        ${wreckCircuitResultHtml(world)}
+        ${wreckResultHtml(world)}
         ${recoveredCircuitResultHtml(world)}
         <table>
           <tr><td>returnKind</td><td>${returnKindFromWorld(world)}</td></tr>
