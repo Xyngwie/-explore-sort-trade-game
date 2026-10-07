@@ -137,6 +137,21 @@ export type FieldInventoryDrop = {
  * Every field after `circuitIds` is optional (older saves / returns lack
  * them; invalid values are dropped one by one, the row is kept).
  */
+/**
+ * What a lostMechs row is (項目5-1b, 2026-10-07 神宮): a mech left behind
+ * alive outside the boarding circle, or the wreck of a mech shot down in the
+ * field. Rows without `kind` (older saves) are left-behind mechs.
+ */
+export type LostMechKind = "left_behind" | "wreck";
+
+export const LOST_MECH_KINDS: readonly LostMechKind[] = ["left_behind", "wreck"] as const;
+
+/** Explore world coordinates (where a wreck lies on its front cell). */
+export type ExplorePos = { x: number; y: number };
+
+/** Upper bound for a saved Explore coordinate (worlds are ~1400×1000). */
+export const EXPLORE_POS_MAX = 100_000;
+
 export type LostMechReturnState = {
   instanceId: string;
   currentAmmo: number | undefined;
@@ -156,7 +171,21 @@ export type LostMechReturnState = {
   durability?: number;
   durabilityMax?: number;
   status?: MechStatus;
+  /**
+   * 項目5-1b: `"wreck"` = the wreck of a mech shot down in the field. Its
+   * circuits stay inside it (`equippedTo` = the mech), it is recovered as a
+   * `destroyed` hull, and it vanishes with its circuits when the Invade board
+   * is regenerated. Absent = left behind (older rows).
+   */
+  kind?: LostMechKind;
+  /** 項目5-1b: where it lies in the Explore world (wrecks reappear here). */
+  pos?: ExplorePos;
 };
+
+/** True for a wreck row (`kind: "wreck"`); older rows without `kind` are left-behind mechs. */
+export function isWreckRow(row: Pick<LostMechReturnState, "kind">): boolean {
+  return row.kind === "wreck";
+}
 
 /**
  * Invade front minesweeper progress (Module 4).
@@ -712,7 +741,57 @@ export function normalizeLostMechExtras(
   if (typeof obj.status === "string" && (MECH_STATUSES as readonly string[]).includes(obj.status)) {
     out.status = obj.status as MechStatus;
   }
+  if (typeof obj.kind === "string" && (LOST_MECH_KINDS as readonly string[]).includes(obj.kind)) {
+    out.kind = obj.kind as LostMechKind;
+  }
+  const pos = normalizeExplorePos(obj.pos);
+  if (pos) out.pos = pos;
+  // A wreck is always a destroyed hull (項目5-1b).
+  if (out.kind === "wreck") {
+    out.durability = 0;
+    out.status = "destroyed";
+  }
   return out;
+}
+
+/** Finite Explore coordinates within ±EXPLORE_POS_MAX (rounded to 0.1); null when unusable. */
+export function normalizeExplorePos(raw: unknown): ExplorePos | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const x = typeof o.x === "number" ? o.x : Number(o.x);
+  const y = typeof o.y === "number" ? o.y : Number(o.y);
+  if (o.x == null || o.y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (Math.abs(x) > EXPLORE_POS_MAX || Math.abs(y) > EXPLORE_POS_MAX) return null;
+  return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+}
+
+/**
+ * 項目5-1b W9 B (2026-10-07 神宮): circuits used to fall out of a wreck as
+ * circuit-only field drops (`cause: "wreck_not_carried"`, #228). Circuits now
+ * always stay inside the wreck, so such drops in older saves go back to the
+ * stash (`equippedTo: null`) on load. A drop whose circuit is already owned is
+ * just removed (no duplicate). Idempotent: after one pass none are left.
+ */
+export function returnWreckFieldDropsToStash(
+  circuits: HubCircuitRecord[],
+  fieldDrops: FieldCircuitDrop[],
+): { circuits: HubCircuitRecord[]; fieldDrops: FieldCircuitDrop[]; returned: string[] } {
+  if (!fieldDrops.some((d) => d.cause === "wreck_not_carried")) {
+    return { circuits, fieldDrops, returned: [] };
+  }
+  const owned = new Set(circuits.map((c) => c.circuitId));
+  const back: HubCircuitRecord[] = [];
+  const keep: FieldCircuitDrop[] = [];
+  for (const d of fieldDrops) {
+    if (d.cause !== "wreck_not_carried") {
+      keep.push(d);
+      continue;
+    }
+    if (owned.has(d.circuit.circuitId)) continue;
+    owned.add(d.circuit.circuitId);
+    back.push({ ...d.circuit, equippedTo: null });
+  }
+  return { circuits: [...circuits, ...back], fieldDrops: keep, returned: back.map((c) => c.circuitId) };
 }
 
 /**
@@ -875,11 +954,16 @@ export function normalizeHubSnapshot(
   const lostMechsRaw = normalizeLostMechs(rawRec?.lostMechs ?? fallback.lostMechs ?? []).filter(
     (m) => !fleetIdSet.has(m.instanceId),
   );
-  const circuits = enforceEquipIntegrity(
+  // W9 B: circuit-only wreck drops of older saves go back to the stash first.
+  const wreckDropsBack = returnWreckFieldDropsToStash(
     normalizeCircuits(
       (raw as HubSnapshot | undefined)?.circuits,
       fallback.circuits ?? [],
     ),
+    normalizeFieldDrops(rawRec?.fieldDrops ?? fallback.fieldDrops ?? []),
+  );
+  const circuits = enforceEquipIntegrity(
+    wreckDropsBack.circuits,
     fleet,
     new Set(lostMechsRaw.map((m) => m.instanceId)),
   );
@@ -893,7 +977,7 @@ export function normalizeHubSnapshot(
         : undefined,
     circuits,
   );
-  const fieldDrops = normalizeFieldDrops(rawRec?.fieldDrops ?? fallback.fieldDrops ?? []);
+  const fieldDrops = wreckDropsBack.fieldDrops;
   const inventoryFieldDrops = normalizeInventoryFieldDrops(
     rawRec?.inventoryFieldDrops ?? fallback.inventoryFieldDrops ?? [],
   );

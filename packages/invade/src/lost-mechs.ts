@@ -5,7 +5,10 @@
  * - The board marks the cells where left-behind mechs wait (rows whose
  *   `frontSeed` is this board's seed); the mark is display only and never
  *   touches mines / opening.
- * - Board regenerated (new seed): every placed row moves to the same
+ * - 項目5-1b W3 C (2026-10-07 神宮): wreck rows (`kind: "wreck"`) do NOT
+ *   move. A wreck of another board (or without a place) vanishes with the
+ *   circuits inside it (`removeWreckRows`).
+ * - Board regenerated (new seed): every placed left-behind row moves to the same
  *   coordinates on the new board (`frontSeed` rewritten), clamped into the
  *   playable range. Circuit field drops (`fieldDrops`) and general inventory
  *   field drops (`inventoryFieldDrops`) follow the same rule.
@@ -16,6 +19,7 @@
 import {
   SECTOR_WALL_DISTANCE,
   normalizeHubSnapshot,
+  removeWreckRows,
   type FrontCellCoord,
   type HubSnapshot,
 } from "@estg/shared";
@@ -50,6 +54,8 @@ export type FrontPlacementResult = {
   movedDrops: string[];
   /** inventoryFieldDrops moved from another board. */
   movedInventoryDrops: string[];
+  /** 項目5-1b W3 C: wrecks of another board removed with their circuits. */
+  removedWrecks?: string[];
 };
 
 /**
@@ -60,6 +66,13 @@ export type FrontPlacementResult = {
  */
 export function placeLostOnFront(hub: HubSnapshot, seed: number, aoiHalf: number): FrontPlacementResult {
   const s = seed >>> 0;
+  // W3 C: wrecks stay only on their own board; on any other board they vanish (with circuits).
+  const wreckSweep = removeWreckRows(
+    hub,
+    (row) => row.frontSeed == null || row.cell == null || row.frontSeed >>> 0 !== s,
+  );
+  hub = wreckSweep.hub;
+  const removedWrecks = wreckSweep.removed;
   const moved: string[] = [];
   const placed: string[] = [];
   const movedDrops: string[] = [];
@@ -86,14 +99,16 @@ export function placeLostOnFront(hub: HubSnapshot, seed: number, aoiHalf: number
     movedInventoryDrops.push(d.dropId);
     return { ...d, frontSeed: s, cell };
   });
-  const changed = moved.length + placed.length + movedDrops.length + movedInventoryDrops.length > 0;
+  const moves = moved.length + placed.length + movedDrops.length + movedInventoryDrops.length > 0;
+  const changed = moves || removedWrecks.length > 0;
   return {
-    hub: changed ? normalizeHubSnapshot({ ...hub, lostMechs, fieldDrops, inventoryFieldDrops }) : hub,
+    hub: moves ? normalizeHubSnapshot({ ...hub, lostMechs, fieldDrops, inventoryFieldDrops }) : hub,
     changed,
     moved,
     placed,
     movedDrops,
     movedInventoryDrops,
+    ...(removedWrecks.length > 0 ? { removedWrecks } : {}),
   };
 }
 

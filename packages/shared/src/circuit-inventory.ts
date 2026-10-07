@@ -281,9 +281,11 @@ export const LOST_MECH_RECOVERY_FALLBACK_DURABILITY = MECH_FLEET_RULES.operation
 
 /** Rebuild the fleet mech for a lostMechs row (instanceId / ammo / battery kept). */
 export function ownedMechFromLostMech(row: LostMechReturnState): OwnedMech {
+  // 項目5-1b W7 A: a recovered wreck comes back as a destroyed hull (circuits attached).
+  const wreck = row.kind === "wreck";
   const base = createOwnedMech(row.catalogId ?? "mech_gen1", {
     instanceId: row.instanceId,
-    durability: row.durability ?? LOST_MECH_RECOVERY_FALLBACK_DURABILITY,
+    durability: wreck ? 0 : (row.durability ?? LOST_MECH_RECOVERY_FALLBACK_DURABILITY),
     ...(row.durabilityMax != null ? { durabilityMax: row.durabilityMax } : {}),
     ...(row.currentAmmo != null ? { currentAmmo: row.currentAmmo } : {}),
   });
@@ -319,11 +321,16 @@ export function recoverLostMechs(
 
 /**
  * Apply one Explore sortie report to the hub (pure, idempotent by sortieId).
- * Mechs in `lostMechInstanceIds` leave the fleet. Their circuits, and the
- * circuits of wrecked mechs that were not left behind (`wreckedMechInstanceIds`,
- * cause `wreck_not_carried`), become field drops on the sortie cell — or are
- * lost with no record when `cell` is null (U7). A wrecked hull stays in the
- * fleet as `destroyed`. Left-behind `lostMechs` keep their circuits.
+ * Mechs in `lostMechInstanceIds` leave the fleet. Their circuits become field
+ * drops on the sortie cell — or are lost with no record when `cell` is null
+ * (U7; Explore sends this only for sorties not via Invade).
+ * 項目5-1b (2026-10-07 神宮): circuits are always inside the wreck.
+ * - `lostMechs` rows (left behind, or `kind: "wreck"` = shot down in the
+ *   field) leave the fleet and keep their circuits. A wreck row without a
+ *   place (no Invade cell) is lost outright with its circuits (W4 A).
+ * - `wreckedMechInstanceIds` not in `lostMechs` (durability 0 from wear but
+ *   brought home, W8 A) stay in the fleet as `destroyed` with their circuits
+ *   attached — no field drop any more.
  * Recovered drops go back to the stash unchanged; acquired circuits are added
  * to the stash.
  */
@@ -352,7 +359,15 @@ export function applySortieReport(
   hub = recoveredMechsResult.hub;
   const recoveredMechIds = new Set(recoveredMechsResult.recovered);
 
-  const lost = new Set(report.lostMechInstanceIds.map((id) => id.trim()).filter(Boolean));
+  // W4 A: a wreck row without a place cannot stay anywhere — lost outright.
+  const placelessWrecks = (report.lostMechs ?? [])
+    .filter((m) => m.kind === "wreck" && (m.cell ?? report.cell) == null)
+    .map((m) => m.instanceId.trim())
+    .filter(Boolean);
+  const lost = new Set([
+    ...report.lostMechInstanceIds.map((id) => id.trim()).filter(Boolean),
+    ...placelessWrecks,
+  ]);
   // A left-behind row wins over a wreck of the same mech: the mech stays in
   // lostMechs with its circuits. Only a wreck that was not left behind drops
   // its circuits (背負えなかった大破機).
@@ -392,17 +407,17 @@ export function applySortieReport(
   const droppedToField: FieldCircuitDrop[] = [];
   const lostForever: HubCircuitRecord[] = [];
   const keep: HubCircuitRecord[] = [];
-  const dropping = new Set<string>([...lost, ...wrecked]);
   for (const c of hub.circuits) {
-    if (c.equippedTo == null || !dropping.has(c.equippedTo)) {
+    if (c.equippedTo == null || !lost.has(c.equippedTo)) {
       keep.push(c);
       continue;
     }
     const circuit: HubCircuitRecord = { ...c, equippedTo: null };
-    const cause = lost.has(c.equippedTo)
-      ? (report.lostCause[c.equippedTo] ?? "left_behind")
-      : "wreck_not_carried";
-    if (report.cell && report.frontSeed != null && Number.isFinite(report.frontSeed)) {
+    const cause = report.lostCause[c.equippedTo] ?? "left_behind";
+    if (
+      !placelessWrecks.includes(c.equippedTo) &&
+      report.cell && report.frontSeed != null && Number.isFinite(report.frontSeed)
+    ) {
       const drop: FieldCircuitDrop = {
         dropId: `drop_${sortieId}_${c.circuitId}`,
         frontSeed: report.frontSeed >>> 0,
@@ -557,6 +572,33 @@ function lostMechRecord(
     durability: row.durability ?? m?.durability ?? merged.durability,
     durabilityMax: m?.durabilityMax ?? merged.durabilityMax,
     status: row.status ?? m?.status ?? merged.status,
+    ...(row.kind === "wreck" ? { durability: 0, status: "destroyed" as const } : {}),
+  };
+}
+
+/**
+ * Remove wreck rows (and the circuits inside them) that `drop` selects —
+ * 項目5-1b W3 C: wrecks vanish with their circuits when the Invade board is
+ * regenerated. Left-behind rows are never touched. The circuit records are
+ * deleted (not moved to the stash).
+ */
+export function removeWreckRows(
+  hub: HubSnapshot,
+  drop: (row: LostMechReturnState) => boolean,
+): { hub: HubSnapshot; removed: string[]; removedCircuitIds: string[] } {
+  const removed = (hub.lostMechs ?? []).filter((m) => m.kind === "wreck" && drop(m)).map((m) => m.instanceId);
+  if (removed.length === 0) return { hub, removed: [], removedCircuitIds: [] };
+  const gone = new Set(removed);
+  const removedCircuitIds = hub.circuits.filter((c) => c.equippedTo != null && gone.has(c.equippedTo)).map((c) => c.circuitId);
+  const goneCircuits = new Set(removedCircuitIds);
+  return {
+    hub: normalizeHubSnapshot({
+      ...hub,
+      lostMechs: (hub.lostMechs ?? []).filter((m) => !gone.has(m.instanceId)),
+      circuits: hub.circuits.filter((c) => !goneCircuits.has(c.circuitId)),
+    }),
+    removed,
+    removedCircuitIds,
   };
 }
 
