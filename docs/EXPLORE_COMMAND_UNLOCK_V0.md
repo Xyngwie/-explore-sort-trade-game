@@ -23,6 +23,7 @@
 - それ以外はすべて回路で解放する。帯同・哨戒・遊撃は高レベルの行動。→ 変更（10/7・神宮）: 帯同・哨戒・遊撃・回収と召還は、その僚機の `wing_mobility` の解放が前提。
 - 背負い: 隊長はいつでも背負える。僚機は ~~`wing_recover` を解放したときだけ~~ `wing_mobility` と `wing_recover` を両方解放したときだけ背負える（→ 変更（10/7・神宮）。[`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md) §6）。
 - 今後の解放の予定（未実装。コマンド ID も挙動も未定）: 回避・接近・離脱。武器の種類を変える回路。
+- 僚機の移動（`wing_mobility`）は「4」の 1×1 の回路で解放する（2026-10-07 17:06 神宮。表への登録は未実装。§4 の注）。
 - レア度とチャーム型回路は計画として残すが後回し。特殊効果は今は入れない。
 
 ### 1.1.1 今の実装との比較（2026-10-07、main `c197b4a` のコードを読んだ範囲 → C20-a で更新）
@@ -158,6 +159,7 @@ isWingmanMobileFor(world, wingmanId): boolean
 - `mechCircuits` は任意の後方互換フィールドである。旧 URL などでこのフィールドが無いとき、`buildEquippedByUnit()` は `{}` を返す。`createWorld` はその場合も `commandUnlock` を必ず作る。プレビュー既定の `all_unlocked` では、装備が空でも全コマンドが動く。`release`（`VITE_EXPLORE_RELEASE_LOCKS`、または DEBUG の release）で `mechCircuits` が無いと、`equippedByUnit` は空のまま回路コマンドはロックされる。
 - `commandUnlock` 自体が無い呼び出しでは、`isCommandUnlockedFor()` と `isWingmanMobileFor()` は全解放の旧挙動を返す。これは World を持たない呼び出し向けの保険で、`mechCircuits` の有無とは別の条件である。
 - 本番の `CIRCUIT_COMMAND_UNLOCKS` は現在も空。回路→コマンドの具体的な対応表は未決定であり、この文書では新しい対応を定義しない。
+  - **注（2026-10-07）:** 「4」の 1×1 の回路 → `wing_mobility` は決定済み（17:06 神宮。`PRODUCT_VISION.md` §2.1.5・設計メモ §2.1）だが、表にはまだ入っていない（STATUS の To-do）。今の表のキーは回路 ID などの文字列で、`equippedByUnit` に入るのは成果が Fully Awakened か Bypass の回路だけ。1×1 の回路はまだどの経路でも作られない。初クリアまで真盤 0%（21:49 神宮。設計メモ §2.1）は、途中で `wing_mobility` が解放されないようにするための決定。
 
 ## 5. モード（プレビュー／リリース）
 
