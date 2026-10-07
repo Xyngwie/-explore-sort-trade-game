@@ -19,6 +19,7 @@ export type UnitKind = "leader" | "wingman" | "enemy";
 export type Unit = {
   id: string; kind: UnitKind; name: string; pos: Vec2; vel: Vec2; heading: number; hp: number; maxHp: number; radius: number; alive: boolean; stance: Stance; waypoint: Vec2 | null; moveTarget: Vec2 | null; cooldown: number; patrolAngle: number; salvageId: string | null; salvageT: number; salvagedCount: number; capacity: number; instanceId: string | null;
   inCover: boolean; coverEscapeT?: number; coverId?: string | null; quirk: WingmanQuirk | null; hitWarnT: number; engageWarnT: number;
+  /** C20-b: holding in place after an order it could not follow ("stop"); cleared by the next order. */ holdOrder?: boolean; /** C20-b: seconds left of the 「？」 above the wingman. */ questionT?: number;
 };
 export type Container = { id: string; pos: Vec2; taken: boolean; discovered: boolean; glowT: number; };
 export type Bullet = { alive: boolean; pos: Vec2; vel: Vec2; ttl: number; damage: number; fromEnemy: boolean; ownerId: string; };

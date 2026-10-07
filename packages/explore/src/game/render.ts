@@ -2,6 +2,7 @@ import { extractionProgressPct } from "../extractProgress";
 import { getCoverObjects } from "./coverObjects";
 import { STANCE_LABEL, type World } from "./types";
 import { isWingmanMobileFor } from "./commandUnlock";
+import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from "./lockedOrder";
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -254,8 +255,21 @@ export function renderWorld(
     ctx.font = "11px sans-serif";
     const quirkTag = w.quirk ? `·${quirkShort(w.quirk)}` : "";
     const coverTag = w.inCover ? "·カバー" : "";
-    const stanceTag = isWingmanMobileFor(world, w.id) ? STANCE_LABEL[w.stance] : "自衛のみ";
-    ctx.fillText(`${w.name}·${stanceTag}${quirkTag}${coverTag}`, tx(w.pos.x) - 28, ty(w.pos.y) - w.radius * sy - 8);
+    // C20-b: 「待機」 while holding (mobile wingmen; immobile keep 「自衛のみ」).
+    const stanceTag = isWingmanMobileFor(world, w.id) ? wingStanceTagJa(w, STANCE_LABEL[w.stance]) : "自衛のみ";
+    const labelX = tx(w.pos.x) - 28;
+    const labelY = ty(w.pos.y) - w.radius * sy - 8;
+    ctx.fillText(`${w.name}·${stanceTag}${quirkTag}${coverTag}`, labelX, labelY);
+    const qa = questionAlpha(w);
+    if (qa > 0) {
+      // C20-b: 「？」 above the name label, fading out over QUESTION_MARK_SEC.
+      ctx.save();
+      ctx.globalAlpha = qa;
+      ctx.fillStyle = QUESTION_COLOR;
+      ctx.font = QUESTION_FONT;
+      ctx.fillText("？", tx(w.pos.x) - 5, labelY - 13);
+      ctx.restore();
+    }
     if (w.stance === "patrol" && w.waypoint) {
       ctx.strokeStyle = "#f0b42955";
       ctx.beginPath();
