@@ -17,7 +17,7 @@ export const EXPLORE_SHORTCUTS: ReadonlyArray<{
   { keys: ["WASD"], label: "移動", commands: ["move"] },
   { keys: ["Space", "F"], label: "射撃", commands: ["fire"] },
   { keys: ["E"], label: "回収（任意）", commands: ["collect"] },
-  { keys: ["X"], label: "抽出要請", commands: ["extract"] },
+  { keys: ["X"], label: "帰還要請", commands: ["extract"] },
   { keys: ["C"], label: "キャンプ", commands: ["camp_set"] },
   { keys: ["U"], label: "荷下ろし", commands: ["camp_unload"] },
   { keys: ["G"], label: "積込", commands: ["camp_pickup"] },

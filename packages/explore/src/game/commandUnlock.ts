@@ -46,7 +46,7 @@ export const EXPLORE_COMMANDS: readonly ExploreCommandDef[] = [
   { id: "move", tier: "basic", label: "移動", keys: ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"] },
   { id: "fire", tier: "basic", label: "射撃", keys: [" ", "f"] },
   { id: "collect", tier: "basic", label: "回収", keys: ["e"] },
-  { id: "extract", tier: "basic", label: "抽出要請", keys: ["x"] },
+  { id: "extract", tier: "basic", label: "帰還要請", keys: ["x"] },
   { id: "abort", tier: "basic", label: "撤退", keys: [] },
   // Circuit tier — lock candidates (mapping decided later).
   { id: "camp_set", tier: "circuit", label: "キャンプ設置", keys: ["c"] },

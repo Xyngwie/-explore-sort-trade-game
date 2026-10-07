@@ -447,6 +447,15 @@ export function persistHangar(
   return state;
 }
 
+/**
+ * Head of the 「探索帰還 …」 summary (display only; `returnKind` values unchanged).
+ * 2026-10-07 神宮: no English 「EXTRACT」 (extract → just 「探索帰還」) and abort is
+ * 「撤退」 like Explore (was 「中断」). Summaries are not saved or parsed.
+ */
+export function exploreReturnHeadJa(kind: SortieReturnKind): string {
+  return kind === "extract" ? "探索帰還" : kind === "abort" ? "探索帰還 撤退" : "探索帰還 失敗";
+}
+
 /** Ingest sort / explore wear / invade / restore query params; clear them from the URL when possible. */
 export function ingestLocationSearch(
   state: HangarState,
@@ -489,8 +498,6 @@ export function ingestLocationSearch(
 
   const wear = parseExploreToHubWearSearch(search);
   if (wear) {
-    const kindJaFor = (kind: typeof wear.returnKind) =>
-      kind === "extract" ? "EXTRACT" : kind === "abort" ? "中断" : "失敗";
     // U9: Explore saves the result to HubSave at sortie end. The same function
     // applies a legacy return URL once; a return Explore already saved is
     // skipped by sortieId / appliedSortieIds (no double apply).
@@ -500,7 +507,7 @@ export function ingestLocationSearch(
       log = pushLog(log, `帰還 sortieId=${wear.sortieId} は反映済み（Explore が保存）のため再適用しない`);
       lastExploreReturn = {
         returnKind: wear.returnKind,
-        summaryJa: `探索帰還 ${kindJaFor(wear.returnKind)} · 反映済み（Explore が出撃終了時に保存）`,
+        summaryJa: `${exploreReturnHeadJa(wear.returnKind)} · 反映済み（Explore が出撃終了時に保存）`,
       };
       notices.push(lastExploreReturn.summaryJa);
       consumed = true;
@@ -533,7 +540,7 @@ export function ingestLocationSearch(
     );
     lastExploreReturn = {
       returnKind: wear.returnKind,
-      summaryJa: `探索帰還 ${kindJaFor(wear.returnKind)} · 摩耗報告 ${wear.mechWear.length}機${
+      summaryJa: `${exploreReturnHeadJa(wear.returnKind)} · 摩耗報告 ${wear.mechWear.length}機${
         detail ? ` · ${detail}` : ""
       }`,
     };
@@ -1347,9 +1354,7 @@ export function simulateReturn(
   const fleet = applyWearReportsToFleet(state.hub.fleet, reports);
   const hub = normalizeHubSnapshot({ ...state.hub, fleet });
   const bufNote = buffer > 0 ? ` · 回路緩衝 ${buffer}` : "";
-  const kindJa =
-    kind === "extract" ? "EXTRACT" : kind === "abort" ? "中断" : "失敗";
-  const summaryJa = `探索帰還 ${kindJa} · シミュ摩耗 ${ids.length}機${bufNote}`;
+  const summaryJa = `${exploreReturnHeadJa(kind)} · シミュ摩耗 ${ids.length}機${bufNote}`;
   const next: HangarState = {
     ...state,
     hub,

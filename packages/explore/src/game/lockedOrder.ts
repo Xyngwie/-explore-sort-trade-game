@@ -19,9 +19,9 @@ import type { Unit, World } from "./types";
 export const QUESTION_MARK_SEC = 1.5;
 /** Probability of "stop" (otherwise "ignore"). */
 export const LOCKED_ORDER_STOP_CHANCE = 0.5;
-/** 「？」 colour / font: same as the wingman name label. */
+/** 「？」 colour: same as the wingman name label. Font: bold 16px (2026-10-07 神宮). */
 export const QUESTION_COLOR = "#9ecbff";
-export const QUESTION_FONT = "11px sans-serif";
+export const QUESTION_FONT = "bold 16px sans-serif";
 /** Map label stance word while holding: 「僚機A·待機」. */
 export const HOLD_LABEL_JA = "待機";
 

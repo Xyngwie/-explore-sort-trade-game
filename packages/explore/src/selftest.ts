@@ -787,7 +787,7 @@ function advancePinned(
   assert.equal(world.phase, "result");
   assert.equal(world.extracted, true);
   assert.ok(world.logs.some((l) => l.text.includes(w1.name) && l.text.includes("置き去り")));
-  assert.ok(world.logs.some((l) => l.text.includes("脱出成功")));
+  assert.ok(world.logs.some((l) => l.text.includes("帰還成功")));
 }
 
 // --- captain outside at lift-off → fail ---
@@ -1210,7 +1210,8 @@ function advancePinned(
   assert.equal(hud.insideCount, 2);
   assert.equal(hud.outsideCount, 1);
   assert.deepEqual(hud.outsideNames, [w1.name]);
-  assert.ok(hud.lines[0]!.includes("EXTRACT"));
+  assert.equal(hud.lines[0], "帰還要件");
+  assert.ok(hud.lines.every((l) => !l.includes("EXTRACT")), "no English EXTRACT in the HUD");
   assert.ok(hud.lines.some((l) => l.includes("離昇まで")));
   assert.ok(hud.lines.some((l) => l.includes("必須") && l.includes("隊長")));
   assert.ok(hud.lines.some((l) => l.includes("円内") && l.includes("生存")));
@@ -1602,7 +1603,7 @@ function advancePinned(
   assert.ok(html.includes("<kbd>WASD</kbd>"), "WASD kbd");
   assert.ok(html.includes("<kbd>Space</kbd>"), "Space kbd");
   assert.ok(html.includes("<kbd>X</kbd>"), "X kbd");
-  assert.ok(html.includes("抽出要請"), "extract label JA");
+  assert.ok(html.includes("帰還要請"), "extract label JA");
   assert.ok(html.includes("kb-overlay-toggle"), "toggle control");
 
   const collapsed = buildKeyboardShortcutsOverlayHtml({ hidden: true });
@@ -2186,7 +2187,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(questionAlpha({ questionT: 0 }), 0);
   assert.equal(questionAlpha({}), 0);
   assert.equal(QUESTION_COLOR, "#9ecbff");
-  assert.equal(QUESTION_FONT, "11px sans-serif");
+  assert.equal(QUESTION_FONT, "bold 16px sans-serif");
   // map label while holding: 「僚機A·待機」
   assert.equal(HOLD_LABEL_JA, "待機");
   assert.equal(wingStanceTagJa({ holdOrder: true }, "帯同"), "待機");
@@ -2217,7 +2218,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
     assert.ok(!htmlRel.includes(`>${label}<`), `${label} row hidden in release`);
   }
   assert.ok(htmlAll.includes("<kbd>1–4</kbd>"));
-  for (const label of ["移動", "射撃", "回収（任意）", "抽出要請", "この表示"]) {
+  for (const label of ["移動", "射撃", "回収（任意）", "帰還要請", "この表示"]) {
     assert.ok(htmlRel.includes(`>${label}<`), `basic row ${label} always shown`);
   }
   // partly unlocked squad row lists only the unlocked keys
@@ -2227,6 +2228,60 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const htmlPart = buildKeyboardShortcutsOverlayHtml({ hidden: false, isLocked: (id: ExploreCommandId) => !isCommandUnlockedFor(part, id) });
   assert.ok(htmlPart.includes("<kbd>2</kbd><kbd>4</kbd></span><span class=\"kb-label\">僚機方針<"), `partial squad keys: ${htmlPart}`);
   console.log("explore command unlock overlay ok");
+}
+
+// Camp texts follow the camp command (2026-10-07 神宮): camp locked → no 「キャンプ」
+// text (top HUD status, help sentence, time-up banner = just 「時間切れ」, briefing
+// help keys). Camp unlocked (all_unlocked) → the same texts as before.
+import {
+  briefingHelpText,
+  campHudText,
+  isCampUnlocked,
+  timeUpHelpSentence,
+  timeoutLockBannerHtmlFor,
+} from "./game/campVisibility";
+{
+  const rel = unlockWorld("release");
+  const all = unlockWorld("all_unlocked");
+  const relLocked = (id: ExploreCommandId) => !isCommandUnlockedFor(rel, id);
+  const allLocked = (id: ExploreCommandId) => !isCommandUnlockedFor(all, id);
+  assert.equal(isCampUnlocked(relLocked), false, "release, no circuit → camp locked");
+  assert.equal(isCampUnlocked(allLocked), true);
+  // equipping a circuit that unlocks camp_set (test-only table) shows camp again
+  const campOn = unlockWorld("release", ["test-camp"], { "test-camp": ["camp_set"] });
+  assert.equal(isCampUnlocked((id) => !isCommandUnlockedFor(campOn, id)), true, "camp unlocked by circuit");
+
+  // (1) top HUD status
+  assert.equal(campHudText(rel, false), null, "no camp HUD item when locked");
+  assert.equal(campHudText(all, true), "キャンプ 未設置", "unlocked: unchanged 「キャンプ 未設置」");
+  // (2) help sentence
+  assert.equal(timeUpHelpSentence(false), "");
+  assert.equal(timeUpHelpSentence(true), "時間切れ後はキャンプ防衛フォーカス（移動ロック・戦闘継続）。");
+  // briefing help: camp keys only while unlocked; all-unlocked text is the old line (wording aside)
+  assert.equal(
+    briefingHelpText(allLocked),
+    "WASD 移動 · クリック移動 · Space/F 射撃 · 発見コンテナ上で自動回収（E 任意） · X 帰還要請 · C キャンプ設置 · U 荷下ろし · G キャンプから積込 · V カバー · 右パネルで僚機命令（画面外も可）",
+  );
+  assert.ok(!briefingHelpText(relLocked).includes("キャンプ"), "release briefing help: no camp");
+  assert.ok(briefingHelpText(relLocked).includes("X 帰還要請"));
+  // (3) time-up banner
+  assert.equal(timeoutLockBannerHtmlFor(rel, false), "", "no banner before time-up");
+  rel.operationTimedOut = true;
+  all.operationTimedOut = true;
+  const relBanner = timeoutLockBannerHtmlFor(rel, false);
+  const relText = relBanner.replace(/<[^>]+>/g, "").replace(/\s+/g, "");
+  assert.equal(relText, "時間切れ", `camp locked: banner shows just 時間切れ: ${relBanner}`);
+  assert.ok(relBanner.includes('id="timeout-lock-banner"'));
+  const allBanner = timeoutLockBannerHtmlFor(all, true);
+  assert.ok(allBanner.includes("<strong>キャンプ防衛モード</strong>"), "unlocked: title unchanged");
+  assert.ok(allBanner.includes("時間切れ · 移動・積み下ろしロック · 戦闘継続"));
+  assert.ok(allBanner.includes("キャンプ未設置 — その場でカバーし戦闘決着を目指せ"));
+  assert.ok(allBanner.includes("円外なら移動不可のため新規の帰還要請は不可 — キャンプ防衛／カバー／撤退で決着。"));
+  // a camp-locked sortie that times out shows no camp text anywhere in these strings
+  for (const t of [campHudText(rel, false) ?? "", timeUpHelpSentence(false), relBanner, briefingHelpText(relLocked)]) {
+    assert.ok(!t.includes("キャンプ"), `no キャンプ: ${t}`);
+  }
+  console.log("explore camp texts follow camp unlock ok");
 }
 
 // ---------------------------------------------------------------------------
