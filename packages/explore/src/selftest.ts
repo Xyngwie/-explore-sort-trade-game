@@ -9,6 +9,20 @@ import { saveSortieResultToHub } from "./game/hubDirectSave";
 import { hubForResortie, resortiePlan, resortieSearch } from "./game/resortie";
 import { nextPatrolOrbitTarget, decideWingman } from "./game/brain";
 import {
+  HOLD_LABEL_JA,
+  LOCKED_ORDER_STOP_CHANCE,
+  QUESTION_COLOR,
+  QUESTION_FONT,
+  QUESTION_MARK_SEC,
+  questionAlpha,
+  reactToLockedOrder,
+  setLockedOrderRng,
+  wingStanceTagJa,
+} from "./game/lockedOrder";
+// C20-b: existing tests keep the old no-op behaviour of orders a wingman cannot
+// follow ("ignore"); the C20-b block injects its own deterministic rolls.
+setLockedOrderRng(() => 0.99);
+import {
   applyOrder,
   applyOrderToAllWingmen,
   campDamageTakenMul,
@@ -2048,6 +2062,145 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   // holders without wingmen keep the circuit-list fallback
   assert.equal(isCommandUnlockedFor({ commandUnlock: w.commandUnlock }, "wing_patrol"), true, "no wingmen → circuit lists");
   console.log("explore C20-a mobility prerequisite + alive-only squad check ok");
+}
+
+// C20-b (2026-10-07 神宮): a mixed squad given a squad policy — the wingmen that
+// cannot follow show 「？」 and roll 50/50 stop (hold) / ignore, rerolled on every
+// order. Nothing is logged. Individual orders / 召還 keep it as an API safety net.
+{
+  const w = unlockWorld("release", [], TEST_ONLY_TABLE);
+  w.commandUnlock.equippedByUnit["wing-a"] = ["test-circuit-squad"]; // stances + mobility
+  w.commandUnlock.equippedByUnit["wing-b"] = [];
+  const [wa, wb] = [w.wingmen[0]!, w.wingmen[1]!];
+  const texts = () => w.logs.map((l) => l.text);
+  const STOP = () => LOCKED_ORDER_STOP_CHANCE - 1e-9;
+  const IGNORE = () => LOCKED_ORDER_STOP_CHANCE; // boundary = ignore
+  const seq = (values: number[]) => {
+    let i = 0;
+    return { rng: () => values[i++ % values.length]!, calls: () => i };
+  };
+  // reactToLockedOrder directly
+  assert.equal(reactToLockedOrder(w, wb, IGNORE), "ignore");
+  assert.equal(wb.holdOrder ?? false, false, "ignore keeps the current action");
+  assert.equal(wb.questionT, QUESTION_MARK_SEC, "「？」 on ignore too");
+  assert.equal(reactToLockedOrder(w, wb, STOP), "stop");
+  assert.equal(wb.holdOrder, true);
+  assert.equal(reactToLockedOrder(w, wb, IGNORE), "ignore");
+  assert.equal(wb.holdOrder, true, "another order it cannot follow does not clear a hold");
+  assert.equal(isWingmanMobileFor(w, wb.id), false, "wing B is immobile");
+  assert.equal(reactToLockedOrder(w, wb, STOP), "stop", "immobile wingmen still roll");
+  assert.equal(reactToLockedOrder(w, w.leader, STOP), "none", "leader never reacts");
+  wb.holdOrder = false;
+
+  // squad policy to the mixed squad: A obeys, B reacts; one roll per order, no log
+  const s1 = seq([0.1, 0.9, 0.2, 0.7]);
+  setLockedOrderRng(s1.rng);
+  const logs0 = w.logs.length;
+  const holds: boolean[] = [];
+  for (let k = 0; k < 4; k++) {
+    wb.holdOrder = false; wb.questionT = 0; wa.questionT = 0;
+    const before = w.logs.length;
+    assert.equal(executeExploreCommand(w, { id: "wing_patrol" }).status, "done");
+    holds.push(wb.holdOrder === true);
+    assert.equal(wb.questionT, QUESTION_MARK_SEC, "「？」 on the wingman that cannot follow");
+    assert.equal(wa.questionT, 0, "no 「？」 on the wingman that obeys");
+    assert.equal(wa.holdOrder ?? false, false);
+    assert.equal(wa.stance, "patrol");
+    const added = texts().slice(0, w.logs.length - before);
+    assert.deepEqual(added.map((t) => t.split("：")[0]), [wa.name], `only A's own line: ${JSON.stringify(added)}`);
+  }
+  assert.equal(s1.calls(), 4, "rerolled on every order, even the same order repeated");
+  assert.deepEqual(holds, [true, false, true, false]);
+  assert.equal(w.logs.length, logs0 + 4, "one line per order (A's), nothing for B");
+  assert.ok(!texts().some((t) => /対象外|未解放|🔒|ロック|停止|無視/.test(t)), "no exempt / lock / stop / ignore wording");
+  // the squad key path does the same
+  setLockedOrderRng(STOP);
+  wb.holdOrder = false;
+  assert.equal(dispatchExploreKey(w, "4")?.status, "done");
+  assert.equal(wa.stance, "raid");
+  assert.equal(wb.holdOrder, true, "key 4 → B reacts");
+  // dead wingmen do not react
+  wb.questionT = 0; wb.alive = false;
+  executeExploreCommand(w, { id: "wing_escort" });
+  assert.equal(wb.questionT, 0, "dead wingman: no 「？」");
+  wb.alive = true;
+  // individual order / 召還 (API safety net, not reachable from the UI): react, no log
+  const logs1 = w.logs.length;
+  wb.holdOrder = false; wb.questionT = 0;
+  assert.equal(executeExploreCommand(w, { id: "wing_patrol", wingId: wb.id }).status, "locked");
+  assert.equal(wb.holdOrder, true);
+  assert.equal(wb.questionT, QUESTION_MARK_SEC);
+  wb.holdOrder = false;
+  assert.equal(executeExploreCommand(w, { id: "wing_escort", wingId: wb.id, rally: true }).status, "locked");
+  assert.equal(wb.holdOrder, true, "召還 reacts too");
+  assert.equal(w.logs.length, logs1, "individual / 召還: no log");
+  // no wingman can follow → nothing happens (bar / keys are hidden in the UI)
+  wa.alive = false;
+  wb.holdOrder = false; wb.questionT = 0;
+  assert.equal(executeExploreCommand(w, { id: "wing_patrol" }).status, "locked");
+  assert.equal(wb.questionT, 0, "all locked: no 「？」");
+  assert.equal(wb.holdOrder, false, "all locked: no roll");
+  wa.alive = true;
+  // all_unlocked: nobody reacts
+  w.commandUnlock.mode = "all_unlocked";
+  wb.questionT = 0;
+  executeExploreCommand(w, { id: "wing_escort" });
+  assert.equal(wb.questionT, 0, "all_unlocked: no 「？」");
+  w.commandUnlock.mode = "release";
+  setLockedOrderRng(() => 0.99);
+
+  // hold = stop in place, shoot only enemies in weapon range (mobile wing A)
+  assert.ok(w.enemies.length > 0, "fixture has enemies");
+  const saved = w.enemies.map((e) => ({ e, pos: { ...e.pos }, alive: e.alive }));
+  for (const e of w.enemies) e.alive = false;
+  const foe = w.enemies[0]!;
+  foe.alive = true;
+  foe.pos = { x: wa.pos.x + w.balance.weaponRange * 1.3, y: wa.pos.y };
+  wa.holdOrder = true;
+  let intent = decideWingman(w, wa, 0.05);
+  assert.equal(intent.moveTarget, null, "hold: no movement");
+  assert.equal(intent.fireAt, null, "hold: no chase / fire beyond weapon range");
+  assert.equal(intent.trySalvage, false, "hold: no salvage");
+  foe.pos = { x: wa.pos.x + w.balance.weaponRange * 0.5, y: wa.pos.y };
+  intent = decideWingman(w, wa, 0.05);
+  assert.equal(intent.moveTarget, null);
+  assert.equal(intent.fireAt, foe, "hold: shoots an enemy in range");
+  for (const r of saved) { r.e.pos = r.pos; r.e.alive = r.alive; }
+  // the next order clears the hold: individual / 召還 / squad / 散開捜索 / 帰還要請
+  assert.equal(executeExploreCommand(w, { id: "wing_escort", wingId: wa.id }).status, "done");
+  assert.equal(wa.holdOrder, false, "individual order clears hold");
+  wa.holdOrder = true; rallyWingman(w, wa);
+  assert.equal(wa.holdOrder, false, "召還 clears hold");
+  wa.holdOrder = true; executeExploreCommand(w, { id: "wing_patrol" });
+  assert.equal(wa.holdOrder, false, "squad policy clears hold");
+  wa.holdOrder = true; wb.holdOrder = true;
+  assert.equal(scatterSearch(w), "applied");
+  assert.equal(wa.holdOrder, false, "散開捜索 clears hold");
+  assert.equal(wb.holdOrder, false, "散開捜索 clears hold (immobile too)");
+  // 「？」 fades over 1.5 s via tickWorld
+  wb.questionT = QUESTION_MARK_SEC;
+  assert.equal(questionAlpha(wb), 1);
+  tickWorld(w, 0.05, idleInput());
+  assert.ok(Math.abs((wb.questionT ?? 0) - (QUESTION_MARK_SEC - 0.05)) < 1e-9, "questionT decays");
+  assert.ok(Math.abs(questionAlpha({ questionT: 0.75 }) - 0.5) < 1e-9);
+  assert.equal(questionAlpha({ questionT: 0 }), 0);
+  assert.equal(questionAlpha({}), 0);
+  assert.equal(QUESTION_COLOR, "#9ecbff");
+  assert.equal(QUESTION_FONT, "11px sans-serif");
+  // map label while holding: 「僚機A·待機」
+  assert.equal(HOLD_LABEL_JA, "待機");
+  assert.equal(wingStanceTagJa({ holdOrder: true }, "帯同"), "待機");
+  assert.equal(wingStanceTagJa({ holdOrder: false }, "帯同"), "帯同");
+  assert.equal(wingStanceTagJa({}, "哨戒"), "哨戒");
+  // 帰還要請 (requestExtract) reassigns every alive wingman via applyOrder → clears holds
+  wa.holdOrder = true; wb.holdOrder = true;
+  if (requestExtract(w)) {
+    assert.equal(wa.holdOrder, false, "帰還要請 clears hold");
+    assert.equal(wb.holdOrder, false, "帰還要請 clears hold (immobile too)");
+  } else {
+    assert.fail("requestExtract should start in this fixture");
+  }
+  console.log("explore C20-b mixed squad 「？」 reaction ok");
 }
 
 // UI: keyboard overlay marks locked rows only when locked

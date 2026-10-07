@@ -17,6 +17,7 @@ import {
   unloadAtCamp,
 } from "./orders";
 import { requestExtract } from "./sim";
+import { reactToLockedOrder } from "./lockedOrder";
 import {
   isCommandUnlockedFor,
   type ExploreCommandId,
@@ -86,6 +87,10 @@ export function isExploreCommandAvailable(
  * C20-a (2026-10-07 神宮): locked commands are not shown to the player, so a
  * locked request does nothing and logs nothing (no 🔒 message).
  */
+function isWingOrderCommandId(id: ExploreCommandId): id is WingOrderCommandId {
+  return id === "wing_escort" || id === "wing_patrol" || id === "wing_recover" || id === "wing_raid";
+}
+
 function denyLocked(_world: World, id: ExploreCommandId): ExploreCommandOutcome {
   return { status: "locked", id };
 }
@@ -96,6 +101,13 @@ export function executeExploreCommand(
 ): ExploreCommandOutcome {
   const id = req.id;
   if (!isCommandUnlockedFor(world, id, "wingId" in req ? req.wingId : undefined)) {
+    // C20-b: an individual order / 召還 the wingman cannot follow (not reachable
+    // from the UI) → 「？」 + stop / ignore as an API safety net, no log. A squad
+    // order with no wingman able to follow does nothing (its bar / keys are hidden).
+    if (isWingOrderCommandId(id) && "wingId" in req && req.wingId != null) {
+      const wing = world.wingmen.find((w) => w.id === req.wingId);
+      if (wing) reactToLockedOrder(world, wing);
+    }
     return denyLocked(world, id);
   }
   switch (req.id) {
@@ -124,11 +136,13 @@ export function executeExploreCommand(
             .filter((wing) => isCommandUnlockedFor(world, id, wing.id))
             .map((wing) => wing.id),
         );
-        return {
-          status: "done",
-          id,
-          result: applyOrderToAllWingmen(world, stance, { allowedWingmanIds }),
-        };
+        const result = applyOrderToAllWingmen(world, stance, { allowedWingmanIds });
+        // C20-b: each alive wingman that cannot follow (mixed squad) shows 「？」
+        // and rolls stop / ignore. No log.
+        for (const wing of world.wingmen) {
+          if (wing.alive && !allowedWingmanIds.has(wing.id)) reactToLockedOrder(world, wing);
+        }
+        return { status: "done", id, result };
       }
       const wing = world.wingmen.find((w) => w.id === req.wingId);
       if (!wing) return { status: "done", id, result: "denied" };

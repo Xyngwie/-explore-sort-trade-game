@@ -90,6 +90,17 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
     };
   }
 
+  // C20-b "stop" after an order it could not follow: hold in place, shoot only
+  // enemies already in weapon range, no salvage, until the next order.
+  if (self.holdOrder) {
+    if (self.salvageId) abortSalvage(self);
+    return {
+      moveTarget: null,
+      fireAt: nearestAliveEnemy(self.pos, world.enemies, b.weaponRange),
+      trySalvage: false,
+    };
+  }
+
   const enemy = nearestAliveEnemy(self.pos, world.enemies, b.visionRange * b.visionHuntMul);
   const enemyDist = enemy ? dist(self.pos, enemy.pos) : Infinity;
 

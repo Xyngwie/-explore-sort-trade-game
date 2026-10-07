@@ -51,6 +51,8 @@ export function recoverApproachWaypoint(world: World, focus: { x: number; y: num
 
 export function applyOrder(world: World, wing: Unit, stance: Stance, opts?: { waypoint?: { x: number; y: number } | null }): "applied" | "denied" {
   if (!wing.alive) return "denied";
+  // C20-b: any order (individual / 召還 / squad policy / the 帰還要請 auto-patrol) clears a hold.
+  wing.holdOrder = false;
   if (stance === "escort") { abortSalvage(wing); wing.stance = "escort"; wing.waypoint = null; pushLog(world, `${wing.name}：帯同。隊長に付く。`); return "applied"; }
   if (stance === "raid") { abortSalvage(wing); wing.stance = "raid"; wing.waypoint = null; pushLog(world, `${wing.name}：遊撃。自律交戦を開始。`); return "applied"; }
   if (stance === "patrol") {
@@ -88,6 +90,7 @@ export function scatterSearch(world: World): "applied" | "denied" {
     const unit = living[i]!; const angle = base + (Math.PI * 2 * i) / n;
     const target = { x: clamp(origin.x + Math.cos(angle) * distOut, pad, world.balance.worldW - pad), y: clamp(origin.y + Math.sin(angle) * distOut, pad, world.balance.worldH - pad) };
     abortSalvage(unit); unit.stance = "raid"; unit.moveTarget = { ...target };
+    if (unit.kind === "wingman") unit.holdOrder = false; // C20-b: 散開捜索 clears a hold
     if (unit.kind === "leader") unit.waypoint = null; else unit.waypoint = { ...target };
   }
   pushLog(world, "散開捜索：隊長＋僚機を遊撃で各方角に展開。"); return "applied";
