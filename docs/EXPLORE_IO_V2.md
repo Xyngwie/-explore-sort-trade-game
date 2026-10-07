@@ -143,6 +143,8 @@ hub は `durabilityAfter` を正として `syncMechStatus` 相当で `OwnedMech`
 | `abort` | 途中撤退 | 20 |
 | `fail` | 失敗・未生還相当 | 35 |
 
+→ 変更（10/7・神宮）: 項目5-1 で、出撃中に撃破された機体（`Unit.alive=false`）は帰還種別に関係なく `durabilityAfter = 0`（`destroyed`）で返す。上の表の減り方は生き残った機体だけにかかる（値は変えない）。大破の扱いは [`CIRCUIT_SQUAD_DESIGN_V0.md`](./CIRCUIT_SQUAD_DESIGN_V0.md) §5。
+
 後続（最小 explore 実装時に足してよい）:
 
 - 出撃中の危険イベントごとに追加ダメージを積み、帰還時に `durabilityAfter` へ反映
