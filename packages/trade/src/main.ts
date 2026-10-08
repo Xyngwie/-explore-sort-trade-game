@@ -50,6 +50,7 @@ import {
   yieldBagFromTypedRepairCost,
   hubCircuitBonuses,
   lostMechCountLineJa,
+  wreckCountLineJa,
   formatCircuitBonusesJa,
   applyRepairDiscountToCost,
   isRareYieldItemId,
@@ -358,6 +359,7 @@ function nextSortiePanel(s: HangarState): string {
   const circuits = formatCircuitHubBrief(hubVisibleCircuits(s.hub), s.lastCircuit);
   const bonuses = formatCircuitBonusesJa(hubCircuitBonuses(s.hub));
   const lostLine = lostMechCountLineJa(s.hub);
+  const wreckLine = wreckCountLineJa(s.hub);
   const readyToDeploy = ready.canDeployExplore && ready.needsRepair === 0;
   const emphasizeDeploy = readyToDeploy && !!deployUrl;
 
@@ -434,6 +436,7 @@ function nextSortiePanel(s: HangarState): string {
           <h3 class="sortie-h3">配備予定</h3>
           ${deployList}
           ${lostLine ? `<p class="muted sortie-line lost-mech-count">${escapeHtml(lostLine)}</p>` : ""}
+          ${wreckLine ? `<p class="muted sortie-line wreck-count">${escapeHtml(wreckLine)}</p>` : ""}
         </div>
         <div>
           <h3 class="sortie-h3">摩耗 / 修理</h3>

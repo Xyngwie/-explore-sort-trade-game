@@ -4,6 +4,7 @@
  */
 
 import {
+  isWreckRow,
   CRAFT_SIGNATURE_STORAGE_KEY,
   HANDOFF_QUERY_KEYS,
   INITIAL_HUB,
@@ -987,10 +988,22 @@ export function hubCircuitBonuses(hub: HubSnapshot): AggregatedCircuitBonuses {
   return aggregateCircuitBonuses(hubVisibleCircuits(hub));
 }
 
-/** Sortie panel line under the sortie mech list; null when no mech is left behind (hidden). */
+/**
+ * Sortie panel line under the sortie mech list; null when no mech is left behind (hidden).
+ * 項目5-1b③: wreck rows (`kind: "wreck"`) are not counted here (`wreckCountLineJa`).
+ */
 export function lostMechCountLineJa(hub: Pick<HubSnapshot, "lostMechs">): string | null {
-  const n = (hub.lostMechs ?? []).length;
+  const n = (hub.lostMechs ?? []).filter((m) => !isWreckRow(m)).length;
   return n > 0 ? `置き去り ${n} 機（Invade の盤に表示）` : null;
+}
+
+/**
+ * 項目5-1b③ (W1 A・W6, 2026-10-07 神宮): wrecks not yet recovered are out of the
+ * hangar list; only this count line is shown (null when there are none, hidden).
+ */
+export function wreckCountLineJa(hub: Pick<HubSnapshot, "lostMechs">): string | null {
+  const n = (hub.lostMechs ?? []).filter((m) => isWreckRow(m)).length;
+  return n > 0 ? `残骸 ${n} 機（Invade の盤に表示）` : null;
 }
 
 export function buildDeployUrl(state: HangarState): string | null {
