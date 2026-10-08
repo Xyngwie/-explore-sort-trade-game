@@ -61,6 +61,8 @@ import {
   fieldDropTitleJa,
   lostMechSortieLineJa,
   lostMechTitleJa,
+  wreckSortieLineJa,
+  wreckTitleJa,
 } from "./lost-mechs";
 import {
   ALL_DESTROYED_INTEL,
@@ -105,6 +107,8 @@ let lastBoardLog: string | null = initialSession.restored
 let lostByCell: Map<string, string[]> = initialSession.lostByCell;
 /** Circuit field drops on this board per cell (HubSave.fieldDrops; display only). */
 let dropsByCell: Map<string, string[]> = initialSession.dropsByCell;
+/** 項目5-1b③: wrecks on this board per cell (HubSave.lostMechs kind "wreck"; display only). */
+let wrecksByCell: Map<string, string[]> = initialSession.wrecksByCell;
 /** Flag-mode: next cell click toggles flag instead of open. */
 let flagMode = false;
 /** History trap armed for current forced-combat lock. */
@@ -148,15 +152,23 @@ function dropCircuitIdsAt(sx: number, sy: number): string[] {
   return dropsByCell.get(cellKey(sx, sy)) ?? [];
 }
 
+function wreckIdsAt(sx: number, sy: number): string[] {
+  return wrecksByCell.get(cellKey(sx, sy)) ?? [];
+}
+
 /** Sortie bar + lines when left-behind mechs or circuit field drops wait on the selected cell. */
 function cellSortieBarHtml(sel: SectorSel | null): string {
   const html = cellSortieBarBaseHtml(sel);
   if (sel == null) return html;
   const lostN = lostIdsAt(sel.sx, sel.sy).length;
   const dropN = dropCircuitIdsAt(sel.sx, sel.sy).length;
+  const wreckN = wreckIdsAt(sel.sx, sel.sy).length;
   const lines: string[] = [];
   if (lostN > 0) {
     lines.push(`<p class="muted lost-mech-line">${escapeHtml(lostMechSortieLineJa(lostN))}</p>`);
+  }
+  if (wreckN > 0) {
+    lines.push(`<p class="muted wreck-line">${escapeHtml(wreckSortieLineJa(wreckN))}</p>`);
   }
   if (dropN > 0) {
     lines.push(`<p class="muted field-drop-line">${escapeHtml(fieldDropSortieLineJa(dropN))}</p>`);
@@ -389,6 +401,8 @@ function cellTitleWithLost(cell: ReturnType<typeof getCell>): string {
   const extras: string[] = [];
   const lostExtra = lostMechTitleJa(lostIdsAt(cell.sx, cell.sy));
   if (lostExtra) extras.push(lostExtra);
+  const wreckExtra = wreckTitleJa(wreckIdsAt(cell.sx, cell.sy));
+  if (wreckExtra) extras.push(wreckExtra);
   const dropExtra = fieldDropTitleJa(dropCircuitIdsAt(cell.sx, cell.sy));
   if (dropExtra) extras.push(dropExtra);
   return extras.length > 0 ? `${base} · ${extras.join(" · ")}` : base;
@@ -427,6 +441,7 @@ function dangerLegendHtml(): string {
     <span class="danger-swatch pending"><span class="chip" aria-hidden="true"></span>敵接触・未解決</span>
     <span class="danger-swatch resolved"><span class="chip" aria-hidden="true"></span>解決済・再出撃可</span>
     <span class="danger-swatch lost-mech"><span class="chip" aria-hidden="true"></span>置き去り機</span>
+    <span class="danger-swatch wreck"><span class="chip" aria-hidden="true"></span>残骸</span>
     <span class="danger-swatch field-drop"><span class="chip" aria-hidden="true"></span>落とし物</span>
     ${swatches}
   </div>
@@ -460,6 +475,7 @@ function render(): void {
         selected != null && selected.sx === sx && selected.sy === sy;
       const lostCount = lostIdsAt(sx, sy).length;
       const dropCount = dropCircuitIdsAt(sx, sy).length;
+      const wreckCount = wreckIdsAt(sx, sy).length;
       const feel = cellFeelClasses(c, board);
       const cls = [
         "cell",
@@ -474,6 +490,7 @@ function render(): void {
         isSel ? "selected" : "",
         lostCount > 0 ? "lost-mech" : "",
         dropCount > 0 ? "field-drop" : "",
+        wreckCount > 0 ? "wreck" : "",
         !c.blocked && !c.open ? "pickable" : "",
         c.open && !c.blocked ? "focusable" : "",
         ...feel,
@@ -483,8 +500,11 @@ function render(): void {
       const disabled = c.blocked ? "disabled" : "";
       const lostAttr = lostCount > 0 ? ` data-lost-count="${lostCount}"` : "";
       const dropAttr = dropCount > 0 ? ` data-drop-count="${dropCount}"` : "";
+      const wreckAttr = wreckCount > 0 ? ` data-wreck-count="${wreckCount}"` : "";
+      // 項目5-1b③: the wreck dot is a child (the cell's ::before / ::after are the drop / left-behind dots).
+      const wreckDot = wreckCount > 0 ? `<span class="wreck-dot" aria-hidden="true"></span>` : "";
       cellsHtml.push(
-        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostAttr}${dropAttr} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</button>`,
+        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostAttr}${dropAttr}${wreckAttr} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}${wreckDot}</button>`,
       );
     }
   }
@@ -592,6 +612,7 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     selected = session.focus;
     lostByCell = session.lostByCell;
     dropsByCell = session.dropsByCell;
+    wrecksByCell = session.wrecksByCell;
     skipped = false;
     flagMode = false;
     forcedLockHistoryArmed = false;

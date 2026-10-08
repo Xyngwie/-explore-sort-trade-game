@@ -368,3 +368,24 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
 .danger-swatch.field-drop .chip { background: #21262d; border-color: #2a313c; }
 .danger-swatch.field-drop .chip::before { top: -2px; left: -2px; width: 7px; height: 7px; }
 
+/* 項目5-1b③ wrecks (HubSave.lostMechs kind "wreck") on this cell — display only.
+   右下の錆色の点（#a8604a）。置き去り機（右上・灰色）・落とし物（左上・琥珀色）と重ならない。
+   セルの ::before / ::after は使用済みなので子要素 .wreck-dot で描く。凡例の見本も同じ見た目。 */
+.cell.wreck,
+.danger-swatch.wreck .chip { position: relative; }
+.cell.wreck .wreck-dot,
+.danger-swatch.wreck .chip::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a8604a;
+  box-shadow: 0 0 0 1px #0d1014;
+  pointer-events: none;
+}
+.danger-swatch.wreck .chip { background: #21262d; border-color: #2a313c; }
+.danger-swatch.wreck .chip::after { bottom: -2px; right: -2px; width: 7px; height: 7px; }
+

@@ -18,6 +18,7 @@
  */
 import {
   SECTOR_WALL_DISTANCE,
+  isWreckRow,
   normalizeHubSnapshot,
   removeWreckRows,
   type FrontCellCoord,
@@ -112,16 +113,37 @@ export function placeLostOnFront(hub: HubSnapshot, seed: number, aoiHalf: number
   };
 }
 
-/** instanceIds of left-behind mechs per cell ("sx,sy") on the board with `seed`. */
+/**
+ * instanceIds of left-behind mechs per cell ("sx,sy") on the board with `seed`.
+ * 項目5-1b③: wreck rows (`kind: "wreck"`) are not left-behind mechs; they
+ * have their own mark (`wrecksByCell`).
+ */
 export function lostMechsByCell(
   hub: Pick<HubSnapshot, "lostMechs"> | null,
   seed: number | null | undefined,
+): Map<string, string[]> {
+  return lostRowsByCell(hub, seed, false);
+}
+
+/** 項目5-1b③ (W6): instanceIds of wrecks per cell ("sx,sy") on the board with `seed`. */
+export function wrecksByCell(
+  hub: Pick<HubSnapshot, "lostMechs"> | null,
+  seed: number | null | undefined,
+): Map<string, string[]> {
+  return lostRowsByCell(hub, seed, true);
+}
+
+function lostRowsByCell(
+  hub: Pick<HubSnapshot, "lostMechs"> | null,
+  seed: number | null | undefined,
+  wrecks: boolean,
 ): Map<string, string[]> {
   const out = new Map<string, string[]>();
   if (!hub || seed == null || !Number.isFinite(seed)) return out;
   const s = seed >>> 0;
   for (const row of hub.lostMechs ?? []) {
     if (row.frontSeed !== s || row.cell == null) continue;
+    if (isWreckRow(row) !== wrecks) continue;
     const key = cellKey(row.cell.sx, row.cell.sy);
     const list = out.get(key) ?? [];
     list.push(row.instanceId);
@@ -145,6 +167,19 @@ export function lostMechTitleJa(ids: readonly string[]): string {
 /** Sortie-bar line for a selected cell with left-behind mechs (神宮の決定の文言). */
 export function lostMechSortieLineJa(count: number): string {
   return `置き去り機 ${count} 機：出撃して離陸すれば回収`;
+}
+
+/** 項目5-1b③ tooltip addition: the wreck IDs (and the count when more than one). */
+export function wreckTitleJa(ids: readonly string[]): string {
+  if (ids.length === 0) return "";
+  return ids.length === 1
+    ? `残骸 ${ids[0]}`
+    : `残骸 ${ids.length} 機: ${ids.join(", ")}`;
+}
+
+/** 項目5-1b③ sortie-bar line for a selected cell with wrecks (mirrors the left-behind line; W2 B). */
+export function wreckSortieLineJa(count: number): string {
+  return `残骸 ${count} 機：出撃して離陸すれば回収`;
 }
 
 /** Circuit IDs of circuit field drops per cell ("sx,sy") on the board with `seed`. */

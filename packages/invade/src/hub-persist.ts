@@ -26,6 +26,7 @@ import {
   fieldDropsByCell,
   lostMechsByCell,
   placeLostOnFront,
+  wrecksByCell,
   type FrontPlacementResult,
 } from "./lost-mechs";
 
@@ -38,6 +39,8 @@ export type FrontSession = {
   lostByCell: Map<string, string[]>;
   /** Circuit field drops on this board per cell ("sx,sy" → circuitIds). */
   dropsByCell: Map<string, string[]>;
+  /** 項目5-1b③: wrecks on this board per cell ("sx,sy" → instanceIds). */
+  wrecksByCell: Map<string, string[]>;
   /** What was moved / placed onto this board (lost-mechs.ts). */
   placement: Omit<FrontPlacementResult, "hub">;
 };
@@ -50,11 +53,11 @@ export type FrontSession = {
 export function syncLostMechsToBoard(
   board: MsBoard,
   storage?: Pick<Storage, "getItem" | "setItem"> | null,
-): Pick<FrontSession, "lostByCell" | "dropsByCell" | "placement"> {
+): Pick<FrontSession, "lostByCell" | "dropsByCell" | "wrecksByCell" | "placement"> {
   const hub = readHub(storage);
   const empty = { changed: false, moved: [], placed: [], movedDrops: [], movedInventoryDrops: [] };
   if (board.seed == null || !Number.isFinite(board.seed)) {
-    return { lostByCell: new Map(), dropsByCell: new Map(), placement: empty };
+    return { lostByCell: new Map(), dropsByCell: new Map(), wrecksByCell: new Map(), placement: empty };
   }
   const res = placeLostOnFront(hub, board.seed, board.aoiHalf);
   if (res.changed) saveHubSaveToLocalStorage(res.hub, storage ?? undefined);
@@ -62,6 +65,7 @@ export function syncLostMechsToBoard(
   return {
     lostByCell: lostMechsByCell(next, board.seed),
     dropsByCell: fieldDropsByCell(next, board.seed),
+    wrecksByCell: wrecksByCell(next, board.seed),
     placement,
   };
 }

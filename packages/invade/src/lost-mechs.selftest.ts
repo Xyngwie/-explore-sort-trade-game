@@ -22,6 +22,9 @@ import {
   lostMechsByCell,
   placeLostOnFront,
   playableHalf,
+  wreckSortieLineJa,
+  wreckTitleJa,
+  wrecksByCell,
 } from "./lost-mechs";
 
 function memStorage(): Storage {
@@ -270,6 +273,70 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
   const odd = placeLostOnFront(normalizeHubSnapshot({ ...h2, lostMechs: [...h2.lostMechs, { ...row("wreck-x"), kind: "wreck" }] } as never), s2.board.seed!, AOI_HALF);
   assert.deepEqual(odd.removedWrecks, ["wreck-x"]);
   assert.deepEqual(odd.placed, []);
+}
+
+// 項目5-1b③ (W6, 2026-10-07 神宮): wrecks get their own cell mark 「残骸」;
+// the left-behind mark / tooltip / line count only rows that are not wrecks.
+// Older rows without `kind` stay left-behind mechs (save compat).
+{
+  const seed = 31337;
+  const hub = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    lostMechs: [
+      row("legacy-left", { frontSeed: seed, cell: { sx: 1, sy: 1 } }),
+      { ...row("left-k", { frontSeed: seed, cell: { sx: 1, sy: 1 } }), kind: "left_behind" },
+      { ...row("w1", { frontSeed: seed, cell: { sx: 1, sy: 1 } }), kind: "wreck", pos: { x: 100, y: 200 } },
+      { ...row("w2", { frontSeed: seed, cell: { sx: -2, sy: 3 } }), kind: "wreck", pos: { x: 300, y: 400 } },
+      { ...row("w3", { frontSeed: seed, cell: { sx: -2, sy: 3 } }), kind: "wreck", pos: { x: 310, y: 410 } },
+      { ...row("w-other", { frontSeed: seed + 1, cell: { sx: 0, sy: 0 } }), kind: "wreck", pos: { x: 1, y: 1 } },
+    ],
+  } as never);
+  const lost = lostMechsByCell(hub, seed);
+  const wr = wrecksByCell(hub, seed);
+  assert.deepEqual([...lost.entries()], [["1,1", ["legacy-left", "left-k"]]], "left-behind mark: no wrecks");
+  assert.deepEqual(wr.get("1,1"), ["w1"]);
+  assert.deepEqual(wr.get("-2,3"), ["w2", "w3"]);
+  assert.equal(wr.size, 2, "wrecks of another board are not marked");
+  assert.equal(wrecksByCell(hub, null).size, 0);
+  assert.equal(wrecksByCell(null, seed).size, 0);
+  assert.equal(wreckTitleJa([]), "");
+  assert.equal(wreckTitleJa(["w1"]), "残骸 w1");
+  assert.equal(wreckTitleJa(["w2", "w3"]), "残骸 2 機: w2, w3");
+  assert.equal(wreckSortieLineJa(2), "残骸 2 機：出撃して離陸すれば回収");
+  assert.equal(lostMechTitleJa(lost.get("1,1")!), "置き去り機 2 機: legacy-left, left-k");
+
+  // the session carries the wreck marks (same board kept, wrecks stay)
+  const st = memStorage();
+  const s0 = loadOrCreateFrontSession(st);
+  const seed0 = s0.board.seed!;
+  assert.ok(s0.wrecksByCell instanceof Map);
+  assert.equal(s0.wrecksByCell.size, 0, "no wrecks → no mark");
+  saveHubSaveToLocalStorage(normalizeHubSnapshot({
+    ...load(st),
+    lostMechs: [
+      { ...row("w1", { frontSeed: seed0, cell: { sx: 2, sy: 2 } }), kind: "wreck", pos: { x: 100, y: 200 } },
+      row("left-1", { frontSeed: seed0, cell: { sx: 2, sy: 2 } }),
+    ],
+  } as never), st);
+  const s1 = loadOrCreateFrontSession(st);
+  assert.deepEqual(s1.wrecksByCell.get("2,2"), ["w1"]);
+  assert.deepEqual(s1.lostByCell.get("2,2"), ["left-1"]);
+  // board regenerated: the wreck vanishes (W3 C), so its mark goes too
+  const s2 = regenerateFrontSession(st);
+  assert.equal(s2.wrecksByCell.size, 0);
+  assert.deepEqual([...s2.lostByCell.values()], [["left-1"]]);
+
+  // view wiring: legend swatch, cell class / dot, tooltip, sortie-bar line
+  const { readFileSync } = await import("node:fs");
+  const mainSrc = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+  assert.ok(mainSrc.includes(`<span class="danger-swatch wreck"><span class="chip" aria-hidden="true"></span>残骸</span>`), "legend swatch");
+  assert.ok(mainSrc.includes(`wreckCount > 0 ? "wreck" : ""`), "cell class");
+  assert.ok(mainSrc.includes(`<span class="wreck-dot" aria-hidden="true"></span>`), "cell dot");
+  assert.ok(mainSrc.includes("wreckTitleJa(wreckIdsAt(cell.sx, cell.sy))"), "tooltip");
+  assert.ok(mainSrc.includes("wreckSortieLineJa(wreckN)"), "sortie-bar line");
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.match(css, /\.cell\.wreck \.wreck-dot,[\s\S]*?bottom: 0;[\s\S]*?right: 0;[\s\S]*?background: #a8604a;/, "bottom-right rust dot");
+  console.log("invade wreck marks ok");
 }
 
 console.log("invade lost-mechs selftest: ok");

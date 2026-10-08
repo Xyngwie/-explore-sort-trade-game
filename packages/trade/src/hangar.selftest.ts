@@ -54,6 +54,7 @@ import {
   yieldBagFromTypedRepairCost,
   hubCircuitBonuses,
   lostMechCountLineJa,
+  wreckCountLineJa,
   repairClassic,
   sellRareItem,
   isRareYieldItemId,
@@ -1672,11 +1673,24 @@ console.log("trade hangar selftest: ok");
   }
   assert.equal(lostMechCountLineJa(hs.hub), "置き去り 1 機（Invade の盤に表示）");
   assert.equal(lostMechCountLineJa({ lostMechs: [{}, {}] as never }), "置き去り 2 機（Invade の盤に表示）");
+  // 項目5-1b③ (W1 A・W6): wrecks are counted on their own line; left-behind counts only non-wreck rows
+  assert.equal(wreckCountLineJa(hs.hub), null, "no wreck → line hidden");
+  assert.equal(wreckCountLineJa({ lostMechs: [] }), null);
+  {
+    const mixed = { lostMechs: [{}, { kind: "left_behind" }, { kind: "wreck" }, { kind: "wreck" }, { kind: "wreck" }] as never };
+    assert.equal(lostMechCountLineJa(mixed), "置き去り 2 機（Invade の盤に表示）");
+    assert.equal(wreckCountLineJa(mixed), "残骸 3 機（Invade の盤に表示）");
+    const onlyWrecks = { lostMechs: [{ kind: "wreck" }] as never };
+    assert.equal(lostMechCountLineJa(onlyWrecks), null, "only wrecks → left-behind line hidden");
+    assert.equal(wreckCountLineJa(onlyWrecks), "残骸 1 機（Invade の盤に表示）");
+  }
   {
     const { readFileSync } = await import("node:fs");
     const mainSrc = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
     const i = mainSrc.indexOf("${deployList}");
     assert.ok(i > 0 && mainSrc.indexOf("lostLine ?", i) > i && mainSrc.indexOf("lostLine ?", i) < mainSrc.indexOf("摩耗 / 修理", i), "line under the sortie mech list");
+    const w = mainSrc.indexOf("wreckLine ?", i);
+    assert.ok(w > mainSrc.indexOf("lostLine ?", i) && w < mainSrc.indexOf("摩耗 / 修理", i), "wreck line right under the left-behind line");
   }
 
   // recovered → counts again
