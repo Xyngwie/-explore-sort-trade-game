@@ -238,6 +238,11 @@ export type ExploreToHubWearPayload = {
    */
   frontSeed?: number;
   cell?: { sx: number; sy: number };
+  /**
+   * 項目5-2: credits the hub deducts once for a rescue abort (floor of half
+   * the wallet at that moment). Absent on every other ending. 0 is 0.
+   */
+  rescueFeeCredits?: number;
 };
 
 const SORTIE_RETURN_KINDS: readonly SortieReturnKind[] = [
@@ -857,6 +862,9 @@ export function buildExploreToHubWearUrl(
     u.searchParams.set("frontSeed", String(payload.frontSeed >>> 0));
     u.searchParams.set("dropCell", `${Math.trunc(payload.cell.sx)},${Math.trunc(payload.cell.sy)}`);
   }
+  if (payload.rescueFeeCredits != null && Number.isFinite(payload.rescueFeeCredits)) {
+    u.searchParams.set("rescueFee", String(Math.max(0, Math.floor(payload.rescueFeeCredits))));
+  }
   return u.toString();
 }
 
@@ -894,7 +902,13 @@ export function parseExploreToHubWearSearch(
       ? { abandonedMechInstanceIds: parseInstanceIds(p.get("abandonedMechInstanceIds")) }
       : {}),
     ...parseSortiePlace(p.get("frontSeed"), p.get("dropCell")),
+    ...parseRescueFee(p.get("rescueFee")),
   };
+}
+
+function parseRescueFee(raw: string | null): { rescueFeeCredits: number } | Record<string, never> {
+  if (raw == null || !/^\d{1,9}$/.test(raw.trim())) return {};
+  return { rescueFeeCredits: Number.parseInt(raw.trim(), 10) };
 }
 
 /** Both frontSeed and dropCell, or neither. A partial pair is ignored. */
@@ -933,6 +947,7 @@ export function toExploreToHubWearPayload(
     | "abandonedMechInstanceIds"
     | "frontSeed"
     | "cell"
+    | "rescueFeeCredits"
   >,
 ): ExploreToHubWearPayload {
   return {
@@ -967,6 +982,9 @@ export function toExploreToHubWearPayload(
       : {}),
     ...(opts?.cell && opts.frontSeed != null && Number.isFinite(opts.frontSeed)
       ? { frontSeed: opts.frontSeed >>> 0, cell: { sx: opts.cell.sx, sy: opts.cell.sy } }
+      : {}),
+    ...(opts?.rescueFeeCredits != null && Number.isFinite(opts.rescueFeeCredits)
+      ? { rescueFeeCredits: Math.max(0, Math.floor(opts.rescueFeeCredits)) }
       : {}),
   };
 }

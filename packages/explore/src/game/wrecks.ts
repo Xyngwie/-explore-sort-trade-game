@@ -11,8 +11,8 @@
  *   coordinates on the next sortie to that cell (lostMechs.ts) until the
  *   Invade board is regenerated (W3 C, invade lost-mechs.ts).
  * - Not recovered, sortie not via Invade: lost with its circuits (W4 A).
- * - Recovering the leader's own wreck in the same sortie starts with 項目5-2
- *   (today a downed leader still ends the sortie at once).
+ * - 項目5-2: the captain's own wreck can come home if a boarding circle that
+ *   was already open lifts off with the wreck inside it.
  */
 import type { ExplorePos, LostMechReturnState } from "@estg/shared";
 import { getCoverObjects } from "./coverObjects";

@@ -14,11 +14,14 @@ export type LeftBehindReason =
   /** `wing_mobility` locked (release mode, no circuit): the wingman could not move. */
   | "no_circuit"
   /** Could move, but was outside the boarding circle at lift-off. */
-  | "outside_circle";
+  | "outside_circle"
+  /** 項目5-2: still alive when the captain's rescue abort ended the sortie. */
+  | "rescue";
 
 export type LeftBehindEntry = { id: string; name: string; reason: LeftBehindReason };
 
 export function leftBehindResultLine(entry: LeftBehindEntry): string {
+  if (entry.reason === "rescue") return `${entry.name}を置き去り（救助撤退）`;
   return entry.reason === "no_circuit"
     ? `${entry.name}を置き去り（搭乗円の外・自衛のみ）` // C20-a: no 「回路なし」 hint (10/7 神宮)
     : `${entry.name}を置き去り（搭乗円の外）`;

@@ -1,6 +1,7 @@
 import { decideWingman } from "./brain";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
 import { recoverStrandedDropsAtLiftOff } from "./circuitDrops";
+import { maybeAutoRescue, noteLeaderDown } from "./rescue";
 import { recoverSortieWrecksAtLiftOff, sortieWreckUnits } from "./wrecks";
 import {
   applyOrder,
@@ -237,12 +238,13 @@ export function spawnEnemyDeathDrops(world: World, at: Vec2, forcedCount?: numbe
 export type BoardingRequirementsHud = { active: boolean; liftOffEta: number | null; cargoEta: number | null; cargoArrived: boolean; mustBeIn: string; captainInside: boolean; aliveCount: number; insideCount: number; outsideCount: number; outsideNames: string[]; insideNames: string[]; lines: string[] };
 
 export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
-  const mustBeIn = "隊長が搭乗円内";
+  const mustBeIn = world.leader.alive ? "隊長が搭乗円内" : "隊長の残骸が搭乗円内";
   if (!world.boarding) return { active: false, liftOffEta: null, cargoEta: null, cargoArrived: false, mustBeIn, captainInside: false, aliveCount: friendlyUnits(world).filter((u) => u.alive).length, insideCount: 0, outsideCount: 0, outsideNames: [], insideNames: [], lines: ["帰還要件", "未要請 — X で搭乗円を展開", `必須: ${mustBeIn}（離昇時）`, `貨物 ${world.balance.boardingCargoDelaySec}s → 離昇 ${world.balance.boardingLiftOffDelaySec}s`] };
   const alive = friendlyUnits(world).filter((u) => u.alive);
   const inside = alive.filter((u) => isInsideBoarding(world, u));
   const outside = alive.filter((u) => !isInsideBoarding(world, u));
-  const captainInside = world.leader.alive && isInsideBoarding(world, world.leader);
+  // 項目5-2 10(b): a wreck inside the circle that was opened before the captain fell still counts.
+  const captainInside = isInsideBoarding(world, world.leader);
   const liftOffEta = boardingLiftOffEta(world);
   const cargoEta = boardingCargoEta(world);
   const cargoArrived = world.boarding.cargoArrived;
@@ -272,7 +274,8 @@ function resolveBoardingLiftOff(world: World): void {
   const alive = friendlyUnits(world).filter((u) => u.alive);
   const inside = alive.filter((u) => dist(u.pos, boarding.center) <= boarding.radius);
   const outside = alive.filter((u) => dist(u.pos, boarding.center) > boarding.radius);
-  const captainIn = world.leader.alive && isInsideBoarding(world, world.leader);
+  // Alive captain, or the captain's wreck, inside the circle (項目5-2 10(b)).
+  const captainIn = isInsideBoarding(world, world.leader);
   world.leftBehind = outside
     .filter((u) => u.kind === "wingman")
     .map((u) => ({ id: u.id, name: u.name, reason: isWingmanMobileFor(world, u.id) ? "outside_circle" : "no_circuit" }));
@@ -300,7 +303,13 @@ function resolveBoardingLiftOff(world: World): void {
       if (dist(c.pos, boarding.center) <= boarding.radius) { c.taken = true; c.discovered = true; c.glowT = 0; circleCrates += 1; world.salvaged += 1; }
     }
     world.extracted = true; world.failReason = null;
-    pushLog(world, circleCrates > 0 ? `帰還成功（隊長搭乗）。搭乗円内コンテナ ${circleCrates} を全回収（合計サルベージ ${world.salvaged}）。` : `帰還成功（隊長搭乗）。サルベージ ${world.salvaged} を保持。`);
+    if (!world.leader.alive) {
+      pushLog(world, circleCrates > 0
+        ? `帰還成功（隊長の残骸を回収）。搭乗円内コンテナ ${circleCrates} を全回収（合計サルベージ ${world.salvaged}）。`
+        : `帰還成功（隊長の残骸を回収）。サルベージ ${world.salvaged} を保持。`);
+    } else {
+      pushLog(world, circleCrates > 0 ? `帰還成功（隊長搭乗）。搭乗円内コンテナ ${circleCrates} を全回収（合計サルベージ ${world.salvaged}）。` : `帰還成功（隊長搭乗）。サルベージ ${world.salvaged} を保持。`);
+    }
   } else { world.extracted = false; world.failReason = "extract_missed"; world.salvaged = 0; pushLog(world, "帰還失敗：隊長が搭乗円外のため離昇せず。"); }
 }
 
@@ -320,9 +329,12 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   if (world.timeLeft <= 0 && !world.operationTimedOut) { world.operationTimedOut = true; leaderAbortSalvageOnTimeout(world); pushLog(world, "時間切れ。移動・積み下ろし不可。戦闘は継続（撤退／撃破／進行中搭乗で決着）。"); }
   const timedOut = isOperationTimedOut(world);
   const leader = world.leader;
-  if (!leader.alive) { world.phase = "result"; world.extracted = false; world.failReason = "leader_down"; world.salvaged = 0; world.boarding = null; world.camp = null; pushLog(world, "隊長撃破。作戦失敗。"); return; }
+  // 項目5-2: a downed captain does not fail the sortie. A total wipe rescues at once.
+  if (maybeAutoRescue(world)) return;
+  const leaderDown = !leader.alive;
+  if (leaderDown) noteLeaderDown(world);
   leader.cooldown = Math.max(0, leader.cooldown - dt);
-  if (timedOut) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
+  if (leaderDown || timedOut) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
   else {
     if (input.move.x !== 0 || input.move.y !== 0) { const n = norm(input.move); leader.moveTarget = { x: leader.pos.x + n.x * world.balance.wasdMoveLookahead, y: leader.pos.y + n.y * world.balance.wasdMoveLookahead }; }
     else if (input.clickMove) leader.moveTarget = { ...input.clickMove };
@@ -330,12 +342,14 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     const leadSpeed = world.balance.moveSpeed * unitMoveSpeedMul(leader, world);
     moveToward(leader, leader.moveTarget, leadSpeed, dt, world);
   }
-  let leadTarget: Unit | null = null; let best: number = world.balance.engageRange;
-  for (const e of world.enemies) { if (!e.alive) continue; const d = dist(leader.pos, e.pos); if (d <= best) { best = d; leadTarget = e; } }
-  if (leadTarget && (input.fire || best <= world.balance.weaponRange)) tryFire(world, leader, leadTarget, false);
-  if (!timedOut) {
-    const leaderWantSalvage = input.interact || world.containers.some((c) => c.discovered && !c.taken && dist(leader.pos, c.pos) < world.balance.interactRadius);
-    updateSalvage(world, leader, leaderWantSalvage, dt);
+  if (!leaderDown) {
+    let leadTarget: Unit | null = null; let best: number = world.balance.engageRange;
+    for (const e of world.enemies) { if (!e.alive) continue; const d = dist(leader.pos, e.pos); if (d <= best) { best = d; leadTarget = e; } }
+    if (leadTarget && (input.fire || best <= world.balance.weaponRange)) tryFire(world, leader, leadTarget, false);
+    if (!timedOut) {
+      const leaderWantSalvage = input.interact || world.containers.some((c) => c.discovered && !c.taken && dist(leader.pos, c.pos) < world.balance.interactRadius);
+      updateSalvage(world, leader, leaderWantSalvage, dt);
+    }
   }
   for (const w of world.wingmen) {
     if (!w.alive) continue;
@@ -349,6 +363,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   updateEnemies(world, dt); updateBullets(world, dt); revealVision(world);
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
+  // A wipe during this tick rescues before a boarding circle can lift off (6A).
+  if (maybeAutoRescue(world)) return;
   updateCamera(world); updateBoarding(world);
 }
 

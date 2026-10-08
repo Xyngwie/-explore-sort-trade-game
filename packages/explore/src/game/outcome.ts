@@ -268,6 +268,9 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
       ...(loc
         ? { frontSeed: loc.frontSeed, cell: { sx: loc.cell.sx, sy: loc.cell.sy } }
         : {}),
+      ...(world.rescueAbort
+        ? { rescueFeeCredits: Math.max(0, Math.floor(world.rescueFeeCredits ?? 0)) }
+        : {}),
     },
   );
   return payload;

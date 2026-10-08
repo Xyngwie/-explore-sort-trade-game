@@ -62,6 +62,12 @@ import {
 import { createPhaseWatcher } from "./game/phaseWatch";
 import { leftBehindResultHtml } from "./game/leftBehind";
 import {
+  previewRescueFee,
+  rescueAbortFromHub,
+  rescueResultHtml,
+  resultHeading,
+} from "./game/rescue";
+import {
   briefingHelpText,
   campHudText,
   isCampUnlocked,
@@ -483,6 +489,11 @@ function wingPanelHtml(): string {
   return `${squadOrderBarHtml()}${cards}`;
 }
 
+function leaderDownBannerHtml(): string {
+  if (world.phase !== "sortie" || world.leader.alive) return "";
+  return `<div class="timeout-lock-banner" id="leader-down-banner" role="status" aria-live="polite">隊長機大破 — 撤退できます（救助費用：所持金の半分）</div>`;
+}
+
 function logsHtml(): string {
   const lines = world.logs.slice(0, 18);
   if (lines.length === 0) {
@@ -499,6 +510,7 @@ function logsHtml(): string {
 /** Direct-save outcome per world (U9). Saved once, when the result screen first renders. */
 const directSaves = new WeakMap<World, DirectSaveResult>();
 let resortieNote = "";
+let rescueConfirm = false;
 
 function ensureDirectSave(): DirectSaveResult | null {
   if (world.phase !== "result") return null;
@@ -613,8 +625,9 @@ function renderDom(): void {
       <h1>作戦結果</h1>
       <div class="card">
         <p class="${result.isExtracted ? "ok" : "warn"}">${
-          result.isExtracted ? "生還" : `失敗（${world.failReason ?? "abort"}）`
+          resultHeading(world) ?? (result.isExtracted ? "生還" : `失敗（${world.failReason ?? "abort"}）`)
         }</p>
+        ${rescueResultHtml(world)}
         ${leftBehindResultHtml(world)}
         ${wreckResultHtml(world)}
         ${recoveredCircuitResultHtml(world)}
@@ -704,6 +717,7 @@ function renderDom(): void {
     ${debugUnlockToggleHtml()}
     ${invadeBannerThinHtml}
     ${timeoutLockBannerHtml()}
+    ${leaderDownBannerHtml()}
     <div class="hud">
       <span>残時間 <strong id="hud-time" class="${isOperationTimedOut(world) ? "timed-out" : ""}">${isOperationTimedOut(world) ? "0.0s · 時間切れ" : world.timeLeft.toFixed(1) + "s"}</strong></span>
       <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
@@ -723,14 +737,18 @@ function renderDom(): void {
           ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden(), isLocked: cmdLocked })}
         </div>
         <div class="row">
-          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) ? "disabled" : ""} title="どこからでも帰還要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。">${boardingActive ? "帰還シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・帰還要請不可" : "帰還要請（搭乗円）"}</button>
+          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !world.leader.alive ? "disabled" : ""} title="${world.leader.alive ? "どこからでも帰還要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!world.leader.alive ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・帰還要請不可" : "帰還要請（搭乗円）"}</button>
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
           ${gatedButtonHtml("btn-purge", "purge", "secondary", "パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。", "パージ／キャンプへ降ろす")}
           ${gatedButtonHtml("btn-camp-pickup", "camp_pickup", "secondary", "キャンプ付近で置場から積込（G）。", "キャンプから積込")}
           ${gatedButtonHtml("btn-scatter", "scatter_search", "stance-raid", "隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。", "散開捜索")}
           <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。時間切れ防衛でも可。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
-          <button type="button" class="secondary" id="btn-abort">撤退</button>
+          ${world.leader.alive
+            ? `<button type="button" class="secondary" id="btn-abort">撤退</button>`
+            : rescueConfirm
+              ? `<span class="rescue-confirm" id="rescue-confirm">救助費用 ${previewRescueFee()}c（所持金の半分）。<button type="button" id="btn-rescue-yes">撤退</button><button type="button" class="secondary" id="btn-rescue-no">取りやめ</button></span>`
+              : `<button type="button" id="btn-rescue">救助撤退</button>`}
         </div>
         ${squadOrderBarHtml()}
         <p class="help">${sortieHelpText()}</p>
@@ -783,6 +801,21 @@ function renderDom(): void {
   });
   document.getElementById("btn-abort")?.addEventListener("click", () => {
     afterCommand(executeExploreCommand(world, { id: "abort" }));
+  });
+  document.getElementById("btn-rescue")?.addEventListener("click", () => {
+    rescueConfirm = true;
+    needsDom = true;
+    renderDom();
+  });
+  document.getElementById("btn-rescue-no")?.addEventListener("click", () => {
+    rescueConfirm = false;
+    needsDom = true;
+    renderDom();
+  });
+  document.getElementById("btn-rescue-yes")?.addEventListener("click", () => {
+    rescueConfirm = false;
+    rescueAbortFromHub(world);
+    needsDom = true;
   });
   bindWingControls(root);
 }
