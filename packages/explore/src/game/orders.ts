@@ -175,7 +175,8 @@ export function toggleSquadCover(world: World): "entered" | "exited" | "denied" 
 export function campDrHudFragment(world: World): string { if (!world.camp || world.camp.stashedCount <= 0) return ""; return `被弾−${campDrPercent(world)}%`; }
 
 export function campDefenseHudModel(world: World): { active: boolean; title: string; stockLine: string; coverHint: string; drVisible: boolean; drPercent: number | null } {
-  const active = isOperationTimedOut(world) && world.phase === "sortie";
+  // 項目5-2b: camp-defense mode is gone. Timeout ends the sortie, or waits on a circle.
+  const active = false;
   const drVisible = !!(world.camp && world.camp.stashedCount > 0); const drPercent = drVisible ? campDrPercent(world) : null;
   let stockLine: string;
   if (world.camp != null && world.camp.stashedCount > 0) stockLine = `置場 ${world.camp.stashedCount} · 防衛圏 被弾−${drPercent}%`;

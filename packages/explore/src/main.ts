@@ -62,17 +62,21 @@ import {
 import { createPhaseWatcher } from "./game/phaseWatch";
 import { leftBehindResultHtml } from "./game/leftBehind";
 import {
-  previewRescueFee,
+  forcedRescueAliveHtml,
+  forcedRescueWarningHtml,
+  hudTimePresentation,
+  leaderDownBannerHtml,
+  previewHeldCredits,
   rescueAbortFromHub,
   rescueResultHtml,
   resultHeading,
+  sortieRetreatHtml,
 } from "./game/rescue";
 import {
   briefingHelpText,
   campHudText,
   isCampUnlocked,
   timeUpHelpSentence,
-  timeoutLockBannerHtmlFor,
 } from "./game/campVisibility";
 import { attachLostMechContext } from "./game/lostMechs";
 import { invadeSquadSearch } from "./game/invadeSquad";
@@ -271,10 +275,6 @@ function extractReqHudHtml(): string {
 }
 
 
-function timeoutLockBannerHtml(): string {
-  return timeoutLockBannerHtmlFor(world, isCampUnlocked(cmdLocked));
-}
-
 /** Shared post-command UI feedback (toast for unload, repaint). */
 function afterCommand(outcome: ExploreCommandOutcome): void {
   if (
@@ -313,6 +313,7 @@ function unlockSignature(): string {
   return CIRCUIT_COMMAND_IDS.map((id) => (cmdLocked(id) ? "0" : "1")).join("");
 }
 let renderedUnlockSignature = "";
+let renderedLeaderAlive = true;
 
 const SQUAD_ORDER_KEYS: ReadonlyArray<{ stance: Stance; key: string }> = [
   { stance: "escort", key: "1" },
@@ -489,11 +490,6 @@ function wingPanelHtml(): string {
   return `${squadOrderBarHtml()}${cards}`;
 }
 
-function leaderDownBannerHtml(): string {
-  if (world.phase !== "sortie" || world.leader.alive) return "";
-  return `<div class="timeout-lock-banner" id="leader-down-banner" role="status" aria-live="polite">隊長機大破 — 撤退できます（救助費用：所持金の半分）</div>`;
-}
-
 function logsHtml(): string {
   const lines = world.logs.slice(0, 18);
   if (lines.length === 0) {
@@ -533,6 +529,7 @@ function directSaveNoteText(res: DirectSaveResult | null): string {
 function renderDom(): void {
   phaseWatch.markRendered(world.phase);
   renderedUnlockSignature = unlockSignature();
+  renderedLeaderAlive = world.leader.alive;
   // U9: record the sortie result before any result button can be pressed.
   const directSave = ensureDirectSave();
   const result = world.phase === "result" ? toExploreResult(world) : null;
@@ -628,6 +625,7 @@ function renderDom(): void {
           resultHeading(world) ?? (result.isExtracted ? "生還" : `失敗（${world.failReason ?? "abort"}）`)
         }</p>
         ${rescueResultHtml(world)}
+        ${forcedRescueAliveHtml(world)}
         ${leftBehindResultHtml(world)}
         ${wreckResultHtml(world)}
         ${recoveredCircuitResultHtml(world)}
@@ -716,10 +714,10 @@ function renderDom(): void {
     <h1>WRECKLINE</h1>
     ${debugUnlockToggleHtml()}
     ${invadeBannerThinHtml}
-    ${timeoutLockBannerHtml()}
-    ${leaderDownBannerHtml()}
+    ${forcedRescueWarningHtml(world)}
+    ${leaderDownBannerHtml(world)}
     <div class="hud">
-      <span>残時間 <strong id="hud-time" class="${isOperationTimedOut(world) ? "timed-out" : ""}">${isOperationTimedOut(world) ? "0.0s · 時間切れ" : world.timeLeft.toFixed(1) + "s"}</strong></span>
+      <span>残時間 <strong id="hud-time" class="${hudTimePresentation(world).className}">${hudTimePresentation(world).text}</strong></span>
       <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
       <span>実弾 <strong id="hud-ammo">${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
@@ -737,18 +735,14 @@ function renderDom(): void {
           ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden(), isLocked: cmdLocked })}
         </div>
         <div class="row">
-          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !world.leader.alive ? "disabled" : ""} title="${world.leader.alive ? "どこからでも帰還要請（X）。進行中はキャンセル不可。時間切れ後は新規不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!world.leader.alive ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : isOperationTimedOut(world) ? "時間切れ・帰還要請不可" : "帰還要請（搭乗円）"}</button>
+          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !world.leader.alive ? "disabled" : ""} title="${world.leader.alive ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!world.leader.alive ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
           ${gatedButtonHtml("btn-purge", "purge", "secondary", "パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。", "パージ／キャンプへ降ろす")}
           ${gatedButtonHtml("btn-camp-pickup", "camp_pickup", "secondary", "キャンプ付近で置場から積込（G）。", "キャンプから積込")}
           ${gatedButtonHtml("btn-scatter", "scatter_search", "stance-raid", "隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。", "散開捜索")}
-          <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。時間切れ防衛でも可。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
-          ${world.leader.alive
-            ? `<button type="button" class="secondary" id="btn-abort">撤退</button>`
-            : rescueConfirm
-              ? `<span class="rescue-confirm" id="rescue-confirm">救助費用 ${previewRescueFee()}c（所持金の半分）。<button type="button" id="btn-rescue-yes">撤退</button><button type="button" class="secondary" id="btn-rescue-no">取りやめ</button></span>`
-              : `<button type="button" id="btn-rescue">救助撤退</button>`}
+          <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
+          ${sortieRetreatHtml(world.leader.alive, rescueConfirm, previewHeldCredits())}
         </div>
         ${squadOrderBarHtml()}
         <p class="help">${sortieHelpText()}</p>
@@ -846,24 +840,28 @@ function bindWingControls(scope: ParentNode): void {
 
 function paintHudOnly(): void {
   const timedOut = isOperationTimedOut(world);
+  const time = hudTimePresentation(world);
   const t = document.getElementById("hud-time");
   if (t) {
-    t.textContent = timedOut ? "0.0s · 時間切れ" : `${world.timeLeft.toFixed(1)}s`;
-    t.classList.toggle("timed-out", timedOut);
+    t.textContent = time.text;
+    t.className = time.className;
   }
-  let banner = document.getElementById("timeout-lock-banner");
-  if (timedOut && world.phase === "sortie") {
-    if (!banner) {
+  const oldLock = document.getElementById("timeout-lock-banner");
+  if (oldLock) oldLock.remove();
+  let warn = document.getElementById("forced-rescue-warning");
+  const warnHtml = forcedRescueWarningHtml(world);
+  if (warnHtml) {
+    if (!warn) {
       const hud = document.querySelector(".hud");
       if (hud?.parentElement) {
         const tmp = document.createElement("div");
-        tmp.innerHTML = timeoutLockBannerHtml();
+        tmp.innerHTML = warnHtml;
         const node = tmp.firstElementChild;
         if (node) hud.parentElement.insertBefore(node, hud);
       }
     }
-  } else if (banner) {
-    banner.remove();
+  } else if (warn) {
+    warn.remove();
   }
   const s = document.getElementById("hud-salvage");
   if (s) s.textContent = String(world.salvaged);
@@ -900,11 +898,12 @@ function paintHudOnly(): void {
   const extractBtn = document.getElementById("btn-extract") as HTMLButtonElement | null;
   if (extractBtn) {
     const active = world.boarding != null;
-    extractBtn.disabled = active || timedOut;
-    extractBtn.textContent = active
-      ? "帰還シーケンス中…"
-      : timedOut
-        ? "時間切れ・帰還要請不可"
+    const dead = !world.leader.alive;
+    extractBtn.disabled = active || timedOut || dead;
+    extractBtn.textContent = dead
+      ? "大破・帰還要請不可"
+      : active
+        ? "帰還シーケンス中…"
         : "帰還要請（搭乗円）";
   }
   for (const [id, cmd] of GATED_BUTTONS) {
@@ -959,6 +958,7 @@ function frame(now: number): void {
     // C20-a: squad-level availability can change mid-sortie (only alive
     // wingmen count) → rebuild so hidden / shown commands stay in sync.
     if (unlockSignature() !== renderedUnlockSignature) renderDom();
+    if (world.leader.alive !== renderedLeaderAlive) renderDom();
     if (canvas) {
       const ctx = canvas.getContext("2d");
       if (ctx) renderWorld(ctx, world, canvas.width, canvas.height);

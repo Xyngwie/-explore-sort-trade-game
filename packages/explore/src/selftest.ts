@@ -83,7 +83,20 @@ import { recoverStrandedDropsAtLiftOff, recoveredCircuitResultHtml, recoveredCir
 import { invadeSquadSearch } from "./game/invadeSquad";
 import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, returnKindFromWorld, sortHandoffUrl, toExploreResult, wreckResultHtml, wreckResultLines } from "./game/outcome";
 import { placeWreckInWorld, wreckLabel } from "./game/wrecks";
-import { rescueAbortSortie, rescueResultLines, resultHeading } from "./game/rescue";
+import {
+  FORCED_RESCUE_RING,
+  forcedRescueAliveLines,
+  forcedRescueRing,
+  forcedRescueWarningHtml,
+  hudTimePresentation,
+  leaderDownBannerHtml,
+  rescueAbortSortie,
+  rescueConfirmCopy,
+  rescueResultLines,
+  resultHeading,
+  retreatButtonShown,
+  sortieRetreatHtml,
+} from "./game/rescue";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
   QUIRK_LABEL,
@@ -1328,90 +1341,8 @@ function advancePinned(
 }
 
 
-// --- operation timeout: lock move/cargo, no auto-fail, combat continues ---
-{
-  const world = createWorld(bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:40&startingAmmo=999"));
-  startSortie(world);
-  // Keep one enemy alive near captain for combat; park others far.
-  for (const e of world.enemies) {
-    e.alive = false;
-    e.hp = 0;
-  }
-  const foe = world.enemies[0]!;
-  foe.alive = true;
-  foe.hp = foe.maxHp;
-  world.leader.pos = { x: 400, y: 400 };
-  foe.pos = { x: 410, y: 400 }; // in weapon range
-  world.leader.cooldown = 0;
-
-  // Near-exhaust the clock then step over zero.
-  world.timeLeft = 0.04;
-  const posBefore = { ...world.leader.pos };
-  tickWorld(world, 0.05, {
-    move: { x: 1, y: 0 },
-    clickMove: null,
-    fire: true,
-    interact: false,
-  });
-  assert.equal(world.phase, "sortie", "timer→0 must not end sortie");
-  assert.equal(world.operationTimedOut, true);
-  assert.equal(isOperationTimedOut(world), true);
-  assert.equal(world.failReason, null);
-  assert.equal(world.extracted, false);
-  assert.ok(world.logs.some((l) => l.text.includes("時間切れ") && l.text.includes("戦闘は継続")));
-
-  // Movement blocked after timeout
-  const pinned = { ...world.leader.pos };
-  for (let i = 0; i < 20; i++) {
-    tickWorld(world, 0.05, {
-      move: { x: 1, y: 0 },
-      clickMove: { x: pinned.x + 200, y: pinned.y },
-      fire: false,
-      interact: false,
-    });
-  }
-  assert.ok(
-    Math.abs(world.leader.pos.x - pinned.x) < 0.5 &&
-      Math.abs(world.leader.pos.y - pinned.y) < 0.5,
-    "captain must not move after timeout",
-  );
-  assert.equal(world.phase, "sortie");
-
-  // Cargo unload / load / purge / camp set denied
-  world.camp = { pos: { ...world.leader.pos }, stashedCount: 2 };
-  world.leader.salvagedCount = 3;
-  world.salvaged = 5;
-  assert.equal(unloadAtCamp(world), "denied");
-  assert.equal(world.camp.stashedCount, 2);
-  assert.equal(world.leader.salvagedCount, 3);
-  assert.equal(pickUpFromCamp(world), "denied");
-  assert.equal(world.camp.stashedCount, 2);
-  assert.equal(purgeCargo(world), "denied");
-  assert.equal(setCampOrDeposit(world), "denied");
-  assert.equal(requestExtract(world), false);
-
-  // Combat tick still runs (enemy may fire / bullets update / cooldowns tick)
-  const ammoBefore = world.currentAmmo.owned_a;
-  const foeHpBefore = foe.hp;
-  world.leader.cooldown = 0;
-  foe.cooldown = 0;
-  for (let i = 0; i < 30; i++) {
-    tickWorld(world, 0.05, {
-      move: { x: 0, y: 0 },
-      clickMove: null,
-      fire: true,
-      interact: false,
-    });
-  }
-  assert.equal(world.phase, "sortie");
-  assert.ok(
-    world.currentAmmo.owned_a! < ammoBefore! || foe.hp < foeHpBefore || world.bullets.length > 0 ||
-      world.combatHitsTaken > 0 ||
-      !foe.alive,
-    "combat must still progress after timeout",
-  );
-  void posBefore;
-}
+// --- operation timeout used to lock the sortie in camp defense. 項目5-2b ends it.
+// The six checks live in the 項目5-2b block at the bottom of this file. ---
 
 // --- timeout while boarding already active: lift-off can still succeed ---
 {
@@ -1507,8 +1438,7 @@ function advancePinned(
   world.operationTimedOut = true;
   world.camp = { pos: { ...world.leader.pos }, stashedCount: 4 };
   model = campDefenseHudModel(world);
-  assert.equal(model.active, true);
-  assert.equal(model.title, "キャンプ防衛モード");
+  assert.equal(model.active, false, "項目5-2b: camp defense mode is gone");
   assert.equal(model.drVisible, true);
   assert.equal(model.drPercent, campDrPercent(world));
   assert.ok(model.stockLine.includes(`被弾−${model.drPercent}%`));
@@ -2256,9 +2186,9 @@ import {
   // (1) top HUD status
   assert.equal(campHudText(rel, false), null, "no camp HUD item when locked");
   assert.equal(campHudText(all, true), "キャンプ 未設置", "unlocked: unchanged 「キャンプ 未設置」");
-  // (2) help sentence
+  // (2) help sentence — camp defense copy is gone for both modes
   assert.equal(timeUpHelpSentence(false), "");
-  assert.equal(timeUpHelpSentence(true), "時間切れ後はキャンプ防衛フォーカス（移動ロック・戦闘継続）。");
+  assert.equal(timeUpHelpSentence(true), "");
   // briefing help: camp keys only while unlocked; all-unlocked text is the old line (wording aside)
   assert.equal(
     briefingHelpText(allLocked),
@@ -2266,19 +2196,14 @@ import {
   );
   assert.ok(!briefingHelpText(relLocked).includes("キャンプ"), "release briefing help: no camp");
   assert.ok(briefingHelpText(relLocked).includes("X 帰還要請"));
-  // (3) time-up banner
+  // (3) time-up lock banner is gone (項目5-2b). The 30s warning is a different element.
   assert.equal(timeoutLockBannerHtmlFor(rel, false), "", "no banner before time-up");
   rel.operationTimedOut = true;
   all.operationTimedOut = true;
   const relBanner = timeoutLockBannerHtmlFor(rel, false);
-  const relText = relBanner.replace(/<[^>]+>/g, "").replace(/\s+/g, "");
-  assert.equal(relText, "時間切れ", `camp locked: banner shows just 時間切れ: ${relBanner}`);
-  assert.ok(relBanner.includes('id="timeout-lock-banner"'));
+  assert.equal(relBanner, "", "camp locked: no time-up lock banner");
   const allBanner = timeoutLockBannerHtmlFor(all, true);
-  assert.ok(allBanner.includes("<strong>キャンプ防衛モード</strong>"), "unlocked: title unchanged");
-  assert.ok(allBanner.includes("時間切れ · 移動・積み下ろしロック · 戦闘継続"));
-  assert.ok(allBanner.includes("キャンプ未設置 — その場でカバーし戦闘決着を目指せ"));
-  assert.ok(allBanner.includes("円外なら移動不可のため新規の帰還要請は不可 — キャンプ防衛／カバー／撤退で決着。"));
+  assert.equal(allBanner, "", "camp unlocked: no camp-defense banner");
   // a camp-locked sortie that times out shows no camp text anywhere in these strings
   for (const t of [campHudText(rel, false) ?? "", timeUpHelpSentence(false), relBanner, briefingHelpText(relLocked)]) {
     assert.ok(!t.includes("キャンプ"), `no キャンプ: ${t}`);
@@ -3656,4 +3581,269 @@ import {
     assert.ok(out.x >= 20 && out.y <= w.balance.worldH - 20, "clamped to the field");
   }
   console.log("explore 項目5-1 sortie wrecks ok");
+}
+
+// 項目5-2b: hide the retreat button until the captain falls, and force a rescue at 0s.
+{
+  const killEnemies = (w: ReturnType<typeof createWorld>) => {
+    for (const e of w.enemies) {
+      e.alive = false;
+      e.hp = 0;
+    }
+  };
+  const deploySearch = (extra: string) =>
+    `?deployedInstanceIds=m1,m2,m3&deployableMechs=3&mechDurability=m1:100;m2:100;m3:100&mechBattery=m1:300:200;m2:300:200;m3:300:200${extra}`;
+  const open = (extra = "") => {
+    const w = createWorld(bootstrapFromSearch(deploySearch(extra)));
+    startSortie(w);
+    killEnemies(w);
+    return w;
+  };
+  const expire = (w: ReturnType<typeof createWorld>) => {
+    w.timeLeft = 0.02;
+    tickWorld(w, 0.05, idleInput());
+  };
+  const hubWith = (credits: number) => {
+    const mk = (id: string) => ({
+      ...shared.createOwnedMech("mech_gen1", { instanceId: id, durability: 100 }),
+      battery: { capacity: 300, activity: 200 },
+    });
+    return shared.normalizeHubSnapshot({
+      ...shared.INITIAL_HUB,
+      credits,
+      fleet: [mk("m1"), mk("m2"), mk("m3")],
+      frontProgress: { seed: 4242, cols: 8, rows: 8, cleared: [], mined: [] },
+    });
+  };
+  const withWallet = (credits: number, run: () => void) => {
+    const mem = new Map<string, string>();
+    const store = {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, v),
+      removeItem: (k: string) => void mem.delete(k),
+      clear: () => mem.clear(),
+      key: (i: number) => [...mem.keys()][i] ?? null,
+      get length() {
+        return mem.size;
+      },
+    };
+    const prev = "localStorage" in globalThis ? globalThis.localStorage : undefined;
+    Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true });
+    try {
+      assert.equal(shared.saveHubSaveToLocalStorage(hubWith(credits)), true);
+      run();
+    } finally {
+      if (prev === undefined) delete (globalThis as { localStorage?: Storage }).localStorage;
+      else Object.defineProperty(globalThis, "localStorage", { value: prev, configurable: true });
+    }
+  };
+
+  // 隊長が無事なあいだ、撤退ボタンが出ない。大破した瞬間に出る。
+  {
+    const w = open();
+    assert.equal(retreatButtonShown(w.leader.alive), false);
+    assert.equal(sortieRetreatHtml(true, false, 501), "");
+    assert.equal(leaderDownBannerHtml(w), "");
+    w.leader.alive = false;
+    w.leader.hp = 0;
+    assert.equal(retreatButtonShown(w.leader.alive), true);
+    const shown = sortieRetreatHtml(false, false, 501);
+    assert.ok(shown.includes('id="btn-rescue"'));
+    assert.ok(!shown.includes("btn-abort"));
+    const banner = leaderDownBannerHtml({ ...w, phase: "sortie" });
+    assert.ok(banner.includes("隊長機大破 — 撤退できます（救助費用：所持金の半分）"));
+    assert.ok(banner.includes("時間切れまで待つと、救助費用は所持金の¾"));
+  }
+
+  // 確認に、今の所持金と、半分を切り捨てて引いたあとの所持金が出る。やめると出撃が続く。
+  {
+    const w = open();
+    w.leader.alive = false;
+    const copy = rescueConfirmCopy(501);
+    assert.equal(copy, "救助費用：所持金の半分（今 501 c → 251 c）");
+    const html = sortieRetreatHtml(false, true, 501);
+    assert.ok(html.includes(copy));
+    assert.ok(html.includes(">撤退</button>"));
+    assert.ok(html.includes(">やめる</button>"));
+    assert.ok(!html.includes("取りやめ"));
+    assert.equal(w.phase, "sortie");
+    assert.notEqual(w.rescueAbort, true);
+    const zero = rescueConfirmCopy(0);
+    assert.equal(zero, "救助費用：所持金の半分（今 0 c → 0 c）");
+  }
+
+  // 時間切れで、搭乗円が進行中なら通常の帰還。摩耗 15。救助費用は無い。
+  {
+    const w = open("&sectorX=2&sectorY=-1&density=0.3");
+    w.leader.pos = { x: 700, y: 400 };
+    for (const u of w.wingmen) u.pos = { x: 700, y: 400 };
+    assert.equal(requestExtract(w), true);
+    w.leader.alive = false;
+    w.leader.hp = 0;
+    w.timeLeft = 0.02;
+    const pin = { x: 700, y: 400 };
+    tickWorld(w, 0.05, { move: { x: 1, y: 0 }, clickMove: { x: 900, y: 400 }, fire: false, interact: false });
+    assert.equal(w.phase, "sortie", "in-progress circle waits");
+    assert.equal(w.operationTimedOut, true);
+    assert.ok(Math.abs(w.leader.pos.x - pin.x) < 0.5 && Math.abs(w.leader.pos.y - pin.y) < 0.5);
+    assert.equal(unloadAtCamp(w), "denied");
+    assert.ok(!w.logs.some((l) => l.text === "時間切れ。強制救助。"));
+    for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 1 && w.phase === "sortie"; t += 0.25) {
+      w.leader.pos = { ...pin };
+      for (const u of w.wingmen) u.pos = { ...pin };
+      tickWorld(w, 0.25, idleInput());
+    }
+    assert.equal(w.phase, "result");
+    assert.equal(w.extracted, true);
+    assert.equal(returnKindFromWorld(w), "extract");
+    assert.equal(resultHeading(w), "帰還成功（隊長の残骸を回収）");
+    assert.equal(exploreReturnPayload(w)!.rescueFeeCredits, undefined);
+    const wear = Object.fromEntries(exploreReturnPayload(w)!.mechWear.map((r) => [r.instanceId, r.durabilityAfter]));
+    assert.equal(wear.m1, 0, "downed captain returns destroyed");
+    assert.equal(wear.m2, 85, "survivor wear is extract 15");
+    assert.equal(wear.m3, 85);
+  }
+
+  // 時間切れ、隊長が生きていて円が無い。半径の中だけ帰り、外は置き去り。費用なし。摩耗 20。abort。コンテナは手渡しに残る。
+  {
+    const w = attachLostMechContext(open("&sectorX=2&sectorY=-1&density=0.3"), hubWith(80));
+    assert.equal(w.wingmen.length, 2);
+    w.leader.pos = { x: 400, y: 400 };
+    w.wingmen[0]!.pos = { x: 450, y: 400 };
+    w.wingmen[1]!.pos = { x: 400, y: 620 };
+    w.leader.salvagedCount = 1;
+    w.wingmen[0]!.salvagedCount = 2;
+    w.wingmen[1]!.salvagedCount = 4;
+    for (const c of w.containers) c.pos = { x: 20, y: 20 };
+    w.containers.push({ id: "in-c", pos: { x: 420, y: 400 }, taken: false, discovered: true, glowT: 0 });
+    w.containers.push({ id: "out-c", pos: { x: 20, y: 20 }, taken: false, discovered: true, glowT: 0 });
+    w.camp = { pos: { x: 400, y: 400 }, stashedCount: 3 };
+    w.commandUnlock = { ...w.commandUnlock, mode: "release", equippedByUnit: {} };
+    expire(w);
+    assert.equal(w.phase, "result");
+    assert.equal(w.extracted, false);
+    assert.equal(returnKindFromWorld(w), "abort");
+    assert.notEqual(w.rescueAbort, true);
+    assert.equal(exploreReturnPayload(w)!.rescueFeeCredits, undefined);
+    assert.equal(resultHeading(w), "強制救助（時間切れ）");
+    assert.deepEqual(
+      w.logs.filter((l) => l.text.includes("時間切れ")).map((l) => l.text),
+      ["時間切れ。強制救助。"],
+    );
+    assert.deepEqual(
+      (w.leftBehind ?? []).map((e) => e.name),
+      [w.wingmen[1]!.name],
+      "outside wingman is left behind",
+    );
+    assert.ok(!(w.leftBehind ?? []).some((e) => e.id === w.wingmen[0]!.id), "inside wingman returns even with no circuit");
+    assert.equal(w.containers.find((c) => c.id === "in-c")!.taken, true);
+    assert.equal(w.containers.find((c) => c.id === "out-c")!.taken, false);
+    assert.equal(w.camp, null);
+    assert.equal(w.salvaged, 1 + 2 + 1 + 3, "carried inside + unpicked inside + camp inside");
+    const result = toExploreResult(w);
+    assert.equal(result.isExtracted, false);
+    assert.equal(result.salvagedContainers, w.salvaged);
+    assert.ok(sortHandoffUrl(w).includes(`salvagedContainers=${w.salvaged}`));
+    const wear = Object.fromEntries(exploreReturnPayload(w)!.mechWear.map((r) => [r.instanceId, r.durabilityAfter]));
+    assert.equal(wear.m1, 80, "returned captain wear is abort 20");
+    assert.equal(wear.m2, 80, "returned wingman wear is abort 20");
+    const lines = forcedRescueAliveLines(w);
+    assert.ok(lines.some((l) => l.startsWith("回収：") && l.includes("隊長")));
+    assert.ok(lines.some((l) => l.includes("残したもの") && l.includes("Invade (2, -1) に残る")));
+    assert.ok(lines.includes("場所：Invade (2, -1)"));
+
+    const outsideCamp = open();
+    outsideCamp.leader.pos = { x: 400, y: 400 };
+    outsideCamp.camp = { pos: { x: 20, y: 20 }, stashedCount: 5 };
+    outsideCamp.leader.salvagedCount = 0;
+    for (const u of outsideCamp.wingmen) u.salvagedCount = 0;
+    for (const c of outsideCamp.containers) c.pos = { x: 20, y: 20 };
+    expire(outsideCamp);
+    assert.equal(outsideCamp.salvaged, 0, "camp outside the radius is lost");
+    assert.equal(toExploreResult(outsideCamp).salvagedContainers, 0);
+  }
+
+  // 時間切れ、隊長が大破、円が無い。3/4 を 1 回。0c は 0c。501c は 126c。僚機は置き去り。積荷とキャンプは失う。
+  withWallet(501, () => {
+    const w = open("&sectorX=1&sectorY=2&density=0.2");
+    w.leader.alive = false;
+    w.leader.hp = 0;
+    w.salvaged = 4;
+    w.leader.salvagedCount = 4;
+    w.camp = { pos: { x: 10, y: 10 }, stashedCount: 2 };
+    expire(w);
+    assert.equal(w.phase, "result");
+    assert.equal(w.rescueAbort, true);
+    assert.equal(w.rescueFeeCredits, 375);
+    assert.equal(Math.floor((501 * 3) / 4), 375);
+    assert.equal(w.salvaged, 0);
+    assert.equal(w.camp, null);
+    assert.equal(returnKindFromWorld(w), "abort");
+    assert.equal(w.extracted, false);
+    assert.equal((w.leftBehind ?? []).length, w.wingmen.length);
+    assert.ok((w.leftBehind ?? []).every((e) => e.reason === "rescue"));
+    assert.equal(resultHeading(w), "強制救助（隊長大破・時間切れ）");
+    assert.ok(rescueResultLines(w).includes("救助費用 375c（所持金の¾）"));
+    assert.ok(rescueResultLines(w).includes("積荷を失った"));
+    assert.ok(rescueResultLines(w).includes("キャンプの置場を失った"));
+    assert.deepEqual(
+      w.logs.filter((l) => l.text.includes("時間切れ")).map((l) => l.text),
+      ["時間切れ。強制救助。"],
+    );
+    const payload = exploreReturnPayload(w)!;
+    assert.equal(payload.rescueFeeCredits, 375);
+    const first = shared.applyExploreReturnToHub(hubWith(501), payload);
+    assert.equal(first.applied, true);
+    assert.equal(first.hub.credits, 126);
+    const second = shared.applyExploreReturnToHub(first.hub, payload);
+    assert.equal(second.applied, false);
+    assert.equal(second.hub.credits, 126);
+  });
+  withWallet(0, () => {
+    const w = open();
+    w.leader.alive = false;
+    w.leader.hp = 0;
+    expire(w);
+    assert.equal(w.rescueFeeCredits, 0);
+    const payload = exploreReturnPayload(w)!;
+    const applied = shared.applyExploreReturnToHub(hubWith(0), payload);
+    assert.equal(applied.hub.credits, 0);
+  });
+
+  // 残り 30 秒の帯と、見出しが生きているときと大破しているときで分かれる。円の色は搭乗円と違う。
+  {
+    const w = open("&sectorX=0&sectorY=0&density=0&engage=forced");
+    assert.equal(w.invadeSector?.engage, "forced");
+    w.timeLeft = 31;
+    assert.equal(forcedRescueWarningHtml(w), "");
+    assert.equal(forcedRescueRing(w), null);
+    assert.equal(hudTimePresentation(w).className, "");
+    w.timeLeft = 30;
+    assert.ok(forcedRescueWarningHtml(w).includes("あと30秒で強制救助"));
+    assert.equal(hudTimePresentation(w).className, "timed-out");
+    const ring = forcedRescueRing(w);
+    assert.ok(ring);
+    assert.equal(ring!.radius, w.balance.boardingRadius);
+    assert.deepEqual(ring!.center, w.leader.pos);
+    w.timeLeft = 10;
+    assert.equal(hudTimePresentation(w).className, "timed-out time-critical");
+    assert.equal(FORCED_RESCUE_RING, "#c084fc");
+    assert.notEqual(FORCED_RESCUE_RING, "#3dd68c");
+    assert.notEqual(FORCED_RESCUE_RING, "#3d8bfd");
+    w.leader.pos = { x: 400, y: 400 };
+    assert.equal(requestExtract(w), true);
+    const around = forcedRescueRing(w);
+    assert.deepEqual(around!.center, w.boarding!.center);
+    w.boarding = null;
+    expire(w);
+    assert.equal(w.phase, "result", "forced engage uses the same timeout");
+    assert.equal(resultHeading(w), "強制救助（時間切れ）");
+    const dead = open();
+    dead.leader.alive = false;
+    dead.leader.hp = 0;
+    expire(dead);
+    assert.equal(resultHeading(dead), "強制救助（隊長大破・時間切れ）");
+    assert.notEqual(resultHeading(w), resultHeading(dead));
+  }
+  console.log("explore 項目5-2b forced rescue ok");
 }

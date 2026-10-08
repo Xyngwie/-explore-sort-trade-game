@@ -239,8 +239,10 @@ export type ExploreToHubWearPayload = {
   frontSeed?: number;
   cell?: { sx: number; sy: number };
   /**
-   * 項目5-2: credits the hub deducts once for a rescue abort (floor of half
-   * the wallet at that moment). Absent on every other ending. 0 is 0.
+   * 項目5-2 / 5-2b: credits the hub deducts once (`rescueFee`).
+   * Button rescue and a total wipe use floor(所持金 / 2). A timeout with the
+   * captain already down uses floor(所持金 × 3 / 4). Absent when there is no
+   * fee (including an alive-captain timeout). 0 is 0.
    */
   rescueFeeCredits?: number;
 };

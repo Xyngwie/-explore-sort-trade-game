@@ -1,4 +1,5 @@
 import { extractionProgressPct } from "../extractProgress";
+import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
 import { getCoverObjects } from "./coverObjects";
 import { STANCE_LABEL, type World } from "./types";
@@ -95,6 +96,20 @@ export function renderWorld(
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(px, py, r * 0.24, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 項目5-2b: thin warning ring. Color is not the boarding circle.
+  const warnRing = forcedRescueRing(world);
+  if (warnRing) {
+    const cx = tx(warnRing.center.x);
+    const cy = ty(warnRing.center.y);
+    const rr = warnRing.radius * sx;
+    ctx.strokeStyle = FORCED_RESCUE_RING;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
     ctx.stroke();
   }
 

@@ -289,7 +289,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 | `mechBattery` | trade → explore と同じ形 | 載せる（U9 以降。出撃時に受け取ったバッテリーをそのまま返す。explore は今バッテリーを消費しない。受け取っていない機体は載せない＝既定の 300/300 を作らない） | 機体の `battery` に書き戻す |
 | `inventoryDrops` | JSON 配列（`FieldInventoryDrop`） | 載せない（今の Explore には表せる一般インベントリの落とし物がない。#199 の PR 本文） | `inventoryFieldDrops` に追加 |
 | `recoveredInventoryDropIds` | `id,id` | 載せない | `inventoryFieldDrops` から回収 |
-| `rescueFee` | 非負整数 | 救助撤退のときだけ載せる（項目5-2。`floor(所持金 / 2)`。0 も載せる） | `applyExploreReturnToHub` が `sortieId` ごとに 1 回だけ `credits` から引く（所持を超えない。0 は引かない） |
+| `rescueFee` | 非負整数 | 救助のときだけ載せる。ボタンの救助撤退と全滅は `floor(所持金 / 2)`（項目5-2）。隊長が大破した時間切れは `floor(所持金 × 3 / 4)`（項目5-2b。同じキー）。0 も載せる。隊長が生きている時間切れは載せない | `applyExploreReturnToHub` が `sortieId` ごとに 1 回だけ `credits` から引く（所持を超えない。0 は引かない） |
 
 - trade の帰還の反映（と Explore の直接保存。どちらも `applyExploreReturnToHub`）は、帰還に `frontSeed` と `cell`（`dropCell`）が両方あるとき、背負えなかった大破機の装着回路をそのマスの `fieldDrops` にする（下）。片方でも欠ける出撃では、その回路は落とし物にも倉庫にもならず失う（U7）。帰還の `recoveredDropIds` は `recoverFieldDrops` で倉庫（`equippedTo: null`）に戻す。既に持っている `circuitId` は場に残す。`acquiredCircuits` はまだ空。`lostMechInstanceIds` は帰還の `abandonedMechInstanceIds`。
 - **背負えなかった大破機の回路**: `wreckedMechInstanceIds` のうち `lostMechs` に入っていない機体の装着回路。背負って帰る処理は未実装なので、置き去りでない大破はすべてこれにあたる。`cause` は `wreck_not_carried`。機体そのものは `destroyed`・耐久 0 で `fleet` に残す（#199）。同時に置き去り（`lostMechs`）なら、回路は落とさずその機体に付いたまま。結果画面は、マスがあれば「前線マス (x, y) に落ちた」、なければ「失われた」と出す。
