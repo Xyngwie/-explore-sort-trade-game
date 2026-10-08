@@ -63,6 +63,12 @@ export function applyReturnedMechState(
   });
 }
 
+/** 項目5-2: rescue cost is floor(所持金 / 2). 0c stays 0c. */
+export function rescueFeeCredits(credits: number): number {
+  const held = Math.max(0, Math.floor(Number(credits) || 0));
+  return Math.floor(held / 2);
+}
+
 export type ApplyExploreReturnResult = {
   hub: HubSnapshot;
   /** false when `sortieId` was already applied (hub unchanged). */
@@ -108,6 +114,14 @@ export function applyExploreReturnToHub(
     if (!report.applied) return { hub, applied: false };
     recoveredCircuitIds = report.recovered;
     next = withLostMechWear(report.hub, wear);
+    // Once per sortieId: a second apply returns above, before this deduction.
+    if (wear.rescueFeeCredits != null) {
+      const fee = Math.max(0, Math.floor(wear.rescueFeeCredits));
+      if (fee > 0) {
+        const held = Math.max(0, Math.floor(next.credits ?? 0));
+        next = { ...next, credits: Math.max(0, held - fee) };
+      }
+    }
   }
   return {
     hub: {

@@ -46,5 +46,15 @@ export type World = { balance: Balance; phase: Phase; timeLeft: number; operatio
   /** dropIds of circuit drops recovered at lift-off this sortie. */
   recoveredDropIds?: string[];
   /** Owned circuitIds at deploy time (used to filter out circuits already owned from recovered result lines). */
-  initialOwnedCircuitIds?: string[]; };
+  initialOwnedCircuitIds?: string[];
+  /** 項目5-2: the captain-down log has been written. The sortie continues. */
+  leaderDownNoted?: boolean;
+  /** 項目5-2: this ending is a rescue abort. returnKind stays `abort`. */
+  rescueAbort?: boolean;
+  /** 項目5-2: floor(所持金 / 2), deducted once per sortieId. 0 stays 0. */
+  rescueFeeCredits?: number;
+  /** 項目5-2: there was cargo (salvage, carried containers, or a camp stash) when the rescue started. */
+  rescueLostCargo?: boolean;
+  /** 項目5-2: a camp site was on the field when the rescue started. */
+  rescueLostCamp?: boolean; };
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };

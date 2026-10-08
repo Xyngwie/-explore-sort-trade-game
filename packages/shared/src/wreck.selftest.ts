@@ -27,7 +27,7 @@ import {
   removeWreckRows,
 } from "./circuit-inventory";
 import { aggregateCircuitBonuses } from "./circuit-bonuses";
-import { applyExploreReturnToHub } from "./sortie-return";
+import { applyExploreReturnToHub, rescueFeeCredits } from "./sortie-return";
 import { buildExploreToHubWearUrl, parseExploreToHubWearSearch } from "./handoff";
 
 const mkCircuit = (id: string, equippedTo: string | null): HubCircuitRecord => ({
@@ -242,4 +242,27 @@ const battery = { capacity: 300, activity: 200 };
   assert.equal(r.hub.circuits.length, 0);
   assert.equal(r.hub.fieldDrops.length, 0);
   console.log("wreck (7) placeless wreck lost outright ok");
+}
+
+// (8) 項目5-2: rescue fee is floor(half), deducted once per sortieId, 0 stays 0.
+{
+  assert.equal(rescueFeeCredits(0), 0);
+  assert.equal(rescueFeeCredits(1), 0);
+  assert.equal(rescueFeeCredits(501), 250);
+  const hub = normalizeHubSnapshot({ ...INITIAL_HUB, credits: 501 });
+  const payload = {
+    returnKind: "abort" as const,
+    mechWear: [] as Array<{ instanceId: string; durabilityAfter: number }>,
+    sortieId: "s-rescue-fee",
+    rescueFeeCredits: 250,
+  };
+  const url = buildExploreToHubWearUrl(payload, "https://estg.invalid/trade/");
+  assert.equal(parseExploreToHubWearSearch(url.split("?")[1] ?? "")?.rescueFeeCredits, 250);
+  const once = applyExploreReturnToHub(hub, payload);
+  assert.equal(once.applied, true);
+  assert.equal(once.hub.credits, 251);
+  const twice = applyExploreReturnToHub(once.hub, payload);
+  assert.equal(twice.applied, false);
+  assert.equal(twice.hub.credits, 251);
+  console.log("wreck (8) rescue fee once per sortieId ok");
 }

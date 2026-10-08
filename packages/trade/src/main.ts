@@ -460,9 +460,9 @@ function nextSortiePanel(s: HangarState): string {
       <details class="sortie-details">
         <summary>シミュ帰還 · URL</summary>
         <div class="row">
-          <button type="button" class="secondary" data-sim="extract">extract</button>
-          <button type="button" class="secondary" data-sim="abort">abort</button>
-          <button type="button" class="secondary" data-sim="fail">fail</button>
+          <button type="button" class="secondary" data-sim="extract">帰還</button>
+          <button type="button" class="secondary" data-sim="abort">撤退</button>
+          <button type="button" class="secondary" data-sim="fail">失敗</button>
         </div>
         ${
           deployUrl

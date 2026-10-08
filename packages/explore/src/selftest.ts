@@ -83,6 +83,7 @@ import { recoverStrandedDropsAtLiftOff, recoveredCircuitResultHtml, recoveredCir
 import { invadeSquadSearch } from "./game/invadeSquad";
 import { buildSortieOutcome, exploreReturnPayload, hubWearHandoffUrl, returnKindFromWorld, sortHandoffUrl, toExploreResult, wreckResultHtml, wreckResultLines } from "./game/outcome";
 import { placeWreckInWorld, wreckLabel } from "./game/wrecks";
+import { rescueAbortSortie, rescueResultLines, resultHeading } from "./game/rescue";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
 import {
   QUIRK_LABEL,
@@ -3395,16 +3396,59 @@ import {
     [100, 0, 100, "destroyed"],
   );
 
-  // (2) leader shot down: today's immediate fail stays, and the leader mech comes back destroyed
+  // (2) 項目5-2: leader shot down does not fail the sortie. Rescue abort destroys the
+  // leader and leaves the living wingmen behind. Their wear is today's abort wear.
   const leaderW = begin(false);
   shootDown(leaderW.leader);
-  tickWorld(leaderW, 0.05, idleInput());
-  assert.equal(leaderW.phase, "result");
-  assert.equal(leaderW.failReason, "leader_down");
-  assert.equal(returnKindFromWorld(leaderW), "fail");
-  assert.deepEqual(wear(leaderW), { m1: 0, m2: 65, m3: 65 }, "leader destroyed, survivors flat fail wear (35)");
+  const leaderPos = { ...leaderW.leader.pos };
+  tickWorld(leaderW, 0.05, { ...idleInput(), move: { x: 1, y: 0 }, fire: true });
+  assert.equal(leaderW.phase, "sortie", "captain down does not end the sortie");
+  assert.equal(leaderW.failReason, null);
+  assert.equal(leaderW.leaderDownNoted, true);
+  assert.deepEqual(leaderW.leader.pos, leaderPos, "a wreck does not move or get dragged by input");
+  assert.equal(executeExploreCommand(leaderW, { id: "extract" }).status, "done");
+  assert.equal((executeExploreCommand(leaderW, { id: "extract" }) as { result: boolean }).result, false);
+  leaderW.salvaged = 2;
+  leaderW.camp = { pos: { x: 10, y: 10 }, stashedCount: 1 };
+  assert.equal(rescueAbortSortie(leaderW, 501), "rescued");
+  assert.equal(leaderW.rescueFeeCredits, 250);
+  assert.equal(returnKindFromWorld(leaderW), "abort");
+  assert.deepEqual(wear(leaderW), { m1: 0, m2: 80, m3: 80 }, "leader destroyed, living wingmen keep abort wear");
   assert.deepEqual(exploreReturnPayload(leaderW)!.wreckedMechInstanceIds, ["m1"]);
-  assert.ok(leaderW.logs.some((l) => l.text === "隊長撃破。作戦失敗。"), "same fail log as today");
+  assert.deepEqual(exploreReturnPayload(leaderW)!.abandonedMechInstanceIds, ["m2", "m3", "m1"]);
+  assert.equal(exploreReturnPayload(leaderW)!.rescueFeeCredits, 250);
+  assert.equal(leaderW.salvaged, 0);
+  assert.equal(leaderW.camp, null);
+  assert.ok(rescueResultLines(leaderW).includes("救助費用 250c"));
+  assert.ok(rescueResultLines(leaderW).includes("積荷を失った"));
+  assert.ok(rescueResultLines(leaderW).includes("キャンプの置場を失った"));
+  assert.ok(leaderW.logs.some((l) => l.text === "救助撤退。救助費用 250c。"));
+
+  // (2b) total wipe rescues immediately, fee 0 when there is no wallet
+  const wipe = begin(false);
+  shootDown(wipe.leader);
+  for (const u of wipe.wingmen) shootDown(u);
+  tickWorld(wipe, 0.05, idleInput());
+  assert.equal(wipe.phase, "result");
+  assert.equal(wipe.rescueAbort, true);
+  assert.equal(wipe.rescueFeeCredits, 0);
+  assert.ok(wipe.logs.some((l) => l.text === "全滅。救助撤退。救助費用 0c。"));
+
+  // (2c) a boarding circle opened before the captain fell lifts the wreck off for free
+  const free = begin(true);
+  free.leader.pos = { x: 700, y: 400 };
+  for (const u of free.wingmen) u.pos = { x: 700, y: 400 };
+  assert.equal(executeExploreCommand(free, { id: "extract" }).status, "done");
+  shootDown(free.leader);
+  for (let t = 0; t < free.balance.boardingLiftOffDelaySec + 2 && free.phase === "sortie"; t += 0.1) {
+    tickWorld(free, 0.1, idleInput());
+  }
+  assert.equal(free.extracted, true);
+  assert.notEqual(free.rescueAbort, true);
+  assert.equal(resultHeading(free), "帰還成功（隊長の残骸を回収）");
+  assert.deepEqual(rescueResultLines(free), []);
+  assert.ok(free.recoveredWreckUnitIds?.includes(free.leader.id));
+  assert.equal(exploreReturnPayload(free)!.rescueFeeCredits, undefined);
 
   // (3) 帰還 (extract) with a shot-down wingman: destroyed; not a left-behind row
   const baseExtract = begin(false);
@@ -3584,19 +3628,22 @@ import {
     assert.equal(recHub.lostMechs.length, 0);
   }
 
-  // (10) W10: the leader leaves a wreck too (its recovery in the same sortie starts with 項目5-2)
+  // (10) W10: the leader leaves a wreck. 項目5-2 records it when the rescue abort ends the sortie.
   {
     const w = begin(true);
     w.leader.pos = { x: 333, y: 444 };
     shootDown(w.leader);
     tickWorld(w, 0.05, idleInput());
-    assert.equal(w.failReason, "leader_down");
+    assert.equal(w.phase, "sortie");
+    assert.equal(rescueAbortSortie(w, 0), "rescued");
     assert.deepEqual(wreckResultLines(w), ["隊長機 は大破（残骸と回路は撃破した場所に残る）"]);
-    assert.deepEqual(exploreReturnPayload(w)!.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m1", "wreck", { x: 333, y: 444 }]]);
+    const wreckRows = (exploreReturnPayload(w)!.lostMechs ?? []).filter((r) => r.kind === "wreck");
+    assert.deepEqual(wreckRows.map((r) => [r.instanceId, r.kind, r.pos]), [["m1", "wreck", { x: 333, y: 444 }]]);
     const d = begin(false);
     shootDown(d.leader);
     tickWorld(d, 0.05, idleInput());
-    assert.deepEqual(exploreReturnPayload(d)!.abandonedMechInstanceIds, ["m1"], "W4 A: not via Invade → lost");
+    rescueAbortSortie(d, 0);
+    assert.deepEqual(exploreReturnPayload(d)!.abandonedMechInstanceIds, ["m2", "m3", "m1"], "W4 A: not via Invade → lost, living wingmen too");
   }
   assert.equal(wreckLabel("僚機A"), "残骸 僚機A");
   // placeWreckInWorld: a saved position on a cover object is pushed just outside it
