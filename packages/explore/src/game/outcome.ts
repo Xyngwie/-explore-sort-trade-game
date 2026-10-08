@@ -17,12 +17,13 @@ import {
 } from "@estg/shared";
 import type { World } from "./types";
 import { strandedNotRecovered } from "./lostMechs";
+import { isAliveForcedRescue } from "./rescue";
 import { abandonedWreckInstanceIds, sortieWreckRows } from "./wrecks";
 
 export function returnKindFromWorld(world: World): SortieReturnKind {
   if (world.extracted) return "extract";
-  // Note: clock expiry no longer sets failReason=timeout (overtime lock).
-  // "timeout" remains only for legacy/manual fail wear paths.
+  // Clock expiry is a forced rescue: alive → abort (wear 20, cargo kept below),
+  // downed → rescue abort. "timeout" remains only for legacy/manual fail wear.
   if (
     world.failReason === "timeout" ||
     world.failReason === "leader_down" ||
@@ -34,7 +35,8 @@ export function returnKindFromWorld(world: World): SortieReturnKind {
 }
 
 export function toExploreResult(world: World): ExploreResult {
-  const salvaged = world.extracted ? world.salvaged : 0;
+  // Alive-captain timeout is abort (not extracted) but keeps in-radius containers.
+  const salvaged = world.extracted || isAliveForcedRescue(world) ? world.salvaged : 0;
   const state = createExpeditionState({
     carrierCapacity: world.carrierCapacity,
     maxOperationTimeSec: world.maxOperationTimeSec,
@@ -145,6 +147,7 @@ export function sortHandoffUrl(world: World): string {
       salvagedContainers: result.salvagedContainers,
       totalStockPieces: result.totalStockPieces,
       isExtracted: result.isExtracted,
+      ...(isAliveForcedRescue(world) ? { forcedRescueRecovered: true as const } : {}),
       ...(craft != null && Number.isFinite(craft) && craft > 1
         ? { craftMultiplier: craft }
         : {}),

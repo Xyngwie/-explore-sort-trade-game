@@ -39,6 +39,13 @@ export type ExploreToSortPayload = {
   totalStockPieces: number;
   isExtracted: boolean;
   /**
+   * Leader-alive time-up forced rescue. `isExtracted` stays false (wear stays
+   * the abort 20) but Sort may refine or deposit these containers like a
+   * normal return. Omit on every other ending, including rescue abort and a
+   * downed-captain time-up (those lose the cargo). Absent on old URLs.
+   */
+  forcedRescueRecovered?: boolean;
+  /**
    * Optional hub circuit craft multiplier (typically 1.0–1.25).
    * From deploy circuitBonuses or explicit ?craftMultiplier= (testing).
    * Omitted / unset → sort uses 1.0.
@@ -239,8 +246,10 @@ export type ExploreToHubWearPayload = {
   frontSeed?: number;
   cell?: { sx: number; sy: number };
   /**
-   * 項目5-2: credits the hub deducts once for a rescue abort (floor of half
-   * the wallet at that moment). Absent on every other ending. 0 is 0.
+   * 項目5-2 / 5-2b: credits the hub deducts once (`rescueFee`).
+   * Button rescue and a total wipe use floor(所持金 / 2). A timeout with the
+   * captain already down uses floor(所持金 × 3 / 4). Absent when there is no
+   * fee (including an alive-captain timeout). 0 is 0.
    */
   rescueFeeCredits?: number;
 };
@@ -397,6 +406,9 @@ export function buildExploreToSortUrl(
   u.searchParams.set("salvagedContainers", String(containers));
   u.searchParams.set("totalStockPieces", String(stock));
   u.searchParams.set("isExtracted", payload.isExtracted ? "1" : "0");
+  if (payload.forcedRescueRecovered) {
+    u.searchParams.set("forcedRescueRecovered", "1");
+  }
   if (payload.craftMultiplier != null) {
     const m = normalizeCraftMultiplier(payload.craftMultiplier, 1);
     if (m !== 1) {
@@ -436,6 +448,9 @@ export function parseExploreToSortSearch(
     salvagedContainers,
     totalStockPieces,
     isExtracted: parseLooseBool(p.get("isExtracted"), false),
+    ...(parseLooseBool(p.get("forcedRescueRecovered"), false)
+      ? { forcedRescueRecovered: true as const }
+      : {}),
     ...(craftMultiplier != null ? { craftMultiplier } : {}),
   };
 }

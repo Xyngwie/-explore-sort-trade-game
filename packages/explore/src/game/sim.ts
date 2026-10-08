@@ -1,7 +1,7 @@
 import { decideWingman } from "./brain";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
 import { recoverStrandedDropsAtLiftOff } from "./circuitDrops";
-import { maybeAutoRescue, noteLeaderDown } from "./rescue";
+import { maybeAutoRescue, noteLeaderDown, resolveForcedRescueTimeout } from "./rescue";
 import { recoverSortieWrecksAtLiftOff, sortieWreckUnits } from "./wrecks";
 import {
   applyOrder,
@@ -255,7 +255,7 @@ export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
 
 export function requestExtract(world: World): boolean {
   if (world.phase !== "sortie" || !world.leader.alive) return false;
-  if (isOperationTimedOut(world)) { pushLog(world, "時間切れのため新規の帰還要請は不可。進行中の搭乗円のみ継続／撤退または戦闘で決着。"); return false; }
+  if (isOperationTimedOut(world)) { pushLog(world, "時間切れのため新規の帰還要請は不可。進行中の搭乗円の完了を待つ。"); return false; }
   if (world.boarding) { pushLog(world, "帰還シーケンス進行中。キャンセル不可。"); return false; }
   const center = { ...world.leader.pos };
   const radius = world.balance.boardingRadius;
@@ -326,11 +326,21 @@ function leaderAbortSalvageOnTimeout(world: World): void { for (const u of frien
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   if (world.phase !== "sortie") return;
   world.elapsed += dt; world.timeLeft = Math.max(0, world.timeLeft - dt);
-  if (world.timeLeft <= 0 && !world.operationTimedOut) { world.operationTimedOut = true; leaderAbortSalvageOnTimeout(world); pushLog(world, "時間切れ。移動・積み下ろし不可。戦闘は継続（撤退／撃破／進行中搭乗で決着）。"); }
+  if (world.timeLeft <= 0 && !world.operationTimedOut) {
+    world.operationTimedOut = true;
+    leaderAbortSalvageOnTimeout(world);
+    // A circle already out finishes as today's extract. Otherwise the sortie ends now.
+    if (!world.boarding) {
+      resolveForcedRescueTimeout(world);
+      return;
+    }
+  }
   const timedOut = isOperationTimedOut(world);
+  const waitingBoarding = timedOut && world.boarding != null;
   const leader = world.leader;
   // 項目5-2: a downed captain does not fail the sortie. A total wipe rescues at once.
-  if (maybeAutoRescue(world)) return;
+  // While a timeout is waiting on a circle, that circle resolves the sortie (5-2b).
+  if (!waitingBoarding && maybeAutoRescue(world)) return;
   const leaderDown = !leader.alive;
   if (leaderDown) noteLeaderDown(world);
   leader.cooldown = Math.max(0, leader.cooldown - dt);
@@ -356,15 +366,17 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     w.cooldown = Math.max(0, w.cooldown - dt);
     const intent = decideWingman(world, w, dt); w.moveTarget = intent.moveTarget;
     const wingSpeed = world.balance.wingmanSpeed * unitMoveSpeedMul(w, world);
-    moveToward(w, intent.moveTarget, wingSpeed, dt, world);
+    if (timedOut) { w.moveTarget = null; w.vel = { x: 0, y: 0 }; }
+    else moveToward(w, intent.moveTarget, wingSpeed, dt, world);
     if (intent.fireAt) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, intent.fireAt, false); }
     if (!timedOut) updateSalvage(world, w, intent.trySalvage, dt);
   }
   updateEnemies(world, dt); updateBullets(world, dt); revealVision(world);
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
-  // A wipe during this tick rescues before a boarding circle can lift off (6A).
-  if (maybeAutoRescue(world)) return;
+  // A wipe during this tick rescues before a boarding circle can lift off (6A),
+  // except a timeout that is already waiting on that circle (5-2b).
+  if (!(isOperationTimedOut(world) && world.boarding) && maybeAutoRescue(world)) return;
   updateCamera(world); updateBoarding(world);
 }
 

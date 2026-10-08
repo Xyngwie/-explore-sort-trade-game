@@ -149,6 +149,33 @@ const overrideWins = parseExploreToSortSearch(
 );
 assert.ok(Math.abs((overrideWins?.craftMultiplier ?? 0) - 1.2) < 0.001);
 
+const oldHandoff = parseExploreToSortSearch(
+  "salvagedContainers=2&totalStockPieces=50&isExtracted=0",
+);
+assert.equal(oldHandoff?.isExtracted, false);
+assert.equal(oldHandoff?.salvagedContainers, 2);
+assert.equal(oldHandoff?.forcedRescueRecovered, undefined, "old handoff shape has no flag");
+assert.ok(
+  (HANDOFF_QUERY_KEYS.exploreToSort as readonly string[]).includes("forcedRescueRecovered"),
+);
+const forcedUrl = buildExploreToSortUrl({
+  salvagedContainers: 7,
+  totalStockPieces: 175,
+  isExtracted: false,
+  forcedRescueRecovered: true,
+});
+const forcedParsed = parseExploreToSortSearch(new URL(forcedUrl).search);
+assert.equal(forcedParsed?.isExtracted, false);
+assert.equal(forcedParsed?.salvagedContainers, 7);
+assert.equal(forcedParsed?.forcedRescueRecovered, true);
+assert.ok(new URL(forcedUrl).searchParams.get("forcedRescueRecovered") === "1");
+const noFlagUrl = buildExploreToSortUrl({
+  salvagedContainers: 0,
+  totalStockPieces: 0,
+  isExtracted: false,
+});
+assert.equal(new URL(noFlagUrl).searchParams.has("forcedRescueRecovered"), false);
+
 const tradeUrl = buildSortToTradeUrlFromResult({
   yieldFood: 10,
   yieldMaterial: 20,
@@ -1191,7 +1218,8 @@ console.log("shared hub-circuits selftest: ok");
       selectedAmmoId: "ammo_standard",
     },
   });
-  assert.ok(legacy);
+  assert.ok(legacy, "old save without forcedRescueRecovered still loads");
+  assert.equal(legacy!.v, 3, "old save migrates");
   assert.equal(legacy!.hub.unopenedContainers, 0, "migrate missing → 0");
 
   const withStock = createHubSave(addUnopenedContainers(INITIAL_HUB, 4));

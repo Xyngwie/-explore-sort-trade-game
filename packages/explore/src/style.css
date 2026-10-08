@@ -358,7 +358,11 @@ button.extract-not-ready {
   letter-spacing: 0.04em;
 }
 .hud strong.timed-out {
-  color: #ff9b9b;
+  color: #ff4d4d;
+}
+.hud strong.time-critical {
+  color: #ff4d4d;
+  font-size: 1.45rem;
 }
 
 .timeout-lock-banner.camp-defense {

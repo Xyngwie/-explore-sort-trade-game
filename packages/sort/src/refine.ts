@@ -67,6 +67,7 @@ function fromLegacyState(s: legacy.RefineLive): RefineLive {
 
 export const computeBudgets = legacy.computeBudgets;
 export const canStartRefine = legacy.canStartRefine;
+export const cargoAcceptedForWarehouse = legacy.cargoAcceptedForWarehouse;
 export const moveBudgetFor = legacy.moveBudgetFor;
 export const indexOf = boardIndexOfCore;
 export function isActiveChain(s: RefineLive): boolean {

@@ -193,11 +193,18 @@ export function computeBudgets(
   return { validPieceBudget, invalidPieceCount };
 }
 
+/** Normal return, or leader-alive time-up (flag set, isExtracted still false). */
+export function cargoAcceptedForWarehouse(
+  inbound: Pick<ExploreToSortPayload, "isExtracted" | "forcedRescueRecovered">,
+): boolean {
+  return inbound.isExtracted === true || inbound.forcedRescueRecovered === true;
+}
+
 export function canStartRefine(inbound: ExploreToSortPayload): {
   ok: boolean;
   reason: string | null;
 } {
-  if (!inbound.isExtracted) {
+  if (!cargoAcceptedForWarehouse(inbound)) {
     return { ok: false, reason: "未生還（isExtracted=false）のため精製できません。" };
   }
   const { validPieceBudget } = computeBudgets(inbound);
@@ -760,6 +767,7 @@ export function parseInboundOrDemo(search: string): {
         salvagedContainers: parsed.salvagedContainers,
         totalStockPieces: stock,
         isExtracted: parsed.isExtracted,
+        ...(parsed.forcedRescueRecovered ? { forcedRescueRecovered: true as const } : {}),
         ...(craft != null ? { craftMultiplier: craft } : {}),
       },
       note: `explore 受取 · 缶 ${parsed.salvagedContainers} · 予算 ${stock} · 生還 ${parsed.isExtracted ? "はい" : "いいえ"}${craftNote}`,
