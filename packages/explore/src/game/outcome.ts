@@ -147,6 +147,7 @@ export function sortHandoffUrl(world: World): string {
       salvagedContainers: result.salvagedContainers,
       totalStockPieces: result.totalStockPieces,
       isExtracted: result.isExtracted,
+      ...(isAliveForcedRescue(world) ? { forcedRescueRecovered: true as const } : {}),
       ...(craft != null && Number.isFinite(craft) && craft > 1
         ? { craftMultiplier: craft }
         : {}),

@@ -3348,6 +3348,8 @@ import {
   assert.ok(rescueResultLines(leaderW).includes("積荷を失った"));
   assert.ok(rescueResultLines(leaderW).includes("キャンプの置場を失った"));
   assert.ok(leaderW.logs.some((l) => l.text === "救助撤退。救助費用 250c。"));
+  assert.equal(toExploreResult(leaderW).salvagedContainers, 0);
+  assert.ok(!sortHandoffUrl(leaderW).includes("forcedRescueRecovered"), "rescue abort does not keep cargo");
 
   // (2b) total wipe rescues immediately, fee 0 when there is no wallet
   const wipe = begin(false);
@@ -3744,6 +3746,8 @@ import {
     assert.equal(result.isExtracted, false);
     assert.equal(result.salvagedContainers, w.salvaged);
     assert.ok(sortHandoffUrl(w).includes(`salvagedContainers=${w.salvaged}`));
+    assert.ok(sortHandoffUrl(w).includes("isExtracted=0"));
+    assert.ok(sortHandoffUrl(w).includes("forcedRescueRecovered=1"), "alive time-up keeps cargo for Sort");
     const wear = Object.fromEntries(exploreReturnPayload(w)!.mechWear.map((r) => [r.instanceId, r.durabilityAfter]));
     assert.equal(wear.m1, 80, "returned captain wear is abort 20");
     assert.equal(wear.m2, 80, "returned wingman wear is abort 20");
@@ -3761,6 +3765,7 @@ import {
     expire(outsideCamp);
     assert.equal(outsideCamp.salvaged, 0, "camp outside the radius is lost");
     assert.equal(toExploreResult(outsideCamp).salvagedContainers, 0);
+    assert.ok(sortHandoffUrl(outsideCamp).includes("forcedRescueRecovered=1"), "flag stays even when nothing was inside");
   }
 
   // 時間切れ、隊長が大破、円が無い。3/4 を 1 回。0c は 0c。501c は 126c。僚機は置き去り。積荷とキャンプは失う。
@@ -3778,6 +3783,8 @@ import {
     assert.equal(Math.floor((501 * 3) / 4), 375);
     assert.equal(w.salvaged, 0);
     assert.equal(w.camp, null);
+    assert.equal(toExploreResult(w).salvagedContainers, 0);
+    assert.ok(!sortHandoffUrl(w).includes("forcedRescueRecovered"), "downed time-up loses cargo");
     assert.equal(returnKindFromWorld(w), "abort");
     assert.equal(w.extracted, false);
     assert.equal((w.leftBehind ?? []).length, w.wingmen.length);

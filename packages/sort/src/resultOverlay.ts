@@ -5,6 +5,7 @@ import {
   CTA_COPY,
 } from "@estg/shared";
 import {
+  cargoAcceptedForWarehouse,
   createRefineFromLocationSearch,
   createTestPlayRefine,
   resolveCraftMultiplier,
@@ -96,7 +97,7 @@ export function buildResultYieldCompactHtml(opts: {
 export function isEmptyCargoEntry(
   s: Pick<RefineLive, "inbound" | "validPieceBudget">,
 ): boolean {
-  return s.inbound.isExtracted === true && s.validPieceBudget <= 0;
+  return cargoAcceptedForWarehouse(s.inbound) && s.validPieceBudget <= 0;
 }
 
 /**
@@ -140,7 +141,7 @@ export function canSkipWithCargo(
 ): boolean {
   if (s.phase != null && s.phase !== "briefing") return false;
   return (
-    s.inbound.isExtracted === true &&
+    cargoAcceptedForWarehouse(s.inbound) &&
     s.validPieceBudget > 0 &&
     Math.max(0, Math.floor(s.inbound.salvagedContainers)) > 0
   );

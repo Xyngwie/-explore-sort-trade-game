@@ -38,7 +38,7 @@ import {
   type RefineLive,
   type PieceKind,
 } from "./refine";
-import { PIECES_PER_CONTAINER } from "@estg/shared";
+import { addUnopenedContainers, INITIAL_HUB, PIECES_PER_CONTAINER } from "@estg/shared";
 import { yieldBagFromClearedCounts } from "@estg/shared";
 import {
   buildCargoSkipHubCtaHtml,
@@ -100,6 +100,19 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     isExtracted: false,
   });
   assert(!a.ok, "blocks when not extracted");
+  const forced = canStartRefine({
+    salvagedContainers: 1,
+    totalStockPieces: 25,
+    isExtracted: false,
+    forcedRescueRecovered: true,
+  });
+  assert(forced.ok, "alive time-up cargo can be refined");
+  const rescue = canStartRefine({
+    salvagedContainers: 1,
+    totalStockPieces: 25,
+    isExtracted: false,
+  });
+  assert(!rescue.ok, "missing flag still blocks");
   const b = canStartRefine({
     salvagedContainers: 0,
     totalStockPieces: 0,
@@ -1454,6 +1467,38 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(!cta.includes("未開封のまま格納庫へ"), "cargo skip no legacy long label");
   assert(cta.includes('id="btn-skip-cargo-hub"'), "cargo skip button id");
   assert(cta.includes("depositUnopenedContainers=3"), "CTA carries deposit");
+}
+
+// Leader-alive time-up: isExtracted stays false, containers still enter the warehouse.
+{
+  const blocked = createRefineFromLocationSearch(
+    "?salvagedContainers=7&totalStockPieces=175&isExtracted=0",
+  );
+  assert(blocked.phase === "blocked", "old abort handoff stays blocked");
+  assert(!canSkipWithCargo(blocked), "old abort does not deposit");
+  assert(blocked.inbound.forcedRescueRecovered !== true, "old handoff has no flag");
+
+  const alive = createRefineFromLocationSearch(
+    "?salvagedContainers=7&totalStockPieces=175&isExtracted=0&forcedRescueRecovered=1",
+  );
+  assert(alive.phase === "briefing", "forced rescue opens like a return");
+  assert(alive.inbound.isExtracted === false, "extracted stays false");
+  assert(alive.inbound.forcedRescueRecovered === true, "flag survives parse");
+  assert(canSkipWithCargo(alive), "forced rescue can skip into the warehouse");
+  const started = startRefine(alive, 3);
+  assert(started.phase === "play", "forced rescue containers can be opened");
+
+  const skipUrl = buildCargoSkipToHubUrl(alive, "http://localhost:5175/");
+  const parsed = parseSortToTradeSearch(new URL(skipUrl).search);
+  assert(parsed != null && parsed.depositUnopenedContainers === 7, "deposit the in-radius count");
+  const hub = addUnopenedContainers(INITIAL_HUB, parsed!.depositUnopenedContainers ?? 0);
+  assert(hub.unopenedContainers === INITIAL_HUB.unopenedContainers + 7, "warehouse stock grows by the recovered cans");
+
+  const emptyForced = createRefineFromLocationSearch(
+    "?salvagedContainers=0&totalStockPieces=0&isExtracted=0&forcedRescueRecovered=1",
+  );
+  assert(isEmptyCargoEntry(emptyForced), "nothing recovered uses the empty-return skip");
+  assert(!canSkipWithCargo(emptyForced), "empty forced rescue deposits nothing");
 }
 
 // Junk-tension telegraph + session yield toggle (no junk banner)
