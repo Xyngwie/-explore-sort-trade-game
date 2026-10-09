@@ -72,11 +72,22 @@ def main():
     }
 
     api_key = (
-        os.environ.get(f"CURSOR_KEY_{recipient.upper()}")
+        os.environ.get(f"CURSOR_AUTOMATIONS_{recipient.upper()}")
+        or os.environ.get(f"CURSOR_KEY_{recipient.upper()}")
         or os.environ.get("CURSOR_API_KEY")
-    )
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        or ""
+    ).strip()
+    if api_key.lower().startswith("authorization:"):
+        api_key = api_key.split(":", 1)[1].strip()
+    if api_key.lower().startswith("bearer "):
+        api_key = api_key[7:].strip()
+    if not api_key:
+        print(
+            f"Error: Authorization token for recipient '{recipient}' is not set. "
+            f"Expected GitHub Actions secret CURSOR_AUTOMATIONS_{recipient.upper()}."
+        )
+        sys.exit(1)
+    headers["Authorization"] = f"Bearer {api_key}"
 
     req_data = json.dumps(payload).encode("utf-8")
 
