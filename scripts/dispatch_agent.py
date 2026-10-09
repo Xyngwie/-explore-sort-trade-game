@@ -19,7 +19,7 @@ WEBHOOK_URLS = {
 WEBHOOK_AUTHS = {
     "inspector": os.environ.get("CURSOR_AUTOMATIONS_INSPECTOR", ""),
     "lead": os.environ.get("CURSOR_AUTOMATIONS_LEAD", ""),
-    "arrow": os.environ.get("CURSOR_AUTOMATIONS_ARROW") or os.environ.get("CURSOR_AUTOMATIONS_ALLOW", ""),
+    "arrow": os.environ.get("CURSOR_AUTOMATIONS_ARROW", ""),
     "javelin": os.environ.get("CURSOR_AUTOMATIONS_JAVELIN", ""),
     "tomahawk": os.environ.get("CURSOR_AUTOMATIONS_TOMAHAWK", ""),
 }

@@ -18,7 +18,7 @@ Issue コメントを受けて該当の Automation だけを起こす経路は `
 |---|---|
 | 風紀委員 | `CURSOR_AUTOMATIONS_INSPECTOR` |
 | 実装隊長 | `CURSOR_AUTOMATIONS_LEAD` |
-| アロー | `CURSOR_AUTOMATIONS_ARROW`（無ければ `CURSOR_AUTOMATIONS_ALLOW`） |
+| アロー | `CURSOR_AUTOMATIONS_ARROW` |
 | ジャベリン | `CURSOR_AUTOMATIONS_JAVELIN` |
 | トマホーク | `CURSOR_AUTOMATIONS_TOMAHAWK` |
 
