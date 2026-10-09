@@ -4,6 +4,7 @@
 
 ## 最終更新
 
+- 2026-10-09 JST / Cursor（ジャベリン）— 自律分散エージェント運用規約・世界観・仕様基準書（[`docs/AUTONOMOUS_OPERATION.md`](./AUTONOMOUS_OPERATION.md)）、および各エージェント用完成版 Instructions（[`docs/agent_instructions/`](./agent_instructions/)）を整備。JSON リレープロトコル（`SPEC_DECISION`, `TASK_ASSIGNMENT`, `WORK_REPORT`, `PR_REPORT`, `DEPLOY_REPORT`, `AGENDA`, `REVISION_REQUEST`）を明文化し、新エージェントが自動起動した際に世界観・判断基準・暗黙ルールを 100% 同期できるようにした。`AGENTS.md` もこの新体系を最優先で参照するよう更新（文書のみ）。
 - 2026-10-09 JST / Cursor（Grok Bot）— 項目5-2b の続き。隊長が生きている時間切れで持ち帰ったコンテナ（半径の中の未回収と、半径の中のキャンプの置場）は、explore→sort の `forcedRescueRecovered` で Sort が通常の帰還と同じく精製でき、未開封のまま倉庫へ入る。印の無い古い URL と古いセーブはそのまま読める。`extracted` は立てないので摩耗は 20 のまま。救助撤退と隊長が大破した時間切れは印を付けず、積荷は倉庫に入らない。
 - 2026-10-08 JST / Cursor（アロー）— 項目5-2b（時間切れの強制救助、隊長が無事なあいだは撤退ボタンを出さない）を実装。draft のまま。マージしていない。この変更の Deploy Modules Preview はまだ走っていない。最後にデプロイ成功した main は #245（`fd892c8`）のまま。#246 と #247 は文書だけで、デプロイは走っていない。プレビューの操作はしていない。
 - 2026-10-08 JST / Cursor（風紀委員）— 項目5の正式仕様を [`ITEM5_FORMAL_SPEC.md`](./ITEM5_FORMAL_SPEC.md) に書いた（文書のみ）。次の実装は 5-2b。隊長が無事なあいだの撤退ボタンを隠し、確認を「今 X c → Y c」と「やめる」にし、時間切れの強制救助を入れる。生きている時間切れの摩耗 20 は `abort` に乗せ、半径の中のコンテナは持ち帰る。5-3 と真盤は決定済みのまま、この実装には入れない。設計メモ §7.1 と食い違うときは正式仕様を優先する。

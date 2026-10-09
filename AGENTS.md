@@ -1,22 +1,52 @@
-# AI / Coding Agent Declaration Protocol
+# AI / Coding Agent Declaration & Autonomous Operation Protocol
 
-## Purpose
+## 1. 最重要：新しく起動したエージェントへ (Must Read)
 
-このリポジトリでは、複数のコーディングエージェントが並列して作業する。各エージェントの「誰が・何を・何の目的で」作業しているかを GitHub 上で明示し、意図の衝突や CI の混乱を防ぐ。
+このリポジトリでは、Cursor Automations（Cloud Agents）と GitHub Actions による完全自律リレー体制が敷かれています。
+**作業を開始する前に、必ず以下のドキュメントを読み込んでください。**
 
-## 作業開始時の宣言
+- **自律分散エージェント運用規約・世界観・仕様基準書:** [`docs/AUTONOMOUS_OPERATION.md`](./docs/AUTONOMOUS_OPERATION.md)
+- **進行状況と現在の立ち位置:** [`docs/STATUS.md`](./docs/STATUS.md)
+- **世界観とゲーム哲学:** [`docs/PRODUCT_VISION.md`](./docs/PRODUCT_VISION.md)
+- **共通セーブデータ契約:** [`docs/HUB_SAVE_CONTRACT.md`](./docs/HUB_SAVE_CONTRACT.md)
 
-エージェントは作業を開始する前に、GitHub 上で次の情報を宣言する。
+---
 
-- **Who / 自分は誰か:** エージェント名・役割
-- **What / 何をするか:** 今回触る対象、ブランチ、PR、作業範囲
-- **Why / 何の目的か:** ユーザー要求または既存タスクに対する目的
-- **Scope / どこまでか:** 今回変更するもの、変更しないもの
-- **Status / 状態:** 作業中、待機、レビュー待ち、完了など
+## 2. 開発体制と役割分担
 
-宣言場所は、作業内容に応じて PR 本文、Issue、または `docs/STATUS.md` とする。既存の作業宣言がある場合は、それを更新して最新状態を維持する。
+- **神宮 (xyngwie):** プロダクトオーナー。世界観・要件・優先度・仕様判断の最終決定。PC を持たず、スマートフォンで実機確認する。
+- **風紀委員 (Inspector / ChatGPT・Codex):** 全体の整合性・仕様決定・監査・デプロイ確認。決定仕様を `SPEC_DECISION` JSON で実装隊長へ指示。PR を監査・マージし、`DEPLOY_REPORT` を出力する。
+- **実装隊長 (Lead / Orchestrator):** 現場監督。決定仕様のタスク分解、ファイル衝突の完全防止、実装エージェントへの `TASK_ASSIGNMENT` 指示。不明点は `AGENDA` で風紀委員へ差し戻す。作業報告を照査し、問題なければ本 PR 化して `PR_REPORT` を提出する。
+- **実装エージェント (Worker / アロー, ジャベリン, トマホーク):** 指示された `TASK_ASSIGNMENT` に従い、許可されたファイル範囲（`Allowed`）のみを変更・テストする。draft PR を作成し、作業報告 `WORK_REPORT` を**実装隊長宛て**に提出する。
 
-## PR に必ず残す宣言
+各エージェントの完成版 Instructions（指示文）は [`docs/agent_instructions/`](./docs/agent_instructions/) に配置されています。
+
+---
+
+## 3. 自律 JSON リレーフロー
+
+```text
+[風紀委員] ── SPEC_DECISION ──▶ [実装隊長]
+    ▲                                │
+    │ (AGENDA: 不明点差し戻し)        │ TASK_ASSIGNMENT
+    └── SPEC_UPDATE ─────────────────┤
+                                     ▼
+                           [実装エージェント]
+                                     │
+    ┌── REVISION_REQUEST ────────────┤ (WORK_REPORT: draft PR)
+    │   (修正指示)                   ▼
+    └──────────────────────▶ [実装隊長] (照査)
+                                     │
+                             PR_REPORT (本PR化)
+                                     ▼
+                                 [風紀委員] (マージ＆デプロイ確認)
+                                     │
+                               DEPLOY_REPORT (完了)
+```
+
+---
+
+## 4. PR に必ず残す宣言
 
 PR 本文の冒頭に次の形式で記載する。
 
@@ -31,31 +61,19 @@ PR 本文の冒頭に次の形式で記載する。
 
 これにより、別のエージェントが PR を見た時点で「この変更は誰の何の意図なのか」を把握できるようにする。
 
-## 並列作業時のルール
+---
 
-1. 他エージェントのブランチ・PRを先に確認する。
-2. 同じファイル、同じ契約、同じ機能を触る場合は、既存の作業意図を確認してから着手する。
-3. 意図が衝突している場合、勝手に上書き・統合しない。神宮（プロダクトオーナー）またはメインオーケストレーターに判断を求める。
-4. 自分の作業が終わったら、PR と `docs/STATUS.md` 等に結果と次の状態を書き戻す。
-5. CI が意図の衝突や不整合を示している場合、単に再実行して通すのではなく、どの作業同士が衝突したかを確認する。
-6. 変更の目的が別であれば、可能な限り別 PR に分離する。
+## 5. コーディングと運用の鉄則
 
-## このプロジェクトでの役割
+1. **SoT は GitHub `main`:** main のコードと契約文書を正本とする。推測で仕様を捏造しない。
+2. **新キー・新識別子の無断作成禁止:** 保存キー（`HubSave`）、URL クエリ、状態識別子を勝手に増やさない。既存の仕組みを流用する。
+3. **ScopeLock（境界防御）:** 指示された `Allowed` 以外のファイルには 1 バイトも触らない。
+4. **テストの虚偽報告厳禁:** 走っていないテストを PASS や GREEN と書かない（`NOT_RUN` と書く）。
+5. **マージは 1 本ずつ、デプロイ確認を見届ける:** `Deploy Modules Preview` の success を確認するまで完了としない。
 
-- **神宮:** プロダクトオーナー。世界観、要件、優先度、仕様判断、最終的な採用判断を行う。PCを持たず、スマートフォンで実機確認する。
-- **Codex / ChatGPT（ちゃっぴー）:** メインオーケストレーター／風紀委員。全体の整合性、仕様・運用文書、作業順序、PR、CI、マージ、デプロイ確認を管理する。
-- **Cursor / Grok Bot:** 高速実装・レビュー・デプロイ確認の実装レーン。必要に応じてブランチで実装し、テスト・ビルド・PR作成を行う。
-- **GeminiSpark:** 第三者視点の UI/UX 改善提案を行う。提案は必要に応じて人間またはオーケストレーターがタスク化する。
+---
 
-## 完了条件
-
-エージェントは「調査した」「コードを書いた」だけで完了扱いにしない。可能な範囲で、
-
-**調査 → 実装 → 検証 → commit → PR → Actions/CI確認 → レビュー → マージ → デプロイ確認 → 実際に動かせる状態 → 神宮のスマートフォンで実機確認**
-
-までつなげる。神宮の判断・権限・実機操作が必要な地点だけを具体的に切り出す。
-
-## Cursor Cloud specific instructions
+## 6. Cursor Cloud specific instructions
 
 - 依存関係はリポジトリルートで `npm ci`（Node.js 20 以上、npm workspaces）。`npm run typecheck` と `npm test` が確認コマンド。本番ビルドは `npm run build:explore` / `build:sort` / `build:trade` / `build:invade` / `build:restore`。
 - Cloud Agent の `start` は次の Vite 開発サーバーを tmux セッション `estg_explore` / `estg_sort` / `estg_trade` / `estg_invade` / `estg_restore` で起動し、応答を待って終了する。既にセッションがあるときは作り直さない。
