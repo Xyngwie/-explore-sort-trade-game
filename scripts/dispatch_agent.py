@@ -2,33 +2,17 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 import urllib.error
 
+# 各エージェントのCursor Webhook URL
 WEBHOOK_URLS = {
     "inspector": os.environ.get("CURSOR_WEBHOOK_INSPECTOR") or "https://api2.cursor.sh/automations/webhook/6d35e176-c35a-11f1-ac31-5e2d0494121f",
     "lead": os.environ.get("CURSOR_WEBHOOK_LEAD") or "https://api2.cursor.sh/automations/webhook/9d6353c0-c35a-11f1-ac31-5e2d0494121f",
     "arrow": os.environ.get("CURSOR_WEBHOOK_ARROW") or "https://api2.cursor.sh/automations/webhook/bbfd7104-c35a-11f1-ac31-5e2d0494121f",
     "javelin": os.environ.get("CURSOR_WEBHOOK_JAVELIN") or "https://api2.cursor.sh/automations/webhook/c886f192-c35a-11f1-ac31-5e2d0494121f",
     "tomahawk": os.environ.get("CURSOR_WEBHOOK_TOMAHAWK") or "https://api2.cursor.sh/automations/webhook/deb8a65d-c35a-11f1-ac31-5e2d0494121f",
-}
-
-# 各 Automation の "Generate auth header" が発行するキー。
-# secret 名は cursor_automations_<エージェント名>。
-# "Authorization:" や "Bearer " が付いていてもキー本体だけを使う。
-WEBHOOK_AUTHS = {
-    "inspector": os.environ.get("CURSOR_AUTOMATIONS_INSPECTOR", ""),
-    "lead": os.environ.get("CURSOR_AUTOMATIONS_LEAD", ""),
-    "arrow": os.environ.get("CURSOR_AUTOMATIONS_ARROW", ""),
-    "javelin": os.environ.get("CURSOR_AUTOMATIONS_JAVELIN", ""),
-    "tomahawk": os.environ.get("CURSOR_AUTOMATIONS_TOMAHAWK", ""),
-}
-WEBHOOK_AUTH_SECRET_NAMES = {
-    "inspector": "CURSOR_AUTOMATIONS_INSPECTOR",
-    "lead": "CURSOR_AUTOMATIONS_LEAD",
-    "arrow": "CURSOR_AUTOMATIONS_ARROW",
-    "javelin": "CURSOR_AUTOMATIONS_JAVELIN",
-    "tomahawk": "CURSOR_AUTOMATIONS_TOMAHAWK",
 }
 
 def extract_json_block(text: str):
@@ -68,20 +52,6 @@ def main():
         print(f"Error: Webhook for recipient '{recipient}' is not defined.")
         sys.exit(1)
 
-    auth = str(WEBHOOK_AUTHS.get(recipient, "")).strip()
-    if not auth:
-        secret_name = WEBHOOK_AUTH_SECRET_NAMES.get(recipient, recipient)
-        print(
-            f"Error: Authorization token for recipient '{recipient}' is not set. "
-            f"Add GitHub Actions secret {secret_name} "
-            f"(the key from that automation's Generate auth header)."
-        )
-        sys.exit(1)
-    if auth.lower().startswith("authorization:"):
-        auth = auth.split(":", 1)[1].strip()
-    if auth.lower().startswith("bearer "):
-        auth = auth[7:].strip()
-
     target_id = f"PR #{pr_number}" if pr_number else f"Issue #{issue_number}"
     payload = {
         "context": (
@@ -96,27 +66,53 @@ def main():
         )
     }
 
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        target_webhook,
-        data=req_data,
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": "Cursor-Dispatcher/1.0",
-            "Authorization": f"Bearer {auth}",
-        },
-        method="POST"
-    )
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Cursor-Dispatcher/1.0"
+    }
 
-    try:
-        with urllib.request.urlopen(req) as res:
-            print(f"Successfully triggered {recipient}! HTTP {res.status}")
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")
-        detail = re.sub(r"crsr_\S+", "<key>", detail)
-        detail = re.sub(r"Bearer\s+\S+", "Bearer <redacted>", detail)
-        print(f"Failed to trigger {recipient}: HTTP {e.code} - {detail}")
-        sys.exit(1)
+    api_key = (
+        os.environ.get(f"CURSOR_KEY_{recipient.upper()}")
+        or os.environ.get("CURSOR_API_KEY")
+    )
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    req_data = json.dumps(payload).encode("utf-8")
+
+    max_retries = 4
+    retry_delay_sec = 30
+
+    for attempt in range(1, max_retries + 1):
+        req = urllib.request.Request(
+            target_webhook,
+            data=req_data,
+            headers=headers,
+            method="POST"
+        )
+        try:
+            print(f"Triggering {recipient}... (attempt {attempt}/{max_retries})")
+            with urllib.request.urlopen(req) as res:
+                print(f"Successfully triggered {recipient}! HTTP {res.status}")
+                sys.exit(0)
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8', errors='replace')
+            print(f"Attempt {attempt} failed: HTTP {e.code} - {error_body}")
+            # 同時実行制限エラーやレートリミット等の場合にリトライ
+            if attempt < max_retries:
+                print(f"Waiting {retry_delay_sec}s for slots to free up before retrying...")
+                time.sleep(retry_delay_sec)
+            else:
+                print(f"All {max_retries} attempts failed to trigger {recipient}.")
+                sys.exit(1)
+        except urllib.error.URLError as e:
+            print(f"Attempt {attempt} connection error: {e.reason}")
+            if attempt < max_retries:
+                print(f"Waiting {retry_delay_sec}s before retrying...")
+                time.sleep(retry_delay_sec)
+            else:
+                print(f"All {max_retries} attempts failed.")
+                sys.exit(1)
 
 if __name__ == "__main__":
     main()
