@@ -1,5 +1,13 @@
 # AI / Coding Agent Declaration Protocol
 
+## リレーで起動したエージェントは先にこれを読む
+
+Cursor Automations（Cloud Agents）は、トリガーのたびに指示文だけを読んだ新しいエージェントとして起動する。このチャットの記憶は残らない。
+
+作業の前に [`docs/AGENT_BRIEFING.md`](docs/AGENT_BRIEFING.md) を読む。風紀委員、実装隊長、実装エージェント（アロー、ジャベリン、トマホーク）の境界、監査と実装の判断、JSON リレー（`SPEC_DECISION`、`TASK_ASSIGNMENT` ほか）はそちらが正本である。貼る指示文は [`docs/automations/`](docs/automations/) にある。
+
+リレーに乗っているあいだは、下の「完了条件」や [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md) が実装レーンにマージまで進めると書いていても、次の境界が優先する。実装エージェントは draft PR と作業報告まで。実装隊長は照合して ready にするまで。マージとデプロイ確認は風紀委員。`main` が正本であること、1 本マージして `Deploy Modules Preview` の成功を見てから次のコードをマージすること、`PRODUCT_VISION` は実装チケットではないことは、そのまま守る。
+
 ## Purpose
 
 このリポジトリでは、複数のコーディングエージェントが並列して作業する。各エージェントの「誰が・何を・何の目的で」作業しているかを GitHub 上で明示し、意図の衝突や CI の混乱を防ぐ。
