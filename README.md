@@ -33,6 +33,7 @@
 
 **実装・契約を決める文書**と、**将来像を置く文書**を分けます。
 
+0. エージェントは作業前に [`docs/AGENT_CANON.md`](docs/AGENT_CANON.md) を読む。Automations に貼る指示文は [`docs/automations/`](docs/automations/) にある
 1. 現在のコード (`packages/*`) が実装上の一次情報
 2. `docs/*_V0.md` / `*_V2.md` / 契約文書が各機能の受入条件・境界を定義
 3. [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) が現在の開発順序と未完了事項を整理
