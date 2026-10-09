@@ -55,6 +55,12 @@ PR 本文の冒頭に次の形式で記載する。
 
 までつなげる。神宮の判断・権限・実機操作が必要な地点だけを具体的に切り出す。
 
+## 自律エージェント運用基準・世界観・仕様規範（必読）
+
+Cursor Automations（Cloud Agents）等で起動するすべての新規エージェントは、作業着手前に必ず以下を参照すること。
+- 世界観・コーディング規約・JSONプロトコル正本: [`docs/AGENT_RULES_AND_STANDARDS.md`](./docs/AGENT_RULES_AND_STANDARDS.md)
+- 現在のステータス・進行状況: [`docs/STATUS.md`](./docs/STATUS.md)
+
 ## Cursor Cloud specific instructions
 
 - 依存関係はリポジトリルートで `npm ci`（Node.js 20 以上、npm workspaces）。`npm run typecheck` と `npm test` が確認コマンド。本番ビルドは `npm run build:explore` / `build:sort` / `build:trade` / `build:invade` / `build:restore`。
