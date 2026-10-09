@@ -1,5 +1,7 @@
 # AI / Coding Agent Declaration Protocol
 
+自動化で起動するエージェントは、過去のチャットを持たない。作業の前に [`docs/agents/CANON.md`](docs/agents/CANON.md) を読む。風紀委員・実装隊長・アロー / ジャベリン / トマホークの手順は [`docs/agents/instructions/`](docs/agents/instructions/) にある。
+
 ## Purpose
 
 このリポジトリでは、複数のコーディングエージェントが並列して作業する。各エージェントの「誰が・何を・何の目的で」作業しているかを GitHub 上で明示し、意図の衝突や CI の混乱を防ぐ。
