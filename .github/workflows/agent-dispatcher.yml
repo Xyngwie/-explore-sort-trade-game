@@ -22,10 +22,11 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           PR_NUMBER: ${{ github.event.issue.pull_request != null && github.event.issue.number || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          CURSOR_WEBHOOK_AUTH_INSPECTOR: ${{ secrets.CURSOR_WEBHOOK_AUTH_INSPECTOR }}
-          CURSOR_WEBHOOK_AUTH_LEAD: ${{ secrets.CURSOR_WEBHOOK_AUTH_LEAD }}
-          CURSOR_WEBHOOK_AUTH_ARROW: ${{ secrets.CURSOR_WEBHOOK_AUTH_ARROW }}
-          CURSOR_WEBHOOK_AUTH_JAVELIN: ${{ secrets.CURSOR_WEBHOOK_AUTH_JAVELIN }}
-          CURSOR_WEBHOOK_AUTH_TOMAHAWK: ${{ secrets.CURSOR_WEBHOOK_AUTH_TOMAHAWK }}
+          CURSOR_AUTOMATIONS_INSPECTOR: ${{ secrets.CURSOR_AUTOMATIONS_INSPECTOR }}
+          CURSOR_AUTOMATIONS_LEAD: ${{ secrets.CURSOR_AUTOMATIONS_LEAD }}
+          CURSOR_AUTOMATIONS_ARROW: ${{ secrets.CURSOR_AUTOMATIONS_ARROW }}
+          CURSOR_AUTOMATIONS_ALLOW: ${{ secrets.CURSOR_AUTOMATIONS_ALLOW }}
+          CURSOR_AUTOMATIONS_JAVELIN: ${{ secrets.CURSOR_AUTOMATIONS_JAVELIN }}
+          CURSOR_AUTOMATIONS_TOMAHAWK: ${{ secrets.CURSOR_AUTOMATIONS_TOMAHAWK }}
         run: |
           python scripts/dispatch_agent.py

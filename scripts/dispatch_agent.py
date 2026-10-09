@@ -14,13 +14,21 @@ WEBHOOK_URLS = {
 }
 
 # 各 Automation の "Generate auth header" が発行するキー。
-# "Bearer " 付きでも、キー本体だけでも受け付ける。
+# secret 名は cursor_automations_<エージェント名>。
+# "Authorization:" や "Bearer " が付いていてもキー本体だけを使う。
 WEBHOOK_AUTHS = {
-    "inspector": os.environ.get("CURSOR_WEBHOOK_AUTH_INSPECTOR", ""),
-    "lead": os.environ.get("CURSOR_WEBHOOK_AUTH_LEAD", ""),
-    "arrow": os.environ.get("CURSOR_WEBHOOK_AUTH_ARROW", ""),
-    "javelin": os.environ.get("CURSOR_WEBHOOK_AUTH_JAVELIN", ""),
-    "tomahawk": os.environ.get("CURSOR_WEBHOOK_AUTH_TOMAHAWK", ""),
+    "inspector": os.environ.get("CURSOR_AUTOMATIONS_INSPECTOR", ""),
+    "lead": os.environ.get("CURSOR_AUTOMATIONS_LEAD", ""),
+    "arrow": os.environ.get("CURSOR_AUTOMATIONS_ARROW") or os.environ.get("CURSOR_AUTOMATIONS_ALLOW", ""),
+    "javelin": os.environ.get("CURSOR_AUTOMATIONS_JAVELIN", ""),
+    "tomahawk": os.environ.get("CURSOR_AUTOMATIONS_TOMAHAWK", ""),
+}
+WEBHOOK_AUTH_SECRET_NAMES = {
+    "inspector": "CURSOR_AUTOMATIONS_INSPECTOR",
+    "lead": "CURSOR_AUTOMATIONS_LEAD",
+    "arrow": "CURSOR_AUTOMATIONS_ARROW",
+    "javelin": "CURSOR_AUTOMATIONS_JAVELIN",
+    "tomahawk": "CURSOR_AUTOMATIONS_TOMAHAWK",
 }
 
 def extract_json_block(text: str):
@@ -62,13 +70,15 @@ def main():
 
     auth = str(WEBHOOK_AUTHS.get(recipient, "")).strip()
     if not auth:
-        secret_name = f"CURSOR_WEBHOOK_AUTH_{recipient.upper()}"
+        secret_name = WEBHOOK_AUTH_SECRET_NAMES.get(recipient, recipient)
         print(
             f"Error: Authorization token for recipient '{recipient}' is not set. "
             f"Add GitHub Actions secret {secret_name} "
             f"(the key from that automation's Generate auth header)."
         )
         sys.exit(1)
+    if auth.lower().startswith("authorization:"):
+        auth = auth.split(":", 1)[1].strip()
     if auth.lower().startswith("bearer "):
         auth = auth[7:].strip()
 

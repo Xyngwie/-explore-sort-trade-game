@@ -16,10 +16,10 @@ Issue コメントを受けて該当の Automation だけを起こす経路は `
 
 | 宛先 | secret 名 |
 |---|---|
-| 風紀委員 | `CURSOR_WEBHOOK_AUTH_INSPECTOR` |
-| 実装隊長 | `CURSOR_WEBHOOK_AUTH_LEAD` |
-| アロー | `CURSOR_WEBHOOK_AUTH_ARROW` |
-| ジャベリン | `CURSOR_WEBHOOK_AUTH_JAVELIN` |
-| トマホーク | `CURSOR_WEBHOOK_AUTH_TOMAHAWK` |
+| 風紀委員 | `CURSOR_AUTOMATIONS_INSPECTOR` |
+| 実装隊長 | `CURSOR_AUTOMATIONS_LEAD` |
+| アロー | `CURSOR_AUTOMATIONS_ARROW`（無ければ `CURSOR_AUTOMATIONS_ALLOW`） |
+| ジャベリン | `CURSOR_AUTOMATIONS_JAVELIN` |
+| トマホーク | `CURSOR_AUTOMATIONS_TOMAHAWK` |
 
 キーが無いコメントは webhook を呼ばず、その Actions は失敗する。失敗したコメントは再実行されないので、secret を入れたあとに同じ JSON を新しいコメントとして書き直す。
