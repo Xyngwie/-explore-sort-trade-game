@@ -99,8 +99,16 @@ import {
   perfectCircuitSellBonusCredits,
   formatCircuitSellPriceJa,
   resolveActiveCircuit,
+  onHangarExploreLink,
 } from "./hangar";
-import { PIECES_PER_CONTAINER, circuitCraftCreditCost } from "@estg/shared";
+import {
+  PIECES_PER_CONTAINER,
+  SORTIE_CHECKPOINT_KEY,
+  circuitCraftCreditCost,
+  isSortieDoneMark,
+  readSortieCheckpoint,
+  writeSortieDoneMark,
+} from "@estg/shared";
 
 /** Minimal in-memory Storage for HubSave. */
 function memoryStorage(): Storage {
@@ -1846,4 +1854,70 @@ console.log("trade hangar selftest: ok");
     assert.equal(sim.lastExploreReturn!.summaryJa.split(" · ")[0], exploreReturnHeadJa(kind), `sim summary head (${kind})`);
   }
   console.log("trade explore return wording + old saved log lines ok");
+}
+
+{
+  const store = memoryStorage();
+  const state = createInitialHangar();
+  const before = state.hub.unopenedContainers ?? 0;
+  const deposited = ingestLocationSearch(state, "?depositUnopenedContainers=3", store);
+  assert.equal(deposited.state.hub.unopenedContainers, before + 3);
+  assert.equal(isSortieDoneMark(store), true);
+  assert.deepEqual(JSON.parse(store.getItem(SORTIE_CHECKPOINT_KEY)!), { v: 1, kind: "done" });
+
+  const refineStore = memoryStorage();
+  const refineStart = createInitialHangar();
+  const refined = ingestLocationSearch(
+    refineStart,
+    "?importMaterials=4&craftMultiplier=1",
+    refineStore,
+  );
+  assert.equal(refined.state.hub.materials, refineStart.hub.materials + 4);
+  assert.equal(isSortieDoneMark(refineStore), true);
+  assert.deepEqual(JSON.parse(refineStore.getItem(SORTIE_CHECKPOINT_KEY)!), { v: 1, kind: "done" });
+
+  const yieldStore = memoryStorage();
+  const yieldStart = createInitialHangar();
+  const yielded = ingestLocationSearch(
+    yieldStart,
+    "?yieldBag=ammo:2&craftMultiplier=1",
+    yieldStore,
+  );
+  assert.equal(yielded.state.hub.inventory.ammo ?? 0, (yieldStart.hub.inventory.ammo ?? 0) + 2);
+  assert.equal(isSortieDoneMark(yieldStore), true);
+
+  const failStore = memoryStorage();
+  const base = createInitialHangar();
+  saveHubSaveToLocalStorage(base.hub, failStore);
+  const origSet = failStore.setItem.bind(failStore);
+  failStore.setItem = (key: string, value: string) => {
+    if (key === HUB_SAVE_STORAGE_KEY) throw new Error("write_refused");
+    origSet(key, value);
+  };
+  ingestLocationSearch(base, "?depositUnopenedContainers=2&importMaterials=3&yieldBag=ammo:1", failStore);
+  assert.equal(isSortieDoneMark(failStore), false);
+  assert.equal(readSortieCheckpoint(failStore).status, "absent");
+
+  const zeroStore = memoryStorage();
+  ingestLocationSearch(createInitialHangar(), "?importMaterials=0&craftMultiplier=1", zeroStore);
+  assert.equal(isSortieDoneMark(zeroStore), false);
+
+  const clearStore = memoryStorage();
+  assert.equal(writeSortieDoneMark(clearStore), true);
+  assert.equal(onHangarExploreLink("link-restore", clearStore), false);
+  assert.equal(isSortieDoneMark(clearStore), true);
+  assert.equal(onHangarExploreLink("link-deploy", clearStore), true);
+  assert.equal(readSortieCheckpoint(clearStore).status, "absent");
+
+  const keepStore = memoryStorage();
+  assert.equal(writeSortieDoneMark(keepStore), true);
+  const invadeUrl = buildInvadeToTradeUrl({
+    sectorX: 1,
+    sectorY: 2,
+    density: 0.2,
+    intelFlags: ["allDestroyed"],
+  });
+  ingestLocationSearch(createInitialHangar(), new URL(invadeUrl).search, keepStore);
+  assert.equal(isSortieDoneMark(keepStore), true, "other entrances do not clear the mark");
+  console.log("trade sortie done mark ok");
 }

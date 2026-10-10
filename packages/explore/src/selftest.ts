@@ -3854,3 +3854,17 @@ import {
   }
   console.log("explore 項目5-2b forced rescue ok");
 }
+
+{
+  const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+  assert.ok(main.includes("sortieFrameShouldTick(world.phase, sortiePaused)"), "frame ticks only while the sortie is running");
+  assert.ok(main.includes("SORTIE_PAUSE_LABEL"), "pause copy is the spec string");
+  assert.ok(main.includes("checkpointKindOnHide"), "hidden and pagehide write the checkpoint");
+  assert.ok(main.includes('visibilityState === "hidden"'), "visible does not resume");
+  assert.ok(!main.includes('visibilityState === "visible"'), "visible does not resume");
+  assert.ok(main.includes("exploreBackBlocked"), "sortie back is blocked in popstate");
+  assert.ok(!main.includes("resolveExploreForcedBackWipe"), "popstate does not wipe");
+  assert.ok(!main.includes("戦線復帰"), "no front-return confirm");
+  assert.ok(main.includes('resolveModuleBaseUrl("trade")'), "unreadable or done opens the hub");
+  assert.equal(main.split("sortiePaused = false").length, 1, "only a tap clears pause");
+}

@@ -45,6 +45,7 @@ import {
   toStagePhase,
   type SessionSource,
 } from "./resultOverlay";
+import { armSortBackTrap } from "./back-guard";
 import {
   buildBriefingBagDifficultyHtml,
   buildPlayHudHtml,
@@ -597,6 +598,11 @@ function finishPointerSwipe(e: PointerEvent) {
 root.addEventListener("pointerup", finishPointerSwipe);
 root.addEventListener("pointercancel", (e) => {
   if (ptrId === e.pointerId) resetPointerGesture();
+});
+
+armSortBackTrap(history, location.href);
+window.addEventListener("popstate", () => {
+  armSortBackTrap(history, location.href);
 });
 
 render();

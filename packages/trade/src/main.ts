@@ -36,6 +36,7 @@ import {
   resolveHangarPerfectInjectRate,
   VERIFY_TRUE_SOLUTION_HINT,
   markDeployed,
+  onHangarExploreLink,
   repairClassic,
   repairCost,
   repairTyped,
@@ -727,6 +728,7 @@ function render() {
   });
 
   document.getElementById("link-deploy")?.addEventListener("click", () => {
+    onHangarExploreLink("link-deploy");
     const url = buildDeployUrl(state);
     if (!url) return;
     const u = new URL(url);

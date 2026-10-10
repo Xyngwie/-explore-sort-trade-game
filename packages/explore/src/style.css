@@ -551,3 +551,14 @@ button.cover-active {
 .left-behind, .wreck-circuits, .recovered-circuits { margin: 0.35rem 0 0.6rem; padding-left: 1.1rem; color: #f59e0b; font-size: 0.9rem; }
 .recovered-circuits { color: #34d399; }
 .wing-card.immobile { border-style: dashed; }
+
+.pause-banner {
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: #1a2438ee;
+  border: 1px solid #8ab4ffaa;
+  color: #e7f0ff;
+  font-size: 1rem;
+  text-align: center;
+}

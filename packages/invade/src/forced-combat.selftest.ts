@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   HUB_SAVE_STORAGE_KEY,
   INITIAL_HUB,
@@ -29,6 +30,7 @@ import {
   isForcedCombatLock,
   markForcedHandoffIntent,
   readHandoffIntent,
+  forcedLockBackAction,
   releaseForcedCombatLock,
   resolveForcedBackWipe,
   wipeAllMechsDestroyed,
@@ -230,6 +232,30 @@ assert.deepEqual(withAllDestroyedIntel([ALL_DESTROYED_INTEL]), [
   assert.ok(saved);
   assert.equal(saved!.hub.frontProgress!.hitMine, false);
   assert.ok((saved!.hub.frontProgress!.opened?.length ?? 0) >= 1);
+}
+
+{
+  const fleet = [createOwnedMech("mech_gen1", { instanceId: "back", durability: 77 })];
+  const hub = normalizeHubSnapshot({ ...INITIAL_HUB, fleet });
+  const storage = memStorage({
+    [HUB_SAVE_STORAGE_KEY]: serializeHubSave(createHubSave(hub)),
+  });
+  const before = storage.getItem(HUB_SAVE_STORAGE_KEY);
+  const action = forcedLockBackAction({ hitMine: true });
+  assert.deepEqual(action, { block: true, wipe: false });
+  assert.equal(storage.getItem(HUB_SAVE_STORAGE_KEY), before);
+  const saved = deserializeHubSave(storage.getItem(HUB_SAVE_STORAGE_KEY)!);
+  assert.equal(saved!.hub.fleet[0]!.durability, 77);
+  assert.notEqual(saved!.hub.fleet[0]!.status, "destroyed");
+  const session = memStorage();
+  markForcedHandoffIntent(session);
+  assert.deepEqual(forcedLockBackAction({ hitMine: true }, session), { block: false, wipe: false });
+  assert.equal(storage.getItem(HUB_SAVE_STORAGE_KEY), before);
+  const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+  assert.ok(main.includes("forcedLockBackAction"));
+  assert.ok(!main.includes("resolveForcedBackWipe"));
+  assert.ok(!main.includes("ブラウザ戻る＝全機大破"));
+  assert.ok(!main.includes("ブラウザの戻る"));
 }
 
 console.log("invade forced-combat.selftest ok");

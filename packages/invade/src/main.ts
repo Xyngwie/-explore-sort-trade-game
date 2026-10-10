@@ -65,12 +65,10 @@ import {
   wreckTitleJa,
 } from "./lost-mechs";
 import {
-  ALL_DESTROYED_INTEL,
   armForcedLockHistory,
+  forcedLockBackAction,
   isForcedCombatLock,
   markForcedHandoffIntent,
-  resolveForcedBackWipe,
-  withAllDestroyedIntel,
 } from "./forced-combat";
 
 type SectorSel = { sx: number; sy: number };
@@ -210,13 +208,12 @@ function cellSortieBarBaseHtml(sel: SectorSel | null): string {
   if (locked) {
     if (toForced == null) {
       return `<div class="cell-sortie-bar locked" role="alert">
-        <p class="warn"><strong>強制戦闘ロック</strong> — 他操作不可。ブラウザ戻る＝全機大破（${ALL_DESTROYED_INTEL}）。</p>
+        <p class="warn"><strong>強制戦闘ロック</strong> — 他操作不可。</p>
         <p class="muted">地雷マスを選ぶと「${CTA_COPY.toExplore}」（${CTA_CHIP.forcedCombat}）が表示されます。</p>
       </div>`;
     }
     return `<div class="cell-sortie-bar locked" role="alert">
       <p class="warn"><strong>強制戦闘ロック</strong>（地雷踏み）— 解決／ハンドオフまで他操作不可。</p>
-      <p class="muted">ブラウザの戻る＝<strong>全機大破</strong>（${CTA_COPY.toHangar}）。</p>
       <p class="muted mono">cell (${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}</p>
       <div class="actions cta-cluster">
         <span class="cta-chip danger" aria-label="${CTA_CHIP.forcedCombat}">${CTA_CHIP.forcedCombat}</span>
@@ -346,7 +343,7 @@ function inboundSummaryHtml(): string {
 
 function handoffActionsHtml(sel: SectorSel | null): string {
   if (forcedLockActive()) {
-    return `<p class="warn">強制戦闘ロック中 — グリッド直下の「${CTA_COPY.toExplore}」（${CTA_CHIP.forcedCombat}）のみ可。ブラウザ戻る＝全機大破（${ALL_DESTROYED_INTEL}）。</p>
+    return `<p class="warn">強制戦闘ロック中 — グリッド直下の「${CTA_COPY.toExplore}」（${CTA_CHIP.forcedCombat}）のみ可。</p>
       <p class="muted">${CTA_COPY.toHangar}／通常出撃／盤面操作はハンドオフまで禁止。</p>`;
   }
   if (sel == null) {
@@ -521,7 +518,7 @@ function render(): void {
     board.status === "won"
       ? `<div class="banner ok-banner" role="status">前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
       : board.hitMine || board.status === "hazard"
-        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。強制戦闘ロック — 強制出撃のみ可。ブラウザ戻る＝全機大破。</div>`
+        ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。強制戦闘ロック — 強制出撃のみ可。</div>`
         : resolvedMineCount > 0
           ? `<div class="banner ok-banner" role="status">交戦解決済の接触マスが ${resolvedMineCount} — 「済」セルから再出撃できます（盤操作も再開）。</div>`
           : "";
@@ -810,16 +807,7 @@ render();
 armForcedLockIfNeeded();
 
 window.addEventListener("popstate", () => {
-  if (!forcedLockActive()) return;
-  const focus = selected ?? { sx: 0, sy: 0 };
-  const sector = sectorPayload(focus);
-  sector.intelFlags = withAllDestroyedIntel(sector.intelFlags);
-  const resolved = resolveForcedBackWipe({
-    board,
-    sector,
-    tradeBaseUrl: tradeBaseUrl(),
-  });
-  if (resolved == null) return;
-  lastBoardLog = `ブラウザ戻る → 全機大破（${resolved.wipe.wipedCount}）· 格納庫へ`;
-  window.location.replace(resolved.url);
+  if (!forcedLockBackAction(board).block) return;
+  forcedLockHistoryArmed = false;
+  armForcedLockIfNeeded();
 });
