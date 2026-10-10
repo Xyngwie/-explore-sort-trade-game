@@ -188,8 +188,25 @@ export function isForcedLockHistoryState(state: unknown): boolean {
 }
 
 /**
+ * Browser back during a forced lock is swallowed. It does not write 全機大破.
+ * popstate must use this, not resolveForcedBackWipe.
+ */
+export function forcedLockBackAction(
+  board: Pick<MsBoard, "hitMine">,
+  session?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+): { block: boolean; wipe: false } {
+  if (readHandoffIntent(session)) {
+    clearForcedHandoffIntent(session);
+    return { block: false, wipe: false };
+  }
+  if (!isForcedCombatLock(board)) return { block: false, wipe: false };
+  return { block: true, wipe: false };
+}
+
+/**
  * Apply wipe + return trade redirect URL when back is used under forced lock.
  * Returns null when handoff intent is set (intentional CTA navigation).
+ * popstate does not call this.
  */
 export function resolveForcedBackWipe(args: {
   board: Pick<MsBoard, "hitMine">;

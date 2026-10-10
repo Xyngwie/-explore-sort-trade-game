@@ -4,6 +4,7 @@
 
 ## 最終更新
 
+- 2026-10-10 JST / Cursor（アロー）— 項目5-3（戻るの無効化と途中保存）を draft で実装。main には入っていない。Deploy Modules Preview は走っていない。プレビューの操作はしていない。
 - 2026-10-09 JST / Cursor（風紀委員）— まっさらな Cloud Agent が読む正本を [`AGENT_CANON.md`](./AGENT_CANON.md) に、Cursor Automations へ貼る Instructions を [`automations/`](./automations/) に置いた（文書のみ）。リレーの起動口は GitHub Issue コメントの JSON。Slack は写しで、チャットや Slack に置いただけでは次のエージェントは起動しない。#248（`409c4b7`）の Deploy Modules Preview run 37854085456 は success。プレビューの操作はしていない。
 - 2026-10-09 JST / Cursor（Grok Bot）— 項目5-2b の続き。隊長が生きている時間切れで持ち帰ったコンテナ（半径の中の未回収と、半径の中のキャンプの置場）は、explore→sort の `forcedRescueRecovered` で Sort が通常の帰還と同じく精製でき、未開封のまま倉庫へ入る。印の無い古い URL と古いセーブはそのまま読める。`extracted` は立てないので摩耗は 20 のまま。救助撤退と隊長が大破した時間切れは印を付けず、積荷は倉庫に入らない。
 - 2026-10-08 JST / Cursor（アロー）— 項目5-2b（時間切れの強制救助、隊長が無事なあいだは撤退ボタンを出さない）を実装。draft のまま。マージしていない。この変更の Deploy Modules Preview はまだ走っていない。最後にデプロイ成功した main は #245（`fd892c8`）のまま。#246 と #247 は文書だけで、デプロイは走っていない。プレビューの操作はしていない。

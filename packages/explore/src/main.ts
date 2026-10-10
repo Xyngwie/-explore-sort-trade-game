@@ -2,11 +2,25 @@ import "./style.css";
 import {
   CTA_CHIP,
   CTA_COPY,
+  EXPLORE_SORTIE_BACK_TRAP,
   HANDOFF_QUERY_KEYS,
+  SORTIE_PAUSE_LABEL,
+  checkpointKindOnHide,
+  discardSortieCheckpoint,
+  exploreBackBlocked,
+  exploreBootFromCheckpoint,
+  historyTrapIsCurrent,
+  isSortieDoneMark,
   loadHubSaveFromLocalStorage,
+  markDoneIfZeroContainersSaved,
   normalizeHubSnapshot,
+  pushHistoryTrap,
+  readSortieCheckpoint,
   resolveModuleBaseUrl,
+  sortieFrameShouldTick,
+  sortiePausedAfter,
   stripHandoffParams,
+  writeHideCheckpoint,
   type HubSnapshot,
 } from "@estg/shared";
 import {
@@ -27,11 +41,14 @@ import {
   setShortcutsOverlayHidden,
 } from "./game/keyboardOverlay";
 import {
-  armExploreForcedHistory,
   clearInvadeForcedLockAfterResolve,
   markExploreForcedHandoffIntent,
-  resolveExploreForcedBackWipe,
 } from "./game/forcedBackWipe";
+import {
+  snapshotResultWorld,
+  snapshotSortieWorld,
+  worldFromCheckpointBody,
+} from "./game/checkpoint";
 import {
   campDrPercent,
   inCampAura,
@@ -131,31 +148,96 @@ if (boot.invadeSector != null) {
     history.replaceState(null, "", cleaned);
   }
 }
-let world: World = makeWorld(boot);
+function bootExploreSession(): { world: World; paused: boolean; leaveForHub: boolean } {
+  const read = readSortieCheckpoint();
+  if (read.status === "unreadable") {
+    discardSortieCheckpoint();
+    return { world: makeWorld(boot), paused: false, leaveForHub: true };
+  }
+  const decision = exploreBootFromCheckpoint(read);
+  if (decision.action === "hub") {
+    return { world: makeWorld(boot), paused: false, leaveForHub: true };
+  }
+  if (decision.action === "continue") {
+    return { world: makeWorld(boot), paused: false, leaveForHub: false };
+  }
+  const restored = worldFromCheckpointBody(decision.body);
+  if (!restored) {
+    discardSortieCheckpoint();
+    return { world: makeWorld(boot), paused: false, leaveForHub: true };
+  }
+  if (decision.action === "sortie") {
+    restored.phase = "sortie";
+    return { world: restored, paused: true, leaveForHub: false };
+  }
+  restored.phase = "result";
+  restored.enemies = [];
+  restored.bullets = [];
+  restored.coverObjects = [];
+  return { world: restored, paused: false, leaveForHub: false };
+}
+
+const exploreSession = bootExploreSession();
+let world: World = exploreSession.world;
+let sortiePaused = exploreSession.paused;
+const leaveForHub = exploreSession.leaveForHub;
+if (leaveForHub) {
+  window.location.replace(resolveModuleBaseUrl("trade"));
+}
 /** Last phase the DOM was rendered for; see game/phaseWatch.ts. */
 const phaseWatch = createPhaseWatcher(world.phase);
 
 const forcedEngageActive = world.invadeSector?.engage === "forced";
-if (forcedEngageActive) {
-  armExploreForcedHistory();
+
+function armExploreSortieBack(): void {
+  if (leaveForHub || world.phase !== "sortie") return;
+  pushHistoryTrap(history, EXPLORE_SORTIE_BACK_TRAP, location.href);
+}
+
+function releaseExploreSortieBack(): void {
+  if (!historyTrapIsCurrent(history, EXPLORE_SORTIE_BACK_TRAP)) return;
+  history.back();
 }
 
 window.addEventListener("popstate", () => {
-  if (world.invadeSector?.engage !== "forced") return;
-  if (world.phase === "result") return;
-  const sector =
-    world.invadeSector != null
-      ? {
-          sectorX: world.invadeSector.sectorX,
-          sectorY: world.invadeSector.sectorY,
-          density: world.invadeSector.density,
-          intelFlags: [...world.invadeSector.intelFlags],
-        }
-      : null;
-  const url = resolveExploreForcedBackWipe({ sector });
-  if (url == null) return;
-  window.location.replace(url);
+  if (!exploreBackBlocked(world.phase)) return;
+  pushHistoryTrap(history, EXPLORE_SORTIE_BACK_TRAP, location.href);
 });
+
+function persistOnHide(showPause: boolean): void {
+  if (leaveForHub) return;
+  const kind = checkpointKindOnHide(world.phase, isSortieDoneMark());
+  if (kind === "sortie") {
+    sortiePaused = sortiePausedAfter("hidden", sortiePaused);
+    writeHideCheckpoint("sortie", snapshotSortieWorld(world));
+    if (showPause) {
+      needsDom = true;
+      renderDom();
+    }
+    return;
+  }
+  if (kind === "result") {
+    writeHideCheckpoint("result", snapshotResultWorld(world));
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persistOnHide(true);
+});
+document.addEventListener("pagehide", () => persistOnHide(false));
+
+window.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (leaveForHub || !sortiePaused || world.phase !== "sortie") return;
+    sortiePaused = sortiePausedAfter("tap", sortiePaused);
+    e.preventDefault();
+    e.stopPropagation();
+    needsDom = true;
+    renderDom();
+  },
+  true,
+);
 
 
 const keys = new Set<string>();
@@ -183,6 +265,7 @@ function flashCampToast(msg: string): void {
 }
 
 window.addEventListener("keydown", (e) => {
+  if (sortiePaused && world.phase === "sortie") return;
   const k = e.key.toLowerCase();
   keys.add(k);
   if (["w", "a", "s", "d", " "].includes(k)) e.preventDefault();
@@ -514,6 +597,8 @@ function ensureDirectSave(): DirectSaveResult | null {
   if (done) return done;
   const res = saveSortieResultToHub(world);
   directSaves.set(world, res);
+  const status = res.status === "skipped" ? res.reason : res.status;
+  markDoneIfZeroContainersSaved(toExploreResult(world).salvagedContainers, status);
   return res;
 }
 
@@ -599,6 +684,7 @@ function renderDom(): void {
     bindDebugUnlockToggle();
     document.getElementById("btn-start")?.addEventListener("click", () => {
       startSortie(world);
+      armExploreSortieBack();
       needsDom = true;
       renderDom();
       bindCanvas();
@@ -712,6 +798,7 @@ function renderDom(): void {
   root.innerHTML = `
     <p class="pill">MODULE 1 · SORTIE</p>
     <h1>WRECKLINE</h1>
+    ${sortiePaused ? `<p class="pause-banner" id="sortie-paused">${SORTIE_PAUSE_LABEL}</p>` : ""}
     ${debugUnlockToggleHtml()}
     ${invadeBannerThinHtml}
     ${forcedRescueWarningHtml(world)}
@@ -952,7 +1039,7 @@ function frame(now: number): void {
   last = now;
   const logLen = world.logs.length;
 
-  if (world.phase === "sortie") {
+  if (sortieFrameShouldTick(world.phase, sortiePaused)) {
     syncMoveFromKeys();
     tickWorld(world, dt, input);
     // C20-a: squad-level availability can change mid-sortie (only alive
@@ -979,6 +1066,7 @@ function frame(now: number): void {
       // Any terminal outcome clears invade forced lock so re-entry is playable.
       clearInvadeForcedLockAfterResolve();
     }
+    if (changedTo === "result") releaseExploreSortieBack();
     needsDom = true;
     renderDom();
   }
@@ -986,5 +1074,10 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
-renderDom();
-requestAnimationFrame(frame);
+if (leaveForHub) {
+  root.replaceChildren();
+} else {
+  if (world.phase === "sortie") armExploreSortieBack();
+  renderDom();
+  requestAnimationFrame(frame);
+}

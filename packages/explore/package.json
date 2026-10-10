@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "selftest": "tsx src/selftest.ts && tsx src/coverBehavior.selftest.ts",
+    "selftest": "tsx src/selftest.ts && tsx src/coverBehavior.selftest.ts && tsx src/checkpoint.selftest.ts",
     "test": "npm run typecheck && npm run selftest"
   },
   "dependencies": {

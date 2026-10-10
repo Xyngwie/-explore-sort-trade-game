@@ -59,6 +59,9 @@ import {
   repairCost,
   sanitizeEditorName,
   saveHubSaveToLocalStorage,
+  shouldMarkDoneAfterTradeWrite,
+  writeSortieDoneMark,
+  clearSortieCheckpoint,
   selectDeployableInstanceIds,
   syncMechStatus,
   spendYieldBag,
@@ -448,6 +451,38 @@ export function persistHangar(
   return state;
 }
 
+function commitHangarIngest(
+  next: HangarState,
+  search: string,
+  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+): HangarState {
+  const saved = saveHubSaveToLocalStorage(next.hub, storage ?? undefined) === true;
+  saveM45StashToLocalStorage(next, storage ?? undefined);
+  const sort = parseSortToTradeSearch(search);
+  if (
+    sort &&
+    shouldMarkDoneAfterTradeWrite({
+      saved,
+      depositUnopenedContainers: Math.floor(Number(sort.depositUnopenedContainers) || 0),
+      importMaterials: Math.floor(Number(sort.importMaterials) || 0),
+      yieldBag: !!sort.yieldBag && Object.keys(sort.yieldBag).length > 0,
+    })
+  ) {
+    writeSortieDoneMark(storage ?? undefined);
+  }
+  return next;
+}
+
+/** Hangar 「探索へ」 (id link-deploy) clears the done mark. Other controls do not. */
+export function onHangarExploreLink(
+  controlId: string,
+  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+): boolean {
+  if (controlId !== "link-deploy") return false;
+  clearSortieCheckpoint(storage ?? undefined);
+  return true;
+}
+
 /**
  * Head of the 「探索帰還 …」 summary (display only; `returnKind` values unchanged).
  * 2026-10-07 神宮: no English 「EXTRACT」 (extract → just 「探索帰還」) and abort is
@@ -461,6 +496,7 @@ export function exploreReturnHeadJa(kind: SortieReturnKind): string {
 export function ingestLocationSearch(
   state: HangarState,
   search: string,
+  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): { state: HangarState; consumed: boolean } {
   let hub = state.hub;
   let log = state.log;
@@ -513,15 +549,19 @@ export function ingestLocationSearch(
       notices.push(lastExploreReturn.summaryJa);
       consumed = true;
       return {
-        state: persistHangar({
-          ...state,
-          hub: normalizeHubSnapshot(apply.hub),
-          log,
-          lastExploreReturn,
-          craftSignature: state.craftSignature || loadCraftSignature(),
-          selectedDeployIds: selectionAfter(apply.hub, state.selectedDeployIds),
-          notice: notices.join(" / "),
-        }),
+        state: commitHangarIngest(
+          {
+            ...state,
+            hub: normalizeHubSnapshot(apply.hub),
+            log,
+            lastExploreReturn,
+            craftSignature: state.craftSignature || loadCraftSignature(),
+            selectedDeployIds: selectionAfter(apply.hub, state.selectedDeployIds),
+            notice: notices.join(" / "),
+          },
+          search,
+          storage,
+        ),
         consumed: true,
       };
     }
@@ -631,7 +671,7 @@ export function ingestLocationSearch(
         ? `ハンドオフ取込: ${notices.join(" / ")}`
         : "ハンドオフを取り込みました",
   };
-  return { state: persistHangar(next), consumed: true };
+  return { state: commitHangarIngest(next, search, storage), consumed: true };
 }
 
 /**
