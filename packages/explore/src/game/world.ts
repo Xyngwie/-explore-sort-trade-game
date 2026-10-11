@@ -454,6 +454,23 @@ export function startSortie(world: World): void {
   world.leftBehind = [];
   world.recoveredLostMechIds = [];
   world.sortieNonce = Math.random().toString(36).slice(2, 10);
+  if (world.circuitPlay) {
+    world.circuitPlay.order = null;
+    world.circuitPlay.pending = null;
+    world.circuitPlay.fogOpen = null;
+    world.circuitPlay.lastSeen = {};
+    world.circuitPlay.airWrecks = [];
+    world.circuitPlay.grantTrue = false;
+    world.circuitPlay.pullOutside = false;
+    world.circuitPlay.collectTap = null;
+    world.circuitPlay.collectDown = false;
+    world.circuitPlay.carried = [];
+  }
+  if (world.coverObjects) {
+    for (let i = world.coverObjects.length - 1; i >= 0; i--) {
+      if (world.coverObjects[i]!.id.startsWith("trench-")) world.coverObjects.splice(i, 1);
+    }
+  }
   for (const c of world.containers) {
     c.taken = false;
     c.discovered = false;

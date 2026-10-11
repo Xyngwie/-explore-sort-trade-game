@@ -29,5 +29,18 @@ export function worldFromCheckpointBody(body: unknown): World | null {
   world.containers = world.containers ?? [];
   world.bullets = world.bullets ?? [];
   world.logs = world.logs ?? [];
+  // #270: JSON turns the circuit fog Uint8Array into a plain object; rebuild it.
+  const play = world.circuitPlay as { fogOpen?: unknown } | undefined;
+  if (play && play.fogOpen != null && !(play.fogOpen instanceof Uint8Array)) {
+    const raw = play.fogOpen;
+    const vals = Array.isArray(raw)
+      ? raw
+      : typeof raw === "object"
+        ? Object.keys(raw as object)
+            .sort((x, y) => Number(x) - Number(y))
+            .map((k) => (raw as Record<string, unknown>)[k])
+        : [];
+    play.fogOpen = Uint8Array.from(vals.map((v) => (v ? 1 : 0)));
+  }
   return world;
 }

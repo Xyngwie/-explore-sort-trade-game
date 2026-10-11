@@ -181,14 +181,54 @@ const MOBILITY_GATED_WING_COMMANDS: ReadonlySet<ExploreCommandId> = new Set([
  *   Holders without `wingmen` fall back to every `wing-*` circuit list.
  * Missing command state preserves the legacy all-unlocked behavior.
  */
+type CircuitRules = {
+  rules: boolean;
+  /** Release mode only: the circuit table below replaces the legacy check. */
+  release: boolean;
+  captainTrueOne: boolean;
+  wingTrueOne: Record<string, boolean>;
+  loadout: Record<string, { effectKey: string | null }[]>;
+};
+
+function livingHasEffect(
+  holder: {
+    leader?: { id: string; alive: boolean };
+    wingmen?: ReadonlyArray<{ id: string; alive: boolean }>;
+    circuitPlay?: CircuitRules | null;
+  },
+  key: string,
+): boolean {
+  const play = holder.circuitPlay;
+  if (!play) return false;
+  const ids: string[] = [];
+  if (holder.leader?.alive !== false && holder.leader) ids.push(holder.leader.id);
+  else if (!holder.leader) ids.push("leader");
+  for (const w of holder.wingmen ?? []) if (w.alive) ids.push(w.id);
+  if (ids.length === 0) ids.push("leader", "wing-a", "wing-b");
+  return ids.some((id) => (play.loadout[id] ?? []).some((c) => c.effectKey === key));
+}
+
 export function isCommandUnlockedFor(
   holder: {
     commandUnlock?: CommandUnlockState | null;
     wingmen?: ReadonlyArray<{ id: string; alive: boolean }>;
+    leader?: { id: string; alive: boolean };
+    circuitPlay?: CircuitRules | null;
   },
   commandId: ExploreCommandId,
   unitId?: string,
 ): boolean {
+  const play = holder.circuitPlay;
+  if (play?.rules && play.release) {
+    // Q3 (神宮 10/12): basic commands never need a circuit; the false 1×1
+    // unlocks nothing; a true 1×1 「4」 on the captain unlocks wing_mobility
+    // (move orders to wingmen) — kept after the captain is wrecked (5-2 9A).
+    if (isBasicCommand(commandId)) return true;
+    if (commandId === "wing_escort") return livingHasEffect(holder, "escort_range");
+    if (commandId === "wing_raid") return livingHasEffect(holder, "raid_attack");
+    if (commandId === "wing_mobility") return play.captainTrueOne;
+    return false;
+  }
   const st = holder.commandUnlock;
   if (!st) return true;
   if (st.mode === "all_unlocked") return true;
@@ -230,9 +270,15 @@ export function isWingmanMobilityUnlocked(
 
 /** World-level mobility check (missing unlock state → mobile, legacy behavior). */
 export function isWingmanMobileFor(
-  holder: { commandUnlock?: CommandUnlockState | null },
+  holder: {
+    commandUnlock?: CommandUnlockState | null;
+    circuitPlay?: { rules: boolean; release: boolean; wingTrueOne: Record<string, boolean> } | null;
+  },
   wingmanId: string,
 ): boolean {
+  const play = holder.circuitPlay;
+  // Q3: a true 1×1 「4」 on the wingman itself makes it autonomous (release only).
+  if (play?.rules && play.release) return !!play.wingTrueOne[wingmanId];
   const st = holder.commandUnlock;
   if (!st) return true;
   if (st.mode === "all_unlocked") return true;

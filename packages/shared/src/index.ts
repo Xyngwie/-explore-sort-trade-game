@@ -22,3 +22,4 @@ export * from "./circuit-craft-cost";
 export * from "./explore-circuit-handoff";
 export * from "./sortie-return";
 export * from "./sortie-checkpoint";
+export * from "./circuit-actions";

@@ -3,13 +3,13 @@
  * §2.2 / §2.3 / §5 / §7). No UI, no storage. The effect→bonus conversion is
  * still undecided, so these only expose facts (restoreState / effect value).
  */
+import { slotCapacity } from "./circuit-actions";
 import { isCircuitRestoreStateActive } from "./circuit-board";
 import { computeCircuitEffectForBoard } from "./circuit-clues";
 import {
   HUB_LIMITS,
   circuitSize,
   isPerfectRestoredCircuit,
-  mechSlotCapacity,
   normalizeCircuitRecord,
   normalizeFieldDrop,
   normalizeInventoryFieldDrops,
@@ -110,10 +110,10 @@ export function equipCircuit(
   const mech = hub.fleet.find((m) => m.instanceId === mechInstanceId);
   if (!mech) return { hub, ok: false, reason: "no_mech" };
   if (rec.equippedTo === mechInstanceId) return { hub, ok: true };
-  const used = hub.circuits.filter(
+  const others = hub.circuits.filter(
     (c) => c.equippedTo === mechInstanceId && c.circuitId !== circuitId,
-  ).length;
-  if (used >= mechSlotCapacity(mech)) return { hub, ok: false, reason: "slot_full" };
+  );
+  if (others.length >= slotCapacity(others, rec)) return { hub, ok: false, reason: "slot_full" };
   const circuits = hub.circuits.map((c) =>
     c.circuitId === circuitId ? { ...c, equippedTo: mechInstanceId } : c,
   );

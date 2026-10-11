@@ -6,6 +6,7 @@ import {
   recoverClaimedContainerIds,
 } from "./orders";
 import { isWingmanMobileFor } from "./commandUnlock";
+import { rangeMul, visionMul } from "./circuitPlay";
 import type { Container, Unit, WingmanIntent, World } from "./types";
 
 function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number): Unit | null {
@@ -78,6 +79,8 @@ export function nextPatrolOrbitTarget(
 
 export function decideWingman(world: World, self: Unit, dt: number): WingmanIntent {
   const b = world.balance;
+  const weaponRange = b.weaponRange * rangeMul(world, self.id);
+  const visionRange = b.visionRange * visionMul(world, self.id);
   const leader = world.leader;
   // No wing_mobility (release mode, no unlocking circuit): stand still and only
   // shoot enemies already within weapon range. No follow / chase / collect.
@@ -85,7 +88,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
     if (self.salvageId) abortSalvage(self);
     return {
       moveTarget: null,
-      fireAt: nearestAliveEnemy(self.pos, world.enemies, b.weaponRange),
+      fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange),
       trySalvage: false,
     };
   }
@@ -96,12 +99,12 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
     if (self.salvageId) abortSalvage(self);
     return {
       moveTarget: null,
-      fireAt: nearestAliveEnemy(self.pos, world.enemies, b.weaponRange),
+      fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange),
       trySalvage: false,
     };
   }
 
-  const enemy = nearestAliveEnemy(self.pos, world.enemies, b.visionRange * b.visionHuntMul);
+  const enemy = nearestAliveEnemy(self.pos, world.enemies, visionRange * b.visionHuntMul);
   const enemyDist = enemy ? dist(self.pos, enemy.pos) : Infinity;
 
   switch (self.stance) {
@@ -144,7 +147,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       if (self.salvageId) {
         return {
           moveTarget: null,
-          fireAt: enemy && enemyDist < b.weaponRange * b.recoverChannelFireMul ? enemy : null,
+          fireAt: enemy && enemyDist < weaponRange * b.recoverChannelFireMul ? enemy : null,
           trySalvage: true,
         };
       }
@@ -157,7 +160,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
         const near = dist(self.pos, c.pos) < b.interactRadius;
         return {
           moveTarget: near ? null : { ...c.pos },
-          fireAt: enemy && enemyDist < b.weaponRange * b.recoverSeekFireMul ? enemy : null,
+          fireAt: enemy && enemyDist < weaponRange * b.recoverSeekFireMul ? enemy : null,
           trySalvage: near,
         };
       }
@@ -165,7 +168,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       if (self.waypoint && dist(self.pos, self.waypoint) > b.waypointArriveDist) {
         return {
           moveTarget: { ...self.waypoint },
-          fireAt: enemy && enemyDist < b.weaponRange * b.recoverSeekFireMul ? enemy : null,
+          fireAt: enemy && enemyDist < weaponRange * b.recoverSeekFireMul ? enemy : null,
           trySalvage: false,
         };
       }
@@ -196,7 +199,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
             : b.raidDefaultRushFrac;
       const raidStandOff = (foe: Unit) => {
         const d = dist(self.pos, foe.pos);
-        const rush = b.weaponRange * rushFrac;
+        const rush = weaponRange * rushFrac;
         const dx = foe.pos.x - self.pos.x;
         const dy = foe.pos.y - self.pos.y;
         const len = Math.hypot(dx, dy) || 1;
@@ -238,7 +241,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
         self.waypoint = null;
       }
       const hunt =
-        nearestAliveEnemy(self.pos, world.enemies, b.visionRange * b.visionRaidHuntMul) ??
+        nearestAliveEnemy(self.pos, world.enemies, visionRange * b.visionRaidHuntMul) ??
         nearestAliveEnemy(self.pos, world.enemies);
       if (hunt) return raidStandOff(hunt);
       // No enemies: loiter near leader without consuming a click target.

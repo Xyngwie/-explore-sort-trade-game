@@ -22,7 +22,7 @@ export type Unit = {
   /** C20-b: holding in place after an order it could not follow ("stop"); cleared by the next order. */ holdOrder?: boolean; /** C20-b: seconds left of the 「？」 above the wingman. */ questionT?: number;
 };
 export type Container = { id: string; pos: Vec2; taken: boolean; discovered: boolean; glowT: number; };
-export type Bullet = { alive: boolean; pos: Vec2; vel: Vec2; ttl: number; damage: number; fromEnemy: boolean; ownerId: string; };
+export type Bullet = { alive: boolean; pos: Vec2; vel: Vec2; ttl: number; damage: number; fromEnemy: boolean; ownerId: string; homingId?: string; bend?: number; emp?: boolean; empSlow?: number; };
 export type LogLine = { t: number; text: string; kind: "tactical" | "battle" };
 export type BoardingState = { center: Vec2; radius: number; requestedAt: number; cargoArrived: boolean; };
 export type ExtractPoint = { pos: Vec2; radius: number };
@@ -31,6 +31,8 @@ export type CampState = { pos: Vec2; stashedCount: number; };
 export type World = { balance: Balance; phase: Phase; timeLeft: number; operationTimedOut: boolean; elapsed: number; maxOperationTimeSec: number; leader: Unit; wingmen: Unit[]; enemies: Unit[]; containers: Container[]; extract: ExtractPoint; boarding: BoardingState | null; camp: CampState | null; bullets: Bullet[]; logs: LogLine[]; salvaged: number; carrierCapacity: number; /** Shared HUB ammo stock; never consumed by firing. */ ammoStock: number; /** Canonical carried ammo keyed by deployed OwnedMech.instanceId. Unset at sortie → full (MECH_AMMO_BASE_CAPACITY; interim rule). */ currentAmmo: Record<string, number | undefined>; /** Canonical persistent battery keyed by deployed OwnedMech.instanceId. */ mechBattery: Record<string, { capacity: number; activity: number }>; /** All equipped circuit ids keyed by Explore unit id. */ circuitIdsByUnit: Record<string, string[]>; extracted: boolean; failReason: FailReason; note: string; deployedInstanceIds: string[]; deployedDurability: Record<string, number>; circuitDurabilityBuffer: number; circuitCraftMultiplier: number; invadeSector: InvadeSectorContext | null; densityThreat: DensityThreat; camera: Camera; combatHitsTaken: number; /** Random per sortie (startSortie); part of the return sortieId so two sorties never share one. */ sortieNonce?: string; coverObjects?: CoverObject[];
   /** Explore-local command unlock mode + equipped circuits (not a save/handoff contract). */
   commandUnlock: CommandUnlockState;
+  /** Runtime circuit actions. Absent → existing sortie behavior. */
+  circuitPlay?: import("./circuitPlay").CircuitPlayState;
   /** Explore-local: wingmen left behind at lift-off (result-screen display only; not handoff/Hub output). */
   leftBehind?: LeftBehindEntry[];
   /** Place of this sortie on the Invade front (null: not via Invade → left-behind mechs are lost outright). */
