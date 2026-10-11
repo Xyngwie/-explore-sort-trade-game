@@ -106,6 +106,7 @@ import {
 } from "./game/unlockMode";
 import {
   attachCircuitPlay,
+  usableAmmo,
   noteCollectTap,
   beginCircuitButton,
   circuitButtons,
@@ -683,7 +684,7 @@ function renderDom(): void {
         <table>
           <tr><td>僚機</td><td>${world.wingmen.length}</td></tr>
           <tr><td>積載上限</td><td>なし（速度で制約）</td></tr>
-          <tr><td>実弾</td><td>${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</td></tr>
+          <tr><td>実弾</td><td>${world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)))}</td></tr>
           <tr><td>活動限界</td><td>${world.maxOperationTimeSec}s</td></tr>
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
           <tr><td>戦線セクター</td><td>${
@@ -849,7 +850,7 @@ function renderDom(): void {
     <div class="hud">
       <span>残時間 <strong id="hud-time" class="${hudTimePresentation(world).className}">${hudTimePresentation(world).text}</strong></span>
       <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
-      <span>実弾 <strong id="hud-ammo">${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</strong></span>
+      <span>実弾 <strong id="hud-ammo">${world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)))}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
       <span>帰還 <strong id="hud-boarding">${extractHud}</strong></span>
       <span><strong id="hud-speed">${speedHud}</strong></span>
@@ -1005,7 +1006,7 @@ function paintHudOnly(): void {
   const s = document.getElementById("hud-salvage");
   if (s) s.textContent = String(world.salvaged);
   const a = document.getElementById("hud-ammo");
-  if (a) a.textContent = world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—");
+  if (a) a.textContent = world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)));
   const h = document.getElementById("hud-hp");
   if (h) h.textContent = String(Math.ceil(world.leader.hp));
 

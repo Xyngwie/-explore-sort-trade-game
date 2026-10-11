@@ -44,6 +44,7 @@ import { COVER_RADIUS, getCoverObjects } from "./coverObjects";
 import { dist, norm, type Vec2 } from "./math";
 import { spawnContainersAt } from "./orders";
 import type { Bullet, Unit, World } from "./types";
+import { IDENTITY_ABILITY_SCALE, releaseAbilityScale, type AbilityScale } from "./releaseAbility";
 
 export type CircuitOrder =
   | { kind: "protect"; allyId: string }
@@ -67,7 +68,7 @@ export type CircuitPlayState = {
   wingFalseOne: Record<string, boolean>;
   loadout: Record<string, ClassifiedCircuit[]>;
   order: CircuitOrder;
-  pending: { kind: string; pick: "enemy" | "ally" | "map" | "none" } | null;
+  pending: { kind: string; pick: "enemy" | "ally" | "map" | "none"; unitIds?: string[] } | null;
   cooldownSec: number;
   fogOpen: Uint8Array | null;
   lastSeen: Record<string, Vec2>;
@@ -88,6 +89,12 @@ export type CircuitPlayState = {
   collectDown: boolean;
   /** Wreck ids currently in the leader inventory. Not a save key. */
   carried: string[];
+  /** PR-B: release-only nine-ability scale per unit (releaseAbility.ts). Not a save key. */
+  ability: Record<string, AbilityScale>;
+  /** PR-B N1: point a non-autonomous wingman was ordered to move to. Not a save key. */
+  wingMove: Record<string, Vec2>;
+  /** PR-B: ammo held back by the max-ammo scale (kept in stock, never spent). Not a save key. */
+  ammoFloor: Record<string, number>;
 };
 
 const ORDER_LABEL: Record<string, string> = {
@@ -130,6 +137,9 @@ function blank(release: boolean): CircuitPlayState {
     collectTap: null,
     collectDown: false,
     carried: [],
+    ability: {},
+    wingMove: {},
+    ammoFloor: {},
   };
 }
 
@@ -263,14 +273,29 @@ export function modsFor(world: World, unitId: string): UnitMods {
   add("forced_march", "armor");
   add("armor_tune", "armor");
   m.armorDr = trueRate(world, "armor_tune");
-  // Q3a/Q3c: false-1×1 wingman ×2 attack / range / vision only in release.
-  const wing = p.release && p.wingFalseOne[unitId];
-  if (wing) {
-    m.attack += 1;
-    m.range += 1;
-    m.vision += 1;
-  }
+  // PR-B: release-only nine-ability scale by the equipped 1×1 (Q3a ×2 for a
+  // false-1×1 wingman is folded into the scale). Move speed, max ammo, bullet
+  // speed, fire interval and max power are applied where they are used
+  // (abilityOf). Max power stays out of `activity` so the scaled cap never
+  // lands in world.mechBattery, which goes home with the mech.
+  const s = abilityOf(world, unitId);
+  m.attack *= s.attack;
+  m.range *= s.range;
+  m.vision *= s.vision;
+  m.armor *= s.maxDurability;
   return m;
+}
+
+/** PR-B: the unit's release ability scale (×1 everywhere outside release). */
+export function abilityOf(world: World, unitId: string): AbilityScale {
+  const p = playOf(world);
+  if (!p?.rules || !p.release) return IDENTITY_ABILITY_SCALE;
+  return p.ability[unitId] ?? abilityOfRelease(unitId);
+}
+
+/** Release scale for a unit with no loadout row (no 1×1 → provisional ×0.5). */
+function abilityOfRelease(unitId: string): AbilityScale {
+  return releaseAbilityScale({ release: true, isCaptain: unitId === "leader", oneByOneEffect: null, hasFalseOne: false });
 }
 
 function unitById(world: World, id: string): Unit | null {
@@ -304,8 +329,37 @@ export function attachCircuitPlay(world: World, hub: HubSnapshot | null, release
     if (list.some((c) => c.oneByOne === "true")) play.wingTrueOne[id] = true;
     if (list.some((c) => c.oneByOne === "false")) play.wingFalseOne[id] = true;
   }
+  play.ability = abilityFromLoadout(play.loadout);
   play.discoverDone = hub ? hasTrueOneByOne(hub) : false;
   world.circuitPlay = play;
+}
+
+/** PR-B: the release scale of every unit from its loaded circuits (Q4 rows already skipped). */
+export function abilityFromLoadout(loadout: Record<string, ClassifiedCircuit[]>): Record<string, AbilityScale> {
+  const out: Record<string, AbilityScale> = {};
+  for (const id of ["leader", "wing-a", "wing-b"]) {
+    const list = loadout[id] ?? [];
+    const ones = list.filter((c) => c.side === 1);
+    out[id] = releaseAbilityScale({
+      release: true,
+      isCaptain: id === "leader",
+      oneByOneEffect: ones.length === 0 ? null : (ones.some((c) => c.oneByOne === "true") ? 4 : 0),
+      hasFalseOne: list.some((c) => c.oneByOne === "false"),
+    });
+  }
+  return out;
+}
+
+/**
+ * 5-3 resume: a checkpoint written before PR-B has no `ability` / `wingMove`
+ * / `ammoFloor`; rebuild them (scale from the saved loadout, no pending moves,
+ * floor recomputed on the first tick).
+ */
+export function backfillCircuitPlayState(play: Partial<CircuitPlayState> | null | undefined): void {
+  if (!play || typeof play !== "object") return;
+  if (!play.ability || typeof play.ability !== "object") play.ability = abilityFromLoadout(play.loadout ?? {});
+  if (!play.wingMove || typeof play.wingMove !== "object") play.wingMove = {};
+  if (!play.ammoFloor || typeof play.ammoFloor !== "object") play.ammoFloor = {};
 }
 
 export function refreshStarterCircuit(hub: HubSnapshot): HubSnapshot {
@@ -327,7 +381,8 @@ export function circuitButtons(world: World): { id: string; label: string }[] {
   if (has("distribute")) out.push({ id: "distribute", label: ORDER_LABEL.distribute! });
   if (has("suppress")) out.push({ id: "suppress", label: ORDER_LABEL.suppress! });
   if (has("haul_speed") || has("squad_haul")) out.push({ id: "haul", label: ORDER_LABEL.haul! });
-  if (p.captainTrueOne && p.cooldownSec <= 0) out.push({ id: "air_support", label: ORDER_LABEL.air_support! });
+  // N2: once the leader is wrecked, air support is unavailable (and not shown).
+  if (p.captainTrueOne && p.cooldownSec <= 0 && world.leader.alive) out.push({ id: "air_support", label: ORDER_LABEL.air_support! });
   return out;
 }
 
@@ -377,6 +432,7 @@ export function beginCircuitButton(world: World, id: string): void {
     return;
   }
   if (id === "air_support") {
+    if (!world.leader.alive) { p.pending = null; return; } // N2
     p.pending = { kind: id, pick: "enemy" };
     return;
   }
@@ -392,6 +448,10 @@ export function consumeCircuitClick(world: World, pt: Vec2): boolean {
   if (!p?.pending) return false;
   const pending = p.pending;
   p.pending = null;
+  if (pending.kind === "wing_move") {
+    issueWingmanMove(world, pending.unitIds ?? [], pt);
+    return true;
+  }
   if (pending.pick === "enemy") {
     const enemy = nearestUnit(world.enemies, pt);
     if (!enemy) return true;
@@ -450,6 +510,7 @@ function issueHaul(world: World): void {
 function tryAirSupport(world: World, enemy: Unit): void {
   const p = playOf(world);
   if (!p?.captainTrueOne || !enemy.alive) return;
+  if (!world.leader.alive) return; // N2
   if (p.cooldownSec > 0) return;
   const loaded = loadHubSaveFromLocalStorage();
   const hub = loaded?.hub;
@@ -595,6 +656,16 @@ function syncCaps(world: World): void {
     const ammoCap = Math.max(1, Math.round(p.baseAmmo[inst]! * ammoMaxMul(world, u.id)));
     const ammo = world.currentAmmo[inst];
     if (ammo != null && ammo > ammoCap) world.currentAmmo[inst] = ammoCap;
+    // PR-B max ammo scale: the part above the scaled cap is held back (it
+    // stays in the mech's stock and returns with it), never destroyed, so a
+    // ×0.5 does not compound over sorties or a 5-3 resume.
+    if (p.ammoFloor[inst] == null) {
+      const now = world.currentAmmo[inst];
+      // Release scale even while the DEBUG toggle is on all_unlocked, so a
+      // later toggle finds the floor; usableAmmo applies it in release only.
+      const k = (p.ability[u.id] ?? abilityOfRelease(u.id)).maxAmmo;
+      p.ammoFloor[inst] = now != null && k < 1 ? Math.max(0, now - Math.max(1, Math.round(now * k))) : 0;
+    }
   }
 }
 
@@ -787,7 +858,7 @@ function tickOrder(world: World, dt: number): void {
             ammos.push({ id, cap });
           }
           const b = world.mechBattery[id];
-          if (b) { act += b.activity; acts.push({ id, cap: b.capacity }); }
+          if (b) { act += b.activity; acts.push({ id, cap: effectiveBatteryCapacity(world, u) ?? b.capacity }); }
         }
         if (ammos.length > 0) {
           const avg = Math.floor(ammo / ammos.length);
@@ -839,6 +910,7 @@ export function stepCircuitPlay(world: World, dt: number): void {
   updateFog(world);
   rememberEnemies(world);
   syncCaps(world);
+  tickWingmanMoves(world);
   tickOrder(world, dt);
 }
 
@@ -855,6 +927,8 @@ export function circuitMoveTarget(world: World, unit: Unit): Vec2 | null {
   // The captain is player-driven: autonomous circuit moves (scatter, cover,
   // orbit, …) apply to wingmen only.
   if (unit.kind === "leader") return null;
+  const wm = p.wingMove[unit.id];
+  if (wm) return { ...wm };
   return alwaysMove(world, unit);
 }
 
@@ -868,7 +942,7 @@ export function circuitSpeed(world: World, unit: Unit): number | null {
     const covers = getCoverObjects(world);
     if (covers.some((c) => dist(c.pos, target) <= c.radius)) extra += falseRate(world, unit.id, "cover_move");
   }
-  return ORDER_MOVE_SPEED * (1 + Math.max(0, extra));
+  return ORDER_MOVE_SPEED * (1 + Math.max(0, extra)) * abilityOf(world, unit.id).moveSpeed;
 }
 
 export function rangeMul(world: World, unitId: string): number {
@@ -902,7 +976,9 @@ function gunR(world: World, unitId: string, gun: GunEffectKey): number {
 export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolean {
   const m = modsFor(world, from.id);
   if (!playOf(world)?.rules || from.instanceId == null) return false;
-  const ammo = world.currentAmmo[from.instanceId] ?? 0;
+  const ammo = usableAmmo(world, from);
+  const carried = world.currentAmmo[from.instanceId] ?? 0;
+  const fi = abilityOf(world, from.id).fireInterval;
   const reach = dist(from.pos, target.pos);
   if (ammo <= 0 && m.melee > 0 && reach <= from.radius + target.radius) {
     target.hp -= world.balance.bulletDamage * (1 + m.melee) * m.attack;
@@ -923,10 +999,10 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
     p.smg[from.id] = st;
     if (st.wait > 0 || from.cooldown > 0) return true;
     spawnShot(world, from, target, (1 / 4) * (1 + r) * m.attack, 1, false, 0);
-    world.currentAmmo[from.instanceId] = ammo - 1;
+    world.currentAmmo[from.instanceId] = carried - 1;
     st.n += 1;
-    if (st.n >= SMG_CYCLE) { st.n = 0; st.wait = SMG_TAIL_SEC; from.cooldown = 0; }
-    else from.cooldown = SMG_INTERVAL_SEC;
+    if (st.n >= SMG_CYCLE) { st.n = 0; st.wait = SMG_TAIL_SEC * fi; from.cooldown = 0; }
+    else from.cooldown = SMG_INTERVAL_SEC * fi;
     return true;
   }
   if (from.cooldown > 0) return true;
@@ -940,27 +1016,27 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
       left -= 1;
       fired += 1;
     }
-    world.currentAmmo[from.instanceId] = ammo - fired;
-    from.cooldown = world.balance.fireCooldown;
+    world.currentAmmo[from.instanceId] = carried - fired;
+    from.cooldown = world.balance.fireCooldown * fi;
     return true;
   } else if (gun === "lmg") {
     spawnShot(world, from, target, m.attack, 1, false, 0);
-    from.cooldown = world.balance.fireCooldown / (2 * (1 + r));
+    from.cooldown = (world.balance.fireCooldown / (2 * (1 + r))) * fi;
   } else if (gun === "fast_round") {
     spawnShot(world, from, target, m.attack, 1.5, false, 0);
-    from.cooldown = world.balance.fireCooldown / (1 + r);
+    from.cooldown = (world.balance.fireCooldown / (1 + r)) * fi;
   } else if (gun === "homing_round") {
     spawnShot(world, from, target, m.attack, 0.75, false, 0, { homingId: target.id, bend: Math.min(0.3, r) });
-    from.cooldown = world.balance.fireCooldown;
+    from.cooldown = world.balance.fireCooldown * fi;
   } else if (gun === "emp_round") {
     const slow = Math.min(EMP_SLOW_CAP, EMP_SLOW_BASE + r);
     spawnShot(world, from, target, m.attack, 1, true, 0, { empSlow: slow });
-    from.cooldown = world.balance.fireCooldown;
+    from.cooldown = world.balance.fireCooldown * fi;
   } else {
     spawnShot(world, from, target, m.attack, 1, false, 0);
-    from.cooldown = world.balance.fireCooldown;
+    from.cooldown = world.balance.fireCooldown * fi;
   }
-  world.currentAmmo[from.instanceId] = ammo - 1;
+  world.currentAmmo[from.instanceId] = carried - 1;
   return true;
 }
 
@@ -975,7 +1051,7 @@ function spawnShot(
   extra?: { homingId?: string; bend?: number; empSlow?: number },
 ): void {
   const base = Math.atan2(to.pos.y - from.pos.y, to.pos.x - from.pos.x) + angleOff;
-  const speed = world.balance.bulletSpeed * speedMul;
+  const speed = world.balance.bulletSpeed * speedMul * abilityOf(world, from.id).bulletSpeed;
   const b: Bullet = {
     alive: true,
     pos: { ...from.pos },
@@ -1236,6 +1312,85 @@ export function ammoMaxMul(world: World, unitId: string): number {
   if (gun === "mmr") return 1 / 5;
   if (gun === "lmg") return 2;
   return 1;
+}
+
+/**
+ * PR-B: rounds this unit may still fire. The max-ammo scale holds back
+ * `ammoFloor` (kept in stock, returned with the mech); outside release the
+ * floor is 0 and this is the carried ammo.
+ */
+export function usableAmmo(world: World, unit: Unit): number {
+  if (unit.instanceId == null) return 0;
+  const cur = world.currentAmmo[unit.instanceId] ?? 0;
+  const floor = releaseOn(world) ? (playOf(world)?.ammoFloor[unit.instanceId] ?? 0) : 0;
+  return Math.max(0, cur - floor);
+}
+
+/**
+ * PR-B: the unit's max power in this sortie (battery cap × the release
+ * scale). world.mechBattery keeps the home value, so the scale never
+ * compounds over sorties.
+ */
+export function effectiveBatteryCapacity(world: World, unit: Unit): number | null {
+  if (!unit.instanceId) return null;
+  const b = world.mechBattery[unit.instanceId];
+  if (!b) return null;
+  return Math.max(1, Math.round(b.capacity * abilityOf(world, unit.id).maxPower));
+}
+
+/** One entry of the wingman action palette (N1). Locked actions are never listed. */
+export type WingmanPaletteAction = { id: string; label: string; next?: WingmanPaletteAction[] };
+
+/**
+ * N1: the wingman command palette as data (extensible: e.g. a future
+ * 「攻撃」→「指定した敵」). Only a non-autonomous wingman gets 「移動」→「地点選択」,
+ * and only once the captain carries the true 1×1 「4」 (the leader may be a
+ * wreck: N3). Autonomous wingmen and locked actions give an empty list.
+ */
+export function wingmanPaletteActions(world: World, unitIds: string[]): WingmanPaletteAction[] {
+  const p = playOf(world);
+  if (!p?.rules || !p.release || !p.captainTrueOne || world.phase !== "sortie") return [];
+  const ids = unitIds.filter((id) => {
+    const u = world.wingmen.find((w) => w.id === id);
+    return !!u && u.alive && !p.wingTrueOne[id];
+  });
+  if (ids.length === 0) return [];
+  return [{ id: "move", label: "移動", next: [{ id: "point", label: "地点選択" }] }];
+}
+
+/** N1: arm the map pick for 「移動」→「地点選択」 (one wingman or several). */
+export function beginWingmanMovePick(world: World, unitIds: string[]): boolean {
+  const p = playOf(world);
+  if (!p || wingmanPaletteActions(world, unitIds).length === 0) return false;
+  p.pending = { kind: "wing_move", pick: "map", unitIds: [...unitIds] };
+  return true;
+}
+
+/**
+ * N1: send non-autonomous wingmen to `pt`; each stops there and returns fire
+ * (it also returns fire on the way). No escort / patrol for them.
+ */
+export function issueWingmanMove(world: World, unitIds: string[], pt: Vec2): string[] {
+  const p = playOf(world);
+  if (!p || wingmanPaletteActions(world, unitIds).length === 0) return [];
+  const moved: string[] = [];
+  for (const id of unitIds) {
+    const u = world.wingmen.find((w) => w.id === id);
+    if (!u || !u.alive || p.wingTrueOne[id]) continue;
+    p.wingMove[id] = { x: pt.x, y: pt.y };
+    moved.push(id);
+  }
+  return moved;
+}
+
+/** N1: drop reached / dead wingman move targets (they then hold and return fire). */
+function tickWingmanMoves(world: World): void {
+  const p = playOf(world);
+  if (!p) return;
+  for (const [id, pt] of Object.entries(p.wingMove)) {
+    const u = world.wingmen.find((w) => w.id === id);
+    if (!u || !u.alive || p.wingTrueOne[id] || dist(u.pos, pt) < 6) delete p.wingMove[id];
+  }
 }
 
 export { effectRate };

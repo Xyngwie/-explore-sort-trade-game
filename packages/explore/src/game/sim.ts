@@ -24,6 +24,9 @@ import {
   circuitMoveTarget,
   circuitSpeed,
   circuitTryWeapon,
+  abilityOf,
+  usableAmmo,
+  visionMul,
   enemyEmpMul,
   enemyHeld,
   focusTarget,
@@ -72,10 +75,10 @@ function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, 
 }
 
 function revealVision(world: World): void {
-  const r = world.balance.visionRange;
-  const r2 = r * r;
   for (const u of friendlyUnits(world)) {
     if (!u.alive) continue;
+    const r = world.balance.visionRange * visionMul(world, u.id);
+    const r2 = r * r;
     for (const c of world.containers) {
       if (c.discovered || c.taken) continue;
       if (dist2(u.pos, c.pos) <= r2) {
@@ -98,7 +101,7 @@ function inCamera(world: World, pos: Vec2): boolean {
 
 function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): void {
   const dir = norm({ x: to.pos.x - from.pos.x, y: to.pos.y - from.pos.y });
-  const speed = world.balance.bulletSpeed;
+  const speed = world.balance.bulletSpeed * (fromEnemy ? 1 : abilityOf(world, from.id).bulletSpeed);
   const b: Bullet = {
     alive: true,
     pos: { ...from.pos },
@@ -120,10 +123,10 @@ function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): vo
   if (!fromEnemy) {
     if (from.instanceId == null) return;
     const currentAmmo = world.currentAmmo[from.instanceId];
-    if (currentAmmo == null || currentAmmo <= 0) return;
+    if (currentAmmo == null || currentAmmo <= 0 || usableAmmo(world, from) <= 0) return;
     world.currentAmmo[from.instanceId] = currentAmmo - 1;
   }
-  from.cooldown = world.balance.fireCooldown;
+  from.cooldown = world.balance.fireCooldown * (fromEnemy ? 1 : abilityOf(world, from.id).fireInterval);
   from.heading = angleOf(from.pos, target.pos);
   if (from.kind === "wingman") from.engageWarnT = world.balance.wingEngageWarnSec;
   spawnBullet(world, from, target, fromEnemy);
@@ -401,7 +404,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (input.move.x !== 0 || input.move.y !== 0) { const n = norm(input.move); fallback = { x: leader.pos.x + n.x * world.balance.wasdMoveLookahead, y: leader.pos.y + n.y * world.balance.wasdMoveLookahead }; }
     else if (input.clickMove) fallback = { ...input.clickMove };
     const locked = movementLocked(world);
-    const cruise = circuitLocomotion(world, leader, locked ? null : fallback, world.balance.moveSpeed * unitMoveSpeedMul(leader, world));
+    const cruise = circuitLocomotion(world, leader, locked ? null : fallback, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed);
     leader.moveTarget = cruise.target;
     if (!locked) updateCoverMovement(world, leader, input.move, dt);
     moveToward(leader, leader.moveTarget, cruise.speed, dt, world);
@@ -431,7 +434,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);
     const intent = decideWingman(world, w, dt);
-    const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.wingmanSpeed * unitMoveSpeedMul(w, world));
+    const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.wingmanSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed);
     w.moveTarget = timedOut ? null : cruise.target;
     if (timedOut) w.vel = { x: 0, y: 0 };
     else moveToward(w, w.moveTarget, cruise.speed, dt, world);

@@ -41,6 +41,17 @@ import {
 import { attackMul, rangeMul, visionMul } from "./game/circuitPlay";
 import { rescueAbortFromHub } from "./game/rescue";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
+import { IDENTITY_ABILITY_SCALE, RELEASE_ABILITY_SCALE } from "./game/releaseAbility";
+
+/**
+ * Release-mode circuit mechanics checks written before PR-B's nine-ability
+ * scale: every unit is put on the ×1 scale (as if it carried the 「4」) so the
+ * mechanic under test is measured alone. The scale itself is checked below.
+ */
+function attachReleaseMechanics(world: ReturnType<typeof createWorld>): void {
+  attachCircuitPlay(world, null, true);
+  for (const id of ["leader", "wing-a", "wing-b"]) world.circuitPlay!.ability[id] = { ...IDENTITY_ABILITY_SCALE };
+}
 
 function classified(over: Partial<ClassifiedCircuit>): ClassifiedCircuit {
   return {
@@ -78,7 +89,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = true;
   world.circuitPlay!.captainTrueOne = true;
   const enemy = world.enemies[0]!;
@@ -96,7 +107,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   assert.equal(requestExtract(world), true);
   assert.equal(requestExtract(world), false, "second press without circuit rules does not cancel");
   assert.ok(world.boarding, "circle stays");
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = true;
   const outside = world.wingmen[0]!;
   outside.pos = {
@@ -112,7 +123,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
   const x0 = world.leader.pos.x;
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = false;
   const idle = { move: { x: 1, y: 0 }, clickMove: null, fire: false, interact: false };
   for (let i = 0; i < 10; i++) tickWorld(world, 0.05, idle);
@@ -122,7 +133,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = true;
   world.leader.instanceId = "leader-1";
   world.currentAmmo["leader-1"] = 3;
@@ -148,7 +159,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = true;
   const before = new Map<string, string>();
   for (const u of [world.leader, ...world.wingmen]) before.set(u.id, u.stance);
@@ -169,7 +180,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   const enemy = world.enemies[0]!;
   enemy.alive = true;
   enemy.pos = { x: world.leader.pos.x + 200, y: world.leader.pos.y };
@@ -184,7 +195,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   const enemy = world.enemies[0]!;
   enemy.alive = true;
   world.circuitPlay!.order = { kind: "suppress", enemyId: enemy.id, left: 0.02 };
@@ -198,7 +209,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = true;
   for (const e of world.enemies) {
     e.alive = true;
@@ -218,7 +229,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = true;
   world.circuitPlay!.loadout.leader = [classified({ effectKey: "scatter", trueBoard: true, r: 0.1 })];
   assert.equal(requestExtract(world), true);
@@ -237,7 +248,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.circuitPlay!.captainOneByOne = true;
   assert.equal(salvageSeconds(world), 8);
   world.leader.pos = { x: 400, y: 400 };
@@ -280,7 +291,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
 {
   const world = createWorld(bootstrapFromSearch(""));
   startSortie(world);
-  attachCircuitPlay(world, null, true);
+  attachReleaseMechanics(world);
   world.invadeSector = { sectorX: 1, sectorY: 1, density: 1, intelFlags: [] };
   const hub = { fleet: [], circuits: [], credits: 0 } as unknown as HubSnapshot;
   noteCircuitExtract(world, true);
@@ -322,6 +333,9 @@ function sortieWith(hubCircuits: HubCircuitRecord[], release: boolean, fleet: Ow
   startSortie(world);
   world.deployedInstanceIds = fleet.map((m) => m.instanceId);
   const hub = normalizeHubSnapshot({ ...INITIAL_HUB, fleet, circuits: hubCircuits } as never);
+  // PR-B: createWorld now defaults to "release"; keep the world mode in step
+  // with the circuit mode exactly like main.ts makeWorld does.
+  world.commandUnlock.mode = release ? "release" : "all_unlocked";
   attachCircuitPlay(world, hub, release);
   return world;
 }
@@ -389,12 +403,15 @@ for (const release of [true, false]) {
 }
 
 // Q3a / Q3c: false 1×1 on a wingman doubles attack / range / vision only in release.
+// PR-B: the ×2 sits on top of the release ×0.5 (no 「4」), so the result is ×1;
+// a bare wingman stays at ×0.5.
 {
   const fl = { ...makeFalseOneByOne("f-wa"), equippedTo: "wa" };
   const rel = sortieWith([fl], true);
-  assert.equal(attackMul(rel, "wing-a"), 2);
-  assert.equal(rangeMul(rel, "wing-a"), 2);
-  assert.equal(visionMul(rel, "wing-a"), 2);
+  assert.equal(attackMul(rel, "wing-a"), RELEASE_ABILITY_SCALE.noFour * RELEASE_ABILITY_SCALE.falseOneWingman);
+  assert.equal(rangeMul(rel, "wing-a"), 1);
+  assert.equal(visionMul(rel, "wing-a"), 1);
+  assert.equal(attackMul(rel, "wing-b"), 0.5, "PR-B: bare wingman ×0.5");
   const all = sortieWith([fl], false);
   assert.equal(attackMul(all, "wing-a"), 1, "Q3c: ×1 in all_unlocked");
   assert.equal(rangeMul(all, "wing-a"), 1);

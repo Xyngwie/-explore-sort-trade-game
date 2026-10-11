@@ -168,7 +168,7 @@ isWingmanMobileFor(world, wingmanId): boolean
 
 | ビルド | 既定モード | DEBUG トグル |
 |---|---|---|
-| 通常（未設定 = GitHub Pages プレビュー） | `all_unlocked`（全コマンド解放＝従来どおり） | 表示 |
+| 通常（未設定 = GitHub Pages プレビュー） | ~~`all_unlocked`~~ → **`release`**（PR-B・神宮 10/12 Go: 進むと開く） | 表示 |
 | `VITE_EXPLORE_RELEASE_LOCKS=1`（または `true`） | 常に `release` | 非表示 |
 
 リリース相当ビルドの例: `VITE_EXPLORE_RELEASE_LOCKS=1 npm run build:explore`
@@ -177,7 +177,7 @@ isWingmanMobileFor(world, wingmanId): boolean
 
 - 位置: 出撃前ブリーフィング画面のタイトル下、および出撃中画面の「WRECKLINE」見出し直下の破線バー（`#debug-unlock-bar` / ボタン `#btn-debug-unlock`）。
 - 表示: `DEBUG 回路ロック: 全コマンド解放（プレイテスト）` または `リリース相当（回路なし＝基本4のみ）`。リリース相当中はバーが琥珀色。
-- 保存: `localStorage["estg.explore.debugCommandUnlockMode"]` = `"all_unlocked"` | `"release"`（未設定・不正値は `all_unlocked`。~~未設定・不正値は `release`~~ → 変更（10/12・神宮、Q1）: #270 では `all_unlocked` のまま）。リロード・再出撃後も維持。HubSave には入れない。
+- 保存: `localStorage["estg.explore.debugCommandUnlockMode"]` = `"all_unlocked"` | `"release"`（~~未設定・不正値は `all_unlocked`~~ → 変更（PR-B・神宮 10/12 Go）: **未設定・不正値は `release`**。`"all_unlocked"` を保存したとき（DEBUG の全解放）だけ全解放）。リロード・再出撃後も維持。HubSave には入れない。
 - 出撃中に切り替えると即座に実行側ゲートにも反映される。
 
 ## 6. テスト
@@ -202,4 +202,18 @@ isWingmanMobileFor(world, wingmanId): boolean
 | 大破（`destroyed`）の機体の回路 | 何も開かない。出撃時の読み込み（`attachCircuitPlay`）と格納庫の集計（`hangarEquippedCircuits`）から外す（Q4） |
 
 - 差分（#269 との違い）: #269 では隊長の 1×1（真偽どちらでも）で移動・回収・帰還が開き、真の 1×1 で航空支援が開いた。10/12 の決定で、基本の行動は回路なしで使え、真の「4」が開くのは `wing_mobility` と航空支援になった。
-- 未決（#270 では作っていない）: `release` で、隊長の「4」で開いた `wing_mobility` を、自律していない僚機にどう出すか（移動の命令のボタン・対象の選び方）。今は解放の判定だけで、画面は #270 の前と同じ（`release` では小隊方針のバーと召還を出さない）。初クリアの PR の前に神宮が決める。
+- 未決（#270 では作っていない）: `release` で、隊長の「4」で開いた `wing_mobility` を、自律していない僚機にどう出すか（移動の命令のボタン・対象の選び方）。今は解放の判定だけで、画面は #270 の前と同じ（`release` では小隊方針のバーと召還を出さない）。初クリアの PR の前に神宮が決める。→ 10/12 決定（N1: 「移動」→「地点選択」→地図をタップ、いまの選択の仕組みで）。PR-B で処理を実装。パレットの出し方は §7.2 の未決。
+
+### 7.2 進むと開く（PR-B、神宮 10/12 Go）
+
+- 公開プレビューの既定は `release`（`unlockMode.ts` `readDebugCommandUnlockMode`: 未設定・不正値・読めない → `release`、保存値 `"all_unlocked"` だけ全解放）。DEBUG の全解放トグルは残す。保存キー `estg.explore.debugCommandUnlockMode` は変えない。
+- **9 つの能力の倍率（`release` のときだけ）**: 攻撃力・最大弾数・弾速・射撃間隔・最大耐久・最大活動量・射程・視界・移動速度。機体ごとに、付けている 1×1 の効果値で決める。「4」で 1 倍、効果値 0 か 1×1 なしで 0.5 倍（仮）。隊長も僚機も同じ。射撃間隔は ÷0.5（長くなる）。値は `packages/explore/src/game/releaseAbility.ts` の `RELEASE_ABILITY_SCALE` の 1 か所だけ。
+  - Q3a: 偽の 1×1 を付けた僚機は、0.5 倍の上に攻撃力・射程・視界 ×2 で、結果 1 倍。隊長にはかけない。
+  - Q4: 大破機の回路は数えない（`attachCircuitPlay` が読まない）。
+  - 技術判断（セーブを壊さないため）: 最大弾数の 0.5 倍は、上限を越える分を「撃てない分」（`circuitPlay.ammoFloor`）として機体に残し、帰還で持ち帰る（消さない。出撃ごとに半分になっていかない）。最大活動量の 0.5 倍は出撃中の上限（`effectiveBatteryCapacity`、分配で使う）だけにかけ、`world.mechBattery`（帰還で HubSave に戻る値）は書き換えない。最大耐久は出撃中の `maxHp` だけ（耐久の保存は出撃時の値と一律摩耗のまま）。
+- **N1: 自律していない僚機の移動**（隊長の「4」で開く。帯同・哨戒は無い）: 指定した地点まで移動して止まり、応射する（移動中も射程内は撃つ。追わない）。速度は移動の基本 120 × 倍率。データと処理は `wingmanPaletteActions`（「移動」→「地点選択」。ロック中の行動は返さない。将来「攻撃」→「指定した敵」などを足せる形）・`beginWingmanMovePick`（地図の 1 点を待つ。1 機でも全選択でも）・`issueWingmanMove`・`circuitPlay.wingMove`（保存キーではない）。自律している僚機は変えない。
+  - **未決（PR-B で止めた）**: パレットの出し方。Explore には「僚機をタップして選ぶ」仕組みがまだ無く（キャンバスのタップは指定行動の対象選びか隊長の移動）、パレットの位置・見た目・順番・全選択の置き場・選択中の表示が既存の約束から決まらない。神宮の決定待ち。
+- **N2**: 隊長が残骸になったあとは航空支援を使えない（ボタンを出さない・押しても構えない・打たない）。
+- **N3**: 隊長が残骸になっても僚機の移動の命令は使える。
+- 設計メモ（実装しない）: (1) 将来、地点はミニマップでも選べるようにする。(2) N2 の続き: 隊長の残骸を運ぶと回路がつながり直し、手動操作と航空支援が戻る。運搬の実装と一緒に作る。
+- テスト: `packages/explore/src/releaseProgress.selftest.ts`。

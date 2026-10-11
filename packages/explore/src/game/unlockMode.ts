@@ -5,8 +5,8 @@
  *   - unset / anything else → false (default: preview / playtest build)
  *   - "1" or "true"          → release build: always "release" mode, debug toggle hidden
  *
- * Preview builds (GitHub Pages today) default to "all_unlocked" and expose a
- * DEBUG toggle whose choice is persisted in localStorage under
+ * Preview builds (GitHub Pages today) default to "release" (unlock as you
+ * progress, #269 / PR-B) and expose a DEBUG toggle whose choice is persisted in localStorage under
  * `COMMAND_UNLOCK_MODE_STORAGE_KEY`. This is a local debug setting, NOT part of
  * HubSave / handoff contracts.
  */
@@ -51,16 +51,20 @@ export function isDebugUnlockToggleVisible(
   return !releaseLocks;
 }
 
-/** Stored debug choice (preview builds only). Unknown / missing → all_unlocked. */
+/**
+ * Stored debug choice (preview builds only). Only an explicit stored
+ * "all_unlocked" (the DEBUG all-unlocked toggle) unlocks everything;
+ * unknown / missing / unreadable → "release" (the public default, #269).
+ */
 export function readDebugCommandUnlockMode(store?: Pick<Storage, "getItem"> | null): CommandUnlockMode {
   const s = store === undefined ? defaultStore() : store;
-  if (!s) return "all_unlocked";
+  if (!s) return "release";
   try {
-    return s.getItem(COMMAND_UNLOCK_MODE_STORAGE_KEY) === "release"
-      ? "release"
-      : "all_unlocked";
+    return s.getItem(COMMAND_UNLOCK_MODE_STORAGE_KEY) === "all_unlocked"
+      ? "all_unlocked"
+      : "release";
   } catch {
-    return "all_unlocked";
+    return "release";
   }
 }
 
@@ -80,7 +84,7 @@ export function writeDebugCommandUnlockMode(
 /**
  * Active mode for a new sortie / world.
  * Release build → always "release" (debug storage ignored).
- * Preview build → debug choice, default "all_unlocked".
+ * Preview build → debug choice, default "release".
  */
 export function resolveCommandUnlockMode(opts?: {
   releaseLocks?: boolean;

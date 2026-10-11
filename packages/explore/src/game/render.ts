@@ -2,6 +2,7 @@ import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
 import { getCoverObjects } from "./coverObjects";
+import { visionMul } from "./circuitPlay";
 import { STANCE_LABEL, type World } from "./types";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from "./lockedOrder";
@@ -222,7 +223,7 @@ export function renderWorld(
   const friendlies = [world.leader, ...world.wingmen];
   for (const e of world.enemies) {
     if (!e.alive) continue;
-    const seen = friendlies.some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision);
+    const seen = friendlies.some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision * visionMul(world, u.id));
     if (!seen) continue;
     ctx.fillStyle = "#ff6b6b";
     ctx.beginPath();

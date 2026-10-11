@@ -100,6 +100,8 @@ import {
   formatCircuitSellPriceJa,
   resolveActiveCircuit,
   onHangarExploreLink,
+  BULLETIN_UNLOCKED_LINE_JA,
+  bulletinUnlockedLineHtml,
 } from "./hangar";
 import {
   PIECES_PER_CONTAINER,
@@ -1430,6 +1432,15 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   };
   const again = ingestLocationSearch(changed, new URL(returnUrl).search);
   assert.equal(again.state.hub.fleet.find((m) => m.instanceId === idA)!.currentAmmo, 5);
+}
+
+// PR-B: hangar line 「掲示板が開いた」 (#269 wording) only with hub.bulletinUnlocked; old saves read false.
+{
+  assert.equal(BULLETIN_UNLOCKED_LINE_JA, "掲示板が開いた");
+  assert.equal(bulletinUnlockedLineHtml({}), "", "old save without the key: no line");
+  assert.equal(bulletinUnlockedLineHtml(null), "");
+  assert.equal(bulletinUnlockedLineHtml({ bulletinUnlocked: false }), "");
+  assert.ok(bulletinUnlockedLineHtml({ bulletinUnlocked: true }).includes("掲示板が開いた"));
 }
 
 console.log("trade hangar selftest: ok");
