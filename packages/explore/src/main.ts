@@ -1,6 +1,8 @@
 import "./style.css";
 import {
   CTA_CHIP,
+  ammoShortLineJa,
+  parseTradeToExploreSearch,
   CTA_COPY,
   EXPLORE_SORTIE_BACK_TRAP,
   HANDOFF_QUERY_KEYS,
@@ -129,6 +131,7 @@ import {
 } from "./game/outcome";
 import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
 import { resortiePlan, resortieSearch } from "./game/resortie";
+import { refillBeforeSortie } from "./game/preSortieAmmo";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 /** HubSave as it is now (null without a save / storage). */
@@ -146,6 +149,19 @@ function freshHub(): HubSnapshot | null {
  * An Invade sortie link (sector only) takes the hangar's sortie selection along (invadeSquad.ts).
  */
 let bootSearch = invadeSquadSearch(window.location.search, freshHub()) ?? window.location.search;
+/** M8: shortage line shown by the briefing 出撃 button (Explore-built squads only). */
+let preSortieAmmoNote = "";
+{
+  // M3: an Invade sortie link (squad from HubSave) is a new sortie — top the
+  // squad up from the stock first. Not on a 5-3 resume (checkpoint present).
+  const hub0 = freshHub();
+  if (hub0 && bootSearch !== window.location.search && readSortieCheckpoint().status === "absent") {
+    const ids = parseTradeToExploreSearch(bootSearch)?.deployedInstanceIds ?? [];
+    const filled = refillBeforeSortie(hub0, ids);
+    preSortieAmmoNote = filled.line;
+    bootSearch = invadeSquadSearch(window.location.search, filled.hub) ?? bootSearch;
+  }
+}
 const boot = bootstrapFromSearch(bootSearch);
 /** New world + this front cell's left-behind mechs from HubSave (lostMechs.ts). */
 function makeWorld(b: ReturnType<typeof bootstrapFromSearch>): World {
@@ -803,6 +819,7 @@ function renderDom(): void {
           }
         </table>
         <div class="row"><button type="button" id="btn-start">出撃</button></div>
+        ${preSortieAmmoNote ? `<p class="warn" id="ammo-short-presortie">${escapeHtml(preSortieAmmoNote)}</p>` : ""}
         <p class="help">${briefingHelpText(cmdLocked)}</p>
       </div>`;
     bindDebugUnlockToggle();
@@ -865,6 +882,7 @@ function renderDom(): void {
           }
           <button type="button" class="secondary" id="btn-again">${CTA_COPY.sortieAgain}</button>
         </div>
+        ${directSave?.status === "saved" && directSave.ammoShort?.length ? `<p class="warn" id="ammo-short-note">${escapeHtml(ammoShortLineJa(directSave.ammoShort, world.deployedInstanceIds))}</p>` : ""}
         ${directSaveNoteText(directSave) ? `<p class="muted" id="direct-save-note">${escapeHtml(directSaveNoteText(directSave))}</p>` : ""}
         ${resortieNote ? `<p class="warn" id="resortie-note">${escapeHtml(resortieNote)}</p>` : ""}
         <p class="mono muted" style="margin-top:0.75rem">${escapeHtml(sortUrl)}</p>
@@ -882,13 +900,16 @@ function renderDom(): void {
       const payload = exploreReturnPayload(world);
       if (payload && world.deployedInstanceIds.length > 0) {
         const plan = resortiePlan(bootSearch, world, payload);
-        const next = resortieSearch(bootSearch, plan.hub, plan.ids);
+        // M3: 再出撃 from the save tops the squad up from the stock first.
+        const filled = plan.fromSave ? refillBeforeSortie(plan.hub, plan.ids) : { hub: plan.hub, line: "" };
+        const next = resortieSearch(bootSearch, filled.hub, plan.ids);
         if (!next) {
           resortieNote = "再出撃できる機体がありません（格納庫で修理・受領してください）。";
           renderDom();
           return;
         }
         bootSearch = next.search;
+        preSortieAmmoNote = filled.line;
         world = makeWorld(bootstrapFromSearch(next.search));
       } else {
         // No deployed mechs (Explore opened without a deploy URL): as before.

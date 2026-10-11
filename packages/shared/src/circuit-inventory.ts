@@ -4,6 +4,7 @@
  * still undecided, so these only expose facts (restoreState / effect value).
  */
 import { slotCapacity } from "./circuit-actions";
+import { reloadMechAmmo } from "./mech-ammo";
 import { isCircuitRestoreStateActive } from "./circuit-board";
 import { computeCircuitEffectForBoard } from "./circuit-clues";
 import {
@@ -117,7 +118,12 @@ export function equipCircuit(
   const circuits = hub.circuits.map((c) =>
     c.circuitId === circuitId ? { ...c, equippedTo: mechInstanceId } : c,
   );
-  return { hub: normalizeHubSnapshot({ ...hub, circuits }), ok: true };
+  let next = normalizeHubSnapshot({ ...hub, circuits });
+  // M5: every equip / swap returns the ammo and reloads (old holder too).
+  for (const id of new Set([mechInstanceId, ...(rec.equippedTo ? [rec.equippedTo] : [])])) {
+    next = reloadMechAmmo(next, id).hub;
+  }
+  return { hub: next, ok: true };
 }
 
 export function unequipCircuit(hub: HubSnapshot, circuitId: string): HubSnapshot {
@@ -126,7 +132,8 @@ export function unequipCircuit(hub: HubSnapshot, circuitId: string): HubSnapshot
   const circuits = hub.circuits.map((c) =>
     c.circuitId === circuitId ? { ...c, equippedTo: null } : c,
   );
-  return normalizeHubSnapshot({ ...hub, circuits });
+  // M5: unequip (also before selling an equipped circuit) returns and reloads.
+  return reloadMechAmmo(normalizeHubSnapshot({ ...hub, circuits }), rec.equippedTo!).hub;
 }
 
 // ---------------------------------------------------------------------------

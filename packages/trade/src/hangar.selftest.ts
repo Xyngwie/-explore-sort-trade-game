@@ -102,7 +102,10 @@ import {
   onHangarExploreLink,
   BULLETIN_UNLOCKED_LINE_JA,
   bulletinUnlockedLineHtml,
+  scrapMech,
+  sortieAmmoShortLineJa,
 } from "./hangar";
+import { ammoSwapLogLineJa } from "./ammo-swap-log";
 import {
   PIECES_PER_CONTAINER,
   SORTIE_CHECKPOINT_KEY,
@@ -1365,9 +1368,13 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.ok(idA && idB, "starter fleet has two mechs");
   rt = { ...rt, selectedDeployIds: [idA!, idB!] };
 
-  // Fresh fleet: no currentAmmo yet → first deploy carries no mechCurrentAmmo.
+  // Fresh fleet: HubSave normalize materialises the interim "undefined = full"
+  // rule (fix/circuit-ammo-activity-refill) → first deploy carries 28 each.
   const firstDeploy = parseTradeToExploreSearch(new URL(buildDeployUrl(rt)!).search)!;
-  assert.equal(firstDeploy.mechCurrentAmmo, undefined);
+  assert.deepEqual(firstDeploy.mechCurrentAmmo, [
+    { instanceId: idA, currentAmmo: 28 },
+    { instanceId: idB, currentAmmo: 28 },
+  ]);
   assert.deepEqual(
     firstDeploy.mechBattery?.map((r) => [r.instanceId, r.battery.capacity, r.battery.activity]),
     [[idA, 300, 300], [idB, 300, 300]],
@@ -1441,6 +1448,48 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(bulletinUnlockedLineHtml(null), "");
   assert.equal(bulletinUnlockedLineHtml({ bulletinUnlocked: false }), "");
   assert.ok(bulletinUnlockedLineHtml({ bulletinUnlocked: true }).includes("掲示板が開いた"));
+}
+
+// fix/circuit-ammo-activity-refill: M7 scrap returns ammo, M3 pre-sortie top-up, M4 swap log line.
+{
+  const st = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = st;
+  let s0 = grantStarterFleet(resetHangar(st));
+  const [a, b] = s0.hub.fleet.map((m) => m.instanceId);
+  s0 = {
+    ...s0,
+    hub: {
+      ...s0.hub,
+      inventory: { ...s0.hub.inventory, ammo: 5 },
+      fleet: s0.hub.fleet.map((m) => (m.instanceId === a ? { ...m, currentAmmo: 20 } : { ...m, currentAmmo: 3 })),
+      ammoBatteryRepaired: true,
+    },
+  };
+  // M8: the line by the 出撃 button previews the shortage after the top-up
+  const ids = [a!, b!];
+  assert.equal(
+    sortieAmmoShortLineJa(s0.hub, ids),
+    "弾薬が足りません：隊長 25/28・僚機A 3/28",
+    "5 in stock: 隊長 20 → 25 first (deploy order), 僚機A stays at 3",
+  );
+  assert.equal(s0.hub.fleet.find((m) => m.instanceId === a)!.currentAmmo, 20, "the preview does not change the hub");
+  // M3: deploying tops up from the stock and saves; the deploy URL carries the refilled values
+  const dep = markDeployed({ ...s0, selectedDeployIds: ids }, ids);
+  assert.equal(dep.hub.fleet.find((m) => m.instanceId === a)!.currentAmmo, 25);
+  assert.equal(dep.hub.fleet.find((m) => m.instanceId === b)!.currentAmmo, 3);
+  assert.equal(dep.hub.inventory.ammo, undefined);
+  assert.ok(dep.log.some((l) => l.includes("弾薬が足りません")), "shortage in the log");
+  const url = parseTradeToExploreSearch(new URL(buildDeployUrl(dep)!).search)!;
+  assert.deepEqual(url.mechCurrentAmmo, [{ instanceId: a, currentAmmo: 25 }, { instanceId: b, currentAmmo: 3 }]);
+  // M7: scrapping a mech returns its carried ammo to the stock
+  const scr = scrapMech(dep, b!);
+  assert.equal(scr.hub.fleet.some((m) => m.instanceId === b), false);
+  assert.equal(scr.hub.inventory.ammo, 3, "scrapped mech's 3 rounds → stock");
+  assert.ok(scr.log.at(-1)!.includes("弾薬 3 を倉庫へ") || scr.log.some((l) => l.includes("弾薬 3 を倉庫へ")));
+  // M4: swap log line text (console only)
+  const moved = { ...scr.hub, fleet: scr.hub.fleet.map((m) => ({ ...m, currentAmmo: 6 })), inventory: { ammo: 22 } };
+  assert.match(ammoSwapLogLineJa(scr.hub, moved), /^回路付け替え・弾薬積み直し：/);
+  assert.equal(ammoSwapLogLineJa(scr.hub, scr.hub), "");
 }
 
 console.log("trade hangar selftest: ok");

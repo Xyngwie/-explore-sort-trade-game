@@ -2829,7 +2829,7 @@ import {
     const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
     const render = main.slice(main.indexOf("function renderDom(): void {"));
     assert.ok(render.indexOf("ensureDirectSave()") > -1 && render.indexOf("ensureDirectSave()") < render.indexOf('if (world.phase === "briefing")'), "renderDom saves first");
-    assert.ok(main.includes("resortiePlan(bootSearch, world, payload)") && main.includes("resortieSearch(bootSearch, plan.hub, plan.ids)"), "再出撃 rebuilds from HubSave (hangar selection)");
+    assert.ok(main.includes("resortiePlan(bootSearch, world, payload)") && main.includes("resortieSearch(bootSearch, filled.hub, plan.ids)") && main.includes("refillBeforeSortie(plan.hub, plan.ids)"), "再出撃 rebuilds from HubSave (hangar selection), topped up from the stock first");
   }
   console.log("explore U9 direct save / re-sortie ok");
 }
@@ -2971,6 +2971,7 @@ import {
     fleet: [mk("m1", 100, 20, 250), mk("m2", 90, 12, 212)],
     ammoLoad: { ...shared.INITIAL_HUB.ammoLoad, standard: 30 } as never,
     frontProgress: { seed: 777, cols: 8, rows: 8, cleared: [], mined: [] },
+    ammoBatteryRepaired: true, // M6 済みのセーブ（弾数を補填せず残す）
   });
   hub0 = shared.upsertCircuitIntoHub(hub0, {
     circuitId: "c_wing",

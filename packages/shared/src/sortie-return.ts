@@ -6,6 +6,7 @@
  * and a legacy return URL alone still applies once.
  */
 import { applySortieReport } from "./circuit-inventory";
+import { refillFleetAmmo, type AmmoShortRow } from "./mech-ammo";
 import type { ExploreToHubWearPayload } from "./handoff";
 import type { HubSnapshot } from "./hub-save";
 import {
@@ -75,6 +76,8 @@ export type ApplyExploreReturnResult = {
   applied: boolean;
   /** Circuit IDs returned to the stash from fieldDrops (recoverFieldDrops). */
   recoveredCircuitIds?: string[];
+  /** M3/M8: deployed mechs still below their ammo cap after the return top-up. */
+  ammoShort?: AmmoShortRow[];
 };
 
 /**
@@ -123,15 +126,24 @@ export function applyExploreReturnToHub(
       }
     }
   }
+  const returned: HubSnapshot = {
+    ...next,
+    fleet: applyReturnedMechState(
+      applyWearReportsToFleet(next.fleet, wear.mechWear),
+      wear,
+    ),
+  };
+  // M3: top every mech that can sortie up to its cap from the 「弾薬」 stock.
+  const refill = refillFleetAmmo(returned);
+  const deployed = new Set([
+    ...(wear.mechCurrentAmmo ?? []).map((r) => r.instanceId),
+    ...(wear.mechWear ?? []).map((r) => r.instanceId),
+  ]);
+  const ammoShort = refill.short.filter((r) => deployed.has(r.instanceId));
   return {
-    hub: {
-      ...next,
-      fleet: applyReturnedMechState(
-        applyWearReportsToFleet(next.fleet, wear.mechWear),
-        wear,
-      ),
-    },
+    hub: refill.hub,
     applied: true,
     ...(recoveredCircuitIds != null ? { recoveredCircuitIds } : {}),
+    ...(ammoShort.length > 0 ? { ammoShort } : {}),
   };
 }

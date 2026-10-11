@@ -1988,7 +1988,7 @@ console.log("shared circuit-effect selftest: ok");
   assert.equal(MECH_AMMO_BASE_CAPACITY, 28);
   assert.equal(normalizeCurrentAmmo(0), 0);
   assert.equal(normalizeCurrentAmmo(17), 17);
-  assert.equal(normalizeCurrentAmmo(999), 28);
+  assert.equal(normalizeCurrentAmmo(999), 56, "transport clamp = largest per-mech cap (LMG 28×2); HubSave clamps per mech");
   assert.equal(normalizeCurrentAmmo(-1), 0);
 
   const a = createOwnedMech("mech_gen1", {
@@ -2007,6 +2007,8 @@ console.log("shared circuit-effect selftest: ok");
     ...INITIAL_HUB,
     ammoLoad: { ammo_standard: 11, ammo_ap: 2, ammo_hp: 0 },
     fleet: [a, b, c],
+    // M6 の一回限り補填は済んだセーブとして扱う（未補填なら上限まで付与される）。
+    ammoBatteryRepaired: true,
   });
   assert.deepEqual(
     hub.fleet.map((m) => [m.instanceId, m.currentAmmo]),
@@ -2135,7 +2137,15 @@ console.log("shared instance-currentAmmo selftest: ok");
     { ...batteryB, battery: { capacity: 450, activity: 330 } },
     { ...batteryC, battery: { capacity: 300, activity: 90 } },
   ];
-  const hub = normalizeHubSnapshot({ ...INITIAL_HUB, fleet });
+  // 未補填セーブ（M6 前）では 300 超の容量は一度だけ 300 へ戻される。
+  const repairedOnce = normalizeHubSnapshot({ ...INITIAL_HUB, fleet });
+  assert.equal(repairedOnce.ammoBatteryRepaired, true);
+  assert.deepEqual(
+    repairedOnce.fleet.find((m) => m.instanceId === "battery-b")?.battery,
+    { capacity: 300, activity: 300 },
+  );
+  // 補填済みセーブでは保存値をそのまま往復させる（輸送契約の確認）。
+  const hub = normalizeHubSnapshot({ ...INITIAL_HUB, fleet, ammoBatteryRepaired: true });
   const roundTrip = parseHubSave(createHubSave(hub));
   assert.ok(roundTrip);
   assert.deepEqual(

@@ -24,6 +24,7 @@ import { loadHubSaveFromLocalStorage, type HubCircuitRecord, type HubSnapshot } 
 import { TRUE_ONE_BY_ONE_PUZZLE_ID, isTrueOneByOnePuzzleId } from "./perfect-circuit-seed";
 import { createOwnedMech, syncMechStatus } from "./mech-fleet";
 import { scaleYieldBag, type YieldBag } from "./sort-yield";
+import { reloadMechAmmo } from "./mech-ammo";
 
 export const FALSE_BOARD_EFFECT_KEYS = [
   "escort_range",
@@ -404,7 +405,8 @@ export function ensureCaptainFalseOneByOne(hub: HubSnapshot): HubSnapshot {
   if (mine.length > 0) return hub;
   const rawId = `false-1x1-${captain.instanceId}`;
   const rec = { ...makeFalseOneByOne(rawId.length <= 64 ? rawId : rawId.slice(0, 64)), equippedTo: captain.instanceId };
-  return { ...hub, circuits: [rec, ...hub.circuits] };
+  // M5: equipping the starter 1×1 returns the captain's ammo and reloads.
+  return reloadMechAmmo({ ...hub, circuits: [rec, ...hub.circuits] }, captain.instanceId).hub;
 }
 
 /**

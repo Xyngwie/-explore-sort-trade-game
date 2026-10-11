@@ -2,6 +2,7 @@
  * Sortie / result snapshots for the one shared checkpoint key.
  * Enemies, bullets, and terrain (cover) are omitted from an operation result.
  */
+import { MECH_BATTERY_DEFAULT_CAPACITY } from "@estg/shared";
 import type { World } from "./types";
 import { backfillCircuitPlayState, type CircuitPlayState } from "./circuitPlay";
 
@@ -45,5 +46,28 @@ export function worldFromCheckpointBody(body: unknown): World | null {
   }
   // PR-B: fill the release-scale / wing-move state a pre-PR-B checkpoint lacks.
   backfillCircuitPlayState(world.circuitPlay as Partial<CircuitPlayState> | undefined);
+  restorePreBoostBattery(world);
   return world;
+}
+
+/**
+ * fix/circuit-ammo-activity-refill: a checkpoint written before the fix holds
+ * the circuit-boosted battery capacity in world.mechBattery (syncCaps used to
+ * write it). Put the pre-boost value back (circuitPlay.baseBattery) so the
+ * return does not save the boost; an over-300 value from a save that was
+ * already inflated goes back to 300 (same one-time repair as HubSave M6).
+ * Idempotent for checkpoints written after the fix.
+ */
+export function restorePreBoostBattery(world: World): void {
+  const base = (world.circuitPlay as { baseBattery?: Record<string, number> } | undefined)?.baseBattery;
+  const bats = world.mechBattery;
+  if (!bats || typeof bats !== "object") return;
+  for (const [inst, b] of Object.entries(bats)) {
+    if (!b) continue;
+    const pre = base?.[inst];
+    let cap = typeof pre === "number" && pre > 0 ? Math.floor(pre) : b.capacity;
+    if (cap > MECH_BATTERY_DEFAULT_CAPACITY) cap = MECH_BATTERY_DEFAULT_CAPACITY;
+    if (base && typeof pre === "number") base[inst] = cap;
+    b.capacity = cap; // activity is clamped to the capacity when the return is saved
+  }
 }
