@@ -187,7 +187,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 
 ### 12.2 v3 で加わったもの
 
-- `circuits[]` の各要素（`HubCircuitRecord`）に `restoreState`（`unrestored`／`fully_awakened`／`bypass`／`offline`）、`origin`（`crafted`／`bought`／`enemy_drop`／`picked_up`／`legacy`）、`equippedTo`（`OwnedMech.instanceId` または `null`＝倉庫）、任意の `acquiredAt`・`effectKey`（予約）。
+- `circuits[]` の各要素（`HubCircuitRecord`）に `restoreState`（`unrestored`／`fully_awakened`／`bypass`／`offline`）、`origin`（`crafted`／`bought`／`enemy_drop`／`picked_up`／`legacy`）、`equippedTo`（`OwnedMech.instanceId` または `null`＝倉庫）、任意の `acquiredAt`・`effectKey`（~~予約~~ → #270 で使用開始。§12.9）。
   - `outcome` は `restoreState` の **3 値の写し（@deprecated）** として残す（`unrestored` → `"offline"`）。既存の呼び出し側を変えないため。正本は `restoreState`。
   - `unrestored` のとき `circuitBoard.outcome` は空。それ以外は `restoreState` と同じ。
   - 評価値は保存しない（`circuitEffectValue` で毎回計算。手がかり生成の互換は selftest で固定、設計 §9 U17）。
@@ -328,3 +328,16 @@ RS-01 の例外として、置き去り機体の扱いは出撃経路で分か�
 - **直接 deploy 禁止:** `lostMechs` の機体を直接 deploy 対象にはしない。Invade で再出現し、Explore の回収処理を経て fleet に戻った後に deploy 可能となる。
 - **legacy row:** 古い `lostMechs` 行など場所情報を持たない互換データは、Invade を開いた際に現在の盤の開始地点へ配置して場所情報を補完する。これは後方互換処理であり、新しい置き去り状態を推測する仕様ではない。
 - **Wreck / Enemy:** Abandoned から Wreck / Enemy へ遷移する具体条件は本契約では定義しない。Battery Activity=0 を直接条件にも使わない。
+
+### 12.9 回路の効果のキー（#270、Issue #269・2026-10-12 神宮の決定）
+
+保存キーは増やさず、`HubSnapshot` に任意のキーを 2 つ足した。`v` は 3 のまま。古いセーブは、キーが無くてもそのまま読める（selftest `circuit-compat.selftest.ts`）。
+
+| フィールド | 型 | 既定・正規化 | 書くもの |
+|---|---|---|---|
+| `airSupportCooldownSec` | `number`（任意） | 欠落・数でない・0 以下は **付けない**（読むと 0、`readAirSupportCooldownSec`） | Explore の航空支援（使った瞬間に 200 を書く）と、帰還の直接保存（`applyCircuitHubSide`。出撃中に減った残りを書き、0 になったら消す）。拠点にいるあいだは減らない |
+| `bulletinUnlocked` | `true`（任意） | 欠落・`true` 以外は **付けない**（読むと false、`readBulletinUnlocked`）。20×20 の真盤（`fully_awakened`）が `circuits` にあれば正規化で `true` を付ける | 正規化（本作のクリア） |
+
+- `circuits[].effectKey`: 2×2〜19×19 の導通した回路（効果値 > 0）に、正規化（`assignMissingEffectKeys`、`createHubSave` も通る）で一度だけ付ける。偽盤は通常行動、真盤は小隊行動の値。付いたキーは引き直さない。ただし盤の種類に合わないキー（Restore で偽盤が真盤になった回路の通常行動のキー）は、次の正規化で一度だけ小隊行動から選び直す（`keyMatchesBoard`）。値の一覧は `shared` `circuit-actions.ts` の `FALSE_BOARD_EFFECT_KEYS`・`TRUE_BOARD_EFFECT_KEYS`。
+- 偽の 1×1（`makeFalseOneByOne`）は、隊長（`fleet[0]`）に回路が 1 枚も無いときだけ、格納庫の装備画面と Explore の出撃準備で付ける（`ensureCaptainFalseOneByOne`、Q2）。付いている回路は動かさない。
+- 5-3 の途中保存（`estg.sortieCheckpoint`）は HubSave とは別のキーで、変えていない。途中保存の `World` に入る `circuitPlay` は、読み直すときに霧の配列（`fogOpen`）を作り直す。`circuitPlay` の無い古い途中保存もそのまま読める。

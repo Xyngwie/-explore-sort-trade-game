@@ -1,6 +1,10 @@
 /**
- * Circuit actions during a sortie. No-op unless `world.circuitPlay.rules`
- * or a loadout is attached, so existing sorties stay on the old path.
+ * Circuit actions during a sortie (Issue #269, 神宮 10/11–12 decisions).
+ * - `rules`: circuit effects are live (attached in both unlock modes; a
+ *   sortie with no effect circuits plays exactly as before).
+ * - `release`: release-mode extras only — command locks via 1×1, the
+ *   false-1×1 wingman ×2 (Q3a/Q3c), and the #269 rework of the basic
+ *   collect / second return press. In `all_unlocked` these stay off.
  */
 import {
   AIR_SUPPORT_COOLDOWN_SEC,
@@ -53,7 +57,10 @@ export type CircuitOrder =
   | null;
 
 export type CircuitPlayState = {
+  /** Circuit effects are live (both unlock modes). */
   rules: boolean;
+  /** Release mode: command locks, Q3a ×2 and the #269 basic-command rework. */
+  release: boolean;
   captainOneByOne: boolean;
   captainTrueOne: boolean;
   wingTrueOne: Record<string, boolean>;
@@ -95,9 +102,10 @@ const ORDER_LABEL: Record<string, string> = {
   air_support: "航空支援",
 };
 
-function blank(rules: boolean): CircuitPlayState {
+function blank(release: boolean): CircuitPlayState {
   return {
-    rules,
+    rules: true,
+    release,
     captainOneByOne: false,
     captainTrueOne: false,
     wingTrueOne: {},
@@ -137,9 +145,18 @@ export function playOf(world: World): CircuitPlayState | null {
   return world.circuitPlay ?? null;
 }
 
-export function movementLocked(world: World): boolean {
+/**
+ * Q3 (神宮 10/12, overrides #269): the captain can move, fire, collect,
+ * return and retreat without any circuit. Kept as an API for callers.
+ */
+export function movementLocked(_world: World): boolean {
+  return false;
+}
+
+/** Release-mode extras (Q3a ×2, #269 basic-command rework). */
+function releaseOn(world: World): boolean {
   const p = playOf(world);
-  return !!p?.rules && !p.captainOneByOne;
+  return !!p?.rules && p.release;
 }
 
 function own(world: World, unitId: string): ClassifiedCircuit[] {
@@ -246,7 +263,8 @@ export function modsFor(world: World, unitId: string): UnitMods {
   add("forced_march", "armor");
   add("armor_tune", "armor");
   m.armorDr = trueRate(world, "armor_tune");
-  const wing = p.wingFalseOne[unitId];
+  // Q3a/Q3c: false-1×1 wingman ×2 attack / range / vision only in release.
+  const wing = p.release && p.wingFalseOne[unitId];
   if (wing) {
     m.attack += 1;
     m.range += 1;
@@ -259,8 +277,12 @@ function unitById(world: World, id: string): Unit | null {
   return friendlies(world).find((u) => u.id === id) ?? null;
 }
 
-export function attachCircuitPlay(world: World, hub: HubSnapshot | null, rules: boolean): void {
-  const play = blank(rules);
+/**
+ * `release`: the active unlock mode is "release". Effects are attached in
+ * both modes. Q4: circuits on a `destroyed` mech never count.
+ */
+export function attachCircuitPlay(world: World, hub: HubSnapshot | null, release: boolean): void {
+  const play = blank(release);
   play.cooldownSec = readAirSupportCooldownSec(hub);
   const ids = world.deployedInstanceIds;
   const unitIds = ["leader", "wing-a", "wing-b"];
@@ -268,6 +290,8 @@ export function attachCircuitPlay(world: World, hub: HubSnapshot | null, rules: 
     for (let i = 0; i < Math.min(ids.length, unitIds.length); i++) {
       const inst = ids[i]!;
       const unitId = unitIds[i]!;
+      const mech = hub.fleet.find((m) => m.instanceId === inst);
+      if (mech?.status === "destroyed") continue;
       const recs = hub.circuits.filter((c) => c.equippedTo === inst);
       play.loadout[unitId] = recs.map(classifyCircuit);
     }
@@ -435,7 +459,11 @@ function tryAirSupport(world: World, enemy: Unit): void {
     credits: hub.credits - AIR_SUPPORT_COST,
     airSupportCooldownSec: AIR_SUPPORT_COOLDOWN_SEC,
   };
-  saveHubSaveToLocalStorage(next);
+  // The charge must land in HubSave before the strike: a refused write
+  // (newer save elsewhere, storage error) means no strike and no cooldown.
+  // Rescue fees (½ / ¾) read the wallet again at the moment of the rescue,
+  // so they always see the balance after this charge (no stale balance).
+  if (!saveHubSaveToLocalStorage(next)) return;
   p.cooldownSec = AIR_SUPPORT_COOLDOWN_SEC;
   enemy.hp = 0;
   enemy.alive = false;
@@ -824,6 +852,9 @@ export function circuitMoveTarget(world: World, unit: Unit): Vec2 | null {
   if (p.order && (p.order.kind === "distribute" || (p.order.kind === "haul" && anyone(world, "squad_haul")))) {
     return orderMove(world, unit);
   }
+  // The captain is player-driven: autonomous circuit moves (scatter, cover,
+  // orbit, …) apply to wingmen only.
+  if (unit.kind === "leader") return null;
   return alwaysMove(world, unit);
 }
 
@@ -1055,12 +1086,12 @@ export function applyLure(world: World, enemy: Unit, dt: number): boolean {
 }
 
 export function salvageSeconds(world: World): number | null {
-  return playOf(world)?.rules ? COLLECT_SECONDS : null;
+  return releaseOn(world) ? COLLECT_SECONDS : null;
 }
 
 export function secondExtractPull(world: World): boolean {
   const p = playOf(world);
-  if (!p?.rules || !world.boarding) return false;
+  if (!p || !releaseOn(world) || !world.boarding) return false;
   p.pullOutside = true;
   const c = world.boarding.center;
   for (const u of living(world)) {
@@ -1148,7 +1179,7 @@ function nearbySalvageTarget(world: World, unit: Unit): boolean {
 /** Map tap used by the existing collect command. A miss clears the wreck tap. */
 export function noteCollectTap(world: World, pt: Vec2): void {
   const p = playOf(world);
-  if (!p?.rules) return;
+  if (!p || !releaseOn(world)) return;
   let best: WreckSpot | null = null;
   let d: number = world.balance.interactRadius;
   for (const w of wreckSpots(world)) {
@@ -1168,7 +1199,7 @@ export function noteCollectTap(world: World, pt: Vec2): void {
  */
 export function applyCollectPress(world: World): void {
   const p = playOf(world);
-  if (!p?.rules || !world.leader.alive) return;
+  if (!p || !releaseOn(world) || !world.leader.alive) return;
   const leader = world.leader;
   const tap = p.collectTap;
   const wreck = tap ? wreckById(world, tap) : null;

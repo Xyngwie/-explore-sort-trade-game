@@ -147,7 +147,8 @@ const boot = bootstrapFromSearch(bootSearch);
 function makeWorld(b: ReturnType<typeof bootstrapFromSearch>): World {
   let hub = freshHub();
   const mode = resolveCommandUnlockMode();
-  if (hub && mode === "release") {
+  // Q2: a captain with no circuit gets the false 1×1 (both modes; existing circuits never move).
+  if (hub) {
     const next = refreshStarterCircuit(hub);
     if (next !== hub) {
       saveHubSaveToLocalStorage(normalizeHubSnapshot(next));
@@ -155,7 +156,8 @@ function makeWorld(b: ReturnType<typeof bootstrapFromSearch>): World {
     }
   }
   const world = attachLostMechContext(createWorld(b), hub);
-  if (mode === "release") attachCircuitPlay(world, hub, true);
+  // Circuit effects are live in both modes; release-only extras follow `mode` (Q1/Q3c).
+  attachCircuitPlay(world, hub, mode === "release");
   return world;
 }
 if (boot.invadeSector != null) {
@@ -460,8 +462,8 @@ function bindDebugUnlockToggle(): void {
     const next = world.commandUnlock.mode === "release" ? "all_unlocked" : "release";
     writeDebugCommandUnlockMode(next);
     world.commandUnlock.mode = next;
-    if (next === "release") attachCircuitPlay(world, freshHub(), true);
-    else if (world.circuitPlay) world.circuitPlay.rules = false;
+    if (world.circuitPlay) world.circuitPlay.release = next === "release";
+    else attachCircuitPlay(world, freshHub(), next === "release");
     needsDom = true;
     renderDom();
   });
@@ -512,12 +514,13 @@ function circuitOrderHtml(): string {
     .join("");
 }
 
+/** Q3: return / retreat never need a circuit. */
 function returnOpen(): boolean {
-  return !world.circuitPlay?.rules || world.circuitPlay.captainOneByOne;
+  return true;
 }
 
 function squadOrderBarHtml(): string {
-  if (world.circuitPlay?.rules) return "";
+  if (world.circuitPlay?.release) return "";
   const items = SQUAD_ORDER_KEYS.filter(({ stance }) => !cmdLocked(WING_COMMAND_FOR_STANCE[stance]));
   // C20-a: no unlocked squad order → no bar at all.
   if (items.length === 0) return "";
@@ -579,7 +582,7 @@ function wingPanelHtml(): string {
           return `<button type="button" class="stance-${s} ${active}" data-order="${w.id}:${s}">${STANCE_LABEL[s]}</button>`;
         })
         .join("");
-      const rallyBtn = world.circuitPlay?.rules || cmdLocked("wing_escort", w.id)
+      const rallyBtn = world.circuitPlay?.release || cmdLocked("wing_escort", w.id)
         ? ""
         : `<button type="button" class="secondary" data-rally="${w.id}">召還</button>`;
       const orderRow =

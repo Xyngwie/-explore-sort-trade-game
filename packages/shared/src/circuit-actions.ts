@@ -209,7 +209,7 @@ export function classifyCircuit(rec: HubCircuitRecord): ClassifiedCircuit {
   else if (side === 1 && conductive && digit === 0 && !trueBoard) oneByOne = "false";
   const true20 = side === 20 && trueBoard;
   const false20 = side === 20 && conductive && !trueBoard;
-  const keyOk = isCircuitEffectKey(rec.effectKey) ? rec.effectKey : null;
+  const keyOk = keyMatchesBoard(rec) ? (rec.effectKey as CircuitEffectKey) : null;
   const inRange = side >= 2 && side <= 19;
   const effectKey = inRange && effect > 0 ? keyOk : null;
   const r = effect > 0 ? effectRate(effect) : 0;
@@ -239,9 +239,20 @@ function hashIndex(circuitId: string, n: number): number {
   return (h >>> 0) % n;
 }
 
-/** Stable equal-weight pick. Saved keys are not redrawn. Effect 0 gets no key. */
+/**
+ * A saved key belongs to the board's kind: false board → normal action,
+ * true board (fully_awakened) → squad action. A Restore that turns a false
+ * board into a true board leaves a normal-action key behind; that key no
+ * longer fits and is replaced once (#270 technical check, 10/12).
+ */
+export function keyMatchesBoard(rec: Pick<HubCircuitRecord, "effectKey" | "restoreState">): boolean {
+  if (!isCircuitEffectKey(rec.effectKey)) return false;
+  return rec.restoreState === "fully_awakened" ? TRUE_SET.has(rec.effectKey) : FALSE_SET.has(rec.effectKey);
+}
+
+/** Stable equal-weight pick. Saved keys that fit the board are not redrawn. Effect 0 gets no key. */
 export function effectKeyForCircuit(rec: HubCircuitRecord): CircuitEffectKey | undefined {
-  if (isCircuitEffectKey(rec.effectKey)) return rec.effectKey;
+  if (keyMatchesBoard(rec)) return rec.effectKey as CircuitEffectKey;
   const side = squareSide(rec.circuitBoard);
   if (side == null || side < 2 || side > 19) return undefined;
   const effect = activeEffect(rec);
@@ -252,7 +263,7 @@ export function effectKeyForCircuit(rec: HubCircuitRecord): CircuitEffectKey | u
 
 export function assignMissingEffectKeys(circuits: readonly HubCircuitRecord[]): HubCircuitRecord[] {
   return circuits.map((rec) => {
-    if (isCircuitEffectKey(rec.effectKey)) return rec;
+    if (keyMatchesBoard(rec)) return rec;
     const key = effectKeyForCircuit(rec);
     if (!key) return rec;
     return { ...rec, effectKey: key };
@@ -323,17 +334,17 @@ export function makeTrueOneByOne(circuitId: string): HubCircuitRecord {
   };
 }
 
-function fleetMechIds(hub: HubSnapshot): Set<string> {
-  return new Set(hub.fleet.map((m) => m.instanceId));
-}
-
 function lostIds(hub: HubSnapshot): Set<string> {
   return new Set((hub.lostMechs ?? []).map((m) => m.instanceId));
 }
 
-/** Equipped on hangar mechs, including those not sortieing. Stash, enemies, wrecks, left-behind excluded. */
+/**
+ * Equipped on hangar mechs, including those not sortieing (Q5, 神宮 10/12:
+ * equipped circuits only). Stash, enemies, wrecks, left-behind excluded.
+ * Q4 (神宮 10/12): circuits on a `destroyed` hangar mech do not count until repaired.
+ */
 export function hangarEquippedCircuits(hub: HubSnapshot): HubCircuitRecord[] {
-  const fleet = fleetMechIds(hub);
+  const fleet = new Set(hub.fleet.filter((m) => m.status !== "destroyed").map((m) => m.instanceId));
   const lost = lostIds(hub);
   return hub.circuits.filter((c) => c.equippedTo != null && fleet.has(c.equippedTo) && !lost.has(c.equippedTo));
 }

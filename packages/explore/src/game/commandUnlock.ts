@@ -183,7 +183,9 @@ const MOBILITY_GATED_WING_COMMANDS: ReadonlySet<ExploreCommandId> = new Set([
  */
 type CircuitRules = {
   rules: boolean;
-  captainOneByOne: boolean;
+  /** Release mode only: the circuit table below replaces the legacy check. */
+  release: boolean;
+  captainTrueOne: boolean;
   wingTrueOne: Record<string, boolean>;
   loadout: Record<string, { effectKey: string | null }[]>;
 };
@@ -217,14 +219,14 @@ export function isCommandUnlockedFor(
   unitId?: string,
 ): boolean {
   const play = holder.circuitPlay;
-  if (play?.rules) {
-    if (commandId === "fire") return true;
-    if (commandId === "move" || commandId === "collect" || commandId === "extract" || commandId === "abort") {
-      return play.captainOneByOne;
-    }
+  if (play?.rules && play.release) {
+    // Q3 (神宮 10/12): basic commands never need a circuit; the false 1×1
+    // unlocks nothing; a true 1×1 「4」 on the captain unlocks wing_mobility
+    // (move orders to wingmen) — kept after the captain is wrecked (5-2 9A).
+    if (isBasicCommand(commandId)) return true;
     if (commandId === "wing_escort") return livingHasEffect(holder, "escort_range");
     if (commandId === "wing_raid") return livingHasEffect(holder, "raid_attack");
-    if (commandId === "wing_mobility") return !!play.wingTrueOne[unitId ?? ""];
+    if (commandId === "wing_mobility") return play.captainTrueOne;
     return false;
   }
   const st = holder.commandUnlock;
@@ -270,12 +272,13 @@ export function isWingmanMobilityUnlocked(
 export function isWingmanMobileFor(
   holder: {
     commandUnlock?: CommandUnlockState | null;
-    circuitPlay?: { rules: boolean; wingTrueOne: Record<string, boolean> } | null;
+    circuitPlay?: { rules: boolean; release: boolean; wingTrueOne: Record<string, boolean> } | null;
   },
   wingmanId: string,
 ): boolean {
   const play = holder.circuitPlay;
-  if (play?.rules) return !!play.wingTrueOne[wingmanId];
+  // Q3: a true 1×1 「4」 on the wingman itself makes it autonomous (release only).
+  if (play?.rules && play.release) return !!play.wingTrueOne[wingmanId];
   const st = holder.commandUnlock;
   if (!st) return true;
   if (st.mode === "all_unlocked") return true;

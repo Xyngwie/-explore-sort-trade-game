@@ -1830,7 +1830,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(isDebugUnlockToggleVisible(true), false, "release build hides debug toggle");
   const mem = new Map<string, string>();
   const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
-  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "release", "preview default is this unlock");
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "all_unlocked", "preview default all unlocked");
   writeDebugCommandUnlockMode("release", store);
   assert.equal(mem.get(COMMAND_UNLOCK_MODE_STORAGE_KEY), "release");
   assert.equal(readDebugCommandUnlockMode(store), "release");
@@ -1839,7 +1839,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "all_unlocked");
   assert.equal(resolveCommandUnlockMode({ releaseLocks: true, store }), "release", "release build always locks");
   mem.set(COMMAND_UNLOCK_MODE_STORAGE_KEY, "garbage");
-  assert.equal(readDebugCommandUnlockMode(store), "release", "unknown stored choice is this unlock");
+  assert.equal(readDebugCommandUnlockMode(store), "all_unlocked");
   assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store: null }), "all_unlocked");
   const fresh = createWorld(bootstrapFromSearch(""));
   assert.equal(fresh.commandUnlock.mode, "all_unlocked", "new world in preview/test = all unlocked");
