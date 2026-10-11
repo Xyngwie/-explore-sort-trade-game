@@ -55,7 +55,16 @@ import {
   hubCircuitBonuses,
   lostMechCountLineJa,
   wreckCountLineJa,
-  repairClassic,
+  repairMech,
+  reviveWreck,
+  buyNewMech,
+  createNewMech,
+  BUY_MECH_LABEL_JA,
+  createMechLabelJa,
+  reviveMechLabelJa,
+  repairMechLabelJa,
+  reviveMechCost,
+  moneyShortfallJa,
   sellRareItem,
   isRareYieldItemId,
   RARE_SELL_PRICE_CREDITS,
@@ -113,6 +122,12 @@ import {
   isSortieDoneMark,
   readSortieCheckpoint,
   writeSortieDoneMark,
+  addDestroyedGen1,
+  formatCircuitBonusesJa,
+  hangarEquippedCircuits,
+  makeRestoredTrueOneByOne,
+  createOwnedMech as createMechForMoney,
+  INITIAL_HUB,
 } from "@estg/shared";
 
 /** Minimal in-memory Storage for HubSave. */
@@ -509,17 +524,20 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 
   const repairTarget = hs.hub.fleet.find((m) => m.status === "needs_repair");
   assert.ok(repairTarget);
+  // #266: the normal repair ignores the circuit repair discount (armor = missing durability, no credits / materials)
   const creditsBefore = hs.hub.credits;
   const materialsBefore = hs.hub.materials;
-  hs = repairClassic(hs, repairTarget!.instanceId);
+  const missing = repairTarget!.durabilityMax - repairTarget!.durability;
+  hs = { ...hs, hub: { ...hs.hub, inventory: { ...hs.hub.inventory, armor: missing + 4 } } };
+  hs = repairMech(hs, repairTarget!.instanceId);
   assert.equal(
     hs.hub.fleet.find((m) => m.instanceId === repairTarget!.instanceId)?.status,
     "operational",
   );
-  const spentC = creditsBefore - hs.hub.credits;
-  const spentM = materialsBefore - hs.hub.materials;
-  assert.equal(spentC, Math.ceil(MECH_FLEET_RULES.repairCredits * 0.8));
-  assert.equal(spentM, Math.ceil(MECH_FLEET_RULES.repairMaterials * 0.8));
+  assert.equal(hs.hub.credits, creditsBefore, "no credits even with a repair discount");
+  assert.equal(hs.hub.materials, materialsBefore, "no materials");
+  assert.equal(hs.hub.inventory.armor, 4, "armor = missing durability (no discount)");
+  assert.ok(!formatCircuitBonusesJa(hubCircuitBonuses(hs.hub)).includes("修理"), "no repair-discount display");
 }
 
 
@@ -1983,4 +2001,140 @@ console.log("trade hangar selftest: ok");
   ingestLocationSearch(createInitialHangar(), new URL(invadeUrl).search, keepStore);
   assert.equal(isSortieDoneMark(keepStore), true, "other entrances do not clear the mark");
   console.log("trade sortie done mark ok");
+}
+
+
+// #266 お金まわり（2026-10-12 神宮の Go）: 新品購入・新規機体作成・残骸復活・通常修理。
+{
+  const st = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = st;
+  // an old save: a hangar wreck (destroyed, circuit on it), a worn mech, a field wreck row, circuits
+  const wreck = { ...createMechForMoney("mech_gen1", { instanceId: "wreck-hangar", durability: 0, currentAmmo: 11 }), battery: { capacity: 300, activity: 123 } };
+  const worn = createMechForMoney("mech_gen2", { instanceId: "worn", durability: 30, currentAmmo: 20 });
+  const okMech = createMechForMoney("mech_gen1", { instanceId: "full", currentAmmo: 28 });
+  const four = { ...makeRestoredTrueOneByOne("four-on-wreck"), equippedTo: "wreck-hangar" };
+  const raw = {
+    v: 3,
+    savedAt: "2026-10-10T00:00:00.000Z",
+    hub: {
+      ...INITIAL_HUB,
+      credits: 0,
+      fleet: [okMech, worn, wreck],
+      circuits: [four],
+      inventory: { ammo: 7 },
+      ammoBatteryRepaired: true, // M6 already done (else the one-time grant tops the wreck up first)
+      lostMechs: [{ instanceId: "field-wreck", kind: "wreck", catalogId: "mech_gen1", durability: 0, durabilityMax: 100, status: "destroyed", currentAmmo: 3, battery: { capacity: 300, activity: 300 }, circuitIds: [], frontSeed: 1, cell: { sx: 0, sy: 0 }, lostAt: "2026-10-10T00:00:00.000Z" }],
+    },
+  };
+  st.setItem("wreckline.hubSave.v3", JSON.stringify(raw));
+  st.setItem(SORTIE_CHECKPOINT_KEY, JSON.stringify({ v: 1, kind: "sortie", savedAt: "2026-10-10T00:00:00.000Z", body: { phase: "sortie" } }));
+  const checkpointBefore = st.getItem(SORTIE_CHECKPOINT_KEY);
+  let s0 = createInitialHangar(st);
+  assert.equal(s0.hub.fleet.length, 3, "old save with wrecks / destroyed mechs / circuits loads");
+  assert.equal(s0.hub.lostMechs.length, 1, "field wreck row kept");
+  assert.equal(s0.hub.circuits.find((c) => c.circuitId === "four-on-wreck")?.equippedTo, "wreck-hangar");
+  assert.equal(hangarEquippedCircuits(s0.hub).some((c) => c.circuitId === "four-on-wreck"), false, "Q4: a wreck's circuit does not count");
+  const total = (h: typeof s0.hub) => (h.inventory.ammo ?? 0) + h.fleet.reduce((n, m) => n + (m.currentAmmo ?? 0), 0);
+  const ammoTotal0 = total(s0.hub);
+
+  // labels exactly as #266
+  assert.equal(BUY_MECH_LABEL_JA, "新品購入 2000c");
+  assert.equal(createMechLabelJa(), "新規機体作成 装甲パーツ300 と 500c");
+  const w0 = s0.hub.fleet.find((m) => m.instanceId === "wreck-hangar")!;
+  assert.equal(reviveMechLabelJa(w0), "残骸復活 装甲パーツ200 と 500c");
+  assert.equal(repairMechLabelJa(s0.hub.fleet.find((m) => m.instanceId === "worn")!), "通常修理 装甲パーツ70");
+  assert.equal(reviveMechCost(s0.hub.fleet.find((m) => m.instanceId === "worn")!), null, "only wrecks revive");
+
+  // shortfall notices (nothing changes)
+  const r0 = reviveWreck(s0, "wreck-hangar");
+  assert.equal(r0.notice, "装甲パーツとクレジットが足りない");
+  assert.deepEqual(r0.hub, s0.hub);
+  s0 = { ...s0, hub: { ...s0.hub, credits: 500 } };
+  assert.equal(reviveWreck(s0, "wreck-hangar").notice, "装甲パーツが足りない");
+  s0 = { ...s0, hub: { ...s0.hub, credits: 499, inventory: { ...s0.hub.inventory, armor: 200 } } };
+  assert.equal(reviveWreck(s0, "wreck-hangar").notice, "クレジットが足りない");
+  assert.equal(moneyShortfallJa(s0.hub, { credits: 0, armor: 0 }), null);
+
+  // revive: circuits stay and count again, ammo / battery / ids kept, full durability
+  s0 = { ...s0, hub: { ...s0.hub, credits: 500 } };
+  let s1 = reviveWreck(s0, "wreck-hangar");
+  assert.equal(s1.notice, "残骸復活 装甲パーツ200 と 500c");
+  assert.equal(s1.log[0], "残骸復活 装甲パーツ200 と 500c");
+  const rv = s1.hub.fleet.find((m) => m.instanceId === "wreck-hangar")!;
+  assert.equal(rv.durability, 100);
+  assert.equal(rv.status, "operational");
+  assert.equal(rv.catalogId, "mech_gen1");
+  assert.equal(rv.currentAmmo, 11, "carried ammo unchanged (M3 loads it before the sortie)");
+  assert.deepEqual(rv.battery, { capacity: 300, activity: 123 });
+  assert.equal(s1.hub.circuits.find((c) => c.circuitId === "four-on-wreck")?.equippedTo, "wreck-hangar", "reviving does not lose circuits");
+  assert.equal(hangarEquippedCircuits(s1.hub).some((c) => c.circuitId === "four-on-wreck"), true, "Q4: counts again after revival");
+  assert.equal(s1.hub.credits, 0);
+  assert.equal(s1.hub.inventory.armor, undefined);
+  assert.equal(total(s1.hub), ammoTotal0, "ammo + storage unchanged by revival");
+  // a second press (double-click) and a reload never pay twice
+  const twice = reviveWreck({ ...s1, hub: { ...s1.hub, credits: 9999, inventory: { ...s1.hub.inventory, armor: 999 } } }, "wreck-hangar");
+  assert.equal(twice.notice, "機体なし");
+  assert.equal(twice.hub.credits, 9999);
+  const reloaded = createInitialHangar(st);
+  assert.equal(reloaded.hub.credits, 0, "reload: saved once, no second charge");
+  assert.equal(reloaded.hub.fleet.find((m) => m.instanceId === "wreck-hangar")!.durability, 100);
+  assert.equal(reloaded.hub.circuits.find((c) => c.circuitId === "four-on-wreck")?.equippedTo, "wreck-hangar");
+
+  // normal repair: armor = missing durability only; no credits / materials; full mech has none
+  s1 = { ...reloaded, hub: { ...reloaded.hub, credits: 3, materials: 9, inventory: { ...reloaded.hub.inventory, armor: 69 } } };
+  assert.equal(repairMech(s1, "worn").notice, "装甲パーツが足りない");
+  s1 = { ...s1, hub: { ...s1.hub, inventory: { ...s1.hub.inventory, armor: 75 } } };
+  const s2 = repairMech(s1, "worn");
+  assert.equal(s2.notice, "通常修理 装甲パーツ70");
+  const rp = s2.hub.fleet.find((m) => m.instanceId === "worn")!;
+  assert.equal(rp.durability, rp.durabilityMax);
+  assert.equal(rp.currentAmmo, 20);
+  assert.equal(s2.hub.credits, 3);
+  assert.equal(s2.hub.materials, 9);
+  assert.equal(s2.hub.inventory.armor, 5);
+  assert.equal(repairMech(s2, "worn").notice, "機体なし", "second press: nothing to repair");
+  assert.equal(repairMech(s2, "worn").hub.inventory.armor, 5);
+  assert.equal(repairMech(s2, "full").notice, "機体なし", "full durability: no repair");
+  assert.equal(total(s2.hub), ammoTotal0, "ammo + storage unchanged by repair");
+
+  // buy new / create new: both offered, same mech_gen1, never chosen automatically
+  let s3 = { ...s2, hub: { ...s2.hub, credits: 1999, inventory: { ...s2.hub.inventory, armor: 300 } } };
+  assert.equal(buyNewMech(s3).notice, "クレジットが足りない");
+  assert.equal(buyNewMech(s3).hub.fleet.length, 3);
+  assert.equal(createNewMech({ ...s3, hub: { ...s3.hub, credits: 499 } }).notice, "クレジットが足りない");
+  assert.equal(createNewMech({ ...s3, hub: { ...s3.hub, inventory: { armor: 299 } } }).notice, "装甲パーツが足りない");
+  assert.equal(createNewMech({ ...s3, hub: { ...s3.hub, credits: 0, inventory: {} } }).notice, "装甲パーツとクレジットが足りない");
+  s3 = { ...s3, hub: { ...s3.hub, credits: 2500 } };
+  const bought = buyNewMech(s3);
+  assert.equal(bought.notice, "新品購入 2000c");
+  assert.equal(bought.hub.credits, 500);
+  assert.equal(bought.hub.inventory.armor, 300, "buying never touches armor parts");
+  assert.equal(bought.hub.fleet.length, 4);
+  assert.equal(bought.hub.fleet.at(-1)!.catalogId, "mech_gen1");
+  const made = createNewMech(bought);
+  assert.equal(made.notice, "新規機体作成 装甲パーツ300 と 500c");
+  assert.equal(made.hub.credits, 0);
+  assert.equal(made.hub.inventory.armor, undefined);
+  assert.equal(made.hub.fleet.length, 5);
+  assert.equal(made.hub.fleet.at(-1)!.catalogId, "mech_gen1");
+  assert.equal(made.hub.fleet.at(-1)!.status, "operational");
+  assert.equal(createInitialHangar(st).hub.fleet.length, 5, "persisted");
+  assert.equal(createInitialHangar(st).hub.credits, 0, "reload does not charge again");
+
+  // #270 air-support recovery (addDestroyedGen1) → the same hangar wreck → revivable
+  let air = { ...made, hub: addDestroyedGen1(made.hub) };
+  const airWreck = air.hub.fleet.at(-1)!;
+  assert.equal(airWreck.status, "destroyed");
+  air = { ...air, hub: { ...air.hub, credits: 500, inventory: { ...air.hub.inventory, armor: 200 } } };
+  const airRevived = reviveWreck(air, airWreck.instanceId);
+  assert.equal(airRevived.notice, "残骸復活 装甲パーツ200 と 500c");
+  assert.equal(airRevived.hub.fleet.find((m) => m.instanceId === airWreck.instanceId)!.status, "operational");
+
+  // field wrecks (lostMechs) are not revived from the hangar
+  assert.equal(reviveWreck(airRevived, "field-wreck").notice, "機体なし");
+  assert.equal(airRevived.hub.lostMechs.some((l) => l.instanceId === "field-wreck"), true);
+  // the 5-3 checkpoint key is never touched by the money actions
+  assert.equal(st.getItem(SORTIE_CHECKPOINT_KEY), checkpointBefore);
+  assert.equal(readSortieCheckpoint(st).status, "ok");
+  console.log("trade #266 money: buy / create / revive / repair ok");
 }

@@ -38,7 +38,7 @@ UI（trade 最小ハンガー）は本 PR の範囲外。shared の純関数で�
 |---|---|---|---|
 | `operational` | 健在 | 耐久が閾値以上 | 可 |
 | `needs_repair` | 要修理 | 耐久が残っているが閾値未満 | 不可 |
-| `destroyed` | 大破 | 耐久 0 | 不可（今の実装は修理不可・解体のみ。背負って持ち帰った大破機の修理は §6） |
+| `destroyed` | 大破 | 耐久 0 | 不可（→ 2026-10-12: 「残骸復活」で健在に戻せる。解体もできる。§6） |
 
 耐久から状態を再計算する（セーブ上の `status` と食い違う場合は耐久側を正とする）:
 
@@ -113,14 +113,21 @@ explore 側は当面 `deployableMechs` 件数ハンドオフのままでよい�
 
 ## 6. 修理コスト（仮）
 
-- 対象: **要修理のみ**~~（大破は修理不可）~~ → 変更（2026-10-07・神宮）: 背負って持ち帰った大破機も修理できる。費用は **装甲パーツ（`durabilityMax` × 2）＋ 500c**（設計メモ §5。未実装。今のコードは要修理のみ）
+- 対象: **要修理のみ**~~（大破は修理不可）~~ → 変更（2026-10-07・神宮）: 背負って持ち帰った大破機も修理できる。費用は **装甲パーツ（`durabilityMax` × 2）＋ 500c**（設計メモ §5）
 - 効果: 耐久を `durabilityMax` まで回復 → 健在
-- コスト（固定・仮）:
+- ~~コスト（固定・仮）: `repairCredits = 50`・`repairMaterials = 30`~~ → 変更（#266・2026-10-12 神宮、feat/money-mech-economy で実装）: 下の 4 つ。装甲パーツは `inventory.armor`（表示「装甲パーツ」）。
 
-```text
-repairCredits   = 50
-repairMaterials = 30
-```
+| 操作 | 対象 | 費用 | ボタンの文言 | 実装 |
+|---|---|---|---|---|
+| 新品購入 | — | **2000c** | 「新品購入 2000c」 | trade `buyNewMech`（`mech_gen1` を 1 機足す） |
+| 新規機体作成 | — | **装甲パーツ（最大耐久 × 3）＋ 500c**（gen1 で 300） | 「新規機体作成 装甲パーツ300 と 500c」 | trade `createNewMech`（`mech_gen1`） |
+| 残骸復活 | 格納庫の大破機（`fleet` の `destroyed`・耐久 0。#270 の航空支援の残骸 `addDestroyedGen1` も） | **装甲パーツ（最大耐久 × 2）＋ 500c** | 「残骸復活 装甲パーツN と 500c」 | trade `reviveWreck`。`instanceId`・回路（`equippedTo`）・携行弾・バッテリーはそのまま、耐久を満タンにして健在へ。復活したら回路はまた数える（Q4） |
+| 通常修理 | 要修理・耐久が減った健在機 | **足りない耐久の分の装甲パーツ**（1 耐久 = 1 個）。クレジットなし | 「通常修理 装甲パーツN」 | shared `repairCost` / `canAffordRepair` / `applyRepair`（`MECH_FLEET_RULES.repairCredits = 0`・`repairArmorPerDurability = 1`）、trade `repairMech` |
+
+- 置き去り・残骸として `lostMechs` にいる機体（戦場の残骸）は格納庫から復活できない（回収してから）。
+- 回路の修理割引はこの 4 つにかけない（「修理 −X%」の表示も外した。`applyRepairDiscountToCost` は残っているが使っていない）。
+- 足りないときもボタンは押せる。押すと何も引かず「装甲パーツが足りない」「クレジットが足りない」「装甲パーツとクレジットが足りない」を通知に出す（`moneyShortfallJa`）。
+- 支払いは全部か無しか（片方だけ引かない）。復活・修理は対象がもう無ければ「機体なし」で何も引かない（2 回押し・読み直しで二重に引かない）。購入・作成は 600ms の二重押し防止。
 
 ヘルパ: `repairCost` / `canAffordRepair` / `applyRepair`（ウォレットと機体をともに返す。足りなければ `null`）。
 
@@ -184,7 +191,7 @@ v1 の `fleet: MechId[]`（文字列の機種 ID）:
 **trade（後続・最小ハンガー）**
 
 - 艦隊リスト（状態・耐久バー）
-- 修理ボタン（コスト表示、不足時 disabled）
+- 修理ボタン（コスト表示）~~、不足時 disabled~~ → 変更（#266・2026-10-12）: 足りなくても押せて、足りない分を通知に出す（§6）
 - スクラップ確認
 - 出撃コミット時は `canDeploy` な機だけ数え、既存 `deployableMechs` に載せる
 
@@ -204,7 +211,7 @@ v1 の `fleet: MechId[]`（文字列の機種 ID）:
 
 1. `OwnedMech` / `MechStatus` と純関数が `@estg/shared` から export される  
 2. `wearAfterSortie` で閾値をまたぐと 健在→要修理→大破 になる  
-3. `applyRepair` は要修理のみ成功し、コストを差し引く  
+3. `applyRepair` は耐久が減った機体（大破を除く）で成功し、足りない耐久の分の装甲パーツを差し引く（#266）  
 4. `applyScrap` で機体が消え、仮表どおりの回収がある  
 5. v1 セーブ（`fleet: ["mech_gen1"]`）を読むと v2 + 所有インスタンスに正規化される  
 6. `npm run test -w @estg/shared`（typecheck + selftest）が通る  
