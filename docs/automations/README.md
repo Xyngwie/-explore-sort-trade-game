@@ -1,6 +1,6 @@
 # Cursor Automations に貼る Instructions
 
-各ファイルの全文を、その役割の Automation の Instructions に貼る。起動トリガーは GitHub の Issue コメントにする。Slack は人間向けの写しであり、起動口にしない。
+各ファイルの全文を、その役割の Automation の Instructions に貼る。起動トリガーは GitHub の Issue コメントにする。Slack の `#webアプリ開発` は人間向けの写しであり、起動口にしない。神宮の操作が要る連絡だけは、風紀委員が神宮（`U0C6KR8AD4Z`）へ DM する。DM も起動口にしない。
 
 | Automation | 貼るファイル | 反応する JSON |
 |---|---|---|
