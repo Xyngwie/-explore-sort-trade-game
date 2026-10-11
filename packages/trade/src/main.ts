@@ -36,6 +36,7 @@ import {
   resolveHangarPerfectInjectRate,
   VERIFY_TRUE_SOLUTION_HINT,
   markDeployed,
+  sortieAmmoShortLineJa,
   onHangarExploreLink,
   repairClassic,
   repairCost,
@@ -364,6 +365,8 @@ function nextSortiePanel(s: HangarState): string {
   const wreckLine = wreckCountLineJa(s.hub);
   const readyToDeploy = ready.canDeployExplore && ready.needsRepair === 0;
   const emphasizeDeploy = readyToDeploy && !!deployUrl;
+  // M8: who would still be short after the pre-sortie top-up from the stock.
+  const ammoShortLine = sortieAmmoShortLineJa(s.hub, ready.selectedIds);
 
   const deployList =
     ready.selectedIds.length === 0
@@ -445,6 +448,7 @@ function nextSortiePanel(s: HangarState): string {
           ${repairLine}
         </div>
       </div>
+      ${ammoShortLine ? `<p class="warn sortie-line ammo-short" id="ammo-short-line">${escapeHtml(ammoShortLine)}</p>` : ""}
       <div class="row sortie-actions sortie-actions-tight${emphasizeDeploy ? " sortie-actions-hero" : ""}" aria-label="次の出撃ショートカット">
         <a class="btn secondary" id="link-invade" href="${escapeHtml(invadeUrl)}" target="_top" rel="noopener" title="Invade">${CTA_COPY.toFront}</a>
         ${
@@ -739,6 +743,9 @@ function render() {
       .map((x) => x.trim())
       .filter(Boolean);
     state = markDeployed(state, ids);
+    // M3: the refill above changed the carried ammo; send the refilled values.
+    const refilled = buildDeployUrl(state);
+    if (refilled) (document.getElementById("link-deploy") as HTMLAnchorElement | null)?.setAttribute("href", refilled);
   });
 
   root.querySelectorAll<HTMLInputElement>('input[data-act="select"]').forEach((el) => {

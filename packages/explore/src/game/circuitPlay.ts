@@ -19,6 +19,7 @@ import {
   EMP_SLOW_BASE,
   EMP_SLOW_CAP,
   GUN_EFFECT_ORDER,
+  MECH_AMMO_BASE_CAPACITY,
   ORDER_MOVE_SPEED,
   SMG_CYCLE,
   SMG_INTERVAL_SEC,
@@ -97,6 +98,8 @@ export type CircuitPlayState = {
   ammoFloor: Record<string, number>;
   /** PR-B P1: wingmen selected for the palette under the map (+ palette step). Not a save key. */
   wingSelect?: { ids: string[]; step: "root" | "move" } | null;
+  /** fix/circuit-ammo-activity-refill: last sortie ammo cap per mech (cap changes move ammoFloor). Not a save key. */
+  ammoCapAt?: Record<string, number>;
 };
 
 const ORDER_LABEL: Record<string, string> = {
@@ -640,6 +643,25 @@ function angleDelta(a: number, b: number): number {
   return Math.abs(d);
 }
 
+/** Even split of `total` rounds under per-row caps; the remainder over every cap goes to row 0 (held back by syncCaps). */
+export function splitAmmo(total: number, caps: readonly number[]): number[] {
+  const out = caps.map(() => 0);
+  let left = Math.max(0, Math.floor(total));
+  for (;;) {
+    const open = caps.map((c, i) => i).filter((i) => out[i]! < caps[i]!);
+    if (left <= 0 || open.length === 0) break;
+    const each = Math.max(1, Math.floor(left / open.length));
+    for (const i of open) {
+      if (left <= 0) break;
+      const give = Math.min(each, caps[i]! - out[i]!, left);
+      out[i]! += give;
+      left -= give;
+    }
+  }
+  if (left > 0 && out.length > 0) out[0]! += left;
+  return out;
+}
+
 function syncCaps(world: World): void {
   const p = playOf(world);
   if (!p) return;
@@ -650,28 +672,43 @@ function syncCaps(world: World): void {
     if (u.hp > u.maxHp) u.hp = u.maxHp;
     const inst = u.instanceId;
     if (!inst) continue;
+    // fix/circuit-ammo-activity-refill: the battery cap with circuits is a
+    // sortie-only value (effectiveBatteryCapacity); world.mechBattery keeps
+    // the pre-boost capacity, which is what the return writes home.
     const bat = world.mechBattery[inst];
-    if (!bat) continue;
-    if (p.baseBattery[inst] == null) p.baseBattery[inst] = bat.capacity || 300;
-    bat.capacity = Math.max(1, Math.round(p.baseBattery[inst]! * modsFor(world, u.id).activity));
-    if (p.baseAmmo[inst] == null) {
-      const cur = world.currentAmmo[inst];
-      p.baseAmmo[inst] = cur != null ? cur : 28;
+    if (bat && p.baseBattery[inst] == null) p.baseBattery[inst] = bat.capacity || 300;
+    // Ammo never leaves the mech here. Anything above this sortie's cap
+    // (base 28 × gun × release scale) is held back in ammoFloor and goes home
+    // with the mech (the hangar returns it to the stock).
+    const now = world.currentAmmo[inst];
+    if (now == null) continue;
+    const cap = sortieAmmoCap(world, u);
+    if (!p.ammoCapAt) p.ammoCapAt = {};
+    const floor = p.ammoFloor[inst];
+    if (floor == null) {
+      p.ammoFloor[inst] = Math.max(0, now - cap);
+    } else {
+      const ready = Math.max(0, now - floor);
+      const was = p.ammoCapAt[inst] ?? cap;
+      if (ready > cap) {
+        // the cap went down mid-sortie (gun circuit / mode): hold the rest back
+        p.ammoFloor[inst] = now - cap;
+      } else if (cap > was && floor > 0) {
+        // the cap went up: held-back rounds become ready again (never created)
+        p.ammoFloor[inst] = floor - Math.min(floor, cap - ready);
+      }
     }
-    const ammoCap = Math.max(1, Math.round(p.baseAmmo[inst]! * ammoMaxMul(world, u.id)));
-    const ammo = world.currentAmmo[inst];
-    if (ammo != null && ammo > ammoCap) world.currentAmmo[inst] = ammoCap;
-    // PR-B max ammo scale: the part above the scaled cap is held back (it
-    // stays in the mech's stock and returns with it), never destroyed, so a
-    // ×0.5 does not compound over sorties or a 5-3 resume.
-    if (p.ammoFloor[inst] == null) {
-      const now = world.currentAmmo[inst];
-      // Release scale even while the DEBUG toggle is on all_unlocked, so a
-      // later toggle finds the floor; usableAmmo applies it in release only.
-      const k = (p.ability[u.id] ?? abilityOfRelease(u.id)).maxAmmo;
-      p.ammoFloor[inst] = now != null && k < 1 ? Math.max(0, now - Math.max(1, Math.round(now * k))) : 0;
-    }
+    p.ammoCapAt[inst] = cap;
   }
+}
+
+/**
+ * Rounds a unit may carry ready to fire in this sortie: base 28 × its gun
+ * circuit (MMR ÷5, LMG ×2) × the release max-ammo scale (P3/P4: sortie only).
+ * Same base as the hangar cap (shared mechAmmoCap); never compounds.
+ */
+export function sortieAmmoCap(world: World, unit: Unit): number {
+  return Math.max(1, Math.round(MECH_AMMO_BASE_CAPACITY * ammoMaxMul(world, unit.id) * abilityOf(world, unit.id).maxAmmo));
 }
 
 function orderOwns(world: World, unit: Unit): boolean {
@@ -849,25 +886,25 @@ function tickOrder(world: World, dt: number): void {
     const near = living(world).filter((u) => dist(u.pos, pt) <= world.balance.interactRadius);
     if (order.left <= 0 || near.length === living(world).length) {
       if (near.length > 0) {
-        let ammo = 0;
         let act = 0;
-        const ammos: { id: string; cap: number }[] = [];
+        const ammos: { id: string; floor: number; usable: number; cap: number }[] = [];
         const acts: { id: string; cap: number }[] = [];
         for (const u of near) {
           const id = u.instanceId;
           if (!id) continue;
           const a = world.currentAmmo[id];
           if (a != null) {
-            const cap = Math.max(1, Math.round((p.baseAmmo[id] ?? a) * ammoMaxMul(world, u.id)));
-            ammo += a;
-            ammos.push({ id, cap });
+            const floor = Math.min(a, p.ammoFloor[id] ?? 0);
+            ammos.push({ id, floor, usable: a - floor, cap: sortieAmmoCap(world, u) });
           }
           const b = world.mechBattery[id];
           if (b) { act += b.activity; acts.push({ id, cap: effectiveBatteryCapacity(world, u) ?? b.capacity }); }
         }
         if (ammos.length > 0) {
-          const avg = Math.floor(ammo / ammos.length);
-          for (const row of ammos) world.currentAmmo[row.id] = Math.min(row.cap, avg);
+          // Share the ready rounds evenly up to each cap; nothing is thrown away
+          // (a remainder nobody can take stays held back and goes home).
+          const shares = splitAmmo(ammos.reduce((n, r) => n + r.usable, 0), ammos.map((r) => r.cap));
+          ammos.forEach((r, i) => { world.currentAmmo[r.id] = r.floor + shares[i]!; });
         }
         if (acts.length > 0) {
           const avg = Math.floor(act / acts.length);
@@ -1327,7 +1364,7 @@ export function ammoMaxMul(world: World, unitId: string): number {
 export function usableAmmo(world: World, unit: Unit): number {
   if (unit.instanceId == null) return 0;
   const cur = world.currentAmmo[unit.instanceId] ?? 0;
-  const floor = releaseOn(world) ? (playOf(world)?.ammoFloor[unit.instanceId] ?? 0) : 0;
+  const floor = playOf(world)?.ammoFloor[unit.instanceId] ?? 0;
   return Math.max(0, cur - floor);
 }
 
@@ -1340,7 +1377,9 @@ export function effectiveBatteryCapacity(world: World, unit: Unit): number | nul
   if (!unit.instanceId) return null;
   const b = world.mechBattery[unit.instanceId];
   if (!b) return null;
-  return Math.max(1, Math.round(b.capacity * abilityOf(world, unit.id).maxPower));
+  // Circuit activity boost and the release max-power scale exist only during
+  // the sortie; neither is written to world.mechBattery (no compounding).
+  return Math.max(1, Math.round(b.capacity * modsFor(world, unit.id).activity * abilityOf(world, unit.id).maxPower));
 }
 
 /** One entry of the wingman action palette (N1). Locked actions are never listed. */

@@ -222,11 +222,26 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 
 | フィールド | 型・範囲 | 既定・正規化 | PR |
 |---|---|---|---|
-| `currentAmmo?` | 整数 0〜28（`MECH_AMMO_BASE_CAPACITY = 28`）。`instanceId` ごとの携行弾 | **保存上の欠落は `undefined` のまま**（旧セーブの機体・`createOwnedMech` で `currentAmmo` を渡さずに作った機体。一度も出撃・帰還していない機体）。値があれば `normalizeCurrentAmmo` で切り捨て・0〜28 に収める（数でなければ 0）。**未設定の機体は出撃時に満タン（28）として扱う（暫定ルール、12.7）**。旧来の `startingAmmo`／`ammoLoad` から機体ごとに配る本ルールは神宮が経済タスクで決める | #201・携行弾の修正 |
+| `currentAmmo?` | 整数 0〜その機体の上限（28 × 銃の回路。MMR 6・LMG 56。輸送 URL の切り詰めは最大 56＝`MECH_AMMO_MAX_CAPACITY`）。`instanceId` ごとの携行弾 | 正規化（`normalizeHubSnapshot` → shared `mech-ammo.ts` `applyHubAmmoRules`）で、**欠落は機体の上限まで満タンにして書く**（従来の暫定ルール「未設定＝満タン」を保存時に確定させる。在庫からは引かない）。上限を超える分は**捨てずに**「弾薬」在庫（`inventory.ammo`）へ戻す。配り方は下の「携行弾の配り方（2026-10-12 決定）」 | #201・携行弾の修正・fix/circuit-ammo-activity-refill |
 | `battery` | `{ capacity: number; activity: number }`。`capacity` は 1 以上の整数、`activity` は 0〜`capacity` の整数 | 欠落・不正は `capacity 300`／`activity 300`（`MECH_BATTERY_DEFAULT_*`）。`normalizeBattery` で切り捨て・範囲内に収める。新しく作る機体も 300／300 | #204 |
 
 - HUB の `ammoLoad`（弾種別の所持）は **共有在庫のまま**。`currentAmmo` は `ammoLoad` に入れない。
 - 帰還の携行弾・バッテリーは、帰還の `mechCurrentAmmo`・`mechBattery` を該当する機体の `currentAmmo`・`battery` に書き戻す（shared `applyReturnedMechState`。#209 で trade に入れ、U9 で shared へ移した。0 も 0 として書く。報告にない機体は変えない）。Explore の直接保存と trade の帰還 URL の反映はどちらも shared `applyExploreReturnToHub`（出撃報告 → 摩耗 → 携行弾・バッテリー）を通る。`sortieId` が既に `appliedSortieIds` にある帰還は何もしないので、二重に反映せず、古い URL を開き直しても新しい値を上書きしない。書き戻した値は次の出撃 URL（`buildTradeToExplorePayloadFromFleet`）の `mechCurrentAmmo`・`mechBattery` でそのまま送られる。
+#### 携行弾の配り方（2026-10-12 神宮の決定、fix/circuit-ammo-activity-refill）
+
+§12.5 で未決だった「機体ごとに配る本ルール」を決めた（shared `mech-ammo.ts`）。
+
+- **在庫**: 「弾薬」在庫は `inventory.ammo`（1 個＝1 発）。旧 `ammoLoad`（弾種別）は触らない（M1）。
+- **上限**: 格納庫での上限＝基礎 28 × 銃の回路（MMR ÷5＝6、LMG ×2＝56。`mechAmmoCap`）。解放モードの 0.5 倍は**出撃中だけ**で、撃てない分は機体に残して持ち帰る（P3）。保存時の切り詰めは機体ごとの上限（LMG は 56 を保つ）。
+- **回路の付け替え**（`equipCircuit`・`unequipCircuit`、装着回路の売却、`ensureCaptainFalseOneByOne`、`enforceEquipIntegrity` で装着が動いた機体。**大破機も含む**）: その機体の携行弾をいったん全部在庫へ戻し、新しい上限を計算し、在庫から上限まで積む（`reloadMechAmmo`）。上限が変わらなくても毎回戻して積み直す（M5）。足りなければあるだけ積む（M2）。動いた弾は記録だけ（trade のコンソールに 1 行。リボン・バナーは出さない、M4・M8）。合計（携行弾＋在庫）は変わらない。
+- **自動補充**（M3、`refillFleetAmmo`）: 帰還時（`applyExploreReturnToHub` の最後。大破機は除く）と出撃前（trade の出撃リンクを押したとき＝`markDeployed`、Explore が HubSave から部隊を組む Invade リンクと「再出撃」）に、在庫から上限まで積む。格納庫を開いただけでは積まない（出撃中に積むと帰還の上書きで在庫が消えるため）。
+- **足りないとき**（M8）: 付け替え→記録だけ。出撃前→出撃ボタンの近くに 1 行（例「弾薬が足りません：僚機A 12/28」。名前は出撃順の 隊長／僚機A／僚機B、複数は「・」でつなぐ。trade `#ammo-short-line`、Explore の作戦概要 `#ammo-short-presortie`）。帰還→結果画面に 1 行（Explore `#ammo-short-note`。帰還結果 `ApplyExploreReturnResult.ammoShort`）。
+- **解体**（M7）: 解体した機体の携行弾は在庫へ戻す（trade `scrapMech`）。
+- **壊れたセーブの修復**（M6、新しい任意キー **`ammoBatteryRepaired?: true`**）: このキーが無いセーブを読んだとき 1 回だけ、`battery.capacity` が 300 を超える機体（`fleet` と `lostMechs`）を 300 に戻し（`activity` も 300 以下に）、携行弾が上限未満の機体を上限まで**付与**する（在庫からは引かない）。その後キーを `true` にする。2 回目以降は何もしない。残骸（`lostMechs`）の携行弾は変えない。
+- **バッテリー**: 回路による最大活動量の上乗せ（`modsFor().activity`）と解放モードの最大活動量 0.5 倍は**出撃中だけ計算し、保存しない**（Explore `effectiveBatteryCapacity`）。帰還は上乗せ前の `capacity` を書く。充電は先送りのまま。**将来、充電を入れるときは携行弾と同じく「満たせないときは知らせる」扱いにする**（今回はドキュメントだけ）。
+- **5-3 の途中保存**: 修正前の途中保存は `mechBattery` に上乗せ後の値を持つことがある。読み直し（`worldFromCheckpointBody` → `restorePreBoostBattery`）で `circuitPlay.baseBattery`（上乗せ前）に戻し、300 を超える値は 300 にする。`circuitPlay.ammoCapAt`（出撃中の上限の記録。保存キーではない）が無い途中保存も読める。旧 `baseAmmo` は読み捨て。
+- selftest: `shared` `mech-ammo.selftest.ts`（旧セーブ＝`currentAmmo` 無し・バッテリー膨張・残骸付き、M6 は 1 回だけ、MMR・LMG の付け替えで合計不変、大破機の付け替え、出撃の繰り返しで上限が積み重ならない、不足の 1 行）、`explore` `ammoRefill.selftest.ts`（MMR で 3 回出撃しても 6 のまま、撃てない分を捨てない、分配で捨てない、修正前の途中保存、出撃前の補充）、`trade` `hangar.selftest.ts`（出撃リンクでの補充と URL、出撃ボタンの 1 行、解体で在庫へ、付け替えの記録行）。
+
 - trade の旧 typed-repair（`repairTyped`）は機体を作り直すので、`currentAmmo` は未設定に、`battery` は 300／300 に戻る（旧コードは触らない方針。STATUS のバックログ）。
 
 ## 12.5a 置き去り機体（lostMechs）の保存対象と回収経路（2026-10-03 正本化）
@@ -314,7 +329,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 
 ### 12.7 explore での使い方（#203・#206・携行弾の修正・U9）
 
-- `World.currentAmmo: Record<instanceId, number | undefined>` は出撃時（`createWorld`）に出撃機ごとに作る。`mechCurrentAmmo` に値がある機体はその値（0 なら撃てない）。**値がない機体は満タン `MECH_AMMO_BASE_CAPACITY`（28）にする**（携行弾の修正（explore、#208）。**暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**。設計は [`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。`startingAmmo` は `World.ammoStock`（HUB の共有在庫の写し）にだけ入り、射撃では減らない。
+- `World.currentAmmo: Record<instanceId, number | undefined>` は出撃時（`createWorld`）に出撃機ごとに作る。（2026-10-12 以降、HubSave の正規化が欠落を満タンで書くので、通常は値がある。出撃中の上限は基礎 28 × 銃の回路 × 解放の倍率で、上限を超える分は `circuitPlay.ammoFloor` として撃たずに持ち帰る。捨てない。§12.5「携行弾の配り方」）`mechCurrentAmmo` に値がある機体はその値（0 なら撃てない）。**値がない機体は満タン `MECH_AMMO_BASE_CAPACITY`（28）にする**（携行弾の修正（explore、#208）。**暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）**。設計は [`MECH_FLEET.md`](./MECH_FLEET.md) §4.1）。`startingAmmo` は `World.ammoStock`（HUB の共有在庫の写し）にだけ入り、射撃では減らない。
 - 射撃は撃った機体の `currentAmmo` だけを 1 減らす。`currentAmmo` が 0 以下の機体は撃たない（`sim.ts` `tryFire`）。修正前（#203〜携行弾の修正）は、trade が `currentAmmo` を設定しないため出撃 URL に `mechCurrentAmmo` が載らず、未設定の機体が撃てなかった（2026-10-03 に手元で確認。explore の selftest で、d6ca6ff の trade が出す出撃 URL そのものと shared の URL 生成の両方から、隊長機・僚機が射程内の敵を撃てることを固定した）。
 - `World.mechBattery` は `mechBattery` の写しで、`lostMechs` の記録と帰還の `mechBattery`（U9）に使う。`World.circuitIdsByUnit` は `mechCircuits` の全回路 ID（状態を問わない）をユニットごとに持ち、`lostMechs.circuitIds` に使う。効果の判定は従来どおり `equippedByUnit`（FA・Bypass だけ）。
 

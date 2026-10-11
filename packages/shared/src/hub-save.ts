@@ -8,6 +8,7 @@ import {
   type MechId,
   emptyAmmoLoad,
 } from "./catalog";
+import { applyHubAmmoRules } from "./mech-ammo";
 import {
   HUB_SAVE_CORRUPT_KEY_PREFIX,
   HUB_SAVE_LEGACY_STORAGE_KEY,
@@ -272,6 +273,8 @@ export type HubSnapshot = {
    * Missing on old saves reads as false.
    */
   bulletinUnlocked?: boolean;
+  /** M6 (fix 10/12): the one-time ammo top-up / battery-cap repair ran. Missing = not yet. */
+  ammoBatteryRepaired?: boolean;
   /**
    * First Invade clear (初クリア, 神宮 10/12 Go). Optional: a save without it
    * has not cleared yet, even when its board looks swept (S2 — never derived
@@ -1020,6 +1023,14 @@ export function normalizeHubSnapshot(
       new Set(lostMechsRaw.map((m) => m.instanceId)),
     ),
   );
+  // M5: mechs whose equipped set equip-integrity changed get their ammo reloaded.
+  const integrityReload = new Set<string>();
+  wreckDropsBack.circuits.forEach((c) => {
+    const after = circuits.find((x) => x.circuitId === c.circuitId);
+    if (c.equippedTo && after && after.equippedTo !== c.equippedTo && fleetIdSet.has(c.equippedTo)) integrityReload.add(c.equippedTo);
+  });
+  const ammoBatteryRepaired =
+    rawRec?.ammoBatteryRepaired === true || (rawRec == null && fallback.ammoBatteryRepaired === true);
   const cooldownRaw = rawRec?.airSupportCooldownSec;
   const cooldownNum = typeof cooldownRaw === "number" ? cooldownRaw : Number(cooldownRaw);
   const airSupportCooldownSec =
@@ -1056,7 +1067,7 @@ export function normalizeHubSnapshot(
     fallback.frontProgress ?? null,
   );
 
-  return {
+  const snapshot: HubSnapshot = {
     credits: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.credits,
       fallback.credits,
@@ -1091,7 +1102,10 @@ export function normalizeHubSnapshot(
     ...(airSupportCooldownSec != null ? { airSupportCooldownSec } : {}),
     ...(bulletinUnlocked ? { bulletinUnlocked: true } : {}),
     ...(firstInvadeClear ? { firstInvadeClear } : {}),
+    ...(ammoBatteryRepaired ? { ammoBatteryRepaired: true } : {}),
   };
+  // Ammo rules (mech-ammo.ts): per-mech cap clamp into the stock, M5 reload, M6 once.
+  return applyHubAmmoRules(snapshot, { reloadIds: [...integrityReload] });
 }
 
 /** Unique instanceIds that exist in the fleet, at most maxSortieMechs. */

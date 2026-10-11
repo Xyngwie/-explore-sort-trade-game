@@ -66,7 +66,7 @@ type OwnedMech = {
   status: MechStatus;
   durability: number;   // 0 .. durabilityMax
   durabilityMax: number;
-  currentAmmo?: number; // 携行弾（#201）。0 .. 28（MECH_AMMO_BASE_CAPACITY）。未設定あり
+  currentAmmo?: number; // 携行弾（#201）。0 .. その機体の上限（28 × 銃の回路。MMR 6・LMG 56）。保存時に満タンで確定
   battery: { capacity: number; activity: number }; // #204。旧データ・新規は 300 / 300
 };
 ```
@@ -75,6 +75,8 @@ type OwnedMech = {
 旧 `MechId[]` はロード時にマイグレーションする（下記）。
 
 ### 4.1 携行弾（`currentAmmo`）— 未設定の扱い（暫定）
+
+- **2026-10-12 更新（神宮の決定、fix/circuit-ammo-activity-refill）**: 本ルールを決めた。在庫は「弾薬」（`inventory.ammo`）、上限は 28 × 銃の回路、回路の付け替えで戻して積み直し、帰還・出撃前に在庫から補充、解体で在庫へ。未設定は HubSave の正規化で満タンとして書く。詳細は [`HUB_SAVE_CONTRACT.md`](./HUB_SAVE_CONTRACT.md) §12.5「携行弾の配り方」。以下は経緯。
 
 - 携行弾は機体ごと（`instanceId` 単位）に持つ（#201・#203）。上限は今は全機体共通の `MECH_AMMO_BASE_CAPACITY = 28`。Explore の射撃は撃った機体の携行弾だけを 1 減らし、0 の機体は撃てない。HUB の `ammoLoad`（弾種別の所持）は共有在庫のまま。
 - **暫定ルール（2026-10-03 参謀の決定。神宮の経済タスクでの決定待ち）: 出撃時に `currentAmmo` が未設定の機体は満タン（その機体の上限＝今は 28）として出撃する。** 出撃 URL の `mechCurrentAmmo` に値がある機体はその値をそのまま使う（0 なら撃てない）。満タン扱いは Explore の出撃開始時（`createWorld`）に行い、HubSave の未設定はそのまま。

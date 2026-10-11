@@ -13,6 +13,7 @@ import {
   type HubSnapshot,
 } from "@estg/shared";
 import { saveMigrationNotice } from "./save-migration-notice";
+import { ammoSwapLogLineJa } from "./ammo-swap-log";
 import { equipHubCircuit, equipRefusalMessageJa, unequipHubCircuit } from "./lost-mech-circuits";
 
 const CARD_ID = "circuit-equip-panel";
@@ -152,6 +153,9 @@ function render(): void {
       window.alert(equipRefusalMessageJa(result.reason));
       return;
     }
+    // M4/M8: ammo moved by the swap is logged only (no ribbon / banner).
+    const line = ammoSwapLogLineJa(current, result.hub);
+    if (line) console.info(line);
     saveHubSaveToLocalStorage(result.hub);
     window.location.reload();
   };

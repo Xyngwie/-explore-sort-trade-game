@@ -57,9 +57,14 @@ export function normalizeBattery(
   return { capacity, activity };
 }
 
+/**
+ * Transport / load clamp. The default ceiling is the largest per-mech cap
+ * (28 × LMG 2 = 56); HubSave then clamps each mech to its own cap and moves
+ * the excess to the stock (mech-ammo.ts), so nothing is discarded.
+ */
 export function normalizeCurrentAmmo(
   value: unknown,
-  capacity = MECH_AMMO_BASE_CAPACITY,
+  capacity = MECH_AMMO_BASE_CAPACITY * 2,
 ): number {
   const raw = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(raw)) return 0;

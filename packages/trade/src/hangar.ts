@@ -93,6 +93,11 @@ import {
   type SortieReturnKind,
   type YieldBag,
   readBulletinUnlocked,
+  ammoShortLineJa,
+  ammoStock,
+  mechAmmoCap,
+  refillFleetAmmo,
+  previewAmmoShort,
 } from "@estg/shared";
 import { isHubCircuitOnLostMech } from "./lost-mech-circuits";
 import { backfillPerfectMaxSize } from "./junk-craft";
@@ -1203,16 +1208,25 @@ export function circuitRestoreStateLabelJa(state: CircuitRestoreState): string {
   return circuitOutcomeLabelJa(state);
 }
 
+/** M8: one line by the 出撃 button — who would still be short after the pre-sortie top-up ("" = nobody). */
+export function sortieAmmoShortLineJa(hub: HubSnapshot, ids: readonly string[]): string {
+  return ammoShortLineJa(previewAmmoShort(hub, ids), ids);
+}
+
 /** Remember last deploy set when user opens the explore link. */
 export function markDeployed(state: HangarState, ids: string[]): HangarState {
   // Keep the squad that actually went out as the saved selection (再出撃 / next visit).
-  const hub = ids.length > 0 ? setSortieSelection(state.hub, ids) : state.hub;
+  const picked = ids.length > 0 ? setSortieSelection(state.hub, ids) : state.hub;
+  // M3: top the squad up from the 「弾薬」 stock before it leaves (fix/circuit-ammo-activity-refill).
+  const filled = refillFleetAmmo(picked, ids);
+  const hub = normalizeHubSnapshot(filled.hub);
+  const shortLine = ammoShortLineJa(filled.short, ids);
   const next: HangarState = {
     ...state,
     hub,
     selectedDeployIds: resolveSortieSelection(hub),
     lastDeployedIds: ids,
-    log: pushLog(state.log, `出撃コミット ${ids.length}機`),
+    log: pushLog(state.log, `出撃コミット ${ids.length}機${shortLine ? ` · ${shortLine}` : ""}`),
     notice: "出撃セットを記録（シミュ帰還用）",
   };
   return persistHangar(next);
@@ -1365,8 +1379,16 @@ export function scrapMech(
     materials: state.hub.materials,
   });
   if (!result) return { ...state, notice: "解体対象なし" };
+  // M7: the scrapped mech's carried ammo goes back to the 「弾薬」 stock.
+  const scrapped = state.hub.fleet.find((m) => m.instanceId === instanceId);
+  const returnedAmmo = scrapped
+    ? Math.max(0, Math.floor(scrapped.currentAmmo ?? mechAmmoCap(state.hub, instanceId)))
+    : 0;
+  const inventory = { ...(state.hub.inventory ?? {}) };
+  if (returnedAmmo > 0) inventory.ammo = ammoStock(state.hub) + returnedAmmo;
   const hub = normalizeHubSnapshot({
     ...state.hub,
+    inventory,
     fleet: result.fleet,
     credits: result.wallet.credits,
     materials: result.wallet.materials,
@@ -1378,7 +1400,7 @@ export function scrapMech(
     lastDeployedIds: state.lastDeployedIds.filter((id) => id !== instanceId),
     log: pushLog(
       state.log,
-      `解体 ${instanceId} → +${result.yielded.credits}c / +${result.yielded.materials}m`,
+      `解体 ${instanceId} → +${result.yielded.credits}c / +${result.yielded.materials}m${returnedAmmo > 0 ? ` · 弾薬 ${returnedAmmo} を倉庫へ` : ""}`,
     ),
     notice: "解体完了",
   };

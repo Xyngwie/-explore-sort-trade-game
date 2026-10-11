@@ -13,6 +13,7 @@ import {
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   saveHubSaveToLocalStorage,
+  type AmmoShortRow,
   type ExploreToHubWearPayload,
 } from "@estg/shared";
 import { applyCircuitHubSide } from "./circuitPlay";
@@ -22,7 +23,7 @@ import type { World } from "./types";
 type Store = Pick<Storage, "getItem" | "setItem">;
 
 export type DirectSaveResult =
-  | { status: "saved"; payload: ExploreToHubWearPayload }
+  | { status: "saved"; payload: ExploreToHubWearPayload; ammoShort?: AmmoShortRow[] }
   | { status: "already_applied"; payload: ExploreToHubWearPayload }
   | { status: "skipped"; reason: "not_result" | "no_deploy" | "no_save" | "write_refused" };
 
@@ -38,5 +39,9 @@ export function saveSortieResultToHub(world: World, storage?: Store | null): Dir
   const applied = applyExploreReturnToHub(hub, payload);
   if (!applied.applied) return { status: "already_applied", payload };
   const ok = saveHubSaveToLocalStorage(normalizeHubSnapshot(applied.hub), storage ?? undefined);
-  return ok ? { status: "saved", payload } : { status: "skipped", reason: "write_refused" };
+  if (!ok) return { status: "skipped", reason: "write_refused" };
+  // M3/M8: the return topped the squad up from the stock; who is still short.
+  return applied.ammoShort && applied.ammoShort.length > 0
+    ? { status: "saved", payload, ammoShort: applied.ammoShort }
+    : { status: "saved", payload };
 }
