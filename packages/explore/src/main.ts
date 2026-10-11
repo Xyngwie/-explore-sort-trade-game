@@ -106,10 +106,14 @@ import {
 } from "./game/unlockMode";
 import {
   attachCircuitPlay,
+  usableAmmo,
   noteCollectTap,
   beginCircuitButton,
   circuitButtons,
-  consumeCircuitClick,
+  handleMapTap,
+  openWingPalette,
+  paletteWingmen,
+  pressWingPalette,
   refreshStarterCircuit,
 } from "./game/circuitPlay";
 import { renderWorld, worldFromCanvas } from "./game/render";
@@ -469,19 +473,30 @@ function bindDebugUnlockToggle(): void {
   });
 }
 
+const boundCanvases = new WeakSet<HTMLCanvasElement>();
 function bindCanvas(): void {
   canvas = document.querySelector<HTMLCanvasElement>("#map");
   if (!canvas) return;
+  // 出撃 calls renderDom (which binds) and then bindCanvas again: bind once per
+  // canvas so one tap is one map tap (a 「地点選択」 tap must not also move the captain).
+  if (boundCanvases.has(canvas)) return;
+  boundCanvases.add(canvas);
   canvas.width = 720;
   canvas.height = 420;
   canvas.addEventListener("pointerdown", (e) => {
     if (world.phase !== "sortie" || !canvas) return;
     const pt = worldFromCanvas(canvas, world, e.clientX, e.clientY);
-    if (consumeCircuitClick(world, pt)) {
+    // P1: ~24 screen px around a wingman selects it (scaled for phone widths).
+    const rect = canvas.getBoundingClientRect();
+    const perPx = rect.width > 0 ? world.camera.w / rect.width : 1;
+    const tap = handleMapTap(world, pt, Math.max(24, 24 * perPx));
+    if (tap !== "move") {
       input.clickMove = null;
       needsDom = true;
+      paintWingPalette();
       return;
     }
+    paintWingPalette();
     noteCollectTap(world, pt);
     input.clickMove = pt;
   });
@@ -506,6 +521,70 @@ function gatedButtonHtml(
   if (cmdLocked(cmd)) return "";
   const disabled = isOperationTimedOut(world) ? " disabled" : "";
   return `<button type="button" class="${baseCls}" id="${domId}"${disabled} title="${title}">${label}</button>`;
+}
+
+/**
+ * P1 (神宮 10/12): the wingman palette in the row under the map. 「全僚機」
+ * selects every non-autonomous wingman; 「移動」 comes first, later actions go
+ * after it. Nothing is rendered while it is locked (no captain 「4」, or only
+ * autonomous wingmen).
+ */
+function wingPaletteHtml(): string {
+  const p = world.circuitPlay;
+  if (world.phase !== "sortie" || !p) return "";
+  const eligible = paletteWingmen(world);
+  if (eligible.length === 0) return "";
+  const sel = p.wingSelect ?? null;
+  const allOn = !!sel && eligible.every((id) => sel.ids.includes(id)) && sel.ids.length > 1;
+  const allBtn = `<button type="button" class="${allOn ? "active-stance" : "secondary"}" data-wing-all>全僚機</button>`;
+  if (!sel) return `<div class="wing-palette" role="group" aria-label="僚機">${allBtn}</div>`;
+  const names = sel.ids
+    .map((id) => world.wingmen.find((w) => w.id === id)?.name ?? id)
+    .map(escapeHtml)
+    .join("・");
+  const armed = p.pending?.kind === "wing_move";
+  const step = armed
+    ? `<span class="wing-palette-hint">地図をタップして地点を指定</span>`
+    : sel.step === "root"
+      ? `<button type="button" class="secondary" data-wing-act="move">移動</button>`
+      : `<button type="button" class="secondary" data-wing-act="point">地点選択</button>`;
+  return `<div class="wing-palette open" role="group" aria-label="僚機">${allBtn}<span class="wing-palette-sel">${names}</span>${step}</div>`;
+}
+
+let paintedWingPalette = "";
+function paintWingPalette(): void {
+  const el = document.getElementById("wing-palette-row");
+  if (!el) return;
+  const html = wingPaletteHtml();
+  if (html === paintedWingPalette) return;
+  paintedWingPalette = html;
+  el.innerHTML = html;
+}
+
+function bindWingPalette(): void {
+  const row = document.getElementById("wing-palette-row");
+  paintedWingPalette = "";
+  paintWingPalette();
+  row?.addEventListener("click", (e) => {
+    const t = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-wing-all],[data-wing-act]");
+    if (!t) return;
+    if (t.hasAttribute("data-wing-all")) openWingPalette(world, paletteWingmen(world));
+    else if (t.dataset.wingAct) pressWingPalette(world, t.dataset.wingAct);
+    needsDom = true;
+    paintWingPalette();
+  });
+  // P1: tapping a wingman's card opens the same palette (buttons inside the card keep their own job).
+  document.getElementById("wing-panel")?.addEventListener("pointerdown", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target || target.closest("button")) return;
+    const card = target.closest<HTMLElement>("[data-wing-select]");
+    const id = card?.dataset.wingSelect;
+    if (!id) return;
+    if (openWingPalette(world, [id])) {
+      needsDom = true;
+      paintWingPalette();
+    }
+  });
 }
 
 function circuitOrderHtml(): string {
@@ -600,7 +679,9 @@ function wingPanelHtml(): string {
       const status = wingCombatStatus(w);
       const hpPct = w.maxHp > 0 ? Math.max(0, Math.min(100, (w.hp / w.maxHp) * 100)) : 0;
       const hpPulse = w.hitWarnT > 0 ? " pulse" : w.engageWarnT > 0 ? " engage-pulse" : "";
-      return `<div class="wing-card ${status.cardClass}">
+      const selected = world.circuitPlay?.wingSelect?.ids.includes(w.id) ? " selected" : "";
+      const selectable = paletteWingmen(world).includes(w.id) ? ` data-wing-select="${w.id}"` : "";
+      return `<div class="wing-card ${status.cardClass}${selected}"${selectable}>
         <h3>
           <span>${escapeHtml(w.name)} ${w.alive ? "" : "（撃破）"}</span>
           <span class="badge ${status.badgeClass}">${status.badgeText}</span>
@@ -683,7 +764,7 @@ function renderDom(): void {
         <table>
           <tr><td>僚機</td><td>${world.wingmen.length}</td></tr>
           <tr><td>積載上限</td><td>なし（速度で制約）</td></tr>
-          <tr><td>実弾</td><td>${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</td></tr>
+          <tr><td>実弾</td><td>${world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)))}</td></tr>
           <tr><td>活動限界</td><td>${world.maxOperationTimeSec}s</td></tr>
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
           <tr><td>戦線セクター</td><td>${
@@ -849,7 +930,7 @@ function renderDom(): void {
     <div class="hud">
       <span>残時間 <strong id="hud-time" class="${hudTimePresentation(world).className}">${hudTimePresentation(world).text}</strong></span>
       <span>回収 <strong id="hud-salvage">${world.salvaged}</strong></span>
-      <span>実弾 <strong id="hud-ammo">${world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—")}</strong></span>
+      <span>実弾 <strong id="hud-ammo">${world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)))}</strong></span>
       <span>隊長HP <strong id="hud-hp">${Math.ceil(world.leader.hp)}</strong></span>
       <span>帰還 <strong id="hud-boarding">${extractHud}</strong></span>
       <span><strong id="hud-speed">${speedHud}</strong></span>
@@ -875,6 +956,7 @@ function renderDom(): void {
           <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
           ${returnOpen() ? sortieRetreatHtml(world.leader.alive, rescueConfirm, previewHeldCredits()) : ""}
         </div>
+        <div id="wing-palette-row"></div>
         ${squadOrderBarHtml()}
         <p class="help">${sortieHelpText()}</p>
       </div>
@@ -891,6 +973,7 @@ function renderDom(): void {
     </div>`;
 
   bindCanvas();
+  bindWingPalette();
   bindDebugUnlockToggle();
   document.getElementById("kb-overlay-toggle")?.addEventListener("click", () => {
     setShortcutsOverlayHidden(!isShortcutsOverlayHidden());
@@ -1005,7 +1088,7 @@ function paintHudOnly(): void {
   const s = document.getElementById("hud-salvage");
   if (s) s.textContent = String(world.salvaged);
   const a = document.getElementById("hud-ammo");
-  if (a) a.textContent = world.leader.instanceId == null ? "—" : String(world.currentAmmo[world.leader.instanceId] ?? "—");
+  if (a) a.textContent = world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)));
   const h = document.getElementById("hud-hp");
   if (h) h.textContent = String(Math.ceil(world.leader.hp));
 
@@ -1081,6 +1164,7 @@ function paintHudOnly(): void {
     panel.innerHTML = wingPanelHtml();
     bindWingControls(panel);
   }
+  paintWingPalette();
 
   const log = document.getElementById("log-list");
   if (log) log.innerHTML = logsHtml();

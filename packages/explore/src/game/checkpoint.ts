@@ -3,6 +3,7 @@
  * Enemies, bullets, and terrain (cover) are omitted from an operation result.
  */
 import type { World } from "./types";
+import { backfillCircuitPlayState, type CircuitPlayState } from "./circuitPlay";
 
 export function snapshotSortieWorld(world: World): unknown {
   return JSON.parse(JSON.stringify(world)) as unknown;
@@ -42,5 +43,7 @@ export function worldFromCheckpointBody(body: unknown): World | null {
         : [];
     play.fogOpen = Uint8Array.from(vals.map((v) => (v ? 1 : 0)));
   }
+  // PR-B: fill the release-scale / wing-move state a pre-PR-B checkpoint lacks.
+  backfillCircuitPlayState(world.circuitPlay as Partial<CircuitPlayState> | undefined);
   return world;
 }

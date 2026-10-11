@@ -92,6 +92,7 @@ import {
   type RestoreToTradePayload,
   type SortieReturnKind,
   type YieldBag,
+  readBulletinUnlocked,
 } from "@estg/shared";
 import { isHubCircuitOnLostMech } from "./lost-mech-circuits";
 import { backfillPerfectMaxSize } from "./junk-craft";
@@ -1853,3 +1854,12 @@ export {
   resolvePerfectCircuitInjectRate,
   rollPerfectCircuit,
 };
+
+/** #269: the hangar line once the 20×20 true board opened the bulletin (wording from #269). */
+export const BULLETIN_UNLOCKED_LINE_JA = "掲示板が開いた";
+
+/** One line in the hangar card when `hub.bulletinUnlocked`; empty otherwise (old saves read false). */
+export function bulletinUnlockedLineHtml(hub: { bulletinUnlocked?: boolean } | null | undefined): string {
+  if (!readBulletinUnlocked(hub)) return "";
+  return `<p class="bulletin-unlocked" data-bulletin-unlocked style="margin:0.25rem 0 0.5rem;font-weight:600">${BULLETIN_UNLOCKED_LINE_JA}</p>`;
+}

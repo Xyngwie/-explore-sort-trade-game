@@ -16,6 +16,7 @@
   ],
   "exclude": [
     "src/selftest.ts",
-    "src/circuitPlay.selftest.ts"
+    "src/circuitPlay.selftest.ts",
+    "src/releaseProgress.selftest.ts"
   ]
 }

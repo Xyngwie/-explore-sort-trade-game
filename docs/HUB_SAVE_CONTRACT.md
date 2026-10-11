@@ -355,3 +355,13 @@ RS-01 の例外として、置き去り機体の扱いは出撃経路で分か�
 - `true-1x1-four` の盤は 1×1・数字 4（`resolveTrueBoardClues`）。Restore で 4 辺の閉ループにすると Fully Awakened ＋ Perfect で刻印ロックになり、そこで初めて真の 1×1（枠 +1・`wing_mobility` など）として数える。
 - S1: 真盤の率（`resolvePerfectCircuitInjectRate`）は、このキーが無いあいだ 0。`?perfectRate=` の指定だけは効く（デバッグ用）。
 - 5-3 の途中保存（`estg.sortieCheckpoint`）・回路・残骸（`lostMechs` の `kind: "wreck"`）は変えていない。selftest: `shared` `first-clear.selftest.ts`、`invade` `first-clear.selftest.ts`。
+
+### 12.11 進むと開く（PR-B、2026-10-12 神宮の Go）
+
+HubSave のキーは増やしていない（`v` は 3 のまま）。
+
+- 公開プレビューの既定の切り替えは Explore のローカル設定 `estg.explore.debugCommandUnlockMode`（HubSave の外）。未設定・不正値は `release`、`"all_unlocked"` だけ全解放。
+- 9 つの能力の倍率は出撃中だけの値で、HubSave に書かない。最大弾数の 0.5 倍で撃てない分は機体の `currentAmmo` に残して持ち帰る。最大活動量の 0.5 倍は `battery.capacity` に書かない。最大耐久は耐久（`durability`）の計算に入らない。
+- 5-3 の途中保存（`estg.sortieCheckpoint`）: 書く中身（`World.circuitPlay`）に `ability`・`wingMove`・`ammoFloor` が増えた（キーは変えない）。PR-B より前の途中保存はこの 3 つが無く、読み直しで `backfillCircuitPlayState` が作る（倍率は保存済みの装備から、移動の命令は無し、撃てない分は最初の 1 歩で計算し直す）。`circuitPlay` 自体が無い途中保存も今までどおり読める。
+- `hub.bulletinUnlocked` を格納庫に 1 行「掲示板が開いた」として出す（無いセーブは false で出さない）。
+- 回路・残骸（`lostMechs` の `kind: "wreck"`）は変えていない。selftest: `explore` `releaseProgress.selftest.ts`（古い HubSave＝回路と残骸付きの往復と出撃、PR-B 前の途中保存の読み直し）、`trade` `hangar.selftest.ts`。

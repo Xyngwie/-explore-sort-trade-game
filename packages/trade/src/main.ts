@@ -72,6 +72,7 @@ import {
   buyUnopenedContainers,
   launchSortFromUnopened,
   UNOPENED_CONTAINER_PRICE_CREDITS,
+  bulletinUnlockedLineHtml,
   type HangarState,
 } from "./hangar";
 import { buildResourceHistoryHtml } from "./resourceHistory";
@@ -545,6 +546,7 @@ function render() {
         <h2 style="font-size:1rem;margin:0">ハンガー</h2>
         <button type="button" class="secondary compact" id="btn-select-all">先頭から${HUB_LIMITS.maxSortieMechs}機</button>
       </div>
+      ${bulletinUnlockedLineHtml(state.hub)}
       <p class="muted" style="margin:0.25rem 0 0.5rem">出撃する機体を最大 ${HUB_LIMITS.maxSortieMechs} 機まで選択（選択は保存され、次回・再出撃でも使われます）。</p>
       <div class="fleet-list">${fleetCards(state)}</div>
     </div>

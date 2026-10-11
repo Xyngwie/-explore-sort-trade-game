@@ -139,6 +139,17 @@ function clearCoverNear(world: ReturnType<typeof createWorld>, pos: { x: number;
   assert.ok(covers.every((c) => Math.hypot(c.pos.x - pos.x, c.pos.y - pos.y) > reach(c)));
 }
 
+/**
+ * PR-B: createWorld now starts in "release" (the public default). These
+ * legacy checks predate the unlock-as-you-progress default and describe the
+ * DEBUG all-unlocked mode; tests that need release set it explicitly.
+ */
+function legacyWorld(...args: Parameters<typeof createWorld>): ReturnType<typeof createWorld> {
+  const w = createWorld(...args);
+  w.commandUnlock.mode = "all_unlocked";
+  return w;
+}
+
 function wing(world: ReturnType<typeof createWorld>): Unit {
   const w = world.wingmen[0];
   assert.ok(w);
@@ -157,7 +168,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
 
 // --- per-mech current ammo: canonical instanceId state, no shared-ammo fallback ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch(
       "?deployableMechs=3&startingAmmo=99&deployedInstanceIds=owned_a,owned_b,owned_c&mechCurrentAmmo=owned_a:10;owned_b:20;owned_c:28",
     ),
@@ -182,11 +193,11 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
 // --- unset currentAmmo sorties full (interim rule, pending 神宮's economy decision) ---
 // Every deployed unit (leader + wingmen) must be able to fire at an in-range enemy.
 function assertEveryDeployedUnitFires(search: string, label: string): void {
-  const probe = createWorld(bootstrapFromSearch(search));
+  const probe = legacyWorld(bootstrapFromSearch(search));
   const unitIds = [probe.leader.id, ...probe.wingmen.map((w) => w.id)];
   assert.equal(unitIds.length, probe.deployedInstanceIds.length, `${label}: one unit per deployed mech`);
   for (const unitId of unitIds) {
-    const world = createWorld(bootstrapFromSearch(search));
+    const world = legacyWorld(bootstrapFromSearch(search));
     startSortie(world);
     const units = [world.leader, ...world.wingmen];
     const shooter = units.find((u) => u.id === unitId)!;
@@ -220,7 +231,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
     "?deployableMechs=3&mechBattery=owned_a%3A300%3A300%3Bowned_b%3A300%3A300%3Bowned_c%3A300%3A300" +
     "&startingAmmo=20&deployedInstanceIds=owned_a%2Cowned_b%2Cowned_c" +
     "&mechDurability=owned_a%3A100%3Bowned_b%3A100%3Bowned_c%3A100";
-  const world = createWorld(bootstrapFromSearch(tradeD6ca6ffFixture));
+  const world = legacyWorld(bootstrapFromSearch(tradeD6ca6ffFixture));
   assert.deepEqual(world.currentAmmo, { owned_a: 28, owned_b: 28, owned_c: 28 });
   assert.equal(world.ammoStock, 20, "startingAmmo stays the shared stock only");
   assertEveryDeployedUnitFires(tradeD6ca6ffFixture, "trade d6ca6ff fixture");
@@ -242,7 +253,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- given currentAmmo is used as-is; only unset mechs are filled ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch(
       "?deployedInstanceIds=owned_a,owned_b,owned_c&mechCurrentAmmo=owned_a:5;owned_c:0&startingAmmo=40",
     ),
@@ -252,7 +263,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- zero currentAmmo rejects firing without borrowing from ammoStock ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:0&startingAmmo=40"),
   );
   assert.equal(world.currentAmmo.owned_a, 0);
@@ -278,7 +289,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- patrol orbit coherence ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const w = wing(world);
   applyOrder(world, w, "patrol", { waypoint: { x: 500, y: 500 } });
@@ -302,7 +313,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- raid: no waypoint / immediate ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const w = wing(world);
   const r = applyOrder(world, w, "raid");
@@ -317,7 +328,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- scatter search: captain + living wingmen → raid, fan ~120° ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   world.leader.heading = 0; // +x
   world.leader.pos = { x: 700, y: 500 };
@@ -362,7 +373,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- scatter fan-out: 2+ wingmen get non-identical goals even with enemies ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   world.leader.heading = 0;
   world.leader.pos = { x: 700, y: 500 };
@@ -408,7 +419,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- recover fan-out: 2+ crates → distinct assigned crate ids ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   assert.ok(world.wingmen.length >= 2);
   const living = world.wingmen.filter((w) => w.alive);
@@ -456,7 +467,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- recover with fewer crates than wingmen → distinct approach goals ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const living = world.wingmen.filter((w) => w.alive);
   assert.ok(living.length >= 2);
@@ -489,7 +500,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- salvage complete → auto escort ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const w = wing(world);
   w.stance = "recover";
@@ -505,7 +516,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- containers unknown until discovered ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   assert.ok(world.containers.every((c) => !c.discovered));
   // Place leader on a crate
@@ -526,7 +537,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- recover denied without discovered crates ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const w = wing(world);
   const r = applyOrder(world, w, "recover");
@@ -536,7 +547,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- off-screen rally changes AI state ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const w = wing(world);
   w.stance = "raid";
@@ -551,7 +562,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- battle report kind when off-screen combat ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   // Force a bullet kill off camera
   world.camera = { x: 0, y: 0, w: 100, h: 100 };
@@ -582,7 +593,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
 
 // --- captain auto-combat without holding fire ---
 {
-  const world = createWorld(bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:30&startingAmmo=999"));
+  const world = legacyWorld(bootstrapFromSearch("?deployedInstanceIds=owned_a&mechCurrentAmmo=owned_a:30&startingAmmo=999"));
   startSortie(world);
   const enemy = world.enemies[0]!;
   enemy.alive = true;
@@ -629,7 +640,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
 
 // --- captain auto-salvage without holding E ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   for (const e of world.enemies) {
     e.alive = false;
@@ -651,7 +662,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
 
 // --- boarding extract + wear scaffold ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch("?deployedInstanceIds=owned_a,owned_b&startingAmmo=20&mechCurrentAmmo=owned_a:17;owned_b:9"),
   );
   startSortie(world);
@@ -703,7 +714,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
 
 // --- wear uses deploy-time durability ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch(
       "?deployedInstanceIds=owned_a&startingAmmo=10&mechDurability=owned_a:85",
     ),
@@ -724,7 +735,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
 
 // --- request extract anywhere; wingmen get patrol waypoint at circle center ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   world.leader.pos = { x: 640, y: 320 };
   for (const w of world.wingmen) {
@@ -770,7 +781,7 @@ function advancePinned(
 
 // --- cargo at +10s; lift-off at +15s only recovers units in circle ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   // Neutralize enemies so combat does not move units off pins
   for (const e of world.enemies) {
@@ -807,7 +818,7 @@ function advancePinned(
 
 // --- captain outside at lift-off → fail ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   for (const e of world.enemies) {
     e.alive = false;
@@ -858,7 +869,7 @@ function advancePinned(
   assert.ok(bootLow.invadeSector);
   assert.equal(bootLow.invadeSector!.sectorX, 1);
   assert.equal(bootLow.invadeSector!.density, 0);
-  const worldLow = createWorld(bootLow);
+  const worldLow = legacyWorld(bootLow);
   assert.equal(worldLow.enemies.length, BALANCE.densityEnemyCountMin);
   assert.equal(worldLow.invadeSector?.sectorY, 0);
   assert.equal(worldLow.balance.enemySpeed, BALANCE.enemySpeed * low.enemySpeedMul);
@@ -871,7 +882,7 @@ function advancePinned(
   assert.equal(bootHigh.ammoStock, 25);
   assert.equal(bootHigh.wingmanCount, 1);
   assert.ok(bootHigh.note.includes("戦線"));
-  const worldHigh = createWorld(bootHigh);
+  const worldHigh = legacyWorld(bootHigh);
   assert.equal(worldHigh.enemies.length, BALANCE.densityEnemyCountMax);
   assert.ok(
     Math.abs(worldHigh.balance.enemySpeed - BALANCE.enemySpeed * high.enemySpeedMul) < 1e-9,
@@ -879,7 +890,7 @@ function advancePinned(
 
   const bootNone = bootstrapFromSearch("?deployableMechs=3&startingAmmo=10");
   assert.equal(bootNone.invadeSector, null);
-  const worldNone = createWorld(bootNone);
+  const worldNone = legacyWorld(bootNone);
   assert.equal(worldNone.enemies.length, BALANCE.baselineEnemyCount);
   assert.equal(worldNone.balance.enemySpeed, BALANCE.enemySpeed);
 }
@@ -887,7 +898,7 @@ function advancePinned(
 
 // --- circuit durability buffer reduces wear ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch(
       "?deployedInstanceIds=owned_a&startingAmmo=10&mechDurability=owned_a:85&circuitBonuses=craft:1.100;repair:0.200;dur:10",
     ),
@@ -953,7 +964,7 @@ function advancePinned(
   assert.equal(bootForced.invadeSector?.engage, "forced");
   assert.equal(bootForced.invadeSector?.enemyCells?.length, 5);
   assert.ok(bootForced.note.includes("強制交戦") || bootForced.note.includes(ENGAGE_BRIEFING_LABEL.forced));
-  const worldForced = createWorld(bootForced);
+  const worldForced = legacyWorld(bootForced);
   assert.equal(worldForced.enemies.length, 5);
   assert.ok(worldForced.enemies[0]!.maxHp > BALANCE.enemyHp); // hp mul
   assert.equal(worldForced.invadeSector?.engage, "forced");
@@ -964,7 +975,7 @@ function advancePinned(
   assert.equal(bootRaid.invadeSector?.engage, "raid");
   assert.deepEqual(bootRaid.invadeSector?.enemyCells, [{ sx: 5, sy: 1 }]);
   assert.ok(bootRaid.note.includes("任意侵入") || bootRaid.note.includes(ENGAGE_BRIEFING_LABEL.raid));
-  const worldRaid = createWorld(bootRaid);
+  const worldRaid = legacyWorld(bootRaid);
   assert.equal(worldRaid.enemies.length, 1);
   assert.ok(worldRaid.enemies.length < worldForced.enemies.length);
 }
@@ -1008,7 +1019,7 @@ function advancePinned(
 
 // --- cargo slowdown scales with salvagedCount / soft ref (no hard MAX) ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const leader = world.leader;
   const ref = BALANCE.cargoSpeedRefSlots;
@@ -1068,7 +1079,7 @@ function advancePinned(
 
 // --- camp set / unload（荷下ろし）/ pick up ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   world.leader.pos = { x: 600, y: 400 };
   world.leader.salvagedCount = 2;
@@ -1125,7 +1136,7 @@ function advancePinned(
 
 // --- field containers: many more than the old ~6 cap ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   assert.ok(
     world.containers.length >= BALANCE.fieldContainerCount,
     `expected >= ${BALANCE.fieldContainerCount} field crates, got ${world.containers.length}`,
@@ -1138,7 +1149,7 @@ function advancePinned(
 
 // --- enemy death drops 0–2 at death site ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const before = world.containers.length;
   const at = { x: 900, y: 400 };
@@ -1160,7 +1171,7 @@ function advancePinned(
 
 // --- purge: camp deposit + field drop ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   for (const e of world.enemies) {
     e.alive = false;
@@ -1196,7 +1207,7 @@ function advancePinned(
 
 // --- boarding requirements HUD clarity ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   for (const e of world.enemies) {
     e.alive = false;
@@ -1236,7 +1247,7 @@ function advancePinned(
 
 // --- unlimited carry: salvaged beyond soft ref / former MAX ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   assert.equal(world.carrierCapacity, BALANCE.carrierCapacityUnlimited);
   for (const e of world.enemies) {
@@ -1266,7 +1277,7 @@ function advancePinned(
 
 // --- escape-circle recovers ALL ground containers inside boarding circle ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   for (const e of world.enemies) {
     e.alive = false;
@@ -1316,7 +1327,7 @@ function advancePinned(
 
 // --- squad order applies to all living wingmen ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   assert.equal(applyOrderToAllWingmen(world, "raid"), world.wingmen.length);
   for (const w of world.wingmen) {
@@ -1329,7 +1340,7 @@ function advancePinned(
 
 // --- camp light-speed tip when empty in aura ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   world.leader.pos = { x: 400, y: 400 };
   assert.equal(setCampOrDeposit(world), "camp_set");
@@ -1346,7 +1357,7 @@ function advancePinned(
 
 // --- timeout while boarding already active: lift-off can still succeed ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   for (const e of world.enemies) {
     e.alive = false;
@@ -1375,7 +1386,7 @@ function advancePinned(
 
 // --- cover: hit chance modifiers + toggle stack rules ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const shooter = world.leader;
   const target = world.enemies[0]!;
@@ -1415,7 +1426,7 @@ function advancePinned(
 
 // --- stocked camp DR always visible (HUD fragment + percent) ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   assert.equal(campDrHudFragment(world), "");
   world.camp = { pos: { ...world.leader.pos }, stashedCount: 0 };
@@ -1429,7 +1440,7 @@ function advancePinned(
 
 // --- timeout camp-defense HUD model ---
 {
-  const world = createWorld(bootstrapFromSearch(""));
+  const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   let model = campDefenseHudModel(world);
   assert.equal(model.active, false);
@@ -1452,7 +1463,7 @@ function advancePinned(
 
 // --- light wingman quirk assignment + raid bias ---
 {
-  const world = createWorld(bootstrapFromSearch("?deployableMechs=4"));
+  const world = legacyWorld(bootstrapFromSearch("?deployableMechs=4"));
   assert.equal(quirkForWingmanIndex(0), "cling");
   assert.equal(quirkForWingmanIndex(1), "decoy");
   assert.equal(quirkForWingmanIndex(2), "sniper");
@@ -1559,7 +1570,7 @@ function advancePinned(
 
 // --- return SortieReport: severe damage is a retained, non-deployable wreck ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch(
       "?deployedInstanceIds=owned_wreck&startingAmmo=10&mechDurability=owned_wreck:20",
     ),
@@ -1575,7 +1586,7 @@ function advancePinned(
 
 // --- lostMechs: missing Battery snapshot is omitted; no fabricated 300/300 fallback ---
 {
-  const world = createWorld(
+  const world = legacyWorld(
     bootstrapFromSearch(
       "?deployedInstanceIds=lost_leader,lost_wing_a,lost_wing_b&deployableMechs=3&startingAmmo=30&mechBattery=lost_leader:300:300;lost_wing_a:300:212;lost_wing_b:300:180",
     ),
@@ -1689,7 +1700,7 @@ import {
 
 // --- wingman off-screen combat UX warn timers ---
 {
-  const world = createWorld(bootstrapFromSearch("?deployableMechs=3&startingAmmo=40"));
+  const world = legacyWorld(bootstrapFromSearch("?deployableMechs=3&startingAmmo=40"));
   startSortie(world);
   const w = world.wingmen[0]!;
   assert.equal(w.hitWarnT, 0);
@@ -1785,7 +1796,7 @@ const TEST_ONLY_TABLE: CircuitCommandUnlockTable = {
 const CIRCUIT_IDS = EXPLORE_COMMANDS.filter((d) => d.tier === "circuit").map((d) => d.id);
 
 function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: CircuitCommandUnlockTable) {
-  const w = createWorld(bootstrapFromSearch(""));
+  const w = legacyWorld(bootstrapFromSearch(""));
   startSortie(w);
   const equippedByUnit = {
     leader: [...equipped],
@@ -1830,7 +1841,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(isDebugUnlockToggleVisible(true), false, "release build hides debug toggle");
   const mem = new Map<string, string>();
   const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
-  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "all_unlocked", "preview default all unlocked");
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "release", "PR-B: preview default is release (unlock as you progress)");
   writeDebugCommandUnlockMode("release", store);
   assert.equal(mem.get(COMMAND_UNLOCK_MODE_STORAGE_KEY), "release");
   assert.equal(readDebugCommandUnlockMode(store), "release");
@@ -1838,11 +1849,12 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   writeDebugCommandUnlockMode("all_unlocked", store);
   assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store }), "all_unlocked");
   assert.equal(resolveCommandUnlockMode({ releaseLocks: true, store }), "release", "release build always locks");
+  assert.equal(readDebugCommandUnlockMode(store), "all_unlocked", "PR-B: the DEBUG all-unlocked choice is kept");
   mem.set(COMMAND_UNLOCK_MODE_STORAGE_KEY, "garbage");
-  assert.equal(readDebugCommandUnlockMode(store), "all_unlocked");
-  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store: null }), "all_unlocked");
+  assert.equal(readDebugCommandUnlockMode(store), "release", "PR-B: an unknown stored value falls back to release");
+  assert.equal(resolveCommandUnlockMode({ releaseLocks: false, store: null }), "release", "PR-B: no storage → release");
   const fresh = createWorld(bootstrapFromSearch(""));
-  assert.equal(fresh.commandUnlock.mode, "all_unlocked", "new world in preview/test = all unlocked");
+  assert.equal(fresh.commandUnlock.mode, "release", "PR-B: a new world in preview/test starts in release");
   assert.deepEqual(fresh.commandUnlock.equippedByUnit, {}, "no circuit equip source yet");
   assert.equal(fresh.wingmen.length, 2, "wingmen still deploy in every mode");
   console.log("explore command unlock mode resolution ok");
@@ -1872,7 +1884,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
 
 // Execution side — release mode, no circuits: circuit tier blocked (buttons + keys), world unchanged
 {
-  const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=release_leader,release_wing_a,release_wing_b&deployableMechs=3&startingAmmo=40"));
+  const w = legacyWorld(bootstrapFromSearch("?deployedInstanceIds=release_leader,release_wing_a,release_wing_b&deployableMechs=3&startingAmmo=40"));
   startSortie(w);
   w.commandUnlock = { mode: "release", equippedByUnit: {} };
   const stances = w.wingmen.map((x) => x.stance);
@@ -2222,7 +2234,7 @@ import {
     leader: ["cap-fa"],
     "wing-a": ["wingA-by"],
   }, "only FA / Bypass circuits become active per unit");
-  const w = createWorld(boot);
+  const w = legacyWorld(boot);
   startSortie(w);
   const table: CircuitCommandUnlockTable = {
     "cap-fa": ["camp_set"],
@@ -2264,7 +2276,7 @@ import {
 // mechCircuits omitted: preserve the existing no-handoff behavior.
 // ---------------------------------------------------------------------------
 {
-  const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=cap,wingA,wingB"));
+  const w = legacyWorld(bootstrapFromSearch("?deployedInstanceIds=cap,wingA,wingB"));
   assert.deepEqual(w.commandUnlock.equippedByUnit, {});
   assert.equal(isCommandUnlockedFor(w, "camp_set"), true, "preview legacy URL remains unlocked");
   assert.equal(isWingmanMobileFor(w, "wing-a"), true, "legacy URL keeps wing mobility behavior");
@@ -2330,7 +2342,7 @@ import {
 
   // release, no circuit: self-defense — shoots in-range enemy, never chases
   {
-    const w = createWorld(
+    const w = legacyWorld(
       bootstrapFromSearch(
         "?deployedInstanceIds=selfdef_leader,selfdef_wing_a,selfdef_wing_b&deployableMechs=3&startingAmmo=40",
       ),
@@ -2404,7 +2416,7 @@ import {
   // Extraction under EXISTING rules: immobile wingmen outside the circle are left behind;
   // outputs keep their shape (flat returnKind wear for every deployed id).
   {
-    const w = createWorld(bootstrapFromSearch("?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30"));
+    const w = legacyWorld(bootstrapFromSearch("?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30"));
     startSortie(w);
     w.commandUnlock = { mode: "release", equippedByUnit: {} };
     clearFoes(w);
@@ -2430,7 +2442,7 @@ import {
   const QS = "?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30";
   const MOBILITY_TABLE: CircuitCommandUnlockTable = { "test-circuit-mobility": ["wing_mobility"] };
   const setup = (mode: "release" | "all_unlocked", circuits: string[] = [], table?: CircuitCommandUnlockTable) => {
-    const w = createWorld(bootstrapFromSearch(QS));
+    const w = legacyWorld(bootstrapFromSearch(QS));
     startSortie(w);
     w.commandUnlock = {
       mode,
@@ -2537,7 +2549,7 @@ import {
   // Return contract captures the existing left-behind source state without changing
   // the Explore-local display record or inventing wreck/enemy semantics.
   {
-    const w = createWorld(
+    const w = legacyWorld(
       bootstrapFromSearch(
         "?deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30&mechCurrentAmmo=m1:12;m2:7;m3:9&mechBattery=m1:300:250;m2:300:212;m3:300:180&mechCircuits=m2~circuit_lost*fa*5",
       ),
@@ -2568,7 +2580,7 @@ import {
   // Via Invade (sector + HubSave front seed): the left-behind wingman keeps its place.
   {
     const w = attachLostMechContext(
-      createWorld(
+      legacyWorld(
         bootstrapFromSearch(
           "?sectorX=2&sectorY=-1&density=0.3&deployedInstanceIds=m1,m2,m3&deployableMechs=3&startingAmmo=30&mechCurrentAmmo=m1:12;m2:7;m3:9&mechBattery=m1:300:250;m2:300:212;m3:300:180&mechCircuits=m2~circuit_lost*fa*5",
         ),
@@ -2612,7 +2624,7 @@ import {
   const search = "?deployedInstanceIds=m1,m2&deployableMechs=2&mechDurability=m1:100;m2:80";
   // (a) 撤退 between frames
   {
-    const w = createWorld(bootstrapFromSearch(search));
+    const w = legacyWorld(bootstrapFromSearch(search));
     const watch = createPhaseWatcher(w.phase);
     startSortie(w);
     watch.markRendered(w.phase); // btn-start renders the sortie screen
@@ -2629,7 +2641,7 @@ import {
   }
   // (b) X lift-off inside a tick goes through the same watcher
   {
-    const w = createWorld(bootstrapFromSearch(search));
+    const w = legacyWorld(bootstrapFromSearch(search));
     const watch = createPhaseWatcher(w.phase);
     startSortie(w);
     watch.markRendered(w.phase);
@@ -2691,7 +2703,7 @@ import {
   };
   /** Sortie with m2 (wing-a) left outside the circle, m3 wrecked by extract wear. */
   const runSortie = (search: string) => {
-    const w = createWorld(bootstrapFromSearch(search));
+    const w = legacyWorld(bootstrapFromSearch(search));
     startSortie(w);
     for (const e of w.enemies) { e.alive = false; e.hp = 0; }
     w.currentAmmo.m1 = 21; // leader fired 7 of 28 (unset → full)
@@ -2755,7 +2767,7 @@ import {
   const re = resortieSearch(search, hubRe, w.deployedInstanceIds);
   assert.ok(re);
   assert.deepEqual(re!.deployedInstanceIds, ["m1"]);
-  const w2 = createWorld(bootstrapFromSearch(re!.search));
+  const w2 = legacyWorld(bootstrapFromSearch(re!.search));
   assert.deepEqual(w2.deployedInstanceIds, ["m1"]);
   assert.equal(w2.wingmen.length, 0, "no left-behind / wrecked wingman in the next sortie");
   assert.equal(w2.currentAmmo.m1, 21, "saved ammo, not refilled");
@@ -2777,7 +2789,7 @@ import {
     assert.deepEqual(plan.ids, shared.resolveSortieSelection(shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(selStore)!.hub)), "same value the hangar reads");
     const reSel = resortieSearch(search, plan.hub, plan.ids);
     assert.deepEqual(reSel?.deployedInstanceIds, ["m1", "m5"]);
-    assert.deepEqual(createWorld(bootstrapFromSearch(reSel!.search)).deployedInstanceIds, ["m1", "m5"]);
+    assert.deepEqual(legacyWorld(bootstrapFromSearch(reSel!.search)).deployedInstanceIds, ["m1", "m5"]);
     // nothing selected can sortie → default first 3 deployable
     const gone = memStore();
     assert.ok(shared.saveHubSaveToLocalStorage({ ...wide, sortieSelection: ["m3"] }, gone));
@@ -2793,7 +2805,7 @@ import {
   assert.equal(empty.getItem(shared.HUB_SAVE_STORAGE_KEY), null);
   const reFallback = resortieSearch(search, hubForResortie(search, w, payload, empty), w.deployedInstanceIds);
   assert.deepEqual(reFallback?.deployedInstanceIds, ["m1"]);
-  assert.equal(createWorld(bootstrapFromSearch(reFallback!.search)).currentAmmo.m1, 21);
+  assert.equal(legacyWorld(bootstrapFromSearch(reFallback!.search)).currentAmmo.m1, 21);
 
   // (4) nobody left to sortie → null (button shows a note instead)
   const allGone = shared.normalizeHubSnapshot({ ...saved, fleet: saved.fleet.filter((m) => m.instanceId !== "m1") });
@@ -2801,15 +2813,15 @@ import {
 
   // (5) deploy URL without mechBattery → return omits battery (no fake 300/300)
   {
-    const wb = createWorld(bootstrapFromSearch("?deployedInstanceIds=x1&deployableMechs=1&mechDurability=x1:100"));
+    const wb = legacyWorld(bootstrapFromSearch("?deployedInstanceIds=x1&deployableMechs=1&mechDurability=x1:100"));
     startSortie(wb);
     assert.equal(executeExploreCommand(wb, { id: "abort" }).status, "done");
     assert.equal(exploreReturnPayload(wb)?.mechBattery, undefined);
   }
   // (6) two sorties never share a sortieId (per-sortie nonce)
   {
-    const a = createWorld(bootstrapFromSearch(search)); startSortie(a); executeExploreCommand(a, { id: "abort" });
-    const b = createWorld(bootstrapFromSearch(search)); startSortie(b); executeExploreCommand(b, { id: "abort" });
+    const a = legacyWorld(bootstrapFromSearch(search)); startSortie(a); executeExploreCommand(a, { id: "abort" });
+    const b = legacyWorld(bootstrapFromSearch(search)); startSortie(b); executeExploreCommand(b, { id: "abort" });
     assert.notEqual(exploreReturnPayload(a)?.sortieId, exploreReturnPayload(b)?.sortieId);
   }
   // (7) main.ts saves when the result screen renders (before any result button)
@@ -2870,7 +2882,7 @@ import {
     return url.search;
   };
   const extractHome = (search: string, hub: ReturnType<typeof makeHub>, leaveWingman: boolean) => {
-    const w = attachLostMechContext(createWorld(bootstrapFromSearch(search)), hub);
+    const w = attachLostMechContext(legacyWorld(bootstrapFromSearch(search)), hub);
     startSortie(w);
     for (const e of w.enemies) {
       e.alive = false;
@@ -2982,7 +2994,7 @@ import {
   assert.equal(invadeSquadSearch(`${invadeLink}&deployedInstanceIds=m1&deployableMechs=1`, hub0), null, "link with a squad untouched");
   assert.equal(invadeSquadSearch(invadeLink, null), null, "no save → unchanged");
 
-  const world = (q: string) => attachLostMechContext(createWorld(bootstrapFromSearch(q)), load());
+  const world = (q: string) => attachLostMechContext(legacyWorld(bootstrapFromSearch(q)), load());
   /** Sortie; `leftOut` wingmen are pulled out of the circle just before lift-off; `leaderAt` is where X is pressed. */
   const run = (q: string, leftOut: boolean, leaderAt?: { x: number; y: number }) => {
     const w = world(q);
@@ -3183,7 +3195,7 @@ import {
 
   // (2) World creation attaches stranded drops and initialOwnedCircuitIds
   const boot = bootstrapFromSearch("?sectorX=2&sectorY=3&density=0.2&deployedInstanceIds=m1,m2&deployableMechs=2");
-  const w = attachLostMechContext(createWorld(boot), hub);
+  const w = attachLostMechContext(legacyWorld(boot), hub);
   assert.equal(w.strandedDrops?.length, 2);
   assert.deepEqual(w.recoveredDropIds, []);
   assert.deepEqual(w.initialOwnedCircuitIds, ["c_already_owned"]);
@@ -3287,7 +3299,7 @@ import {
     return url.search;
   };
   const begin = (viaInvade: boolean, hub = makeHub()) => {
-    const w = attachLostMechContext(createWorld(bootstrapFromSearch(deploySearch(viaInvade))), hub);
+    const w = attachLostMechContext(legacyWorld(bootstrapFromSearch(deploySearch(viaInvade))), hub);
     startSortie(w);
     for (const e of w.enemies) { e.alive = false; e.hp = 0; }
     return w;
@@ -3520,7 +3532,7 @@ import {
       return url.search;
     };
     const next = attachLostMechContext(
-      createWorld(bootstrapFromSearch(leaderOnlySearch())),
+      legacyWorld(bootstrapFromSearch(leaderOnlySearch())),
       saved,
     );
     const sm = next.strandedMechs ?? [];
@@ -3538,7 +3550,7 @@ import {
     assert.deepEqual(again.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420 }]]);
     // recovered → destroyed hull with its circuits
     const rec = attachLostMechContext(
-      createWorld(bootstrapFromSearch(leaderOnlySearch())),
+      legacyWorld(bootstrapFromSearch(leaderOnlySearch())),
       saved,
     );
     startSortie(rec);
@@ -3596,7 +3608,7 @@ import {
   const deploySearch = (extra: string) =>
     `?deployedInstanceIds=m1,m2,m3&deployableMechs=3&mechDurability=m1:100;m2:100;m3:100&mechBattery=m1:300:200;m2:300:200;m3:300:200${extra}`;
   const open = (extra = "") => {
-    const w = createWorld(bootstrapFromSearch(deploySearch(extra)));
+    const w = legacyWorld(bootstrapFromSearch(deploySearch(extra)));
     startSortie(w);
     killEnemies(w);
     return w;

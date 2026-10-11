@@ -2,6 +2,7 @@ import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
 import { getCoverObjects } from "./coverObjects";
+import { visionMul } from "./circuitPlay";
 import { STANCE_LABEL, type World } from "./types";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from "./lockedOrder";
@@ -222,7 +223,7 @@ export function renderWorld(
   const friendlies = [world.leader, ...world.wingmen];
   for (const e of world.enemies) {
     if (!e.alive) continue;
-    const seen = friendlies.some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision);
+    const seen = friendlies.some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision * visionMul(world, u.id));
     if (!seen) continue;
     ctx.fillStyle = "#ff6b6b";
     ctx.beginPath();
@@ -300,6 +301,28 @@ export function renderWorld(
       ctx.strokeStyle = "#f0b42955";
       ctx.beginPath();
       ctx.arc(tx(w.waypoint.x), ty(w.waypoint.y), world.balance.patrolRadius * sx, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // P1 (PR-B): selected wingmen get a frame; ordered move points get a small marker.
+  const play = world.circuitPlay;
+  if (play) {
+    for (const id of play.wingSelect?.ids ?? []) {
+      const w = world.wingmen.find((u) => u.id === id);
+      if (!w || !w.alive) continue;
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(tx(w.pos.x) - w.radius * sx - 5, ty(w.pos.y) - w.radius * sy - 5, (w.radius * sx + 5) * 2, (w.radius * sy + 5) * 2);
+      ctx.lineWidth = 1;
+    }
+    for (const [id, pt] of Object.entries(play.wingMove ?? {})) {
+      if (!world.wingmen.some((u) => u.id === id && u.alive)) continue;
+      const mx = tx(pt.x);
+      const my = ty(pt.y);
+      ctx.strokeStyle = "#ffd166";
+      ctx.beginPath();
+      ctx.moveTo(mx, my - 6); ctx.lineTo(mx + 6, my); ctx.lineTo(mx, my + 6); ctx.lineTo(mx - 6, my); ctx.closePath();
       ctx.stroke();
     }
   }
