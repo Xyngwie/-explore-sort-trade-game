@@ -341,3 +341,17 @@ RS-01 の例外として、置き去り機体の扱いは出撃経路で分か�
 - `circuits[].effectKey`: 2×2〜19×19 の導通した回路（効果値 > 0）に、正規化（`assignMissingEffectKeys`、`createHubSave` も通る）で一度だけ付ける。偽盤は通常行動、真盤は小隊行動の値。付いたキーは引き直さない。ただし盤の種類に合わないキー（Restore で偽盤が真盤になった回路の通常行動のキー）は、次の正規化で一度だけ小隊行動から選び直す（`keyMatchesBoard`）。値の一覧は `shared` `circuit-actions.ts` の `FALSE_BOARD_EFFECT_KEYS`・`TRUE_BOARD_EFFECT_KEYS`。
 - 偽の 1×1（`makeFalseOneByOne`）は、隊長（`fleet[0]`）に回路が 1 枚も無いときだけ、格納庫の装備画面と Explore の出撃準備で付ける（`ensureCaptainFalseOneByOne`、Q2）。付いている回路は動かさない。
 - 5-3 の途中保存（`estg.sortieCheckpoint`）は HubSave とは別のキーで、変えていない。途中保存の `World` に入る `circuitPlay` は、読み直すときに霧の配列（`fogOpen`）を作り直す。`circuitPlay` の無い古い途中保存もそのまま読める。
+
+### 12.10 初クリアのキー（#272、2026-10-12 神宮の Go・S1〜S3）
+
+保存キーは増やさず、`HubSnapshot` に任意のキーを 1 つ足した。`v` は 3 のまま。
+
+| フィールド | 型 | 既定・正規化 | 書くもの |
+|---|---|---|---|
+| `firstInvadeClear` | `{ boardSeed: number \| null; at?: string }`（任意） | 欠落・`null`・`false` は **付けない**（未クリア）。それ以外の値（壊れた形・`true` など）はクリア済みとして `{ boardSeed: null }` に直す（再付与を防ぐ）。`boardSeed` は uint32、`at` は ISO 文字列（40 字まで） | Invade（`hub-persist.ts` `persistFrontSessionWithClear`）。盤が sectorCleared に**変わった**操作の保存でだけ、`recordFirstInvadeClear` で記録する |
+
+- S2: キーの無いセーブは未クリア。盤の様子（保存済みの盤が掃討済み・出撃の帰還の `invadeSector`・intel の `sectorCleared`・`frontProgress` の開いたマス・`bulletinUnlocked`）からは推測しない。読み込んだ時点で掃討済みの盤は数えず、次に盤を掃討したときに記録する（#271 の照合結果を取り込み）。
+- 記録と同じスナップショットで、未修復の「4」の 1×1 を倉庫に 1 枚入れる（`circuitId` `true-1x1`、`circuitBoard.puzzleId` `true-1x1-four`、`restoreState` `unrestored`、`origin` `picked_up`、`equippedTo` null、`locked` なし）。キーがあれば何もしない（二度目の掃討・読み直し・二重の保存・古い写しの適用でも増えない。「4」を売っても再付与しない）。すでに「4」を持つセーブ（テスト用の直った形を含む）には 2 枚目を入れない。
+- `true-1x1-four` の盤は 1×1・数字 4（`resolveTrueBoardClues`）。Restore で 4 辺の閉ループにすると Fully Awakened ＋ Perfect で刻印ロックになり、そこで初めて真の 1×1（枠 +1・`wing_mobility` など）として数える。
+- S1: 真盤の率（`resolvePerfectCircuitInjectRate`）は、このキーが無いあいだ 0。`?perfectRate=` の指定だけは効く（デバッグ用）。
+- 5-3 の途中保存（`estg.sortieCheckpoint`）・回路・残骸（`lostMechs` の `kind: "wreck"`）は変えていない。selftest: `shared` `first-clear.selftest.ts`、`invade` `first-clear.selftest.ts`。

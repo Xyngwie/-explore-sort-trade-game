@@ -170,6 +170,8 @@ Seeded true boards are mixed into restore generation / hangar demo grants via **
 3. DEV / localhost → 33%
 4. else → **1%** prod
 
+**S1 gate (#272, 2026-10-12 神宮の Go / 10/7 S1):** steps 2–4 return **0** until the first Invade clear (`HubSnapshot.firstInvadeClear`, read from the stored HubSave; tests pass `ctx.firstCleared`). No save / missing key → 0 (S2). Step 1 (`?perfectRate=`) still wins as a debug knob. Crafting from junk now rolls with this rate too (hit → unrestored sized true v2 board); purchase, field pickups and enemy drops have no circuit-creating path yet and must use this resolver when added.
+
 **API:** `rollPerfectCircuit(rng, { rate })` · `buildInjectedOrFlawedPuzzle` / restore `generatePuzzle(..., { injectRate })` · true path = `buildTruePuzzleFromSolution()` (verify-true 2×2 from known loop). Flawed path keeps random digit fill.
 
 **UI:** restore HUD and hangar seed log/notice show 「真盤気配」 / 真盤注入 only in DEV, localhost, tests, or an explicit `?perfectRate=` debug URL. Formal/production player-facing UI suppresses the marker (and injection-rate debug text), so production players must not be told that a board was a true-board injection. Majority of boards remain flawed.
