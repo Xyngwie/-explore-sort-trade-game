@@ -16,6 +16,7 @@ import {
   parseRestoreToTradeSearch,
   VERIFY_TRUE_PUZZLE_ID,
   VERIFY_TRUE_CLUES,
+  TRUE_ONE_BY_ONE_PUZZLE_ID,
   buildVerifyTrueSolutionMarks,
   buildVerifyTrueUnsolvedBoard,
   PERFECT_CIRCUIT_DEV_RATE,
@@ -477,20 +478,23 @@ assert.ok(
       prodRateType: typeof PERFECT_CIRCUIT_PROD_RATE,
       devRate: PERFECT_CIRCUIT_DEV_RATE,
       devRateType: typeof PERFECT_CIRCUIT_DEV_RATE,
-      resolvedProdRate: resolvePerfectCircuitInjectRate({ hostname: "cdn.example" }),
-      resolvedDevRate: resolvePerfectCircuitInjectRate({ isDev: true }),
+      resolvedProdRate: resolvePerfectCircuitInjectRate({ hostname: "cdn.example", firstCleared: true }),
+      resolvedDevRate: resolvePerfectCircuitInjectRate({ isDev: true, firstCleared: true }),
     }),
   );
   assert.equal(PERFECT_CIRCUIT_PROD_RATE, 0.01);
   assert.equal(PERFECT_CIRCUIT_DEV_RATE, 0.33);
   assert.equal(
-    resolvePerfectCircuitInjectRate({ isDev: true }),
+    resolvePerfectCircuitInjectRate({ isDev: true, firstCleared: true }),
     PERFECT_CIRCUIT_DEV_RATE,
   );
   assert.equal(
-    resolvePerfectCircuitInjectRate({ hostname: "cdn.example" }),
+    resolvePerfectCircuitInjectRate({ hostname: "cdn.example", firstCleared: true }),
     PERFECT_CIRCUIT_PROD_RATE,
   );
+  // S1: 0% until the first Invade clear (no HubSave in Node → not cleared).
+  assert.equal(resolvePerfectCircuitInjectRate({ hostname: "cdn.example" }), 0);
+  assert.equal(resolvePerfectCircuitInjectRate({ isDev: true }), 0);
 
   // Injection honors the requested size (STATUS 項目12): 6×6 true board.
   const trueBoard = generatePuzzle("roll-me", 6, 6, { forceKind: "true" });
@@ -861,6 +865,42 @@ assert.ok(
   assert.equal(slowPerfectBoardSide("?circuitId=" + buildSizedTruePuzzleIdV2("s", 17, 17)), 17);
   assert.equal(slowPerfectBoardSide(""), null);
   console.log("restore max 20×20 (9..20, clamp >20, oversize stored board, 生成中 notice) ok");
+}
+
+{
+  // S3 (神宮 10/7, wired 10/12): Restore opens the unrestored 「4」 1×1, and a closed loop is Perfect.
+  const four = createEmptyCircuitBoard(1, 1, TRUE_ONE_BY_ONE_PUZZLE_ID);
+  const url = buildTradeToRestoreUrl({ circuitId: "true-1x1", circuitBoard: four });
+  const s1 = bootstrapFromSearch(new URL(url).search);
+  assert.equal(s1.source, "handoff-board");
+  assert.equal(s1.locked, false, "unrestored 「4」 is editable");
+  assert.equal(s1.puzzle.cols, 1);
+  assert.equal(s1.puzzle.rows, 1);
+  assert.deepEqual(s1.puzzle.clues, [[4]], "one cell, clue 4");
+  assert.equal(s1.puzzle.rarity, "perfect_rare");
+  assert.equal(s1.marks.length, 4);
+  assert.equal(classifyPlayResult(s1.puzzle.clues, s1.marks, 1, 1).outcome, "offline");
+  const loop: EdgeMark[] = [1, 1, 1, 1];
+  const done = classifyPlayResult(s1.puzzle.clues, loop, 1, 1);
+  assert.equal(done.outcome, "fully_awakened");
+  assert.equal(done.perfectClearance, true, "→ Perfect lock");
+  const three = classifyPlayResult(s1.puzzle.clues, [1, 1, 1, 0], 1, 1);
+  assert.notEqual(three.outcome, "fully_awakened");
+  const ret = buildReturnToTradeUrl({
+    circuitId: "true-1x1",
+    cols: 1,
+    rows: 1,
+    marks: loop,
+    puzzleId: s1.puzzle.puzzleId,
+    outcome: "fully_awakened",
+    perfect: true,
+    locked: true,
+    baseUrl: "https://example.test/trade/",
+  });
+  const parsed = parseRestoreToTradeSearch(new URL(ret).search);
+  assert.equal(parsed?.circuitBoard.puzzleId, TRUE_ONE_BY_ONE_PUZZLE_ID);
+  assert.equal(parsed?.circuitBoard.locked, true);
+  console.log("restore S3 1×1 「4」 ok");
 }
 
 console.log("restore circuit.selftest ok");

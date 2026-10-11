@@ -2,6 +2,7 @@ import {
   RESTORE_MAX_SIDE,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
+  resolvePerfectCircuitInjectRate,
   saveHubSaveToLocalStorage,
 } from "@estg/shared";
 import {
@@ -46,7 +47,17 @@ function craftCircuit(side: number): void {
   // Same style as the sell confirm; only for 100c and up (8×8+).
   const confirmText = junkCraftConfirmText(side);
   if (confirmText && !window.confirm(confirmText)) return;
-  const result = craftJunkCircuit(getHub(), side, { circuitId: makeCircuitId() });
+  // S1: 0% until the first Invade clear, then the usual rate (1% on the public preview).
+  const trueBoardRate = resolvePerfectCircuitInjectRate({
+    search: window.location.search,
+    hostname: window.location.hostname,
+    isDev: Boolean(import.meta.env.DEV),
+    envRate:
+      (import.meta.env.VITE_PERFECT_CIRCUIT_RATE as string | undefined) ??
+      (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ??
+      null,
+  });
+  const result = craftJunkCircuit(getHub(), side, { circuitId: makeCircuitId(), trueBoardRate });
   if (!result.ok) return;
   saveHubSaveToLocalStorage(result.hub);
   window.location.reload();

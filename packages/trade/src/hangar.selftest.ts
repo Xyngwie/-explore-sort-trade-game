@@ -692,13 +692,16 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.equal(PERFECT_CIRCUIT_PROD_RATE, 0.01);
   assert.equal(PERFECT_CIRCUIT_DEV_RATE, 0.33);
   assert.equal(
-    resolveHangarPerfectInjectRate({ isDev: true }),
+    resolveHangarPerfectInjectRate({ isDev: true, firstCleared: true }),
     PERFECT_CIRCUIT_DEV_RATE,
   );
   assert.equal(
-    resolveHangarPerfectInjectRate({ hostname: "example.com" }),
+    resolveHangarPerfectInjectRate({ hostname: "example.com", firstCleared: true }),
     PERFECT_CIRCUIT_PROD_RATE,
   );
+  // S1: 0% until the first Invade clear.
+  assert.equal(resolveHangarPerfectInjectRate({ hostname: "example.com", firstCleared: false }), 0);
+  assert.equal(resolveHangarPerfectInjectRate({ isDev: true, firstCleared: false }), 0);
   assert.equal(
     resolveHangarPerfectInjectRate({ search: "?perfectRate=0.33" }),
     0.33,

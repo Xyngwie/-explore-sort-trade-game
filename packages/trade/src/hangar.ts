@@ -942,6 +942,8 @@ export function resolveHangarPerfectInjectRate(ctx?: {
   hostname?: string | null;
   isDev?: boolean;
   envRate?: string | number | null;
+  /** S1: omit to read `firstInvadeClear` from HubSave (0% before the first clear). */
+  firstCleared?: boolean;
 }): number {
   return resolvePerfectCircuitInjectRate(ctx ?? {});
 }

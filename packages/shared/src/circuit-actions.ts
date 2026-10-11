@@ -21,6 +21,7 @@ import {
   resolveCluesForCircuitBoard,
 } from "./circuit-clues";
 import { loadHubSaveFromLocalStorage, type HubCircuitRecord, type HubSnapshot } from "./hub-save";
+import { TRUE_ONE_BY_ONE_PUZZLE_ID, isTrueOneByOnePuzzleId } from "./perfect-circuit-seed";
 import { createOwnedMech, syncMechStatus } from "./mech-fleet";
 import { scaleYieldBag, type YieldBag } from "./sort-yield";
 
@@ -315,9 +316,36 @@ export function makeFalseOneByOne(circuitId: string): HubCircuitRecord {
   };
 }
 
-export function makeTrueOneByOne(circuitId: string): HubCircuitRecord {
+/**
+ * The "4" 1×1 as found on the first Invade clear (S3, 神宮 10/12 Go):
+ * unrestored, empty edges, clue 4 from {@link TRUE_ONE_BY_ONE_PUZZLE_ID}.
+ * Restore draws the loop; the result locks like any Perfect board. Until then
+ * it is not a true 1×1 (no slot, no command, no ×1 multiplier).
+ */
+export function makeTrueOneByOne(circuitId: string, at?: string): HubCircuitRecord {
+  const board = createEmptyCircuitBoard(1, 1, TRUE_ONE_BY_ONE_PUZZLE_ID);
+  const rec: HubCircuitRecord = {
+    circuitId,
+    circuitBoard: board,
+    restoreState: "unrestored",
+    origin: "picked_up",
+    equippedTo: null,
+    outcome: "offline",
+  };
+  if (at) {
+    rec.acquiredAt = at;
+    rec.updatedAt = at;
+  }
+  return rec;
+}
+
+/**
+ * A "4" 1×1 after Restore (Fully Awakened + Perfect lock). Tests and fixtures;
+ * the game itself only reaches this through Restore.
+ */
+export function makeRestoredTrueOneByOne(circuitId: string): HubCircuitRecord {
   const board = {
-    ...createEmptyCircuitBoard(1, 1, circuitId),
+    ...createEmptyCircuitBoard(1, 1, TRUE_ONE_BY_ONE_PUZZLE_ID),
     edgeState: oneByOneEdges(),
     outcome: "fully_awakened" as const,
     perfect: true,
@@ -332,6 +360,11 @@ export function makeTrueOneByOne(circuitId: string): HubCircuitRecord {
     outcome: "fully_awakened",
     locked: true,
   };
+}
+
+/** The "4" in any state (unrestored or restored): its fixed puzzleId, or a restored true 1×1. */
+export function isFoundTrueOneByOne(rec: HubCircuitRecord): boolean {
+  return isTrueOneByOnePuzzleId(rec.circuitBoard.puzzleId) || isTrueOneByOne(rec);
 }
 
 function lostIds(hub: HubSnapshot): Set<string> {
@@ -375,13 +408,13 @@ export function ensureCaptainFalseOneByOne(hub: HubSnapshot): HubSnapshot {
 }
 
 /**
- * First discovery of one true 1×1. Does not attach it to lost mechs or wrecks.
- * No-op when one is already owned.
+ * First discovery of one "4" 1×1 (unrestored) into the stash. Does not attach
+ * it to lost mechs or wrecks. No-op when one is already owned in any state.
  */
-export function discoverTrueOneByOne(hub: HubSnapshot, circuitId = "true-1x1"): HubSnapshot {
-  if (hasTrueOneByOne(hub)) return hub;
+export function discoverTrueOneByOne(hub: HubSnapshot, circuitId = "true-1x1", at?: string): HubSnapshot {
+  if (hub.circuits.some(isFoundTrueOneByOne)) return hub;
   if (hub.circuits.some((c) => c.circuitId === circuitId)) return hub;
-  const rec = makeTrueOneByOne(circuitId);
+  const rec = makeTrueOneByOne(circuitId, at);
   return { ...hub, circuits: [rec, ...hub.circuits] };
 }
 
@@ -423,6 +456,16 @@ export function circuitTrueBoardRate(hub: HubSnapshot | null | undefined, baseRa
   const sum = base + pt / 100;
   if (base <= TRUE_BOARD_RATE_CAP) return Math.min(TRUE_BOARD_RATE_CAP, sum);
   return sum;
+}
+
+/** Stored HubSave has `firstInvadeClear` (S2: missing key / no save / failed read → false). */
+export function storedHubFirstInvadeCleared(): boolean {
+  try {
+    const save = loadHubSaveFromLocalStorage();
+    return save?.hub?.firstInvadeClear != null;
+  } catch {
+    return false;
+  }
 }
 
 /** Load the hangar and add its bonus. Missing hub, failed load, or +0 keeps `base`. */
