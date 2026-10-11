@@ -16,6 +16,7 @@ import {
   buildSizedTruePuzzleIdV2,
   resolveSizedTruePuzzle,
 } from "./perfect-circuit-sized";
+import { applyStoredHubPerfectBonus } from "./circuit-actions";
 
 /** puzzleId stamped on CircuitBoardState / restore generatePuzzle lookup. */
 export const VERIFY_TRUE_PUZZLE_ID = "verify-true-2";
@@ -293,21 +294,25 @@ export function resolvePerfectCircuitInjectRate(
   const fromQuery = parsePerfectCircuitRate(
     params?.get(PERFECT_CIRCUIT_RATE_QUERY_KEY) ?? undefined,
   );
-  if (fromQuery != null) return fromQuery;
-
-  const fromEnv = parsePerfectCircuitRate(ctx.envRate);
-  if (fromEnv != null) return fromEnv;
-
-  const host = (ctx.hostname ?? "").trim().toLowerCase();
-  if (
-    ctx.isDev === true ||
-    host === "localhost" ||
-    host === "127.0.0.1"
-  ) {
-    return PERFECT_CIRCUIT_DEV_RATE;
+  let base: number;
+  if (fromQuery != null) base = fromQuery;
+  else {
+    const fromEnv = parsePerfectCircuitRate(ctx.envRate);
+    if (fromEnv != null) base = fromEnv;
+    else {
+      const host = (ctx.hostname ?? "").trim().toLowerCase();
+      if (
+        ctx.isDev === true ||
+        host === "localhost" ||
+        host === "127.0.0.1"
+      ) {
+        base = PERFECT_CIRCUIT_DEV_RATE;
+      } else {
+        base = PERFECT_CIRCUIT_PROD_RATE;
+      }
+    }
   }
-
-  return PERFECT_CIRCUIT_PROD_RATE;
+  return applyStoredHubPerfectBonus(base);
 }
 
 export type InjectedBoardKind = "true" | "flawed";

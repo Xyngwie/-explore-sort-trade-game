@@ -24,7 +24,6 @@ import {
   TRENCH_SETUP_SEC,
   addDestroyedGen1,
   classifyCircuit,
-  discoverTrueOneByOne,
   effectRate,
   ensureCaptainFalseOneByOne,
   hasTrueOneByOne,
@@ -39,6 +38,7 @@ import {
 } from "@estg/shared";
 import { COVER_RADIUS, getCoverObjects } from "./coverObjects";
 import { dist, norm, type Vec2 } from "./math";
+import { spawnContainersAt } from "./orders";
 import type { Bullet, Unit, World } from "./types";
 
 export type CircuitOrder =
@@ -49,7 +49,7 @@ export type CircuitOrder =
   | { kind: "trench"; x: number; y: number; left: number; r: number }
   | { kind: "distribute"; x: number; y: number; left: number }
   | { kind: "suppress"; enemyId: string; left: number }
-  | { kind: "haul"; prevStance: Unit["stance"] }
+  | { kind: "haul"; prevStance: Record<string, Unit["stance"]> }
   | null;
 
 export type CircuitPlayState = {
@@ -74,6 +74,13 @@ export type CircuitPlayState = {
   discoverDone: boolean;
   stepDt: number;
   baseAmmo: Record<string, number>;
+  /** Second press of an open return circle pulls living units outside it inward. */
+  pullOutside: boolean;
+  /** Last wreck tapped for the existing collect command. Not a save key. */
+  collectTap: string | null;
+  collectDown: boolean;
+  /** Wreck ids currently in the leader inventory. Not a save key. */
+  carried: string[];
 };
 
 const ORDER_LABEL: Record<string, string> = {
@@ -111,6 +118,10 @@ function blank(rules: boolean): CircuitPlayState {
     discoverDone: false,
     stepDt: 0.016,
     baseAmmo: {},
+    pullOutside: false,
+    collectTap: null,
+    collectDown: false,
+    carried: [],
   };
 }
 
@@ -361,36 +372,55 @@ export function consumeCircuitClick(world: World, pt: Vec2): boolean {
     const enemy = nearestUnit(world.enemies, pt);
     if (!enemy) return true;
     if (pending.kind === "air_support") tryAirSupport(world, enemy);
-    else if (pending.kind === "focus") p.order = { kind: "focus", enemyId: enemy.id };
-    else if (pending.kind === "suppress") p.order = { kind: "suppress", enemyId: enemy.id, left: SUPPRESS_SEC };
+    else if (pending.kind === "focus") assignOrder(world, { kind: "focus", enemyId: enemy.id });
+    else if (pending.kind === "suppress") assignOrder(world, { kind: "suppress", enemyId: enemy.id, left: SUPPRESS_SEC });
     else if (pending.kind === "pincer") {
       const who = holders(world, "pincer");
-      p.order = { kind: "pincer", enemyId: enemy.id, points: pincerPoints(world.leader.pos, enemy.pos, who) };
+      assignOrder(world, { kind: "pincer", enemyId: enemy.id, points: pincerPoints(world.leader.pos, enemy.pos, who) });
     }
     return true;
   }
   if (pending.pick === "ally") {
     const ally = nearestUnit(world.wingmen, pt);
     if (!ally) return true;
-    p.order = { kind: "protect", allyId: ally.id };
+    assignOrder(world, { kind: "protect", allyId: ally.id });
     return true;
   }
-  if (pending.kind === "forced_march") p.order = { kind: "forced_march", x: pt.x, y: pt.y };
+  if (pending.kind === "forced_march") assignOrder(world, { kind: "forced_march", x: pt.x, y: pt.y });
   else if (pending.kind === "trench") {
     const r = holders(world, "trench").reduce((s, u) => s + (selfKey(world, u.id, "trench")?.r ?? 0), 0);
     const left = Math.max(TRENCH_SETUP_MIN_SEC, TRENCH_SETUP_SEC * (1 - Math.min(0.9, r)));
-    p.order = { kind: "trench", x: pt.x, y: pt.y, left, r };
+    assignOrder(world, { kind: "trench", x: pt.x, y: pt.y, left, r });
   } else if (pending.kind === "distribute") {
-    p.order = { kind: "distribute", x: pt.x, y: pt.y, left: DISTRIBUTE_SEC };
+    assignOrder(world, { kind: "distribute", x: pt.x, y: pt.y, left: DISTRIBUTE_SEC });
   }
   return true;
+}
+
+function restoreHaul(world: World, order: { prevStance: Record<string, Unit["stance"]> }): void {
+  for (const [id, stance] of Object.entries(order.prevStance)) {
+    const u = friendlies(world).find((x) => x.id === id);
+    if (u) u.stance = stance;
+  }
+}
+
+function assignOrder(world: World, next: CircuitOrder): void {
+  const p = playOf(world);
+  if (!p) return;
+  if (p.order?.kind === "haul") restoreHaul(world, p.order);
+  p.order = next;
 }
 
 function issueHaul(world: World): void {
   const p = playOf(world);
   if (!p) return;
+  if (p.order?.kind === "haul") restoreHaul(world, p.order);
   if (!world.camp) world.camp = { pos: { ...world.leader.pos }, stashedCount: 0 };
-  p.order = { kind: "haul", prevStance: world.leader.stance };
+  const squad = anyone(world, "squad_haul");
+  const who = living(world).filter((u) => squad || !!selfKey(world, u.id, "haul_speed") || !!selfKey(world, u.id, "squad_haul"));
+  const prevStance: Record<string, Unit["stance"]> = {};
+  for (const u of who) prevStance[u.id] = u.stance;
+  p.order = { kind: "haul", prevStance };
 }
 
 function tryAirSupport(world: World, enemy: Unit): void {
@@ -421,14 +451,12 @@ export function noteCircuitExtract(world: World, captainIn: boolean): void {
       if (dist(w.pos, circle.center) <= circle.radius) w.recovered = true;
     }
   }
-  if (world.invadeSector && !p.discoverDone) p.grantTrue = true;
 }
 
 export function applyCircuitHubSide(world: World, hub: HubSnapshot): HubSnapshot {
   const p = playOf(world);
   if (!p) return hub;
   let next = hub;
-  if (p.grantTrue && !hasTrueOneByOne(next)) next = discoverTrueOneByOne(next);
   if (p.cooldownSec > 0) next = { ...next, airSupportCooldownSec: p.cooldownSec };
   else if (next.airSupportCooldownSec) {
     const { airSupportCooldownSec: _drop, ...rest } = next;
@@ -545,7 +573,7 @@ function syncCaps(world: World): void {
 function orderOwns(world: World, unit: Unit): boolean {
   const order = playOf(world)?.order;
   if (!order) return false;
-  if (order.kind === "focus" || order.kind === "distribute") return true;
+  if (order.kind === "distribute") return true;
   if (order.kind === "haul" && (anyone(world, "squad_haul") || selfKey(world, unit.id, "haul_speed") || selfKey(world, unit.id, "squad_haul"))) {
     return anyone(world, "squad_haul") || !!selfKey(world, unit.id, "haul_speed") || !!selfKey(world, unit.id, "squad_haul");
   }
@@ -681,12 +709,12 @@ function tickOrder(world: World, dt: number): void {
   const order = p.order;
   if (order.kind === "focus") {
     const foe = world.enemies.find((e) => e.id === order.enemyId);
-    if (!foe?.alive) p.order = null;
+    if (!foe?.alive) assignOrder(world, null);
     return;
   }
   if (order.kind === "pincer") {
     const foe = world.enemies.find((e) => e.id === order.enemyId);
-    if (!foe?.alive) { p.order = null; return; }
+    if (!foe?.alive) { assignOrder(world, null); return; }
     const who = Object.keys(order.points);
     if (who.every((id) => {
       const u = unitById(world, id);
@@ -699,7 +727,7 @@ function tickOrder(world: World, dt: number): void {
   }
   if (order.kind === "forced_march") {
     const who = holders(world, "forced_march");
-    if (who.length === 0 || who.every((u) => arrived(u, order, world))) p.order = null;
+    if (who.length === 0 || who.every((u) => arrived(u, order, world))) assignOrder(world, null);
     return;
   }
   if (order.kind === "trench") {
@@ -707,7 +735,7 @@ function tickOrder(world: World, dt: number): void {
     if (order.left <= 0) {
       const covers = getCoverObjects(world);
       covers.push({ id: `trench-${covers.length}`, pos: { x: order.x, y: order.y }, radius: COVER_RADIUS });
-      p.order = null;
+      assignOrder(world, null);
     }
     return;
   }
@@ -745,14 +773,14 @@ function tickOrder(world: World, dt: number): void {
           }
         }
       }
-      p.order = null;
+      assignOrder(world, null);
     }
     return;
   }
   if (order.kind === "suppress") {
     order.left -= dt;
     const foe = world.enemies.find((e) => e.id === order.enemyId);
-    if (!foe?.alive || order.left <= 0) p.order = null;
+    if (!foe?.alive || order.left <= 0) assignOrder(world, null);
     return;
   }
   if (order.kind === "haul" && world.camp) {
@@ -765,7 +793,7 @@ function tickOrder(world: World, dt: number): void {
           u.salvagedCount = 0;
         }
       }
-      p.order = null;
+      assignOrder(world, null);
     }
   }
 }
@@ -774,7 +802,7 @@ export function stepCircuitPlay(world: World, dt: number): void {
   const p = playOf(world);
   if (!p?.rules) return;
   p.stepDt = dt;
-  if (anyone(world, "lure") && p.order?.kind === "suppress") p.order = null;
+  placeCarried(world);
   if (p.cooldownSec > 0) p.cooldownSec = Math.max(0, p.cooldownSec - dt);
   for (const id of Object.keys(p.smg)) {
     const s = p.smg[id]!;
@@ -789,7 +817,9 @@ export function stepCircuitPlay(world: World, dt: number): void {
 export function circuitMoveTarget(world: World, unit: Unit): Vec2 | null {
   const p = playOf(world);
   if (!p?.rules) return null;
-  if (p.order?.kind === "focus") return null;
+  if (p.pullOutside && world.boarding && dist(unit.pos, world.boarding.center) > world.boarding.radius) {
+    return { ...world.boarding.center };
+  }
   if (orderOwns(world, unit)) return orderMove(world, unit);
   if (p.order && (p.order.kind === "distribute" || (p.order.kind === "haul" && anyone(world, "squad_haul")))) {
     return orderMove(world, unit);
@@ -845,6 +875,7 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
   const reach = dist(from.pos, target.pos);
   if (ammo <= 0 && m.melee > 0 && reach <= from.radius + target.radius) {
     target.hp -= world.balance.bulletDamage * (1 + m.melee) * m.attack;
+    noteDamageBreaksSuppress(world, target);
     if (target.hp <= 0) { target.hp = 0; target.alive = false; }
     from.cooldown = world.balance.fireCooldown;
     return true;
@@ -869,10 +900,18 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
   }
   if (from.cooldown > 0) return true;
   if (gun === "shotgun") {
-    for (const deg of [-10, -5, 0, 5, 10]) {
-      spawnShot(world, from, target, (1 + r) * m.attack, 1, false, (deg * Math.PI) / 180);
+    const angles = [-10, -5, 0, 5, 10];
+    let left = ammo;
+    let fired = 0;
+    for (const deg of angles) {
+      if (left <= 0) break;
+      spawnShot(world, from, target, (1 / 4) * (1 + r) * m.attack, 1, false, (deg * Math.PI) / 180);
+      left -= 1;
+      fired += 1;
     }
+    world.currentAmmo[from.instanceId] = ammo - fired;
     from.cooldown = world.balance.fireCooldown;
+    return true;
   } else if (gun === "lmg") {
     spawnShot(world, from, target, m.attack, 1, false, 0);
     from.cooldown = world.balance.fireCooldown / (2 * (1 + r));
@@ -1010,6 +1049,8 @@ export function applyLure(world: World, enemy: Unit, dt: number): boolean {
   enemy.vel = { x: dir.x * sp, y: dir.y * sp };
   enemy.pos.x += enemy.vel.x * dt;
   enemy.pos.y += enemy.vel.y * dt;
+  const p = playOf(world);
+  if (p?.order?.kind === "suppress" && p.order.enemyId === enemy.id) assignOrder(world, null);
   return true;
 }
 
@@ -1020,11 +1061,132 @@ export function salvageSeconds(world: World): number | null {
 export function secondExtractPull(world: World): boolean {
   const p = playOf(world);
   if (!p?.rules || !world.boarding) return false;
+  p.pullOutside = true;
   const c = world.boarding.center;
   for (const u of living(world)) {
     if (dist(u.pos, c) > world.boarding.radius) u.moveTarget = { ...c };
   }
   return true;
+}
+
+type WreckSpot = { id: string; pos: Vec2; move: (at: Vec2) => void };
+
+function wreckSpots(world: World): WreckSpot[] {
+  const out: WreckSpot[] = [];
+  for (const u of friendlies(world)) {
+    if (u.alive || !u.instanceId) continue;
+    out.push({
+      id: u.id,
+      pos: u.pos,
+      move: (at) => {
+        u.pos.x = at.x;
+        u.pos.y = at.y;
+      },
+    });
+  }
+  for (const m of world.strandedMechs ?? []) {
+    if (!m.wreck) continue;
+    out.push({
+      id: `s:${m.instanceId}`,
+      pos: m.pos,
+      move: (at) => {
+        m.pos.x = at.x;
+        m.pos.y = at.y;
+      },
+    });
+  }
+  for (const w of playOf(world)?.airWrecks ?? []) {
+    if (w.recovered) continue;
+    out.push({
+      id: `a:${w.id}`,
+      pos: w.pos,
+      move: (at) => {
+        w.pos.x = at.x;
+        w.pos.y = at.y;
+      },
+    });
+  }
+  return out;
+}
+
+function wreckById(world: World, id: string): WreckSpot | null {
+  return wreckSpots(world).find((w) => w.id === id) ?? null;
+}
+
+function placeCarried(world: World): void {
+  const p = playOf(world);
+  if (!p || p.carried.length === 0) return;
+  const at = world.leader.pos;
+  const next: string[] = [];
+  for (const id of p.carried) {
+    const w = wreckById(world, id);
+    if (!w) continue;
+    w.move(at);
+    next.push(id);
+  }
+  p.carried = next;
+}
+
+function dropContainerStack(world: World, unit: Unit): void {
+  const n = unit.salvagedCount;
+  if (n <= 0) return;
+  unit.salvageId = null;
+  unit.salvageT = 0;
+  unit.salvagedCount = 0;
+  world.salvaged = Math.max(0, world.salvaged - n);
+  const spawned = spawnContainersAt(world, unit.pos, n, { discovered: true, idPrefix: "purge" });
+  const glow = world.balance.deathDropGlowSec;
+  for (const c of spawned) c.glowT = glow;
+}
+
+function nearbySalvageTarget(world: World, unit: Unit): boolean {
+  return world.containers.some(
+    (c) => c.discovered && !c.taken && dist(unit.pos, c.pos) < world.balance.interactRadius,
+  );
+}
+
+/** Map tap used by the existing collect command. A miss clears the wreck tap. */
+export function noteCollectTap(world: World, pt: Vec2): void {
+  const p = playOf(world);
+  if (!p?.rules) return;
+  let best: WreckSpot | null = null;
+  let d: number = world.balance.interactRadius;
+  for (const w of wreckSpots(world)) {
+    const dd = dist(w.pos, pt);
+    if (dd <= d) {
+      d = dd;
+      best = w;
+    }
+  }
+  p.collectTap = best?.id ?? null;
+}
+
+/**
+ * Collect press. Holding a container and a wreck tap drops that container stack
+ * and takes the wreck. No tap and no nearby salvage target drops the whole
+ * inventory in place. A nearby target keeps the existing salvage channel.
+ */
+export function applyCollectPress(world: World): void {
+  const p = playOf(world);
+  if (!p?.rules || !world.leader.alive) return;
+  const leader = world.leader;
+  const tap = p.collectTap;
+  const wreck = tap ? wreckById(world, tap) : null;
+  if (tap && wreck && leader.salvagedCount > 0) {
+    dropContainerStack(world, leader);
+    if (!p.carried.includes(tap)) p.carried.push(tap);
+    wreck.move(leader.pos);
+    p.collectTap = null;
+    return;
+  }
+  if (tap) {
+    if (!wreck) p.collectTap = null;
+    return;
+  }
+  if (nearbySalvageTarget(world, leader)) return;
+  dropContainerStack(world, leader);
+  placeCarried(world);
+  p.carried = [];
 }
 
 export function focusTarget(world: World, unit: Unit): Unit | null {

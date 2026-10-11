@@ -20,7 +20,7 @@ import {
   computeCircuitEffectForBoard,
   resolveCluesForCircuitBoard,
 } from "./circuit-clues";
-import type { HubCircuitRecord, HubSnapshot } from "./hub-save";
+import { loadHubSaveFromLocalStorage, type HubCircuitRecord, type HubSnapshot } from "./hub-save";
 import { createOwnedMech, syncMechStatus } from "./mech-fleet";
 import { scaleYieldBag, type YieldBag } from "./sort-yield";
 
@@ -387,21 +387,43 @@ export function qualityBonusPt(hub: HubSnapshot): number {
   let pt = 0;
   for (const rec of hangarEquippedCircuits(hub)) {
     const c = classifyCircuit(rec);
-    if (c.false20) pt += FALSE_20_PERFECT_PT;
+    if (c.false20 && c.effect > 0) pt += FALSE_20_PERFECT_PT;
     pt += c.perfectPt;
   }
   return Math.min(PERFECT_RATE_CAP_PT, Math.max(0, pt));
 }
 
 /**
- * Before the first clear the rate stays 0. After clear, base + bonus, cap 31%.
- * Does not replace the existing resolver; callers add this on top of that base.
+ * Add hangar perfect-rate points on top of an existing inject rate.
+ * No hub, a failed read, or a zero bonus leaves `baseRate` unchanged.
+ * A missing `bulletinUnlocked` does not zero the rate.
+ * Cap the sum at 31% only when the base itself is at or below 31%.
  */
-export function circuitTrueBoardRate(hub: HubSnapshot, baseRate: number): number {
-  const cleared = readBulletinUnlocked(hub) || hasTrueTwenty(hub);
-  if (!cleared) return 0;
-  const base = Number.isFinite(baseRate) ? Math.max(0, baseRate) : CLEARED_TRUE_BOARD_RATE;
-  return Math.min(TRUE_BOARD_RATE_CAP, base + qualityBonusPt(hub) / 100);
+export function circuitTrueBoardRate(hub: HubSnapshot | null | undefined, baseRate: number): number {
+  const base = Number.isFinite(baseRate) ? baseRate : CLEARED_TRUE_BOARD_RATE;
+  if (!hub) return base;
+  let pt = 0;
+  try {
+    pt = qualityBonusPt(hub);
+  } catch {
+    return base;
+  }
+  if (!(pt > 0)) return base;
+  const sum = base + pt / 100;
+  if (base <= TRUE_BOARD_RATE_CAP) return Math.min(TRUE_BOARD_RATE_CAP, sum);
+  return sum;
+}
+
+/** Load the hangar and add its bonus. Missing hub, failed load, or +0 keeps `base`. */
+export function applyStoredHubPerfectBonus(base: number): number {
+  if (!Number.isFinite(base)) return base;
+  try {
+    const save = loadHubSaveFromLocalStorage();
+    if (!save?.hub) return base;
+    return circuitTrueBoardRate(save.hub, base);
+  } catch {
+    return base;
+  }
 }
 
 export function sortYieldRate(hub: HubSnapshot): number {

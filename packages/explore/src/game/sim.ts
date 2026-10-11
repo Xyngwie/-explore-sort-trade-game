@@ -17,6 +17,7 @@ import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
 import { updateCoverMovement } from "./coverMovement";
 import { isWingmanMobileFor } from "./commandUnlock";
 import {
+  applyCollectPress,
   applyLure,
   attackMul,
   bendHoming,
@@ -47,7 +48,6 @@ function friendlyUnits(world: World): Unit[] {
 function circuitLocomotion(world: World, unit: Unit, fallback: Vec2 | null, fallbackSpeed: number): { target: Vec2 | null; speed: number } {
   const play = world.circuitPlay;
   if (!play?.rules) return { target: fallback, speed: fallbackSpeed };
-  if (play.order?.kind === "focus") return { target: null, speed: 0 };
   const ct = circuitMoveTarget(world, unit);
   if (ct) return { target: ct, speed: circuitSpeed(world, unit) ?? fallbackSpeed };
   if (unit.kind === "leader" && movementLocked(world)) return { target: null, speed: 0 };
@@ -407,14 +407,22 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     moveToward(leader, leader.moveTarget, cruise.speed, dt, world);
   }
   if (!leaderDown) {
+    const focusing = world.circuitPlay?.rules === true && world.circuitPlay.order?.kind === "focus";
     const focus = focusTarget(world, leader);
-    let leadTarget: Unit | null = focus; let best: number = world.balance.engageRange * rangeMul(world, leader.id);
-    if (!focus) {
+    if (focusing) {
+      if (focus) tryFire(world, leader, focus, false);
+    } else {
+      let leadTarget: Unit | null = null; let best: number = world.balance.engageRange * rangeMul(world, leader.id);
       for (const e of world.enemies) { if (!e.alive) continue; const d = dist(leader.pos, e.pos); if (d <= best) { best = d; leadTarget = e; } }
+      const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
+      if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false);
     }
-    const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
-    if (leadTarget && (focus || input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false);
     if (!timedOut && !movementLocked(world)) {
+      const playEdge = world.circuitPlay;
+      if (playEdge?.rules) {
+        if (input.interact && !playEdge.collectDown) applyCollectPress(world);
+        playEdge.collectDown = input.interact;
+      }
       const leaderWantSalvage = input.interact || world.containers.some((c) => c.discovered && !c.taken && dist(leader.pos, c.pos) < world.balance.interactRadius);
       updateSalvage(world, leader, leaderWantSalvage, dt);
     }
@@ -427,9 +435,11 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     w.moveTarget = timedOut ? null : cruise.target;
     if (timedOut) w.vel = { x: 0, y: 0 };
     else moveToward(w, w.moveTarget, cruise.speed, dt, world);
+    const focusing = world.circuitPlay?.rules === true && world.circuitPlay.order?.kind === "focus";
     const focus = focusTarget(world, w);
-    const shot = focus ?? intent.fireAt;
-    if (shot && (focus || intent.fireAt)) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, shot, false); }
+    if (focusing) {
+      if (focus) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, focus, false); }
+    } else if (intent.fireAt) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, intent.fireAt, false); }
     if (!timedOut && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage, dt);
   }
   updateEnemies(world, dt); updateBullets(world, dt); revealVision(world);

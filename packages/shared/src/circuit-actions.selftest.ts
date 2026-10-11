@@ -11,12 +11,14 @@ import {
   makeFalseOneByOne,
   makeTrueOneByOne,
   perfectRatePoints,
+  qualityBonusPt,
   readAirSupportCooldownSec,
   readBulletinUnlocked,
   slotCapacity,
   type HubSnapshot,
 } from "./circuit-actions";
 import { resolveCluesForCircuitBoard } from "./circuit-clues";
+import { buildVerifyPerfectLockedBoard } from "./perfect-circuit-seed";
 
 assert.equal(effectRate(8), 0.06);
 assert.equal(effectRate(49), 0.14);
@@ -46,11 +48,32 @@ assert.equal(effectKeyForCircuit(keyed), effectKeyForCircuit(keyed));
 assert.equal(effectKeyForCircuit(fals), undefined);
 
 const bare = { fleet: [{ instanceId: "m1" }], circuits: [], lostMechs: [] } as unknown as HubSnapshot;
-assert.equal(circuitTrueBoardRate(bare, 0.01), 0);
+assert.equal(circuitTrueBoardRate(bare, 0.01), 0.01);
+assert.equal(circuitTrueBoardRate(bare, 0.33), 0.33);
 assert.equal(readBulletinUnlocked(bare), false);
 assert.equal(readAirSupportCooldownSec(bare), 0);
 const cleared = { ...bare, bulletinUnlocked: true } as HubSnapshot;
 assert.equal(circuitTrueBoardRate(cleared, 0.01), 0.01);
-assert.equal(circuitTrueBoardRate(cleared, 0.4), 0.31);
+assert.equal(circuitTrueBoardRate(cleared, 0.4), 0.4);
+const rated = {
+  ...bare,
+  circuits: [
+    {
+      circuitId: "pr",
+      circuitBoard: buildVerifyPerfectLockedBoard("t"),
+      restoreState: "fully_awakened",
+      origin: "picked_up",
+      equippedTo: "m1",
+      outcome: "fully_awakened",
+      locked: true,
+      effectKey: "perfect_rate",
+    },
+  ],
+} as unknown as HubSnapshot;
+const pt = qualityBonusPt(rated);
+const add = pt / 100;
+assert.equal(circuitTrueBoardRate(rated, 0.01), pt > 0 ? Math.min(0.31, 0.01 + add) : 0.01);
+assert.equal(circuitTrueBoardRate(rated, 0.33), pt > 0 ? 0.33 + add : 0.33);
+assert.equal(circuitTrueBoardRate(rated, 0.4), pt > 0 ? 0.4 + add : 0.4);
 
 console.log("circuit-actions.selftest ok");

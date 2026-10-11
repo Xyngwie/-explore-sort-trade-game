@@ -461,6 +461,10 @@ export function startSortie(world: World): void {
     world.circuitPlay.lastSeen = {};
     world.circuitPlay.airWrecks = [];
     world.circuitPlay.grantTrue = false;
+    world.circuitPlay.pullOutside = false;
+    world.circuitPlay.collectTap = null;
+    world.circuitPlay.collectDown = false;
+    world.circuitPlay.carried = [];
   }
   if (world.coverObjects) {
     for (let i = world.coverObjects.length - 1; i >= 0; i--) {

@@ -106,6 +106,7 @@ import {
 } from "./game/unlockMode";
 import {
   attachCircuitPlay,
+  noteCollectTap,
   beginCircuitButton,
   circuitButtons,
   consumeCircuitClick,
@@ -479,6 +480,7 @@ function bindCanvas(): void {
       needsDom = true;
       return;
     }
+    noteCollectTap(world, pt);
     input.clickMove = pt;
   });
 }
