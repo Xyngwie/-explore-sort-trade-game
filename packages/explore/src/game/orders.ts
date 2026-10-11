@@ -1,3 +1,4 @@
+import { circuitIncomingMul } from "./circuitPlay";
 import { clamp, dist } from "./math";
 import type { Balance } from "./balance";
 import type { Container, Stance, Unit, World } from "./types";
@@ -156,7 +157,9 @@ export function campDrPercent(world: World): number { return Math.round((1 - wor
 
 export function shotHitChance(shooter: Unit, target: Unit, world: World): number {
   let chance = 1;
-  if (target.inCover) chance *= world.balance.coverIncomingHitMul;
+  const incoming = circuitIncomingMul(world, target);
+  if (incoming != null) chance *= incoming;
+  else if (target.inCover) chance *= world.balance.coverIncomingHitMul;
   if (shooter.inCover) chance *= world.balance.coverAccuracyMul;
   return Math.min(1, Math.max(0, chance));
 }

@@ -5,10 +5,10 @@
  *   - unset / anything else → false (default: preview / playtest build)
  *   - "1" or "true"          → release build: always "release" mode, debug toggle hidden
  *
- * Preview builds (GitHub Pages today) default to "all_unlocked" and expose a
- * DEBUG toggle whose choice is persisted in localStorage under
- * `COMMAND_UNLOCK_MODE_STORAGE_KEY`. This is a local debug setting, NOT part of
- * HubSave / handoff contracts.
+ * Preview builds default to "release" (this circuit unlock). A DEBUG toggle
+ * can still choose "all_unlocked". The choice is localStorage under
+ * `COMMAND_UNLOCK_MODE_STORAGE_KEY`, not part of HubSave / handoff contracts.
+ * Node tests have no storage and stay "all_unlocked".
  */
 import type { CommandUnlockMode } from "./commandUnlock";
 
@@ -51,16 +51,22 @@ export function isDebugUnlockToggleVisible(
   return !releaseLocks;
 }
 
-/** Stored debug choice (preview builds only). Unknown / missing → all_unlocked. */
+/**
+ * Stored debug choice (preview builds only).
+ * Missing or unknown → release (this unlock is the public preview default).
+ * Explicit "all_unlocked" keeps the DEBUG full unlock.
+ * No storage at all (node tests) stays all_unlocked.
+ */
 export function readDebugCommandUnlockMode(store?: Pick<Storage, "getItem"> | null): CommandUnlockMode {
   const s = store === undefined ? defaultStore() : store;
   if (!s) return "all_unlocked";
   try {
-    return s.getItem(COMMAND_UNLOCK_MODE_STORAGE_KEY) === "release"
-      ? "release"
-      : "all_unlocked";
+    const v = s.getItem(COMMAND_UNLOCK_MODE_STORAGE_KEY);
+    if (v === "all_unlocked") return "all_unlocked";
+    if (v === "release") return "release";
+    return "release";
   } catch {
-    return "all_unlocked";
+    return "release";
   }
 }
 
@@ -80,7 +86,7 @@ export function writeDebugCommandUnlockMode(
 /**
  * Active mode for a new sortie / world.
  * Release build → always "release" (debug storage ignored).
- * Preview build → debug choice, default "all_unlocked".
+ * Preview build → debug choice. No saved choice → release (circuit unlock).
  */
 export function resolveCommandUnlockMode(opts?: {
   releaseLocks?: boolean;

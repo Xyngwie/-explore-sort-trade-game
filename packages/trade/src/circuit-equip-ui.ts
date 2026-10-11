@@ -4,10 +4,11 @@
  * equip/unequip for free. The actual slot rules live in shared/circuit-inventory.
  */
 import {
+  ensureCaptainFalseOneByOne,
   hubVisibleCircuits,
   loadHubSaveWithStatus,
-  mechSlotCapacity,
   saveHubSaveToLocalStorage,
+  slotCapacity,
   type HubCircuitRecord,
   type HubSnapshot,
 } from "@estg/shared";
@@ -73,7 +74,12 @@ function render(): void {
 
   const loaded = loadHub();
   if (!loaded) return;
-  const hub = loaded;
+  let hub = loaded;
+  const granted = ensureCaptainFalseOneByOne(hub);
+  if (granted !== hub) {
+    saveHubSaveToLocalStorage(granted);
+    hub = granted;
+  }
   // circuits on a left-behind mech (lostMechs) stay in HubSave but are not shown here
   const circuits = hubVisibleCircuits(hub);
   const fleet = hub.fleet ?? [];
@@ -87,7 +93,7 @@ function render(): void {
     ? `<p class="muted">装備先の機体がありません。</p>`
     : fleet.map((mech) => {
         const mine = circuits.filter((c) => c.equippedTo === mech.instanceId);
-        const cap = mechSlotCapacity(mech);
+        const cap = slotCapacity(mine);
         const names = mine.length === 0
           ? "なし"
           : mine.map((c) => `${esc(c.circuitId)}（${stateLabel(c)}）`).join("、");

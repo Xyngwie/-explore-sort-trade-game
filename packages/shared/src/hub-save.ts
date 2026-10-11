@@ -14,6 +14,12 @@ import {
   HUB_SAVE_STORAGE_KEY,
 } from "./constants";
 import {
+  assignMissingEffectKeys,
+  boardGivesBulletin,
+  isTrueOneByOne,
+  slotCapacity,
+} from "./circuit-actions";
+import {
   canDeploy,
   createOwnedMech,
   normalizeBattery,
@@ -256,6 +262,16 @@ export type HubSnapshot = {
   lostMechs: LostMechReturnState[];
   /** HubSave v3: recently applied Explore sortie ids (apply-once guard). */
   appliedSortieIds?: string[];
+  /**
+   * Air support seconds still to wait. Missing on old saves reads as 0.
+   * Decreases only during a sortie.
+   */
+  airSupportCooldownSec?: number;
+  /**
+   * 20×20 true board (fully_awakened) has cleared the game.
+   * Missing on old saves reads as false.
+   */
+  bulletinUnlocked?: boolean;
   /**
    * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
    * hangar (instanceIds, at most `HUB_LIMITS.maxSortieMechs`). Trade's deploy
@@ -550,10 +566,14 @@ function enforceEquipIntegrity(
     arr.push(i);
     byMech.set(c.equippedTo, arr);
   });
-  for (const [mechId, idxs] of byMech) {
-    const cap = mechSlotCapacity(mechs.get(mechId));
+  for (const [, idxs] of byMech) {
+    const equipped = idxs.map((i) => out[i]!);
+    const cap = slotCapacity(equipped);
     if (idxs.length <= cap) continue;
     const ranked = [...idxs].sort((a, b) => {
+      const pa = isTrueOneByOne(out[a]!) ? 1 : 0;
+      const pb = isTrueOneByOne(out[b]!) ? 1 : 0;
+      if (pa !== pb) return pb - pa;
       const ta = out[a]!.updatedAt ?? "";
       const tb = out[b]!.updatedAt ?? "";
       if (ta !== tb) return ta < tb ? 1 : -1;
@@ -962,11 +982,19 @@ export function normalizeHubSnapshot(
     ),
     normalizeFieldDrops(rawRec?.fieldDrops ?? fallback.fieldDrops ?? []),
   );
-  const circuits = enforceEquipIntegrity(
-    wreckDropsBack.circuits,
-    fleet,
-    new Set(lostMechsRaw.map((m) => m.instanceId)),
+  const circuits = assignMissingEffectKeys(
+    enforceEquipIntegrity(
+      wreckDropsBack.circuits,
+      fleet,
+      new Set(lostMechsRaw.map((m) => m.instanceId)),
+    ),
   );
+  const cooldownRaw = rawRec?.airSupportCooldownSec;
+  const cooldownNum = typeof cooldownRaw === "number" ? cooldownRaw : Number(cooldownRaw);
+  const airSupportCooldownSec =
+    Number.isFinite(cooldownNum) && cooldownNum > 0 ? cooldownNum : undefined;
+  const bulletinUnlocked =
+    rawRec?.bulletinUnlocked === true || circuits.some(boardGivesBulletin);
 
   // Missing (v1/v2) → derived from Perfect circuits (U11); stored v3 value kept as-is.
   const perfectMaxSize = normalizePerfectMaxSize(
@@ -1026,6 +1054,8 @@ export function normalizeHubSnapshot(
     lostMechs,
     appliedSortieIds,
     sortieSelection,
+    ...(airSupportCooldownSec != null ? { airSupportCooldownSec } : {}),
+    ...(bulletinUnlocked ? { bulletinUnlocked: true } : {}),
   };
 }
 

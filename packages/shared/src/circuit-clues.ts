@@ -125,8 +125,12 @@ export function generateCircuitClueBoard(
 }
 
 export function resolveCluesForCircuitBoard(
-  board: Pick<CircuitBoardState, "cols" | "rows" | "puzzleId">,
+  board: Pick<CircuitBoardState, "cols" | "rows" | "puzzleId"> & { perfect?: boolean | null },
 ): CircuitClueGrid {
+  // 真 1×1 は数字 4 が一つ。手がかり生成は 0..3 しか出さないので、ここだけ固定する。
+  if (board.cols === 1 && board.rows === 1 && board.perfect === true) {
+    return [[4]];
+  }
   const fixed = resolveTrueBoardClues(board.puzzleId);
   if (fixed && (fixed.puzzleId === VERIFY_TRUE_PUZZLE_ID || (fixed.cols === board.cols && fixed.rows === board.rows))) {
     return fixed.clues.map((row) => [...row]);

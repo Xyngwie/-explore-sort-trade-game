@@ -177,10 +177,14 @@ isWingmanMobileFor(world, wingmanId): boolean
 
 - 位置: 出撃前ブリーフィング画面のタイトル下、および出撃中画面の「WRECKLINE」見出し直下の破線バー（`#debug-unlock-bar` / ボタン `#btn-debug-unlock`）。
 - 表示: `DEBUG 回路ロック: 全コマンド解放（プレイテスト）` または `リリース相当（回路なし＝基本4のみ）`。リリース相当中はバーが琥珀色。
-- 保存: `localStorage["estg.explore.debugCommandUnlockMode"]` = `"all_unlocked"` | `"release"`（未設定・不正値は `all_unlocked`）。リロード・再出撃後も維持。HubSave には入れない。
+- 保存: `localStorage["estg.explore.debugCommandUnlockMode"]` = `"all_unlocked"` | `"release"`（未設定・不正値は `release`。保存先が無い node テストは `all_unlocked`）。リロード・再出撃後も維持。HubSave には入れない。
 - 出撃中に切り替えると即座に実行側ゲートにも反映される。
 
 ## 6. テスト
 
 `npm run test -w @estg/explore` の `explore command unlock *` ブロック:
 純関数判定、モード解決・保存、`wing_mobility`（両モード、暫定表での解放、静止・自衛射撃・追跡なし・回収なし、出撃中切替、既存の帰還要請ルールでの置き去りと出力形の不変）、置き去り結果行（回路なし／回路あり・円外／置き去りなし／撤退の各ケース、handoff・Hub 出力に漏れないこと）、all_unlocked で全実行、release・回路なしで回路コマンドがボタン／キー経路ともブロックされ基本 4（`BASIC_COMMAND_IDS` の 5 件）は動作、テスト専用の暫定対応表で装備時に解放、~~ショートカット表のロック表示~~ → 変更（10/7・神宮）: ロック中のキーは何もせずログも出ない・ショートカット表はロック中の行を出さない（全解放では従来と同じ HTML）・`explore C20-a mobility prerequisite + alive-only squad check`（方針と召還の `wing_mobility` 前提、生きている僚機だけで小隊単位を判定、混在小隊にロックの文言が出ないこと）。暫定対応表はテスト内にのみ存在し、本番の `CIRCUIT_COMMAND_UNLOCKS` は空であることもテストで固定している。 `explore camp texts follow camp unlock`: キャンプ未解放（release・回路なし）では上端の状態・ヘルプの文・出撃前ヘルプのキャンプのキー・時間切れの帯（「時間切れ」だけ）にキャンプの文字が出ず、全解放と回路で解放したときは今までと同じ。
+
+## 7. 公開プレビューの既定（2026-10-11）
+
+公開プレビューの既定は、この回路解放（`release`）である。DEBUG の全解放は残す。射撃は 1×1 無しで出る。移動・回収・帰還（帰還要請と撤退）は隊長機の 1×1（真偽どちらでも）で開く。キャンプ設置、荷下ろし、積込、パージ、散開捜索、哨戒、召還、1〜4 のボタンは出さない。帯同は `escort_range`、遊撃は `raid_attack`、散開は `scatter` を装備しているあいだの行動。指定行動（保護・集中・挟撃・強行軍・塹壕・分配・牽制・運搬・航空支援）は、生きている味方がその回路を装備しているときだけボタンで出す。新しいホットキーは無い。

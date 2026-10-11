@@ -15,6 +15,7 @@
     "src"
   ],
   "exclude": [
-    "src/selftest.ts"
+    "src/selftest.ts",
+    "src/circuitPlay.selftest.ts"
   ]
 }

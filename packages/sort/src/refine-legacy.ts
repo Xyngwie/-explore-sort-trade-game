@@ -18,6 +18,10 @@ import {
   parseExploreToSortSearch,
   stockFromContainers,
   yieldBagFromClearedWithMultiplier,
+  applySortYieldBonus,
+  loadHubSaveFromLocalStorage,
+  normalizeHubSnapshot,
+  sortYieldRate,
 } from "@estg/shared";
 
 /** Zoo Keeper + active chain + SORT_V2 economy (docs/SORT_V2_RULES.md). */
@@ -1213,12 +1217,24 @@ export function resolveCraftMultiplier(inbound: ExploreToSortPayload): number {
   return SORT_V0_RULES.craftMultiplier;
 }
 
+function applySortYieldFromHub(bag: YieldBag): YieldBag {
+  try {
+    const loaded = loadHubSaveFromLocalStorage();
+    if (!loaded?.hub) return bag;
+    const rate = sortYieldRate(normalizeHubSnapshot(loaded.hub));
+    return applySortYieldBonus(bag, rate);
+  } catch {
+    return bag;
+  }
+}
+
 export function toCraftingResult(s: RefineLive): CraftingPuzzleResult {
   const craftMultiplier = resolveCraftMultiplier(s.inbound);
-  const yieldBag: YieldBag = yieldBagFromClearedWithMultiplier(
+  const baseBag: YieldBag = yieldBagFromClearedWithMultiplier(
     s.cleared,
     craftMultiplier,
   );
+  const yieldBag = applySortYieldFromHub(baseBag);
   return {
     yieldFood: s.cleared.food,
     yieldMaterial: s.cleared.material,

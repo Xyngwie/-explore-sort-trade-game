@@ -15,6 +15,7 @@ import {
   saveHubSaveToLocalStorage,
   type ExploreToHubWearPayload,
 } from "@estg/shared";
+import { applyCircuitHubSide } from "./circuitPlay";
 import { exploreReturnPayload } from "./outcome";
 import type { World } from "./types";
 
@@ -33,7 +34,7 @@ export function saveSortieResultToHub(world: World, storage?: Store | null): Dir
   // No HubSave here (e.g. local dev cross-origin, or Explore opened by hand):
   // do not invent one; the return URL still carries the result to trade.
   if (!loaded?.hub) return { status: "skipped", reason: "no_save" };
-  const hub = normalizeHubSnapshot(loaded.hub);
+  const hub = applyCircuitHubSide(world, normalizeHubSnapshot(loaded.hub));
   const applied = applyExploreReturnToHub(hub, payload);
   if (!applied.applied) return { status: "already_applied", payload };
   const ok = saveHubSaveToLocalStorage(normalizeHubSnapshot(applied.hub), storage ?? undefined);

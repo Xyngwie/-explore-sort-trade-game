@@ -483,7 +483,7 @@ const v2Text = JSON.stringify(v2Save);
     ],
   } as unknown as HubSnapshot);
   const built = buildMechCircuitsForDeploy(hub, ["owned_a", "owned_b"]);
-  assert.deepEqual(built, { owned_a: [{ circuitId: "ha", restoreState: "bypass", effect: 1 }] });
+  assert.deepEqual(built, { owned_a: [{ circuitId: "ha", restoreState: "bypass", effect: 1, effectKey: "mmr" }] });
 }
 
 // ---------------------------------------------------------------------------

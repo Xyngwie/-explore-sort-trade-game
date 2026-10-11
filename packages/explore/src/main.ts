@@ -14,6 +14,7 @@ import {
   loadHubSaveFromLocalStorage,
   markDoneIfZeroContainersSaved,
   normalizeHubSnapshot,
+  saveHubSaveToLocalStorage,
   pushHistoryTrap,
   readSortieCheckpoint,
   resolveModuleBaseUrl,
@@ -100,8 +101,16 @@ import { invadeSquadSearch } from "./game/invadeSquad";
 import {
   COMMAND_UNLOCK_MODE_LABEL,
   isDebugUnlockToggleVisible,
+  resolveCommandUnlockMode,
   writeDebugCommandUnlockMode,
 } from "./game/unlockMode";
+import {
+  attachCircuitPlay,
+  beginCircuitButton,
+  circuitButtons,
+  consumeCircuitClick,
+  refreshStarterCircuit,
+} from "./game/circuitPlay";
 import { renderWorld, worldFromCanvas } from "./game/render";
 import {
   buildSortieOutcome,
@@ -135,7 +144,18 @@ let bootSearch = invadeSquadSearch(window.location.search, freshHub()) ?? window
 const boot = bootstrapFromSearch(bootSearch);
 /** New world + this front cell's left-behind mechs from HubSave (lostMechs.ts). */
 function makeWorld(b: ReturnType<typeof bootstrapFromSearch>): World {
-  return attachLostMechContext(createWorld(b), freshHub());
+  let hub = freshHub();
+  const mode = resolveCommandUnlockMode();
+  if (hub && mode === "release") {
+    const next = refreshStarterCircuit(hub);
+    if (next !== hub) {
+      saveHubSaveToLocalStorage(normalizeHubSnapshot(next));
+      hub = normalizeHubSnapshot(next);
+    }
+  }
+  const world = attachLostMechContext(createWorld(b), hub);
+  if (mode === "release") attachCircuitPlay(world, hub, true);
+  return world;
 }
 if (boot.invadeSector != null) {
   const cleaned = stripHandoffParams(
@@ -439,6 +459,8 @@ function bindDebugUnlockToggle(): void {
     const next = world.commandUnlock.mode === "release" ? "all_unlocked" : "release";
     writeDebugCommandUnlockMode(next);
     world.commandUnlock.mode = next;
+    if (next === "release") attachCircuitPlay(world, freshHub(), true);
+    else if (world.circuitPlay) world.circuitPlay.rules = false;
     needsDom = true;
     renderDom();
   });
@@ -452,6 +474,11 @@ function bindCanvas(): void {
   canvas.addEventListener("pointerdown", (e) => {
     if (world.phase !== "sortie" || !canvas) return;
     const pt = worldFromCanvas(canvas, world, e.clientX, e.clientY);
+    if (consumeCircuitClick(world, pt)) {
+      input.clickMove = null;
+      needsDom = true;
+      return;
+    }
     input.clickMove = pt;
   });
 }
@@ -477,7 +504,18 @@ function gatedButtonHtml(
   return `<button type="button" class="${baseCls}" id="${domId}"${disabled} title="${title}">${label}</button>`;
 }
 
+function circuitOrderHtml(): string {
+  return circuitButtons(world)
+    .map((b) => `<button type="button" class="secondary" data-circuit-order="${b.id}">${b.label}</button>`)
+    .join("");
+}
+
+function returnOpen(): boolean {
+  return !world.circuitPlay?.rules || world.circuitPlay.captainOneByOne;
+}
+
 function squadOrderBarHtml(): string {
+  if (world.circuitPlay?.rules) return "";
   const items = SQUAD_ORDER_KEYS.filter(({ stance }) => !cmdLocked(WING_COMMAND_FOR_STANCE[stance]));
   // C20-a: no unlocked squad order → no bar at all.
   if (items.length === 0) return "";
@@ -539,7 +577,7 @@ function wingPanelHtml(): string {
           return `<button type="button" class="stance-${s} ${active}" data-order="${w.id}:${s}">${STANCE_LABEL[s]}</button>`;
         })
         .join("");
-      const rallyBtn = cmdLocked("wing_escort", w.id)
+      const rallyBtn = world.circuitPlay?.rules || cmdLocked("wing_escort", w.id)
         ? ""
         : `<button type="button" class="secondary" data-rally="${w.id}">召還</button>`;
       const orderRow =
@@ -822,14 +860,15 @@ function renderDom(): void {
           ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden(), isLocked: cmdLocked })}
         </div>
         <div class="row">
-          <button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !world.leader.alive ? "disabled" : ""} title="${world.leader.alive ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!world.leader.alive ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>
+          ${returnOpen() ? `<button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !world.leader.alive ? "disabled" : ""} title="${world.leader.alive ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!world.leader.alive ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>` : ""}
+          ${circuitOrderHtml()}
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
           ${gatedButtonHtml("btn-purge", "purge", "secondary", "パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。", "パージ／キャンプへ降ろす")}
           ${gatedButtonHtml("btn-camp-pickup", "camp_pickup", "secondary", "キャンプ付近で置場から積込（G）。", "キャンプから積込")}
           ${gatedButtonHtml("btn-scatter", "scatter_search", "stance-raid", "隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。", "散開捜索")}
           <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
-          ${sortieRetreatHtml(world.leader.alive, rescueConfirm, previewHeldCredits())}
+          ${returnOpen() ? sortieRetreatHtml(world.leader.alive, rescueConfirm, previewHeldCredits()) : ""}
         </div>
         ${squadOrderBarHtml()}
         <p class="help">${sortieHelpText()}</p>
@@ -855,6 +894,14 @@ function renderDom(): void {
   });
   document.getElementById("btn-extract")?.addEventListener("click", () => {
     afterCommand(executeExploreCommand(world, { id: "extract" }));
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-circuit-order]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.circuitOrder;
+      if (!id) return;
+      beginCircuitButton(world, id);
+      needsDom = true;
+    });
   });
   document.getElementById("btn-camp")?.addEventListener("click", () => {
     afterCommand(executeExploreCommand(world, { id: "camp_set" }));
