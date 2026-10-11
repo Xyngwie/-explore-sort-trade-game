@@ -4,6 +4,7 @@
 
 ## 最終更新
 
+- 2026-10-11 JST / Cursor（風紀委員）— #269 の穴。初回 Invade クリアの真 1×1 は、回路効果の実装（#270）では倉庫へ入れない。既存の印はどれも初回クリアではない。出撃の invadeSector がある帰還成功、intel の sectorCleared、frontProgress の開いたマス、hub.bulletinUnlocked からは入れない。盤の様子からクリア済みとは推測しない（2026-10-07 S2）。初クリアの保存キーは #269 では足さない。発見は、お金まわりで初クリアのキーを effectivePerfectInjectRate と一緒に入れる決定まで実装しない。#270 はマージしていない。Deploy Modules Preview は走っていない。プレビューの操作はしていない。
 - 2026-10-10 JST / Cursor（風紀委員）— 項目5-3（戻るの無効化と途中保存）を #267（`5256085`）でマージした。Deploy Modules Preview run 38008393878 は success（build と deploy）。プレビューの操作はしていない。
 - 2026-10-10 JST / Cursor（アロー）— 項目5-3（戻るの無効化と途中保存）を draft で実装。main には入っていない。Deploy Modules Preview は走っていない。プレビューの操作はしていない。
 - 2026-10-09 JST / Cursor（風紀委員）— まっさらな Cloud Agent が読む正本を [`AGENT_CANON.md`](./AGENT_CANON.md) に、Cursor Automations へ貼る Instructions を [`automations/`](./automations/) に置いた（文書のみ）。リレーの起動口は GitHub Issue コメントの JSON。Slack は写しで、チャットや Slack に置いただけでは次のエージェントは起動しない。#248（`409c4b7`）の Deploy Modules Preview run 37854085456 は success。プレビューの操作はしていない。
@@ -79,7 +80,7 @@
 
 - To-do：初クリアまで真盤0%（実装予定。お金まわりの購入 PR と一緒に）。Invade を初めてクリアして「4」の 1×1 の回路を発見するまで、作成・購入・探索で拾う回路・敵が落とす回路のすべてで真盤の確率を 0% にする（2026-10-07 21:49 神宮。設計メモ §2.1）。初クリアを記録するセーブのキーはまだ無い
 - To-do：装甲パーツの価値は、修理費（最大HPの2倍の装甲パーツ＋500c）が新品の僚機（2000c）より少し安くなるように決める（神宮 10/7）
-- To-do（お金の PR。10/7 神宮 S1〜S3、記録のみ）: S1 A 初めて Invade をクリアしたあとは、ジャンクからの回路作成にも 1% の真盤の確率（それまでは 0%）。`effectivePerfectInjectRate` と初クリアのキーと一緒に入れる。S2 A 初クリアのキーが無いセーブは未クリア扱い（盤から推測しない）。S3 A Restore が 1×1 の回路に対応し、初めての Invade クリアで「4」の 1×1 の回路を発見する。修理費もお金の PR で入れる
+- To-do（お金の PR。10/7 神宮 S1〜S3、記録のみ）: S1 A 初めて Invade をクリアしたあとは、ジャンクからの回路作成にも 1% の真盤の確率（それまでは 0%）。`effectivePerfectInjectRate` と初クリアのキーと一緒に入れる。S2 A 初クリアのキーが無いセーブは未クリア扱い（盤から推測しない）。S3 A Restore が 1×1 の回路に対応し、初めての Invade クリアで「4」の 1×1 の回路を発見する。この発見は回路効果の #269 では倉庫へ入れない（2026-10-11 風紀委員。既存の印は初回クリアではない）。修理費もお金の PR で入れる
 - To-do：解放表に『4』の1×1 → wing_mobility を入れる（2026-10-07 17:06 神宮。今の `CIRCUIT_COMMAND_UNLOCKS` は空。[`EXPLORE_COMMAND_UNLOCK_V0.md`](./EXPLORE_COMMAND_UNLOCK_V0.md) §4）
 
 次にやること（回路データモデルの残り。順番は設計書 §8 の A → B・C・D・E → F → G。担当・着手順の確定はオーケストレーター）:

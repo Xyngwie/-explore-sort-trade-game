@@ -46,7 +46,7 @@
   - **追加決定（2026-10-07・神宮）:** 1×1 の回路は、初回の Invade クリアで発見する 1 枚（§4）だけの例外。それ以外の Restore は今までどおり 2×2〜20×20。
     - **確定（2026-10-07 17:06・神宮）:** この 1×1 の回路（数字 4 が 1 つ）は、僚機が自立する「4」の 1×1 の回路で、付けると `wing_mobility`（僚機の移動）が解放される。主人公の 1×1 の回路もこれとして扱う（`PRODUCT_VISION.md` §2.1.5）。
   - **追加決定（2026-10-07 21:49・神宮）: 初クリアまで真盤 0%。** Invade を初めてクリアして「4」の 1×1 の回路を発見するまでは、**作成・購入・探索で拾う回路・敵が落とす回路のすべて** で、真盤の確率を **0%** にする。狙いは、途中で `wing_mobility` が解放されないようにすること。未実装（STATUS の To-do。お金まわりの購入 PR と一緒に入れる予定）。
-    - 実装メモ（2026-10-07 の調査、main `2451fdd`）: 今のコードで真盤を混ぜる抽選は、Restore を盤なしで開いたとき（`?seed=` のデモ盤・`circuitId` だけの受け取り。`restore/src/session.ts` `bootstrapFromSearch`）と、格納庫の「シード読込」（`trade/src/hangar.ts` `buildSeedCircuitBoard`）だけ。率はどちらも `resolvePerfectCircuitInjectRate`（本番 1%・DEV/localhost 33%・`?perfectRate=` で指定）。ジャンクから作った回路は、Restore が `injectRate` なしで盤を作るので抽選がなく、今は真盤にならない。購入・探索で拾う・敵が落とす回路は未実装。初クリアを記録するセーブのキーはまだ無い。
+    - 実装メモ（2026-10-07 の調査、main `2451fdd`）: 今のコードで真盤を混ぜる抽選は、Restore を盤なしで開いたとき（`?seed=` のデモ盤・`circuitId` だけの受け取り。`restore/src/session.ts` `bootstrapFromSearch`）と、格納庫の「シード読込」（`trade/src/hangar.ts` `buildSeedCircuitBoard`）だけ。率はどちらも `resolvePerfectCircuitInjectRate`（本番 1%・DEV/localhost 33%・`?perfectRate=` で指定）。ジャンクから作った回路は、Restore が `injectRate` なしで盤を作るので抽選がなく、今は真盤にならない。購入・探索で拾う・敵が落とす回路は未実装。初クリアを記録するセーブのキーはまだ無い。回路効果の実装（#269、2026-10-11 風紀委員）では、この 1 枚を既存の印（出撃の帰還、sectorCleared、frontProgress、掲示板の解放）では倉庫へ入れない。キーはお金まわりで真盤率と一緒に入れるまで作らない。
   - **追加決定（旧 §8.4-2）:** 作成サイズの上限が上がるのは **Fully Awakened（パーフェクト）** のときだけ。Bypass では上がらない。
   - **追加決定（旧 §8.5-5）:** 作成サイズは **正方形（N×N）だけ**。長方形は作れない。
   - **追加決定:** 現行のジャンク作成は 4×4 固定（§9.2 C10）。STATUS 項目14の実装で 2×2 始まりに合わせる。作成コストは §2.2。
