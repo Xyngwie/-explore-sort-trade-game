@@ -215,19 +215,13 @@ export function parseCircuitBonusesCompact(
 
 /** One-line Japanese summary for hangar UI. */
 export function formatCircuitBonusesJa(b: AggregatedCircuitBonuses): string {
-  if (
-    b.craftMultiplierBonus <= 0 &&
-    b.repairDiscount <= 0 &&
-    b.durabilityBuffer <= 0
-  ) {
+  // #266（2026-10-12 神宮）: 修理の費用に回路の割引はかけないので、割引は表示しない。
+  if (b.craftMultiplierBonus <= 0 && b.durabilityBuffer <= 0) {
     return "回路ボーナスなし（fully_awakened / bypass が必要）";
   }
   const bits: string[] = [];
   if (b.craftMultiplierBonus > 0) {
     bits.push(`craft ×${b.craftMultiplier.toFixed(2)}`);
-  }
-  if (b.repairDiscount > 0) {
-    bits.push(`修理 −${Math.round(b.repairDiscount * 100)}%`);
   }
   if (b.durabilityBuffer > 0) {
     bits.push(`摩耗緩衝 ${b.durabilityBuffer}`);

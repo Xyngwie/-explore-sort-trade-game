@@ -12,21 +12,15 @@ import {
   bindEditorNameInput,
 } from "@estg/shared";
 import {
-  EXAMPLE_TYPED_REPAIR_COST,
-  MECH_FLEET_RULES,
   MECH_STATUS_LABEL_JA,
   buildDeployUrl,
   buildInvadeUrl,
   buildRestoreUrl,
-  canAffordRepair,
-  canAffordYieldCost,
   canDeploy,
   circuitRestoreStateLabelJa,
   clearHandoffFromUrl,
   createInitialHangar,
-  describeTypedRepairShortfall,
   durabilityBarClass,
-  formatTypedRepairSpend,
   grantDemoInventory,
   grantStarterFleet,
   grantVerifyPerfectLockedCircuit,
@@ -38,9 +32,16 @@ import {
   markDeployed,
   sortieAmmoShortLineJa,
   onHangarExploreLink,
-  repairClassic,
+  repairMech,
+  reviveWreck,
+  buyNewMech,
+  createNewMech,
+  BUY_MECH_LABEL_JA,
+  createMechLabelJa,
+  reviveMechCost,
+  reviveMechLabelJa,
+  repairMechLabelJa,
   repairCost,
-  repairTyped,
   resetHangar,
   scrapMech,
   selectAllDeployable,
@@ -49,12 +50,10 @@ import {
   setDeploySelection,
   simulateReturn,
   statusClass,
-  yieldBagFromTypedRepairCost,
   hubCircuitBonuses,
   lostMechCountLineJa,
   wreckCountLineJa,
   formatCircuitBonusesJa,
-  applyRepairDiscountToCost,
   isRareYieldItemId,
   rareSellPriceCredits,
   RARE_SELL_PRICE_TABLE,
@@ -104,7 +103,7 @@ function escapeHtml(s: string): string {
 
 /** Failure / blocked notices → warn; success → ok. */
 function noticeClass(notice: string): string {
-  if (/不足|失敗|なし|のみ|対象なし|機体なし|摩耗対象/.test(notice)) return "warn";
+  if (/不足|足りない|失敗|なし|のみ|対象なし|機体なし|摩耗対象/.test(notice)) return "warn";
   return "ok";
 }
 
@@ -154,12 +153,23 @@ function rarePriceTableRows(): string {
   }).join("");
 }
 
+const MONEY_CLICK_GUARD_MS = 600;
+let lastMoneyClickAt = -Infinity;
+/** True right after a money button press (the scrap button ignores that click). */
+function moneyClickRecent(): boolean {
+  return performance.now() - lastMoneyClickAt < MONEY_CLICK_GUARD_MS;
+}
+function moneyClickAllowed(): boolean {
+  const now = performance.now();
+  if (now - lastMoneyClickAt < MONEY_CLICK_GUARD_MS) return false;
+  lastMoneyClickAt = now;
+  return true;
+}
+
 function fleetCards(s: HangarState): string {
   if (s.hub.fleet.length === 0) {
     return `<p class="muted">艦隊が空です。「シード読込」または「機体を受領」でデモ機を追加してください。</p>`;
   }
-  const typedSpend = formatTypedRepairSpend();
-  const circuitBonuses = hubCircuitBonuses(s.hub);
   return s.hub.fleet
     .map((m) => {
       const pct = Math.round((m.durability / m.durabilityMax) * 100);
@@ -169,35 +179,12 @@ function fleetCards(s: HangarState): string {
       const selectionFull =
         s.selectedDeployIds.length >= HUB_LIMITS.maxSortieMechs && !checked;
       const selectDisabled = !deployable || selectionFull;
-      const classicBase = repairCost(m);
-      const classicCost =
-        classicBase != null
-          ? applyRepairDiscountToCost(classicBase, circuitBonuses)
-          : null;
-      const needsRepair = m.status === "needs_repair";
-      // Clickable when repairable so shortfall shows as notice (not only disabled).
-      const classicClickable = classicCost != null;
-      const classicAfford =
-        classicCost != null &&
-        s.hub.credits >= classicCost.credits &&
-        s.hub.materials >= classicCost.materials;
-      const typedClickable = needsRepair;
-      const typedBag = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
-      const typedAfford =
-        needsRepair &&
-        s.hub.credits >= EXAMPLE_TYPED_REPAIR_COST.credits &&
-        canAffordYieldCost(s.hub.inventory, typedBag);
-      const typedHint = needsRepair
-        ? typedAfford
-          ? `<p class="muted" style="margin:0.35rem 0 0">型付き消費: ${escapeHtml(typedSpend)}</p>`
-          : `<p class="warn" style="margin:0.35rem 0 0">${escapeHtml(
-              describeTypedRepairShortfall(s.hub.credits, s.hub.inventory) ??
-                "型付き資材不足",
-            )}</p>`
-        : "";
-      const classicHint =
-        needsRepair && classicCost && !classicAfford
-          ? `<p class="warn" style="margin:0.2rem 0 0">集計不足（要 ${classicCost.credits}c / ${classicCost.materials}m · 持 ${s.hub.credits}c / ${s.hub.materials}m）</p>`
+      // #266: wreck → 残骸復活, worn → 通常修理 (none at full durability). Never disabled;
+      // a shortfall is shown as a notice when pressed.
+      const moneyAct = reviveMechCost(m)
+        ? `<button type="button" class="fleet-act" data-act="revive" data-id="${escapeHtml(m.instanceId)}">${escapeHtml(reviveMechLabelJa(m))}</button>`
+        : repairCost(m)
+          ? `<button type="button" class="fleet-act" data-act="repair" data-id="${escapeHtml(m.instanceId)}">${escapeHtml(repairMechLabelJa(m))}</button>`
           : "";
 
       return `
@@ -222,21 +209,9 @@ function fleetCards(s: HangarState): string {
           <span class="${durabilityBarClass(m.status)}"><span style="width:${pct}%"></span></span>
         </div>
         <div class="row">
-          <button type="button" class="fleet-act" data-act="repair-classic" data-id="${escapeHtml(m.instanceId)}" ${
-            classicClickable ? "" : "disabled"
-          } title="集計クレジット/資材を消費して健在へ">${
-            classicAfford
-              ? `集計 −${MECH_FLEET_RULES.repairCredits}c/−${MECH_FLEET_RULES.repairMaterials}m`
-              : `集計 ${MECH_FLEET_RULES.repairCredits}c/${MECH_FLEET_RULES.repairMaterials}m`
-          }</button>
-          <button type="button" class="fleet-act" data-act="repair-typed" data-id="${escapeHtml(m.instanceId)}" ${
-            typedClickable ? "" : "disabled"
-          } title="型付き YieldBag + クレジットを消費して健在へ">${
-            typedAfford ? `型付き ${escapeHtml(typedSpend)}` : "型付き修理"
-          }</button>
+          ${moneyAct}
           <button type="button" class="secondary fleet-act" data-act="scrap" data-id="${escapeHtml(m.instanceId)}">解体</button>
         </div>
-        ${typedHint}${classicHint}
       </div>`;
     })
     .join("");
@@ -496,10 +471,6 @@ function render() {
   const sigDraft = keepSigFocus ? sigBefore.value : null;
   renderDeferred = false;
   const ready = buildNextSortieReadiness(state);
-  const typedCost = yieldBagFromTypedRepairCost(EXAMPLE_TYPED_REPAIR_COST);
-  const typedCostText = Object.entries(typedCost)
-    .map(([k, v]) => `${k}:${v}`)
-    .join(" · ");
   const ammoTotal =
     state.hub.ammoLoad.ammo_standard +
     state.hub.ammoLoad.ammo_ap +
@@ -551,6 +522,10 @@ function render() {
         <button type="button" class="secondary compact" id="btn-select-all">先頭から${HUB_LIMITS.maxSortieMechs}機</button>
       </div>
       ${bulletinUnlockedLineHtml(state.hub)}
+      <div class="row mech-money-row">
+        <button type="button" id="btn-buy-mech">${escapeHtml(BUY_MECH_LABEL_JA)}</button>
+        <button type="button" id="btn-create-mech">${escapeHtml(createMechLabelJa())}</button>
+      </div>
       <p class="muted" style="margin:0.25rem 0 0.5rem">出撃する機体を最大 ${HUB_LIMITS.maxSortieMechs} 機まで選択（選択は保存され、次回・再出撃でも使われます）。</p>
       <div class="fleet-list">${fleetCards(state)}</div>
     </div>
@@ -561,7 +536,7 @@ function render() {
         <thead><tr><th>アイテム</th><th>数量</th><th>売却</th></tr></thead>
         <tbody>${inventoryRows(state.hub)}</tbody>
       </table>
-      <p class="muted" style="margin-top:0.5rem">レアのみ売却可。型付き修理例: ${EXAMPLE_TYPED_REPAIR_COST.credits}c + ${escapeHtml(typedCostText || "—")}</p>
+      <p class="muted" style="margin-top:0.5rem">レアのみ売却可。</p>
       <details class="sortie-details">
         <summary>レア売却 仮価格表 <span class="pill tbd-tag">TBD</span></summary>
         <p class="muted" style="margin:0.5rem 0">明示テーブル（<span class="mono">RARE_SELL_PRICE_TABLE</span>）。バランス未調整。</p>
@@ -658,6 +633,19 @@ function render() {
         null,
     });
     state = loadPlaytestSeed(state, { injectRate, showInjectionDetails });
+    render();
+  });
+  // #266: buy / create are not idempotent — a double-click (second click within
+  // MONEY_CLICK_GUARD_MS) does not pay twice. Revive / repair also change nothing on a
+  // second press because the mech is no longer a wreck / worn.
+  document.getElementById("btn-buy-mech")?.addEventListener("click", () => {
+    if (!moneyClickAllowed()) return;
+    state = buyNewMech(state);
+    render();
+  });
+  document.getElementById("btn-create-mech")?.addEventListener("click", () => {
+    if (!moneyClickAllowed()) return;
+    state = createNewMech(state);
     render();
   });
   document.getElementById("btn-grant")?.addEventListener("click", () => {
@@ -762,8 +750,13 @@ function render() {
     el.addEventListener("click", () => {
       const id = el.dataset.id!;
       const act = el.dataset.act!;
-      if (act === "repair-classic") state = repairClassic(state, id);
-      else if (act === "repair-typed") state = repairTyped(state, id);
+      // #266: the repair / revive button disappears after one press and the
+      // 解体 button can slide under the pointer, so the second click of a
+      // double-click must not land on 解体 (or pay again).
+      if (act === "repair" || act === "revive") {
+        if (!moneyClickAllowed()) return;
+        state = act === "repair" ? repairMech(state, id) : reviveWreck(state, id);
+      }
       else if (act === "select-circuit") state = selectCircuit(state, id);
       else if (act === "sell-rare") state = sellRareItem(state, id, 1);
       else if (act === "sell-circuit") {
@@ -778,6 +771,7 @@ function render() {
         state = sellCircuit(state, id);
       }
       else if (act === "scrap") {
+        if (moneyClickRecent()) return;
         if (!window.confirm(`解体しますか？\n${id}`)) return;
         state = scrapMech(state, id);
       }

@@ -6,6 +6,7 @@
  */
 
 import { isMechId, type MechId } from "./catalog";
+import { spendYieldBag, type YieldBag } from "./sort-yield";
 
 export const MECH_STATUSES = [
   "operational",
@@ -98,9 +99,13 @@ export const MECH_FLEET_RULES = {
   wearOnExtract: 15,
   wearOnFail: 35,
   wearOnAbort: 20,
-  /** Repair (要修理 → 健在, full durability). 大破は修理不可. */
-  repairCredits: 50,
-  repairMaterials: 30,
+  /**
+   * 通常修理（#266、2026-10-12 神宮）: 大破していない機体の、最大耐久までに
+   * 足りない耐久 1 につき装甲パーツ 1 個。クレジットと資材（materials）は使わない。
+   * 回路の修理割引はかけない。大破は通常修理できない（格納庫の残骸復活）。
+   */
+  repairCredits: 0,
+  repairArmorPerDurability: 1,
   /** Scrap yields by status (base; gen2 gets a small bonus). */
   scrapByStatus: {
     operational: { credits: 40, materials: 15 },
@@ -112,9 +117,10 @@ export const MECH_FLEET_RULES = {
 
 export type SortieReturnKind = "extract" | "fail" | "abort";
 
+/** 通常修理の支払い（#266）: クレジットは 0、装甲パーツ（`inventory.armor`）が足りない耐久の数。 */
 export type RepairCost = {
   credits: number;
-  materials: number;
+  armor: number;
 };
 
 export type ScrapYield = {
@@ -302,44 +308,40 @@ export function repairCost(
   mech: OwnedMech,
   rules: typeof MECH_FLEET_RULES = MECH_FLEET_RULES,
 ): RepairCost | null {
-  if (mech.status !== "needs_repair") return null;
+  if (mech.status === "destroyed" || mech.durability <= 0) return null;
+  const missing = Math.max(0, Math.floor(mech.durabilityMax) - Math.floor(mech.durability));
+  if (missing <= 0) return null;
   return {
     credits: rules.repairCredits,
-    materials: rules.repairMaterials,
+    armor: missing * rules.repairArmorPerDurability,
   };
 }
 
-export function canAffordRepair(
-  mech: OwnedMech,
-  wallet: { credits: number; materials: number },
-): boolean {
+/** Wallet for the normal repair: credits + the four resources (armor parts live in `inventory.armor`). */
+type RepairWallet = { credits: number; inventory: YieldBag };
+
+export function canAffordRepair(mech: OwnedMech, wallet: RepairWallet): boolean {
   const cost = repairCost(mech);
   if (!cost) return false;
-  return wallet.credits >= cost.credits && wallet.materials >= cost.materials;
+  return wallet.credits >= cost.credits && Math.floor(Number(wallet.inventory.armor ?? 0) || 0) >= cost.armor;
 }
 
 /**
- * Spend cost and restore to full 健在. Returns null if not 要修理 or cannot afford.
- * Does not mutate inputs.
+ * Spend armor parts and restore to full durability (status via syncMechStatus).
+ * null when the mech is destroyed / already full / the wallet is short.
+ * Keeps instanceId, catalogId, currentAmmo, battery. Does not mutate inputs.
  */
 export function applyRepair(
   mech: OwnedMech,
-  wallet: { credits: number; materials: number },
-): { mech: OwnedMech; wallet: { credits: number; materials: number } } | null {
+  wallet: RepairWallet,
+): { mech: OwnedMech; wallet: RepairWallet } | null {
   const cost = repairCost(mech);
-  if (!cost) return null;
-  if (wallet.credits < cost.credits || wallet.materials < cost.materials) {
-    return null;
-  }
+  if (!cost || wallet.credits < cost.credits) return null;
+  const inventory = spendYieldBag(wallet.inventory, { armor: cost.armor });
+  if (!inventory) return null;
   return {
-    mech: syncMechStatus({
-      ...mech,
-      durability: mech.durabilityMax,
-    }),
-    wallet: {
-      credits: wallet.credits - cost.credits,
-      materials: wallet.materials - cost.materials,
-    },
+    mech: syncMechStatus({ ...mech, durability: mech.durabilityMax }),
+    wallet: { credits: wallet.credits - cost.credits, inventory },
   };
 }
 

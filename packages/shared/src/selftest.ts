@@ -270,19 +270,21 @@ assert.equal(worn.durability, 50 - MECH_FLEET_RULES.wearOnFail);
 assert.equal(worn.status, "needs_repair");
 assert.equal(canDeploy(worn), false);
 
+// #266 通常修理: 足りない耐久の数の装甲パーツだけ（クレジット 0、資材なし、割引なし）
 const cost = repairCost(worn);
-assert.deepEqual(cost, {
-  credits: MECH_FLEET_RULES.repairCredits,
-  materials: MECH_FLEET_RULES.repairMaterials,
-});
-const repaired = applyRepair(worn, { credits: 100, materials: 100 });
+assert.deepEqual(cost, { credits: 0, armor: worn.durabilityMax - worn.durability });
+assert.equal(applyRepair(worn, { credits: 0, inventory: { armor: cost!.armor - 1 } }), null, "short armor → nothing changes");
+const repaired = applyRepair({ ...worn, currentAmmo: 9 }, { credits: 7, inventory: { armor: cost!.armor + 3, ammo: 5 } });
 assert.ok(repaired);
 assert.equal(repaired!.mech.status, "operational");
 assert.equal(repaired!.mech.durability, repaired!.mech.durabilityMax);
-assert.equal(
-  repaired!.wallet.credits,
-  100 - MECH_FLEET_RULES.repairCredits,
-);
+assert.equal(repaired!.mech.currentAmmo, 9, "carried ammo kept");
+assert.equal(repaired!.wallet.credits, 7, "no credits");
+assert.deepEqual(repaired!.wallet.inventory, { armor: 3, ammo: 5 });
+// an operational but scratched mech can be repaired too; a full one cannot
+const scratched = createOwnedMech("mech_gen1", { instanceId: "t2b", durability: 85 });
+assert.deepEqual(repairCost(scratched), { credits: 0, armor: 15 });
+assert.equal(repairCost(createOwnedMech("mech_gen1", { instanceId: "t2c" })), null, "full durability → no repair");
 
 const wrecked = wearAfterSortie(
   createOwnedMech("mech_gen1", { instanceId: "t3", durability: 10 }),
@@ -290,7 +292,7 @@ const wrecked = wearAfterSortie(
 );
 assert.equal(wrecked.status, "destroyed");
 assert.equal(repairCost(wrecked), null);
-assert.equal(applyRepair(wrecked, { credits: 999, materials: 999 }), null);
+assert.equal(applyRepair(wrecked, { credits: 999, inventory: { armor: 999 } }), null);
 
 const yieldOp = scrapYield(
   createOwnedMech("mech_gen1", { instanceId: "s1" }),

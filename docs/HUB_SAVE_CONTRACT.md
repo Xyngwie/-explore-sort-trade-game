@@ -242,6 +242,8 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - **5-3 の途中保存**: 修正前の途中保存は `mechBattery` に上乗せ後の値を持つことがある。読み直し（`worldFromCheckpointBody` → `restorePreBoostBattery`）で `circuitPlay.baseBattery`（上乗せ前）に戻し、300 を超える値は 300 にする。`circuitPlay.ammoCapAt`（出撃中の上限の記録。保存キーではない）が無い途中保存も読める。旧 `baseAmmo` は読み捨て。
 - selftest: `shared` `mech-ammo.selftest.ts`（旧セーブ＝`currentAmmo` 無し・バッテリー膨張・残骸付き、M6 は 1 回だけ、MMR・LMG の付け替えで合計不変、大破機の付け替え、出撃の繰り返しで上限が積み重ならない、不足の 1 行）、`explore` `ammoRefill.selftest.ts`（MMR で 3 回出撃しても 6 のまま、撃てない分を捨てない、分配で捨てない、修正前の途中保存、出撃前の補充）、`trade` `hangar.selftest.ts`（出撃リンクでの補充と URL、出撃ボタンの 1 行、解体で在庫へ、付け替えの記録行）。
 
+- **A1・A2（2026-10-12 神宮、#266 の PR で記録）**: A1 = A（付け替えで動いた弾は開発用コンソールに記録するだけ。画面には出さない）。A2 = A（fix/circuit-ammo-activity-refill で実装側が決めた技術上の既定 4 つはそのまま。上の各項目に書いたとおりで、変えない。`currentAmmo` 欠落を満タンで書く暫定ルールもこれに含む）。
+- **機体のお金（#266、feat/money-mech-economy）**: 新しい保存キーは無い。購入・作成は `fleet` に `mech_gen1` を 1 機足す（`currentAmmo` 欠落 → 上の暫定ルールで満タン 28 を付与。在庫からは引かない）。残骸復活は `fleet` の大破機の `durability`・`status` だけを変える（`instanceId`・回路の `equippedTo`・`currentAmmo`・`battery` はそのまま）。通常修理は `inventory.armor` を足りない耐久の分だけ引き、クレジット・`materials` は変えない。どれも 1 回の操作で 1 回だけ保存する（URL に操作を載せないので読み直しで繰り返さない）。
 - trade の旧 typed-repair（`repairTyped`）は機体を作り直すので、`currentAmmo` は未設定に、`battery` は 300／300 に戻る（旧コードは触らない方針。STATUS のバックログ）。
 
 ## 12.5a 置き去り機体（lostMechs）の保存対象と回収経路（2026-10-03 正本化）

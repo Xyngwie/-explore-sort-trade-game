@@ -87,6 +87,7 @@ import {
   type CircuitRestoreState,
   type HubCircuitRecord,
   type HubSnapshot,
+  type OwnedMech,
   type InvadeToTradePayload,
   type MechId,
   type RestoreToTradePayload,
@@ -1232,57 +1233,153 @@ export function markDeployed(state: HangarState, ids: string[]): HangarState {
   return persistHangar(next);
 }
 
-export function repairClassic(
-  state: HangarState,
-  instanceId: string,
-): HangarState {
-  const mech = state.hub.fleet.find((m) => m.instanceId === instanceId);
-  if (!mech) return { ...state, notice: "機体なし" };
-  const baseCost = repairCost(mech);
-  if (!baseCost) {
-    return { ...state, notice: "要修理のみ修理可（大破は解体）" };
-  }
-  const bonuses = hubCircuitBonuses(state.hub);
-  const cost = applyRepairDiscountToCost(baseCost, bonuses);
-  if (
-    state.hub.credits < cost.credits ||
-    state.hub.materials < cost.materials
-  ) {
-    const disc =
-      bonuses.repairDiscount > 0
-        ? ` · 回路割引 −${Math.round(bonuses.repairDiscount * 100)}%`
-        : "";
-    return {
-      ...state,
-      notice: `クレジット/資材不足（要 ${cost.credits}c / ${cost.materials}m${disc}）`,
-    };
-  }
-  // Apply discounted spend; restore mech to full like applyRepair.
-  const repaired = syncMechStatus({
-    ...mech,
-    durability: mech.durabilityMax,
-  });
-  const fleet = state.hub.fleet.map((m) =>
-    m.instanceId === instanceId ? repaired : m,
-  );
-  const hub = normalizeHubSnapshot({
-    ...state.hub,
-    fleet,
-    credits: state.hub.credits - cost.credits,
-    materials: state.hub.materials - cost.materials,
-  });
-  const discNote =
-    bonuses.repairDiscount > 0
-      ? `（回路 −${Math.round(bonuses.repairDiscount * 100)}%）`
-      : "";
+// ---------------------------------------------------------------------------
+// #266 お金まわり（2026-10-12 神宮の Go）: 機体の入手と修理。値は仕様の数そのまま
+// （回路の修理割引はかけない）。ボタンは支払えなくても押せて、不足は notice。
+// ---------------------------------------------------------------------------
+
+/** 新品購入（僚機 mech_gen1）。クレジットだけ。 */
+export const MECH_BUY_CREDITS = 2000;
+/** 新規機体作成: 最大耐久 × 3 個の装甲パーツと 500c（作るのは購入と同じ mech_gen1）。 */
+export const MECH_CREATE_ARMOR_PER_MAX_DURABILITY = 3;
+export const MECH_CREATE_CREDITS = 500;
+/** 残骸復活（格納庫の大破機）: その機体の最大耐久 × 2 個の装甲パーツと 500c。 */
+export const MECH_REVIVE_ARMOR_PER_MAX_DURABILITY = 2;
+export const MECH_REVIVE_CREDITS = 500;
+
+export type MechMoneyCost = { credits: number; armor: number };
+
+export function buyMechCost(): MechMoneyCost {
+  return { credits: MECH_BUY_CREDITS, armor: 0 };
+}
+export function createMechCost(): MechMoneyCost {
+  return {
+    credits: MECH_CREATE_CREDITS,
+    armor: MECH_FLEET_RULES.defaultDurabilityMax * MECH_CREATE_ARMOR_PER_MAX_DURABILITY,
+  };
+}
+/** null unless the mech is a wreck in the hangar fleet (durability 0 / destroyed). */
+export function reviveMechCost(mech: OwnedMech): MechMoneyCost | null {
+  if (!isHangarWreck(mech)) return null;
+  return {
+    credits: MECH_REVIVE_CREDITS,
+    armor: Math.max(0, Math.floor(mech.durabilityMax)) * MECH_REVIVE_ARMOR_PER_MAX_DURABILITY,
+  };
+}
+function isHangarWreck(mech: OwnedMech): boolean {
+  return mech.status === "destroyed" || mech.durability <= 0;
+}
+
+export const BUY_MECH_LABEL_JA = `新品購入 ${MECH_BUY_CREDITS}c`;
+export function createMechLabelJa(): string {
+  return `新規機体作成 装甲パーツ${createMechCost().armor} と ${MECH_CREATE_CREDITS}c`;
+}
+export function reviveMechLabelJa(mech: OwnedMech): string {
+  return `残骸復活 装甲パーツ${reviveMechCost(mech)?.armor ?? 0} と ${MECH_REVIVE_CREDITS}c`;
+}
+export function repairMechLabelJa(mech: OwnedMech): string {
+  return `通常修理 装甲パーツ${repairCost(mech)?.armor ?? 0}`;
+}
+
+function armorInStock(hub: HubSnapshot): number {
+  return Math.max(0, Math.floor(Number(hub.inventory?.armor ?? 0) || 0));
+}
+
+/** 「クレジットが足りない」「装甲パーツが足りない」「装甲パーツとクレジットが足りない」、足りていれば null。 */
+export function moneyShortfallJa(hub: HubSnapshot, cost: MechMoneyCost): string | null {
+  const creditsShort = Math.max(0, Math.floor(hub.credits)) < cost.credits;
+  const armorShort = armorInStock(hub) < cost.armor;
+  if (creditsShort && armorShort) return "装甲パーツとクレジットが足りない";
+  if (armorShort) return "装甲パーツが足りない";
+  if (creditsShort) return "クレジットが足りない";
+  return null;
+}
+
+/** Pay armor parts (spendYieldBag) and credits together, or nothing at all. */
+function payMoneyCost(hub: HubSnapshot, cost: MechMoneyCost): HubSnapshot | null {
+  if (moneyShortfallJa(hub, cost)) return null;
+  const inventory = cost.armor > 0 ? spendYieldBag(hub.inventory, { armor: cost.armor }) : hub.inventory;
+  if (!inventory) return null;
+  return { ...hub, inventory, credits: hub.credits - cost.credits };
+}
+
+function commitMoney(state: HangarState, hub: HubSnapshot, line: string): HangarState {
   const next: HangarState = {
     ...state,
     hub,
     selectedDeployIds: resolveSortieSelection(hub),
-    log: pushLog(state.log, `修理(集計) ${instanceId}${discNote}`),
-    notice: `集計コストで修理完了 → 健在${discNote}`,
+    log: pushLog(state.log, line),
+    notice: line,
   };
   return persistHangar(next);
+}
+
+/** 「新品購入 2000c」: a fresh mech_gen1 (addMechToHub) for credits only. */
+export function buyNewMech(state: HangarState): HangarState {
+  const cost = buyMechCost();
+  const short = moneyShortfallJa(state.hub, cost);
+  if (short) return { ...state, notice: short };
+  const paid = payMoneyCost(state.hub, cost);
+  const hub = paid ? addMechToHub(paid, "mech_gen1") : null;
+  if (!hub) return { ...state, notice: short ?? "クレジットが足りない" };
+  return commitMoney(state, hub, BUY_MECH_LABEL_JA);
+}
+
+/** 「新規機体作成 装甲パーツ300 と 500c」: the same mech_gen1 as a purchase. Never picks buy vs create itself. */
+export function createNewMech(state: HangarState): HangarState {
+  const cost = createMechCost();
+  const short = moneyShortfallJa(state.hub, cost);
+  if (short) return { ...state, notice: short };
+  const paid = payMoneyCost(state.hub, cost);
+  const hub = paid ? addMechToHub(paid, "mech_gen1") : null;
+  if (!hub) return { ...state, notice: "装甲パーツとクレジットが足りない" };
+  return commitMoney(state, hub, createMechLabelJa());
+}
+
+/**
+ * 「残骸復活 装甲パーツN と 500c」: a wreck that is back in the hangar fleet
+ * (destroyed / durability 0, incl. #270 air-support recoveries) gets full
+ * durability; status from syncMechStatus. instanceId, catalogId, currentAmmo,
+ * battery and the circuits' equippedTo stay (its circuits count again: Q4).
+ * Not for lostMechs / the field. A second press (no longer a wreck) changes nothing.
+ */
+export function reviveWreck(state: HangarState, instanceId: string): HangarState {
+  const mech = state.hub.fleet.find((m) => m.instanceId === instanceId);
+  const cost = mech ? reviveMechCost(mech) : null;
+  if (!mech || !cost) return { ...state, notice: "機体なし" };
+  const short = moneyShortfallJa(state.hub, cost);
+  if (short) return { ...state, notice: short };
+  const paid = payMoneyCost(state.hub, cost);
+  if (!paid) return { ...state, notice: short ?? "装甲パーツとクレジットが足りない" };
+  const label = reviveMechLabelJa(mech);
+  const revived = syncMechStatus({ ...mech, durability: mech.durabilityMax });
+  const hub = normalizeHubSnapshot({
+    ...paid,
+    fleet: paid.fleet.map((m) => (m.instanceId === instanceId ? revived : m)),
+  });
+  return commitMoney(state, hub, label);
+}
+
+/**
+ * 「通常修理 装甲パーツN」: a mech that is not destroyed and below max
+ * durability spends N = missing durability armor parts (no credits, no
+ * materials, no circuit discount) and goes to full. currentAmmo / battery kept.
+ */
+export function repairMech(state: HangarState, instanceId: string): HangarState {
+  const mech = state.hub.fleet.find((m) => m.instanceId === instanceId);
+  if (!mech || !repairCost(mech)) return { ...state, notice: "機体なし" };
+  const label = repairMechLabelJa(mech);
+  const short = moneyShortfallJa(state.hub, repairCost(mech)!);
+  if (short) return { ...state, notice: short };
+  const done = applyRepair(mech, { credits: state.hub.credits, inventory: state.hub.inventory });
+  if (!done) return { ...state, notice: "装甲パーツが足りない" };
+  const hub = normalizeHubSnapshot({
+    ...state.hub,
+    credits: done.wallet.credits,
+    inventory: done.wallet.inventory,
+    fleet: state.hub.fleet.map((m) => (m.instanceId === instanceId ? done.mech : m)),
+  });
+  return commitMoney(state, hub, label);
 }
 
 /** Human-readable shortfall for EXAMPLE_TYPED_REPAIR_COST vs wallet/inventory. */
