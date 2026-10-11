@@ -17,6 +17,7 @@ import {
   equipCircuit,
   type CircuitBoardState,
   type HubSnapshot,
+  isSizedTruePuzzleId,
 } from "@estg/shared";
 import {
   JUNK_CRAFT_CONFIRM_MIN_CREDITS,
@@ -304,3 +305,22 @@ assert.equal(junkCraftConfirmText(8), "回路を作成しますか？\n8×8\nジ
 assert.ok(junkCraftConfirmText(20)!.includes("13301c"));
 
 console.log("trade junk-craft selftest: ok");
+
+// ---------------------------------------------------------------------------
+// S1 (神宮 10/7, wired 10/12): true-board roll on craft (rate from the resolver)
+// ---------------------------------------------------------------------------
+{
+  const hub = hubWith({ perfectMaxSize: 3, credits: 100, inventory: { junk: 20 } });
+  const none = craftJunkCircuit(hub, 3, { circuitId: "s1_none", trueBoardRate: 0, rng: () => 0 });
+  assert.equal(none.record!.circuitBoard.puzzleId, "s1_none", "rate 0 (before the first clear) never rolls");
+  const miss = craftJunkCircuit(hub, 3, { circuitId: "s1_miss", trueBoardRate: 0.01, rng: () => 0.5 });
+  assert.equal(miss.record!.circuitBoard.puzzleId, "s1_miss");
+  const hit = craftJunkCircuit(hub, 3, { circuitId: "s1_hit", trueBoardRate: 0.01, rng: () => 0 });
+  const pid = hit.record!.circuitBoard.puzzleId!;
+  assert.ok(isSizedTruePuzzleId(pid), "hit → sized true-board id");
+  assert.equal(hit.record!.restoreState, "unrestored", "still a white board until Restore");
+  assert.equal(hit.record!.circuitBoard.cols, 3);
+  const legacy = craftJunkCircuit(hub, 3, { circuitId: "s1_legacy" });
+  assert.equal(legacy.record!.circuitBoard.puzzleId, "s1_legacy", "no rate given → as before");
+}
+console.log("junk-craft S1 true-board roll ok");

@@ -159,7 +159,7 @@ isWingmanMobileFor(world, wingmanId): boolean
 - `mechCircuits` は任意の後方互換フィールドである。旧 URL などでこのフィールドが無いとき、`buildEquippedByUnit()` は `{}` を返す。`createWorld` はその場合も `commandUnlock` を必ず作る。プレビュー既定の `all_unlocked` では、装備が空でも全コマンドが動く。`release`（`VITE_EXPLORE_RELEASE_LOCKS`、または DEBUG の release）で `mechCircuits` が無いと、`equippedByUnit` は空のまま回路コマンドはロックされる。
 - `commandUnlock` 自体が無い呼び出しでは、`isCommandUnlockedFor()` と `isWingmanMobileFor()` は全解放の旧挙動を返す。これは World を持たない呼び出し向けの保険で、`mechCircuits` の有無とは別の条件である。
 - 本番の `CIRCUIT_COMMAND_UNLOCKS` は現在も空。回路→コマンドの具体的な対応表は未決定であり、この文書では新しい対応を定義しない。
-  - **注（2026-10-07）:** 「4」の 1×1 の回路 → `wing_mobility` は決定済み（17:06 神宮。`PRODUCT_VISION.md` §2.1.5・設計メモ §2.1）だが、表にはまだ入っていない（STATUS の To-do）。今の表のキーは回路 ID などの文字列で、`equippedByUnit` に入るのは成果が Fully Awakened か Bypass の回路だけ。1×1 の回路はまだどの経路でも作られない。初クリアまで真盤 0%（21:49 神宮。設計メモ §2.1）は、途中で `wing_mobility` が解放されないようにするための決定。
+  - **注（2026-10-07）:** 「4」の 1×1 の回路 → `wing_mobility` は決定済み（17:06 神宮。`PRODUCT_VISION.md` §2.1.5・設計メモ §2.1）だが、表にはまだ入っていない（STATUS の To-do）。今の表のキーは回路 ID などの文字列で、`equippedByUnit` に入るのは成果が Fully Awakened か Bypass の回路だけ。1×1 の回路はまだどの経路でも作られない。→ 2026-10-12: 偽の 1×1 は新しい隊長に付く（#270、Q2）。「4」は初クリアで未修復のまま倉庫に入り（#272）、Restore で直して付けると隊長の `wing_mobility`・航空支援、僚機の自律が開く（#270 の判定）。初クリアまで真盤 0%（21:49 神宮。設計メモ §2.1）は、途中で `wing_mobility` が解放されないようにするための決定。
 
 ## 5. モード（プレビュー／リリース）
 

@@ -771,15 +771,15 @@ import { countCircuitLoopSolutions } from "./circuit-solver";
   assert.equal(rollPerfectCircuit(() => 0.99, { rate: 1 }), true);
 
   assert.equal(
-    resolvePerfectCircuitInjectRate({ isDev: true }),
+    resolvePerfectCircuitInjectRate({ isDev: true, firstCleared: true }),
     PERFECT_CIRCUIT_DEV_RATE,
   );
   assert.equal(
-    resolvePerfectCircuitInjectRate({ hostname: "localhost" }),
+    resolvePerfectCircuitInjectRate({ hostname: "localhost", firstCleared: true }),
     PERFECT_CIRCUIT_DEV_RATE,
   );
   assert.equal(
-    resolvePerfectCircuitInjectRate({ hostname: "example.com" }),
+    resolvePerfectCircuitInjectRate({ hostname: "example.com", firstCleared: true }),
     PERFECT_CIRCUIT_PROD_RATE,
   );
   assert.equal(
@@ -801,8 +801,20 @@ import { countCircuitLoopSolutions } from "./circuit-solver";
     resolvePerfectCircuitInjectRate({
       hostname: "example.com",
       envRate: "0.001",
+      firstCleared: true,
     }),
     PERFECT_CIRCUIT_PROD_RATE_ALT,
+  );
+
+  // S1 (神宮 10/7, wired 10/12): 0% until the first Invade clear; the query knob still wins.
+  assert.equal(resolvePerfectCircuitInjectRate({ hostname: "example.com", firstCleared: false }), 0);
+  assert.equal(resolvePerfectCircuitInjectRate({ isDev: true, firstCleared: false }), 0);
+  assert.equal(resolvePerfectCircuitInjectRate({ hostname: "example.com", envRate: "0.001", firstCleared: false }), 0);
+  assert.equal(resolvePerfectCircuitInjectRate({ hostname: "example.com" }), 0, "no HubSave → not cleared (S2)");
+  assert.equal(
+    resolvePerfectCircuitInjectRate({ hostname: "example.com", search: "?perfectRate=0.2", firstCleared: false }),
+    0.2,
+    "query wins before the first clear",
   );
 
   assert.equal(isPerfectCircuitDebugContext({ isDev: true }), true);

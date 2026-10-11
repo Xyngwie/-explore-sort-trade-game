@@ -28,7 +28,7 @@ import {
   keyIsFalse,
   keyIsTrue,
   makeFalseOneByOne,
-  makeTrueOneByOne,
+  makeRestoredTrueOneByOne,
   qualityBonusPt,
   readAirSupportCooldownSec,
   readBulletinUnlocked,
@@ -181,7 +181,7 @@ function oldSave(): Record<string, unknown> {
   assert.equal(qualityBonusPt(hub), 0);
   const repaired = { ...hub, fleet: hub.fleet.map((m) => (m.instanceId === "dead" ? mech("dead") : m)) } as HubSnapshot;
   assert.ok(sortYieldRate(repaired) > 0, "repaired mech counts again");
-  const t1 = { ...makeTrueOneByOne("t1"), equippedTo: "dead" };
+  const t1 = { ...makeRestoredTrueOneByOne("t1"), equippedTo: "dead" };
   const withFour = { ...hub, circuits: [t1, ...hub.circuits] } as HubSnapshot;
   assert.equal(hangarEquippedCircuits(withFour).some((c) => c.circuitId === "t1"), false, "Q4: a 「4」 on a destroyed mech counts for nothing");
   assert.equal(classifyCircuit(makeFalseOneByOne("f")).oneByOne, "false");

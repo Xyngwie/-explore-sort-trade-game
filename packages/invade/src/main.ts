@@ -2,11 +2,13 @@ import "./style.css";
 import {
   CTA_CHIP,
   CTA_COPY,
+  FIRST_CLEAR_DISCOVERY_LINE_JA,
   HANDOFF_QUERY_KEYS,
   SECTOR_FRONT_DISTANCE,
   SECTOR_WALL_DISTANCE,
   buildInvadeToExploreUrl,
   buildInvadeToTradeUrl,
+  firstClearDiscoveredOnBoard,
   parseTradeToInvadeSearch,
   resolveModuleBaseUrl,
   sectorDensityAt,
@@ -52,7 +54,8 @@ import {
 import {
   clearPersistedFrontProgress,
   loadOrCreateFrontSession,
-  persistFrontSession,
+  persistFrontSessionWithClear,
+  readStoredHub,
   regenerateFrontSession,
 } from "./hub-persist";
 import {
@@ -112,8 +115,16 @@ let flagMode = false;
 /** History trap armed for current forced-combat lock. */
 let forcedLockHistoryArmed = false;
 
+/** Board status at the last save; a change to "won" is the sweep (first-clear.ts). */
+let lastSavedStatus = board.status;
+/** HubSave says the first clear was on this board → one extra banner line. */
+let firstClearOnThisBoard = firstClearDiscoveredOnBoard(readStoredHub(), board.seed);
+
 function saveFrontProgress(): void {
-  persistFrontSession(board, selected);
+  const justWon = board.status === "won" && lastSavedStatus !== "won";
+  const r = persistFrontSessionWithClear(board, selected, undefined, { justWon });
+  lastSavedStatus = board.status;
+  if (r.discovered) firstClearOnThisBoard = true;
 }
 
 function tradeBaseUrl(): string {
@@ -516,7 +527,9 @@ function render(): void {
   const resolvedMineCount = frontProgressFeel(board).openedMines;
   const statusBanner =
     board.status === "won"
-      ? `<div class="banner ok-banner" role="status">前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。</div>`
+      ? `<div class="banner ok-banner" role="status">前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。${
+          firstClearOnThisBoard ? `<br /><span data-first-clear-discovery>${escapeHtml(FIRST_CLEAR_DISCOVERY_LINE_JA)}</span>` : ""
+        }</div>`
       : board.hitMine || board.status === "hazard"
         ? `<div class="banner warn-banner" role="status">敵接触（scoutHazard）。強制戦闘ロック — 強制出撃のみ可。</div>`
         : resolvedMineCount > 0
@@ -607,6 +620,8 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     const session = regenerateFrontSession();
     board = session.board;
     selected = session.focus;
+    lastSavedStatus = board.status;
+    firstClearOnThisBoard = firstClearDiscoveredOnBoard(readStoredHub(), board.seed);
     lostByCell = session.lostByCell;
     dropsByCell = session.dropsByCell;
     wrecksByCell = session.wrecksByCell;

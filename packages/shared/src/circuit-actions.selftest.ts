@@ -9,7 +9,7 @@ import {
   effectKeyForCircuit,
   effectRate,
   makeFalseOneByOne,
-  makeTrueOneByOne,
+  makeRestoredTrueOneByOne,
   perfectRatePoints,
   qualityBonusPt,
   readAirSupportCooldownSec,
@@ -32,7 +32,7 @@ assert.equal(cargoSlotBonus(16), 1);
 assert.equal(cargoSlotBonus(256), 4);
 assert.equal(cargoSlotBonus(0), 0);
 
-const truth = makeTrueOneByOne("true-1x1");
+const truth = makeRestoredTrueOneByOne("true-1x1");
 const fals = makeFalseOneByOne("false-1x1");
 assert.equal(classifyCircuit(truth).oneByOne, "true");
 assert.equal(classifyCircuit(fals).oneByOne, "false");

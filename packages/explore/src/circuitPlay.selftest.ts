@@ -30,7 +30,7 @@ import {
   edgeCount,
   encodeEdgeState,
   makeFalseOneByOne,
-  makeTrueOneByOne,
+  makeRestoredTrueOneByOne,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   saveHubSaveToLocalStorage,
@@ -374,7 +374,7 @@ for (const release of [true, false]) {
 
 // Q3: a true 「4」 on the captain opens wing_mobility (and air support, Q3b); a 「4」 on a wingman makes it autonomous.
 {
-  const world = sortieWith([{ ...makeTrueOneByOne("t-cap"), equippedTo: "cap" }], true);
+  const world = sortieWith([{ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap" }], true);
   assert.equal(world.circuitPlay!.captainTrueOne, true);
   assert.equal(isCommandUnlockedFor(world, "wing_mobility", "wing-a"), true, "Q3: captain 4 → wing_mobility");
   assert.equal(isWingmanMobileFor(world, "wing-a"), false, "captain 4 alone does not make wingmen autonomous");
@@ -382,7 +382,7 @@ for (const release of [true, false]) {
   assert.ok(circuitButtonsIds(world).includes("air_support"), "Q3b: captain 4 → air support button");
   world.leader.alive = false;
   assert.equal(isCommandUnlockedFor(world, "wing_mobility", "wing-a"), true, "5-2 9A: wing orders stay after the captain is wrecked");
-  const wing = sortieWith([{ ...makeTrueOneByOne("t-wa"), equippedTo: "wa" }], true);
+  const wing = sortieWith([{ ...makeRestoredTrueOneByOne("t-wa"), equippedTo: "wa" }], true);
   assert.equal(isWingmanMobileFor(wing, "wing-a"), true, "Q3: wingman 4 → autonomous");
   assert.equal(isWingmanMobileFor(wing, "wing-b"), false);
   assert.equal(isCommandUnlockedFor(wing, "wing_mobility", "wing-a"), false, "wingman 4 does not open captain orders");
@@ -404,7 +404,7 @@ for (const release of [true, false]) {
 // Q4: a destroyed mech's circuits (even a 「4」) never load.
 {
   const fleet = [mech("cap", { status: "destroyed", durability: 0 }), mech("wa")];
-  const world = sortieWith([{ ...makeTrueOneByOne("t-dead"), equippedTo: "cap" }], true, fleet);
+  const world = sortieWith([{ ...makeRestoredTrueOneByOne("t-dead"), equippedTo: "cap" }], true, fleet);
   assert.equal(world.circuitPlay!.captainTrueOne, false, "Q4: 4 on a destroyed mech opens nothing");
   assert.equal(isCommandUnlockedFor(world, "wing_mobility", "wing-a"), false);
 }
@@ -442,7 +442,7 @@ for (const release of [true, false]) {
   };
   try {
     const fleet = [mech("cap"), mech("wa"), mech("wb")];
-    const t4 = { ...makeTrueOneByOne("t-cap"), equippedTo: "cap" };
+    const t4 = { ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap" };
     saveHubSaveToLocalStorage(normalizeHubSnapshot({ ...INITIAL_HUB, credits: 1001, fleet, circuits: [t4] } as never));
     const world = sortieWith([t4], false, fleet);
     const enemy = world.enemies[0]!;

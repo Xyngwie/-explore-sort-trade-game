@@ -12,12 +12,14 @@
  */
 import {
   HUB_LIMITS,
+  buildSizedTruePuzzleIdV2,
   circuitCraftCreditCost,
   circuitCraftJunkCost,
   craftMaxSize,
   createEmptyCircuitBoard,
   derivePerfectMaxSize,
   normalizeHubSnapshot,
+  rollPerfectCircuit,
   type HubCircuitRecord,
   type HubSnapshot,
 } from "@estg/shared";
@@ -117,7 +119,18 @@ export type JunkCraftResult = {
 export function craftJunkCircuit(
   hub: HubSnapshot,
   side: number,
-  opts: { circuitId: string; at?: Date },
+  opts: {
+    circuitId: string;
+    at?: Date;
+    /**
+     * S1 (神宮 10/7, wired 10/12): true-board rate from
+     * `resolvePerfectCircuitInjectRate` (0 until the first Invade clear).
+     * Omitted → 0 (no roll, as before).
+     */
+    trueBoardRate?: number;
+    /** Uniform[0,1) for the roll (default Math.random). */
+    rng?: () => number;
+  },
 ): JunkCraftResult {
   const reason = blockReason(hub, side);
   if (reason) return { ok: false, hub, reason };
@@ -126,7 +139,16 @@ export function craftJunkCircuit(
   const at = (opts.at ?? new Date()).toISOString();
 
   // Unrestored white board: no board.outcome (normalize keeps it empty).
-  const board = createEmptyCircuitBoard(side, side, opts.circuitId);
+  // A hit stamps a sized true-board id (same as Restore's injection), still unrestored.
+  const isTrue =
+    opts.trueBoardRate != null &&
+    opts.trueBoardRate > 0 &&
+    rollPerfectCircuit(opts.rng ?? (() => Math.random()), { rate: opts.trueBoardRate });
+  const board = createEmptyCircuitBoard(
+    side,
+    side,
+    isTrue ? buildSizedTruePuzzleIdV2(opts.circuitId, side, side) : opts.circuitId,
+  );
   const record: HubCircuitRecord = {
     circuitId: opts.circuitId,
     circuitBoard: board,

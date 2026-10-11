@@ -8,6 +8,7 @@ import {
   clearFrontProgressInHub,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
+  recordFirstInvadeClear,
   saveHubSaveToLocalStorage,
   setFrontProgressInHub,
   type FrontCellCoord,
@@ -110,12 +111,41 @@ export function persistFrontSession(
   board: MsBoard,
   focus: FrontCellCoord | null,
   storage?: Pick<Storage, "getItem" | "setItem"> | null,
+  opts?: { justWon?: boolean },
 ): boolean {
+  return persistFrontSessionWithClear(board, focus, storage, opts).saved;
+}
+
+/**
+ * Same as {@link persistFrontSession}. When `justWon` (this action turned the
+ * board into "won"), the first Invade clear is recorded in the same snapshot
+ * and the unrestored "4" goes to the stash — once per save (first-clear.ts).
+ * A board that was already won when loaded never records (S2).
+ */
+export function persistFrontSessionWithClear(
+  board: MsBoard,
+  focus: FrontCellCoord | null,
+  storage?: Pick<Storage, "getItem" | "setItem"> | null,
+  opts?: { justWon?: boolean },
+): { saved: boolean; discovered: boolean } {
   const snap = captureFrontProgress(board, focus);
-  if (!snap) return false;
+  if (!snap) return { saved: false, discovered: false };
   const hub = readHub(storage);
-  const next = setFrontProgressInHub(hub, snap);
-  return saveHubSaveToLocalStorage(next, storage ?? undefined);
+  let next = setFrontProgressInHub(hub, snap);
+  let discovered = false;
+  if (opts?.justWon === true && board.status === "won") {
+    const r = recordFirstInvadeClear(next, board.seed ?? null);
+    next = r.hub;
+    discovered = r.discovered;
+  }
+  return { saved: saveHubSaveToLocalStorage(next, storage ?? undefined), discovered };
+}
+
+/** Hub as stored now (for the clear banner line). */
+export function readStoredHub(
+  storage?: Pick<Storage, "getItem" | "setItem"> | null,
+): HubSnapshot {
+  return readHub(storage);
 }
 
 /** Clear front progress after regenerate-board (keeps rest of hub). */

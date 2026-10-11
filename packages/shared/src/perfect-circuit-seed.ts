@@ -16,10 +16,21 @@ import {
   buildSizedTruePuzzleIdV2,
   resolveSizedTruePuzzle,
 } from "./perfect-circuit-sized";
-import { applyStoredHubPerfectBonus } from "./circuit-actions";
+import { applyStoredHubPerfectBonus, storedHubFirstInvadeCleared } from "./circuit-actions";
 
 /** puzzleId stamped on CircuitBoardState / restore generatePuzzle lookup. */
 export const VERIFY_TRUE_PUZZLE_ID = "verify-true-2";
+
+/**
+ * puzzleId of the "4" 1×1 found on the first Invade clear (S3, 神宮 10/12 Go).
+ * One cell, clue 4. Stored unrestored; Restore draws the loop, then it locks
+ * like any Perfect board.
+ */
+export const TRUE_ONE_BY_ONE_PUZZLE_ID = "true-1x1-four";
+
+export function isTrueOneByOnePuzzleId(puzzleId: string | null | undefined): boolean {
+  return puzzleId != null && puzzleId.trim() === TRUE_ONE_BY_ONE_PUZZLE_ID;
+}
 
 /** Hub circuitId for unsolved solvable grant 「検証用真盤を受領」. */
 export const VERIFY_TRUE_CIRCUIT_ID = "verify_true";
@@ -156,6 +167,9 @@ export function resolveTrueBoardClues(
 } | null {
   const verify = resolveVerifyTrueClues(puzzleId);
   if (verify) return verify;
+  if (isTrueOneByOnePuzzleId(puzzleId)) {
+    return { cols: 1, rows: 1, puzzleId: TRUE_ONE_BY_ONE_PUZZLE_ID, clues: [[4]] };
+  }
   const sized = resolveSizedTruePuzzle(puzzleId);
   if (!sized) return null;
   return {
@@ -231,6 +245,12 @@ export type PerfectCircuitRateContext = {
   /** Pass `import.meta.env.DEV` from Vite entrypoints */
   isDev?: boolean;
   /**
+   * S1 (神宮 10/7, wired 10/12): true-board rate is 0% until the first Invade
+   * clear. Omit to read `firstInvadeClear` from the stored HubSave (no save →
+   * not cleared). An explicit `?perfectRate=` still wins (debug knob).
+   */
+  firstCleared?: boolean;
+  /**
    * Explicit env override (`PERFECT_CIRCUIT_RATE` or `VITE_PERFECT_CIRCUIT_RATE`).
    * Use `0.001` for the docs alternate formal target.
    */
@@ -276,6 +296,9 @@ export function isPerfectCircuitDebugContext(
  * 2. `envRate` (prod alternate / ops knob)
  * 3. Vite DEV or localhost → {@link PERFECT_CIRCUIT_DEV_RATE} (33%)
  * 4. else {@link PERFECT_CIRCUIT_PROD_RATE} (1%)
+ * Steps 2–4 are 0 until the first Invade clear (S1; `ctx.firstCleared` or the
+ * stored HubSave `firstInvadeClear`). Crafting, purchase, field pickups and
+ * enemy drops all take their rate from here.
  */
 export function resolvePerfectCircuitInjectRate(
   ctx: PerfectCircuitRateContext = {},
@@ -297,6 +320,8 @@ export function resolvePerfectCircuitInjectRate(
   let base: number;
   if (fromQuery != null) base = fromQuery;
   else {
+    const cleared = ctx.firstCleared ?? storedHubFirstInvadeCleared();
+    if (!cleared) return 0;
     const fromEnv = parsePerfectCircuitRate(ctx.envRate);
     if (fromEnv != null) base = fromEnv;
     else {

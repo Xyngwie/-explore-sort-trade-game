@@ -273,12 +273,43 @@ export type HubSnapshot = {
    */
   bulletinUnlocked?: boolean;
   /**
+   * First Invade clear (初クリア, 神宮 10/12 Go). Optional: a save without it
+   * has not cleared yet, even when its board looks swept (S2 — never derived
+   * from the board). Written once, together with the discovered "4" 1×1.
+   */
+  firstInvadeClear?: FirstInvadeClear;
+  /**
    * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
    * hangar (instanceIds, at most `HUB_LIMITS.maxSortieMechs`). Trade's deploy
    * URL and Explore's 再出撃 both read it via `resolveSortieSelection`.
    */
   sortieSelection?: string[];
 };
+
+/**
+ * First Invade clear record. `boardSeed` is the board swept first (null when
+ * unknown); `at` is an ISO time. Only presence matters for "cleared".
+ */
+export type FirstInvadeClear = {
+  boardSeed: number | null;
+  at?: string;
+};
+
+/**
+ * Loose → FirstInvadeClear. Missing / null / false → undefined (not cleared).
+ * Any other present value counts as cleared (an odd value never re-grants).
+ */
+export function normalizeFirstInvadeClear(raw: unknown): FirstInvadeClear | undefined {
+  if (raw == null || raw === false) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) return { boardSeed: null };
+  const o = raw as Record<string, unknown>;
+  const seedNum = typeof o.boardSeed === "number" ? o.boardSeed : Number.NaN;
+  const out: FirstInvadeClear = {
+    boardSeed: Number.isFinite(seedNum) ? seedNum >>> 0 : null,
+  };
+  if (typeof o.at === "string" && o.at.trim()) out.at = o.at.trim().slice(0, 40);
+  return out;
+}
 
 /** @deprecated Prefer HubSaveV2 — kept for migration typing. */
 export type HubSaveV1 = {
@@ -995,6 +1026,9 @@ export function normalizeHubSnapshot(
     Number.isFinite(cooldownNum) && cooldownNum > 0 ? cooldownNum : undefined;
   const bulletinUnlocked =
     rawRec?.bulletinUnlocked === true || circuits.some(boardGivesBulletin);
+  const firstInvadeClear = normalizeFirstInvadeClear(
+    rawRec && "firstInvadeClear" in rawRec ? rawRec.firstInvadeClear : rawRec == null ? fallback.firstInvadeClear : undefined,
+  );
 
   // Missing (v1/v2) → derived from Perfect circuits (U11); stored v3 value kept as-is.
   const perfectMaxSize = normalizePerfectMaxSize(
@@ -1056,6 +1090,7 @@ export function normalizeHubSnapshot(
     sortieSelection,
     ...(airSupportCooldownSec != null ? { airSupportCooldownSec } : {}),
     ...(bulletinUnlocked ? { bulletinUnlocked: true } : {}),
+    ...(firstInvadeClear ? { firstInvadeClear } : {}),
   };
 }
 
