@@ -562,3 +562,25 @@ button.cover-active {
   font-size: 1rem;
   text-align: center;
 }
+
+/* P1 (PR-B): wingman palette in the row under the map, selected wingman card. */
+.wing-palette {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.45rem 0 0.15rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 8px;
+  background: #12161c;
+  border: 1px solid var(--border);
+}
+.wing-palette.open { border-color: #ffd166aa; }
+.wing-palette button { padding: 0.45rem 0.7rem; font-size: 0.8rem; min-height: 36px; }
+.wing-palette-sel { font-size: 0.78rem; color: #ffd166; }
+.wing-palette-hint { font-size: 0.78rem; color: #9aa0a6; }
+.wing-card[data-wing-select] { cursor: pointer; }
+.wing-card.selected {
+  border-color: #ffd166;
+  box-shadow: 0 0 0 1px #ffd16688 inset;
+}

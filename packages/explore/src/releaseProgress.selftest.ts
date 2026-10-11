@@ -25,6 +25,10 @@ import {
   beginWingmanMovePick,
   circuitButtons,
   consumeCircuitClick,
+  handleMapTap,
+  openWingPalette,
+  paletteWingmen,
+  pressWingPalette,
   effectiveBatteryCapacity,
   issueWingmanMove,
   rangeMul,
@@ -285,6 +289,52 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   const legacy = worldFromCheckpointBody(noPlay)!;
   legacy.phase = "sortie";
   for (let i = 0; i < 5; i++) tickWorld(legacy, 0.05, idle);
+}
+
+// --- P1: palette under the map (map tap ~24px / card / 全僚機), other taps move the captain ---
+{
+  const locked = sortie([falseCap()]);
+  const wa0 = locked.wingmen[0]!;
+  assert.equal(handleMapTap(locked, { ...wa0.pos }, 24), "move", "no 「4」: a tap on a wingman moves the captain (nothing locked is shown)");
+  assert.equal(openWingPalette(locked, ["wing-a"]), false, "no 「4」: the card opens nothing");
+  assert.deepEqual(paletteWingmen(locked), []);
+
+  const w = sortie([trueCap(), { ...makeRestoredTrueOneByOne("t-wb"), equippedTo: "wb" }]);
+  const wa = w.wingmen[0]!;
+  const wb = w.wingmen[1]!;
+  assert.deepEqual(paletteWingmen(w), ["wing-a"], "autonomous wing-b stays out of the palette");
+  assert.equal(handleMapTap(w, { ...wb.pos }, 24), "move", "a tap on the autonomous wingman moves the captain");
+  assert.equal(handleMapTap(w, { x: wa.pos.x + 20, y: wa.pos.y }, 24), "selected", "within ~24px selects");
+  assert.deepEqual(w.circuitPlay!.wingSelect, { ids: ["wing-a"], step: "root" });
+  assert.equal(handleMapTap(w, { x: wa.pos.x + 200, y: wa.pos.y }, 24), "move", "another tap moves the captain");
+  assert.equal(w.circuitPlay!.wingSelect, null, "and closes the palette");
+  // card entry → 移動 → 地点選択 → map tap
+  assert.equal(openWingPalette(w, ["wing-a"]), true);
+  assert.equal(pressWingPalette(w, "point"), false, "「地点選択」 only after 「移動」");
+  assert.equal(pressWingPalette(w, "move"), true);
+  assert.equal(pressWingPalette(w, "point"), true);
+  const dest = { x: wa.pos.x + 40, y: wa.pos.y + 10 };
+  assert.equal(handleMapTap(w, dest, 24), "consumed", "the destination tap does not move the captain");
+  assert.deepEqual(w.circuitPlay!.wingMove["wing-a"], dest);
+  assert.equal(w.circuitPlay!.wingSelect, null, "palette closes after the order");
+  // armed designated action takes over (existing cancel: the next tap is consumed)
+  openWingPalette(w, ["wing-a"]);
+  beginCircuitButton(w, "air_support");
+  assert.equal(w.circuitPlay!.wingSelect, null, "arming a designated action closes the palette");
+  assert.equal(handleMapTap(w, { x: 5, y: 5 }, 24), "consumed");
+  // 全僚機 with two non-autonomous wingmen
+  const two = sortie([trueCap()]);
+  assert.equal(openWingPalette(two, paletteWingmen(two)), true);
+  pressWingPalette(two, "move");
+  pressWingPalette(two, "point");
+  const pt = { x: two.leader.pos.x + 60, y: two.leader.pos.y + 60 };
+  handleMapTap(two, pt, 24);
+  assert.deepEqual(Object.keys(two.circuitPlay!.wingMove).sort(), ["wing-a", "wing-b"], "「全僚機」 orders every wingman");
+  // a selected wingman that dies drops out of the palette
+  openWingPalette(two, ["wing-a"]);
+  two.wingmen[0]!.alive = false;
+  stepCircuitPlay(two, 0.01);
+  assert.equal(two.circuitPlay!.wingSelect, null);
 }
 
 console.log("releaseProgress.selftest ok");

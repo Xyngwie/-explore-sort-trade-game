@@ -95,6 +95,8 @@ export type CircuitPlayState = {
   wingMove: Record<string, Vec2>;
   /** PR-B: ammo held back by the max-ammo scale (kept in stock, never spent). Not a save key. */
   ammoFloor: Record<string, number>;
+  /** PR-B P1: wingmen selected for the palette under the map (+ palette step). Not a save key. */
+  wingSelect?: { ids: string[]; step: "root" | "move" } | null;
 };
 
 const ORDER_LABEL: Record<string, string> = {
@@ -426,6 +428,8 @@ export function pincerPoints(captain: Vec2, enemy: Vec2, units: Unit[]): Record<
 export function beginCircuitButton(world: World, id: string): void {
   const p = playOf(world);
   if (!p?.rules || world.phase !== "sortie") return;
+  p.wingSelect = null; // P1: another designated action takes over the next map tap
+
   if (id === "haul") {
     issueHaul(world);
     p.pending = null;
@@ -450,6 +454,7 @@ export function consumeCircuitClick(world: World, pt: Vec2): boolean {
   p.pending = null;
   if (pending.kind === "wing_move") {
     issueWingmanMove(world, pending.unitIds ?? [], pt);
+    p.wingSelect = null;
     return true;
   }
   if (pending.pick === "enemy") {
@@ -1366,6 +1371,66 @@ export function beginWingmanMovePick(world: World, unitIds: string[]): boolean {
   return true;
 }
 
+/** P1: wingmen that can be put in the palette (alive, not autonomous, captain 「4」). */
+export function paletteWingmen(world: World): string[] {
+  return world.wingmen.filter((w) => wingmanPaletteActions(world, [w.id]).length > 0).map((w) => w.id);
+}
+
+/** P1: select wingmen and open the palette (root step). Locked → nothing opens. */
+export function openWingPalette(world: World, unitIds: string[]): boolean {
+  const p = playOf(world);
+  const ids = unitIds.filter((id) => paletteWingmen(world).includes(id));
+  if (!p || ids.length === 0) return false;
+  if (p.pending?.kind === "wing_move") p.pending = null;
+  p.wingSelect = { ids, step: "root" };
+  return true;
+}
+
+/** P1: close the palette (and an armed 「地点選択」). */
+export function closeWingPalette(world: World): void {
+  const p = playOf(world);
+  if (!p) return;
+  p.wingSelect = null;
+  if (p.pending?.kind === "wing_move") p.pending = null;
+}
+
+/** P1: press a palette entry: 「移動」 → 「地点選択」 → wait for the map tap. */
+export function pressWingPalette(world: World, actionId: string): boolean {
+  const p = playOf(world);
+  const sel = p?.wingSelect;
+  if (!p || !sel) return false;
+  if (sel.step === "root" && actionId === "move") { p.wingSelect = { ...sel, step: "move" }; return true; }
+  if (sel.step === "move" && actionId === "point") return beginWingmanMovePick(world, sel.ids);
+  return false;
+}
+
+/** P1: nearest palette-eligible wingman within `max` world units of `pt`. */
+export function paletteWingmanAt(world: World, pt: Vec2, max: number): string | null {
+  let best: string | null = null;
+  let bd = max;
+  for (const id of paletteWingmen(world)) {
+    const u = world.wingmen.find((w) => w.id === id)!;
+    const d = dist(u.pos, pt);
+    if (d <= bd) { bd = d; best = id; }
+  }
+  return best;
+}
+
+/**
+ * P1: one map tap. An armed pick (designated action or 「地点選択」) takes it
+ * first (existing rule: the next tap is consumed). Else a tap near a
+ * selectable wingman opens its palette; any other tap closes the palette and
+ * moves the captain as before ("move").
+ */
+export function handleMapTap(world: World, pt: Vec2, wingPickRadius: number): "consumed" | "selected" | "move" {
+  if (consumeCircuitClick(world, pt)) return "consumed";
+  const id = paletteWingmanAt(world, pt, wingPickRadius);
+  if (id && openWingPalette(world, [id])) return "selected";
+  const p = playOf(world);
+  if (p) p.wingSelect = null;
+  return "move";
+}
+
 /**
  * N1: send non-autonomous wingmen to `pt`; each stops there and returns fire
  * (it also returns fire on the way). No escort / patrol for them.
@@ -1387,6 +1452,12 @@ export function issueWingmanMove(world: World, unitIds: string[], pt: Vec2): str
 function tickWingmanMoves(world: World): void {
   const p = playOf(world);
   if (!p) return;
+  if (p.wingSelect) {
+    const ok = paletteWingmen(world);
+    const ids = p.wingSelect.ids.filter((id) => ok.includes(id));
+    if (ids.length === 0) closeWingPalette(world);
+    else if (ids.length !== p.wingSelect.ids.length) p.wingSelect = { ...p.wingSelect, ids };
+  }
   for (const [id, pt] of Object.entries(p.wingMove)) {
     const u = world.wingmen.find((w) => w.id === id);
     if (!u || !u.alive || p.wingTrueOne[id] || dist(u.pos, pt) < 6) delete p.wingMove[id];

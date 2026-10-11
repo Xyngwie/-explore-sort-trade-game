@@ -305,6 +305,28 @@ export function renderWorld(
     }
   }
 
+  // P1 (PR-B): selected wingmen get a frame; ordered move points get a small marker.
+  const play = world.circuitPlay;
+  if (play) {
+    for (const id of play.wingSelect?.ids ?? []) {
+      const w = world.wingmen.find((u) => u.id === id);
+      if (!w || !w.alive) continue;
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(tx(w.pos.x) - w.radius * sx - 5, ty(w.pos.y) - w.radius * sy - 5, (w.radius * sx + 5) * 2, (w.radius * sy + 5) * 2);
+      ctx.lineWidth = 1;
+    }
+    for (const [id, pt] of Object.entries(play.wingMove ?? {})) {
+      if (!world.wingmen.some((u) => u.id === id && u.alive)) continue;
+      const mx = tx(pt.x);
+      const my = ty(pt.y);
+      ctx.strokeStyle = "#ffd166";
+      ctx.beginPath();
+      ctx.moveTo(mx, my - 6); ctx.lineTo(mx + 6, my); ctx.lineTo(mx, my + 6); ctx.lineTo(mx - 6, my); ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
   // Leader
   if (world.leader.alive) {
     if (world.leader.inCover) drawCoverRing(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), world.leader.radius * sx);
