@@ -20,6 +20,7 @@
     "src/releaseProgress.selftest.ts",
     "src/ammoRefill.selftest.ts",
     "src/carry.selftest.ts",
-    "src/rescue.selftest.ts"
+    "src/rescue.selftest.ts",
+    "src/statusBadges.selftest.ts"
   ]
 }
