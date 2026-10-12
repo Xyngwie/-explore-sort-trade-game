@@ -7,6 +7,7 @@ import { visionMul } from "./circuitPlay";
 import { STANCE_LABEL, type World } from "./types";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from "./lockedOrder";
+import { STATUS_BADGE_COLOR, STATUS_BADGE_OUTLINE, STATUS_BADGE_PX, wingmanStatusLine } from "./statusBadges";
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -290,6 +291,25 @@ export function renderWorld(
     const labelX = tx(w.pos.x) - 28;
     const labelY = ty(w.pos.y) - w.radius * sy - 8;
     ctx.fillText(`${w.name}·${stanceTag}${quirkTag}${coverTag}`, labelX, labelY);
+    // feat/explore-status-badges: red outlined state line over the name label.
+    // The canvas backing is fixed and CSS-scaled, so the font is sized in
+    // backing px to land at STATUS_BADGE_PX on screen at any width / map zoom.
+    const status = wingmanStatusLine(world, w);
+    let topY = labelY;
+    if (status) {
+      const shown = ctx.canvas.clientWidth > 0 ? ctx.canvas.clientWidth : cssW;
+      const px = (STATUS_BADGE_PX * cssW) / shown;
+      topY = labelY - px - 2;
+      ctx.save();
+      ctx.font = `bold ${px.toFixed(2)}px sans-serif`;
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(1, px / 4);
+      ctx.strokeStyle = STATUS_BADGE_OUTLINE;
+      ctx.fillStyle = STATUS_BADGE_COLOR;
+      ctx.strokeText(status, labelX, topY);
+      ctx.fillText(status, labelX, topY);
+      ctx.restore();
+    }
     const qa = questionAlpha(w);
     if (qa > 0) {
       // C20-b: 「？」 above the name label, fading out over QUESTION_MARK_SEC.
@@ -297,7 +317,7 @@ export function renderWorld(
       ctx.globalAlpha = qa;
       ctx.fillStyle = QUESTION_COLOR;
       ctx.font = QUESTION_FONT;
-      ctx.fillText("？", tx(w.pos.x) - 5, labelY - 13);
+      ctx.fillText("？", tx(w.pos.x) - 5, topY - 13);
       ctx.restore();
     }
     if (w.stance === "patrol" && w.waypoint) {
