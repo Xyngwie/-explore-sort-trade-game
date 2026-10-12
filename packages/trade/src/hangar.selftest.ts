@@ -1446,7 +1446,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     nextDeploy.mechBattery?.map((r) => [r.instanceId, r.battery.capacity, r.battery.activity]),
     [[idA, 300, 123], [idB, 300, 300]],
   );
-  assert.equal(nextUrl.searchParams.has("startingAmmo"), false);
+  assert.equal(nextUrl.searchParams.has("startingAmmo"), true); // F1 (項目4-1): stock always sent
 
   // Re-opening the same return URL is ignored (already applied) and does not overwrite.
   const changed = {
@@ -2209,4 +2209,40 @@ console.log("trade hangar selftest: ok");
   const repaired = repairMech(worn, boughtMech.instanceId);
   assert.equal(bar(repaired.hub).装甲パーツ, 70);
   console.log("trade E1 bought mech ammo 0 / holdings bar real stock ok");
+}
+
+// 項目4-1 F1・F3（2026-10-12）: 出撃 URL の startingAmmo は倉庫の弾、デモ受領機は満タン。
+{
+  const st = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = st;
+  const raw = {
+    v: 3,
+    savedAt: "2026-10-01T00:00:00.000Z",
+    hub: {
+      ...INITIAL_HUB,
+      fleet: [createMechForMoney("mech_gen1", { instanceId: "only", currentAmmo: 5 })],
+      ammoLoad: { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 },
+      inventory: { ammo: 17 },
+      ammoBatteryRepaired: true,
+    },
+  };
+  st.setItem("wreckline.hubSave.v3", JSON.stringify(raw));
+  const s0 = createInitialHangar(st);
+  const url = new URL(buildDeployUrl({ ...s0, selectedDeployIds: ["only"] })!);
+  assert.equal(url.searchParams.get("startingAmmo"), "17", "F1: startingAmmo = inventory.ammo (not ammoLoad 55)");
+  assert.equal(new URL(buildInvadeUrl(s0)).searchParams.get("startingAmmo"), "17", "F1: the Invade link too");
+  assert.deepEqual(s0.hub.ammoLoad, { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 }, "ammoLoad kept");
+  // F3: 「機体を受領」 → carried ammo at cap (attached, stock untouched), durability max, battery full
+  const g = grantStarterFleet(s0);
+  const added = g.hub.fleet.filter((m) => m.instanceId !== "only");
+  assert.ok(added.length >= 1);
+  for (const m of added) {
+    assert.equal(m.currentAmmo, 28, "F3: ammo at its cap");
+    assert.equal(m.durability, m.durabilityMax, "F3: durability max");
+    assert.equal(m.battery.activity, m.battery.capacity, "F3: battery full");
+    assert.equal(m.battery.capacity, 300);
+  }
+  assert.equal(g.hub.inventory.ammo, 17, "F3: not drawn from stock");
+  assert.equal(g.hub.fleet.find((m) => m.instanceId === "only")!.currentAmmo, 5, "existing mechs untouched");
+  console.log("trade 4-1 F1 startingAmmo / F3 demo mech full ok");
 }

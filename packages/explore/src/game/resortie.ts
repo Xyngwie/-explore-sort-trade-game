@@ -97,7 +97,8 @@ export function resortieSearch(
   previousIds: readonly string[],
 ): { search: string; deployedInstanceIds: string[] } | null {
   const inbound = parseTradeToExploreSearch(originalSearch);
-  const startingAmmo = inbound?.startingAmmo ?? 0;
+  // F1: the hub ammo stock (`inventory.ammo`) from the saved HubSave, else the previous URL value.
+  const startingAmmo = hub.inventory?.ammo != null ? Math.max(0, Math.floor(hub.inventory.ammo)) : inbound?.startingAmmo ?? 0;
   const payload = buildTradeToExplorePayloadFromFleet(hub.fleet, startingAmmo, previousIds);
   const deployedInstanceIds = payload.deployedInstanceIds ?? [];
   if (deployedInstanceIds.length === 0) return null;

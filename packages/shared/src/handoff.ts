@@ -590,12 +590,12 @@ export function buildTradeToExploreUrl(
     );
     if (encodedBattery) u.searchParams.set("mechBattery", encodedBattery);
   }
-  if (!payload.mechCurrentAmmo || payload.mechCurrentAmmo.length === 0) {
-    u.searchParams.set(
-      "startingAmmo",
-      String(Math.max(0, Math.floor(payload.startingAmmo))),
-    );
-  }
+  // F1 (項目4-1, 2026-10-12): always send the hub ammo stock (`inventory.ammo`) so the
+  // Explore briefing's 「実弾」 shows it. URLs without it still parse (→ 0).
+  u.searchParams.set(
+    "startingAmmo",
+    String(Math.max(0, Math.floor(payload.startingAmmo))),
+  );
   if (ids.length > 0) {
     u.searchParams.set("deployedInstanceIds", encodeInstanceIds(ids));
   }

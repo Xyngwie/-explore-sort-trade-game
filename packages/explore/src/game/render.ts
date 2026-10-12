@@ -1,6 +1,7 @@
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
+import { carriedWreckIds, wreckCarrierId } from "./carry";
 import { getCoverObjects } from "./coverObjects";
 import { visionMul } from "./circuitPlay";
 import { STANCE_LABEL, type World } from "./types";
@@ -243,6 +244,7 @@ export function renderWorld(
   const recoveredLost = new Set(world.recoveredLostMechIds ?? []);
   for (const m of world.strandedMechs ?? []) {
     if (recoveredLost.has(m.instanceId)) continue;
+    if (wreckCarrierId(world, `s:${m.instanceId}`) != null) continue; // drawn on its carrier (項目4-1)
     drawCraft(ctx, tx(m.pos.x), ty(m.pos.y), 9 * sx, "#8a9099", Math.PI / 2);
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
@@ -253,6 +255,7 @@ export function renderWorld(
   for (const u of [world.leader, ...world.wingmen]) {
     if (u.alive || !u.instanceId) continue;
     if ((world.recoveredWreckUnitIds ?? []).includes(u.id)) continue;
+    if (wreckCarrierId(world, u.id) != null) continue; // drawn on its carrier (項目4-1)
     drawCraft(ctx, tx(u.pos.x), ty(u.pos.y), u.radius * sx, "#8a9099", u.heading);
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
@@ -335,6 +338,19 @@ export function renderWorld(
     ctx.font = "11px sans-serif";
     const leadLabel = world.leader.inCover ? "隊長·カバー" : "隊長";
     ctx.fillText(leadLabel, tx(world.leader.pos.x) - 18, ty(world.leader.pos.y) - 22);
+  }
+
+  // 項目4-1 C7: a carried wreck is drawn small on top of its carrier, with 「積載中 残骸」.
+  for (const u of [world.leader, ...world.wingmen]) {
+    if (!u.alive) continue;
+    const n = carriedWreckIds(world, u.id).length;
+    if (n <= 0) continue;
+    const cx = tx(u.pos.x);
+    const cy = ty(u.pos.y) - u.radius * sy * 0.9;
+    drawCraft(ctx, cx, cy, u.radius * sx * 0.55, "#8a9099", u.heading);
+    ctx.fillStyle = "#e6d3a3";
+    ctx.font = "11px sans-serif";
+    ctx.fillText(n > 1 ? `積載中 残骸×${n}` : "積載中 残骸", cx + u.radius * sx * 0.8, cy + 4);
   }
 
   // Vision ring (leader)

@@ -98,6 +98,7 @@ import {
   ammoShortLineJa,
   ammoStock,
   mechAmmoCap,
+  MECH_BATTERY_DEFAULT_CAPACITY,
   refillFleetAmmo,
   previewAmmoShort,
 } from "@estg/shared";
@@ -714,6 +715,23 @@ export function grantStarterFleet(state: HangarState): HangarState {
     const id: MechId = hub.fleet.length === 1 ? "mech_gen2" : "mech_gen1";
     hub = addMechToHub(hub, id) ?? hub;
   }
+  // F3 (2026-10-12 神宮「実弾・装甲・電力を満タン」): a demo mech comes with carried ammo at
+  // its cap (attached directly, not drawn from stock), durability at max and a full battery.
+  const before = new Set(state.hub.fleet.map((m) => m.instanceId));
+  hub = {
+    ...hub,
+    fleet: hub.fleet.map((m) => {
+      if (before.has(m.instanceId)) return m;
+      const capacity = Math.max(1, Math.floor(m.battery?.capacity ?? MECH_BATTERY_DEFAULT_CAPACITY));
+      return {
+        ...m,
+        durability: m.durabilityMax,
+        status: "operational" as const,
+        currentAmmo: mechAmmoCap(hub, m.instanceId),
+        battery: { capacity, activity: capacity },
+      };
+    }),
+  };
   const next: HangarState = {
     ...state,
     hub,
@@ -1060,7 +1078,8 @@ export function buildDeployUrl(state: HangarState): string | null {
   // Only the chosen mechs (at most 3) go out — and only they take wear.
   const ids = selectionAfter(state.hub, state.selectedDeployIds);
   if (ids.length === 0) return null;
-  const ammo = ammoTotal(state.hub.ammoLoad);
+  // F1 (2026-10-12): startingAmmo = the hub ammo stock (`inventory.ammo`, M1), not the old typed ammoLoad.
+  const ammo = Math.max(0, Math.floor(state.hub.inventory.ammo ?? 0));
   const payload = buildTradeToExplorePayloadFromFleet(
     state.hub.fleet,
     ammo,
@@ -1088,7 +1107,7 @@ export function buildDeployUrl(state: HangarState): string | null {
 /** trade → invade preview URL (optional; fromHub + fleet/ammo summary). */
 export function buildInvadeUrl(state: HangarState): string {
   const deployableMechs = selectDeployableInstanceIds(state.hub.fleet).length;
-  const startingAmmo = ammoTotal(state.hub.ammoLoad);
+  const startingAmmo = Math.max(0, Math.floor(state.hub.inventory.ammo ?? 0)); // F1
   return buildTradeToInvadeUrl(
     {
       fromHub: true,

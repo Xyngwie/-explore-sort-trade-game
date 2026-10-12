@@ -264,9 +264,14 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   wreck.pos = { x: 410, y: 400 };
   noteCollectTap(world, { ...wreck.pos });
   applyCollectPress(world);
+  // 項目4-1: the wreck takes 8 s; the containers stay until it goes in
+  assert.equal(world.leader.salvagedCount, 2, "the swap waits for the 8 s pickup");
+  for (let t = 0; t < 7.9; t += 0.1) stepCircuitPlay(world, 0.1);
+  assert.equal(world.circuitPlay!.carry.leader, undefined, "not yet at 7.9 s");
+  for (let t = 0; t < 0.3; t += 0.1) stepCircuitPlay(world, 0.1);
   assert.equal(world.leader.salvagedCount, 0, "swap drops the container stack");
   assert.equal(world.salvaged, 0);
-  assert.ok(world.circuitPlay!.carried.includes(wreck.id), "wreck enters inventory");
+  assert.ok(world.circuitPlay!.carry.leader?.includes(wreck.id), "wreck enters inventory");
   world.leader.pos = { x: 500, y: 420 };
   stepCircuitPlay(world, 0.05);
   assert.equal(wreck.pos.x, 500);
@@ -276,7 +281,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   world.circuitPlay!.collectTap = null;
   applyCollectPress(world);
   assert.equal(world.leader.salvagedCount, 0, "no tap and no nearby target dumps inventory");
-  assert.equal(world.circuitPlay!.carried.length, 0, "dump releases carried wrecks");
+  assert.equal(world.circuitPlay!.carry.leader, undefined, "dump releases carried wrecks");
   assert.equal(wreck.pos.x, 500);
   world.leader.salvagedCount = 3;
   world.salvaged = 3;
@@ -284,6 +289,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   crate.discovered = true;
   crate.taken = false;
   crate.pos = { ...world.leader.pos };
+  wreck.pos = { x: 900, y: 900 };
   applyCollectPress(world);
   assert.equal(world.leader.salvagedCount, 3, "nearby salvage target keeps the current collect");
 }

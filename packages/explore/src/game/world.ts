@@ -254,7 +254,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
   if (inbound != null) {
     note =
       deployedInstanceIds.length > 0
-        ? `HUB v2 · 健在 ${craft} 機 · ids ${deployedInstanceIds.join(",")}`
+        ? `HUB v2 · 健在 ${craft} 機 · ids ${deployedInstanceIds.join(",")} · 実弾 ${ammoStock}`
         : `HUB 受取 · 配備 ${craft} 機（僚機 ${wingmanCount}） · 実弾 ${ammoStock}`;
   } else {
     note = "デモ編成 · 僚機 2 · 既定実弾";
@@ -464,7 +464,8 @@ export function startSortie(world: World): void {
     world.circuitPlay.pullOutside = false;
     world.circuitPlay.collectTap = null;
     world.circuitPlay.collectDown = false;
-    world.circuitPlay.carried = [];
+    world.circuitPlay.carry = {};
+    world.circuitPlay.wreckChannel = {};
   }
   if (world.coverObjects) {
     for (let i = world.coverObjects.length - 1; i >= 0; i--) {
