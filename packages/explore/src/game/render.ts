@@ -7,7 +7,7 @@ import { visionMul } from "./circuitPlay";
 import { STANCE_LABEL, type World } from "./types";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from "./lockedOrder";
-import { STATUS_BADGE_COLOR, STATUS_BADGE_OUTLINE, STATUS_BADGE_PX, wingmanStatusLine } from "./statusBadges";
+import { STATUS_BADGE_COLOR, STATUS_BADGE_OUTLINE, STATUS_BADGE_PX, wingmanStatusLine, wreckCircuitLine } from "./statusBadges";
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -261,6 +261,8 @@ export function renderWorld(
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
     ctx.fillText(wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(u.pos.x) - 30, ty(u.pos.y) - u.radius * sy - 8);
+    // 21:29 神宮 1 = B: a wrecked wingman shows its circuits (type + value) over the label.
+    if (u.kind !== "leader") drawOverheadLine(ctx, cssW, wreckCircuitLine(world, u), tx(u.pos.x) - 30, ty(u.pos.y) - u.radius * sy - 8);
   }
 
   // Dropped circuits waiting on this front cell (circuitDrops.ts): recovered at
@@ -295,21 +297,7 @@ export function renderWorld(
     // The canvas backing is fixed and CSS-scaled, so the font is sized in
     // backing px to land at STATUS_BADGE_PX on screen at any width / map zoom.
     const status = wingmanStatusLine(world, w);
-    let topY = labelY;
-    if (status) {
-      const shown = ctx.canvas.clientWidth > 0 ? ctx.canvas.clientWidth : cssW;
-      const px = (STATUS_BADGE_PX * cssW) / shown;
-      topY = labelY - px - 2;
-      ctx.save();
-      ctx.font = `bold ${px.toFixed(2)}px sans-serif`;
-      ctx.lineJoin = "round";
-      ctx.lineWidth = Math.max(1, px / 4);
-      ctx.strokeStyle = STATUS_BADGE_OUTLINE;
-      ctx.fillStyle = STATUS_BADGE_COLOR;
-      ctx.strokeText(status, labelX, topY);
-      ctx.fillText(status, labelX, topY);
-      ctx.restore();
-    }
+    const topY = status ? drawOverheadLine(ctx, cssW, status, labelX, labelY) : labelY;
     const qa = questionAlpha(w);
     if (qa > 0) {
       // C20-b: 「？」 above the name label, fading out over QUESTION_MARK_SEC.
@@ -414,4 +402,26 @@ export function worldFromCanvas(canvas: HTMLCanvasElement, world: World, clientX
   const nx = (clientX - rect.left) / rect.width;
   const ny = (clientY - rect.top) / rect.height;
   return { x: world.camera.x + nx * world.camera.w, y: world.camera.y + ny * world.camera.h };
+}
+
+/**
+ * feat/explore-status-badges: red outlined line over a label. The canvas
+ * backing is fixed and CSS-scaled, so the font is sized in backing px to land
+ * at STATUS_BADGE_PX on screen at any width / map zoom. Returns its baseline.
+ */
+function drawOverheadLine(ctx: CanvasRenderingContext2D, cssW: number, text: string, x: number, labelY: number): number {
+  if (!text) return labelY;
+  const shown = ctx.canvas.clientWidth > 0 ? ctx.canvas.clientWidth : cssW;
+  const px = (STATUS_BADGE_PX * cssW) / shown;
+  const y = labelY - px - 2;
+  ctx.save();
+  ctx.font = `bold ${px.toFixed(2)}px sans-serif`;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(1, px / 4);
+  ctx.strokeStyle = STATUS_BADGE_OUTLINE;
+  ctx.fillStyle = STATUS_BADGE_COLOR;
+  ctx.strokeText(text, x, y);
+  ctx.fillText(text, x, y);
+  ctx.restore();
+  return y;
 }
