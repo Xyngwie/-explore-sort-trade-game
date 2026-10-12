@@ -1,3 +1,5 @@
+import { ENEMY_UNKNOWN_JA, enemyAt, noteEnemyTap } from "./game/enemyIdentity";
+import { isEnemySeen } from "./game/render";
 import "./style.css";
 import { loadLineJa, unitLoad } from "./game/carry";
 import {
@@ -518,6 +520,9 @@ function bindCanvas(): void {
     // P1: ~24 screen px around a wingman selects it (scaled for phone widths).
     const rect = canvas.getBoundingClientRect();
     const perPx = rect.width > 0 ? world.camera.w / rect.width : 1;
+    // Enemy PR1 (F1 = B): a tap near a seen enemy shows 「所属不明」; the tap still does what it did before.
+    const tapped = enemyAt(world, pt, Math.max(24, 24 * perPx), (en) => isEnemySeen(world, en));
+    if (tapped) { noteEnemyTap(world, tapped.id); needsDom = true; }
     const tap = handleMapTap(world, pt, Math.max(24, 24 * perPx));
     if (tap !== "move") {
       input.clickMove = null;
@@ -729,6 +734,12 @@ function wingPanelHtml(): string {
 }
 
 function logsHtml(): string {
+  // Enemy PR1 (F1 = B): the tapped enemy in the info panel — only 「所属不明」.
+  const tag = world.enemyTag ? `<li class="tactical enemy-tag">${escapeHtml(ENEMY_UNKNOWN_JA)}</li>` : "";
+  return tag + logsListHtml();
+}
+
+function logsListHtml(): string {
   const lines = world.logs.slice(0, 18);
   if (lines.length === 0) {
     return `<li class="tactical">戦術／戦報はここに出ます。</li>`;

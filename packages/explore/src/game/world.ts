@@ -1,3 +1,4 @@
+import { makeEnemyIdentity } from "./enemyIdentity";
 import {
   DEFAULT_EXPEDITION_LOADOUT,
   parseInvadeToExploreSearch,
@@ -168,6 +169,7 @@ function placeEnemies(
         capacity: 0,
       }),
     );
+    enemies[enemies.length - 1]!.enemyIdentity = makeEnemyIdentity(enemies[enemies.length - 1]!);
   }
   return enemies;
 }

@@ -4,9 +4,10 @@ import { wreckLabel } from "./wrecks";
 import { carriedWreckIds, wreckCarrierId } from "./carry";
 import { getCoverObjects } from "./coverObjects";
 import { visionMul } from "./circuitPlay";
-import { STANCE_LABEL, type World } from "./types";
+import { STANCE_LABEL, type Unit, type World } from "./types";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from "./lockedOrder";
+import { enemyDisplayNameJa } from "./enemyIdentity";
 import { STATUS_BADGE_COLOR, STATUS_BADGE_OUTLINE, STATUS_BADGE_PX, wingmanStatusLine, wreckCircuitLine } from "./statusBadges";
 
 export function renderWorld(
@@ -223,14 +224,20 @@ export function renderWorld(
 
   const vision = world.balance.visionRange;
   const friendlies = [world.leader, ...world.wingmen];
+  void friendlies; void vision;
   for (const e of world.enemies) {
     if (!e.alive) continue;
-    const seen = friendlies.some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision * visionMul(world, u.id));
-    if (!seen) continue;
+    if (!isEnemySeen(world, e)) continue;
     ctx.fillStyle = "#ff6b6b";
     ctx.beginPath();
     ctx.arc(tx(e.pos.x), ty(e.pos.y), e.radius * sx, 0, Math.PI * 2);
     ctx.fill();
+    // Enemy PR1 (F1 = B): 「所属不明」 only after a tap, for a few seconds.
+    if (world.enemyTag?.enemyId === e.id) {
+      ctx.fillStyle = "#ffb3b3";
+      ctx.font = "11px sans-serif";
+      ctx.fillText(enemyDisplayNameJa(e), tx(e.pos.x) - 22, ty(e.pos.y) - e.radius * sy - 6);
+    }
   }
 
   // Bullets
@@ -424,4 +431,10 @@ function drawOverheadLine(ctx: CanvasRenderingContext2D, cssW: number, text: str
   ctx.fillText(text, x, y);
   ctx.restore();
   return y;
+}
+
+/** Enemy PR1: an enemy the squad can see (same rule as drawing it). */
+export function isEnemySeen(world: World, e: Unit): boolean {
+  const vision = world.balance.visionRange;
+  return [world.leader, ...world.wingmen].some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision * visionMul(world, u.id));
 }
