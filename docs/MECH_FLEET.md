@@ -119,7 +119,7 @@ explore 側は当面 `deployableMechs` 件数ハンドオフのままでよい�
 
 | 操作 | 対象 | 費用 | ボタンの文言 | 実装 |
 |---|---|---|---|---|
-| 新品購入 | — | **2000c** | 「新品購入 2000c」 | trade `buyNewMech`（`mech_gen1` を 1 機足す） |
+| 新品購入 | — | **2000c** | 「新品購入 2000c」 | trade `buyNewMech`（`mech_gen1` を 1 機足す。携行弾 0＝E1） |
 | 新規機体作成 | — | **装甲パーツ（最大耐久 × 3）＋ 500c**（gen1 で 300） | 「新規機体作成 装甲パーツ300 と 500c」 | trade `createNewMech`（`mech_gen1`） |
 | 残骸復活 | 格納庫の大破機（`fleet` の `destroyed`・耐久 0。#270 の航空支援の残骸 `addDestroyedGen1` も） | **装甲パーツ（最大耐久 × 2）＋ 500c** | 「残骸復活 装甲パーツN と 500c」 | trade `reviveWreck`。`instanceId`・回路（`equippedTo`）・携行弾・バッテリーはそのまま、耐久を満タンにして健在へ。復活したら回路はまた数える（Q4） |
 | 通常修理 | 要修理・耐久が減った健在機 | **足りない耐久の分の装甲パーツ**（1 耐久 = 1 個）。クレジットなし | 「通常修理 装甲パーツN」 | shared `repairCost` / `canAffordRepair` / `applyRepair`（`MECH_FLEET_RULES.repairCredits = 0`・`repairArmorPerDurability = 1`）、trade `repairMech` |
@@ -128,6 +128,7 @@ explore 側は当面 `deployableMechs` 件数ハンドオフのままでよい�
 - 回路の修理割引はこの 4 つにかけない（「修理 −X%」の表示も外した。`applyRepairDiscountToCost` は残っているが使っていない）。
 - 足りないときもボタンは押せる。押すと何も引かず「装甲パーツが足りない」「クレジットが足りない」「装甲パーツとクレジットが足りない」を通知に出す（`moneyShortfallJa`）。
 - 支払いは全部か無しか（片方だけ引かない）。復活・修理は対象がもう無ければ「機体なし」で何も引かない（2 回押し・読み直しで二重に引かない）。購入・作成は 600ms の二重押し防止。
+- **E1〜E3（2026-10-12 神宮、fix/hangar-money-followups）**: E1 = B — 購入・作成した機体は携行弾 0 で来る。出撃前の補充（M3）で在庫から積み、足りなければ出撃ボタンの近くに 1 行（M8）。E2 = A — 足りないときの通知の場所は今のまま（ページ上）。E3 = B — 上の所持欄に「装甲パーツ」を足した。あわせて所持欄の「弾薬」を旧 `ammoLoad` の合計から `inventory.ammo` に、「電力パーツ」を `inventory.power` から出すように直した（電力パーツは欄に無かった）。
 
 ヘルパ: `repairCost` / `canAffordRepair` / `applyRepair`（ウォレットと機体をともに返す。足りなければ `null`）。
 

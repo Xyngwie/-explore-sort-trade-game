@@ -58,6 +58,7 @@ import {
   repairMech,
   reviveWreck,
   buyNewMech,
+  holdingPills,
   createNewMech,
   BUY_MECH_LABEL_JA,
   createMechLabelJa,
@@ -2137,4 +2138,75 @@ console.log("trade hangar selftest: ok");
   assert.equal(st.getItem(SORTIE_CHECKPOINT_KEY), checkpointBefore);
   assert.equal(readSortieCheckpoint(st).status, "ok");
   console.log("trade #266 money: buy / create / revive / repair ok");
+}
+
+
+// fix/hangar-money-followups（2026-10-12 神宮 E1〜E3）: 購入・作成の弾 0、所持欄の在庫数。
+{
+  const st = memoryStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = st;
+  // an old v3 save: typed ammoLoad (old), inventory with ammo / armor / power, a mech without currentAmmo
+  const noAmmo = createMechForMoney("mech_gen1", { instanceId: "old-no-ammo" });
+  delete (noAmmo as { currentAmmo?: number }).currentAmmo;
+  const raw = {
+    v: 3,
+    savedAt: "2026-10-01T00:00:00.000Z",
+    hub: {
+      ...INITIAL_HUB,
+      credits: 5000,
+      materials: 42,
+      fleet: [noAmmo],
+      ammoLoad: { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 },
+      inventory: { ammo: 30, armor: 400, power: 9, junk: 2 },
+    },
+  };
+  st.setItem("wreckline.hubSave.v3", JSON.stringify(raw));
+  const s0 = createInitialHangar(st);
+  assert.equal(s0.hub.fleet.length, 1, "old save loads");
+  assert.equal(s0.hub.fleet[0]!.currentAmmo, 28, "A2 #1: an old mech without currentAmmo is full (not from stock)");
+  assert.equal(s0.hub.inventory.ammo, 30, "A2 #1: the stock is not drawn for it");
+  assert.deepEqual(s0.hub.ammoLoad, { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 }, "old ammoLoad kept in the save");
+
+  // holdings bar = the real stock (not ammoLoad 55, not a 4-resource sum)
+  const bar = (h: typeof s0.hub) => Object.fromEntries(holdingPills(h).map((p) => [p.labelJa, p.value]));
+  assert.deepEqual(bar(s0.hub), { Cr: 5000, 資材: 42, 弾薬: 30, 装甲パーツ: 400, 電力パーツ: 9 });
+  assert.deepEqual(holdingPills(s0.hub).map((p) => p.labelJa), ["Cr", "資材", "弾薬", "装甲パーツ", "電力パーツ"], "E3: 装甲パーツ in the bar");
+  assert.deepEqual(bar({ ...s0.hub, inventory: {} }), { Cr: 5000, 資材: 42, 弾薬: 0, 装甲パーツ: 0, 電力パーツ: 0 }, "empty stock reads 0");
+
+  // E1 = B: bought / created mechs come with ammo 0; the ammo total does not grow
+  const total = (h: typeof s0.hub) => (h.inventory.ammo ?? 0) + h.fleet.reduce((n, m) => n + (m.currentAmmo ?? 0), 0);
+  const total0 = total(s0.hub);
+  const bought = buyNewMech(s0);
+  const boughtMech = bought.hub.fleet.at(-1)!;
+  assert.equal(boughtMech.currentAmmo, 0, "E1: a bought mech has ammo 0");
+  assert.equal(total(bought.hub), total0, "E1: buying does not add ammo");
+  assert.equal(bar(bought.hub).Cr, 3000);
+  const made = createNewMech(bought);
+  const madeMech = made.hub.fleet.at(-1)!;
+  assert.equal(madeMech.currentAmmo, 0, "E1: a created mech has ammo 0");
+  assert.equal(total(made.hub), total0, "E1: creating does not add ammo");
+  assert.equal(bar(made.hub).装甲パーツ, 100, "armor parts in the bar after create (400 − 300)");
+  assert.equal(bar(made.hub).Cr, 2500);
+  // reload: still 0 (M6 / the interim "unset = full" rule never refills an explicit 0)
+  const reloaded = createInitialHangar(st);
+  assert.equal(reloaded.hub.fleet.find((m) => m.instanceId === boughtMech.instanceId)!.currentAmmo, 0, "0 survives reload");
+  assert.equal(reloaded.hub.fleet.find((m) => m.instanceId === madeMech.instanceId)!.currentAmmo, 0);
+  assert.equal(total(reloaded.hub), total0);
+
+  // M3: the sortie loads them from stock (30 → 28 + 2), M8 line for the short one
+  const ids = [boughtMech.instanceId, madeMech.instanceId];
+  const dep = markDeployed({ ...reloaded, selectedDeployIds: ids }, ids);
+  assert.equal(dep.hub.fleet.find((m) => m.instanceId === boughtMech.instanceId)!.currentAmmo, 28, "M3: loaded before the sortie");
+  assert.equal(dep.hub.fleet.find((m) => m.instanceId === madeMech.instanceId)!.currentAmmo, 2);
+  assert.equal(dep.hub.inventory.ammo ?? 0, 0);
+  assert.equal(bar(dep.hub).弾薬, 0, "the bar follows the loading");
+  assert.equal(total(dep.hub), total0, "loading moves ammo, never makes it");
+  assert.match(dep.log[0] ?? "", /弾薬が足りません：僚機A 2\/28/, "M8: the usual shortage line");
+  assert.deepEqual(dep.hub.ammoLoad, { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 }, "ammoLoad untouched");
+
+  // repair spends armor parts → the bar drops by the same amount
+  const worn = { ...dep, hub: { ...dep.hub, fleet: dep.hub.fleet.map((m) => (m.instanceId === boughtMech.instanceId ? { ...m, durability: 70, status: "needs_repair" as const } : m)) } };
+  const repaired = repairMech(worn, boughtMech.instanceId);
+  assert.equal(bar(repaired.hub).装甲パーツ, 70);
+  console.log("trade E1 bought mech ammo 0 / holdings bar real stock ok");
 }

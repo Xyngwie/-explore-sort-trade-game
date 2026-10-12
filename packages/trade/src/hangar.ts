@@ -5,6 +5,7 @@
 
 import {
   isWreckRow,
+  RESOURCE_LABEL_JA,
   CRAFT_SIGNATURE_STORAGE_KEY,
   HANDOFF_QUERY_KEYS,
   INITIAL_HUB,
@@ -1314,24 +1315,60 @@ function commitMoney(state: HangarState, hub: HubSnapshot, line: string): Hangar
   return persistHangar(next);
 }
 
-/** 「新品購入 2000c」: a fresh mech_gen1 (addMechToHub) for credits only. */
+/** One pill of the hangar holdings bar (Cr・資材・弾薬・装甲パーツ・電力パーツ). */
+export type HoldingPill = { key: string; labelJa: string; value: number };
+
+/**
+ * The stock part of the holdings bar, read from the real stock (2026-10-12):
+ * 弾薬 = `inventory.ammo` (M1; the old typed `ammoLoad` is not shown here and
+ * is left untouched in the save), 装甲パーツ = `inventory.armor` (E3),
+ * 電力パーツ = `inventory.power`. Cr and 資材 are `credits` / `materials`.
+ */
+export function holdingPills(hub: Pick<HubSnapshot, "credits" | "materials" | "inventory">): HoldingPill[] {
+  const n = (v: unknown) => Math.max(0, Math.floor(Number(v) || 0));
+  return [
+    { key: "credits", labelJa: "Cr", value: n(hub.credits) },
+    { key: "materials", labelJa: "資材", value: n(hub.materials) },
+    { key: "ammo", labelJa: RESOURCE_LABEL_JA.ammo, value: n(hub.inventory?.ammo) },
+    { key: "armor", labelJa: RESOURCE_LABEL_JA.armor, value: n(hub.inventory?.armor) },
+    { key: "power", labelJa: RESOURCE_LABEL_JA.power, value: n(hub.inventory?.power) },
+  ];
+}
+
+/**
+ * E1 = B (2026-10-12 神宮): a bought / created mech arrives with no carried ammo
+ * (`currentAmmo: 0`, not the interim "unset = full" grant). Stock loads it before
+ * the sortie (M3) and a shortage shows the usual line (M8), so the ammo total
+ * (carried + stock) does not grow on a purchase.
+ */
+function addEmptyGen1(hub: HubSnapshot): HubSnapshot | null {
+  const before = new Set(hub.fleet.map((m) => m.instanceId));
+  const next = addMechToHub(hub, "mech_gen1");
+  if (!next) return null;
+  return {
+    ...next,
+    fleet: next.fleet.map((m) => (before.has(m.instanceId) ? m : { ...m, currentAmmo: 0 })),
+  };
+}
+
+/** 「新品購入 2000c」: a fresh mech_gen1 (addMechToHub, ammo 0: E1) for credits only. */
 export function buyNewMech(state: HangarState): HangarState {
   const cost = buyMechCost();
   const short = moneyShortfallJa(state.hub, cost);
   if (short) return { ...state, notice: short };
   const paid = payMoneyCost(state.hub, cost);
-  const hub = paid ? addMechToHub(paid, "mech_gen1") : null;
+  const hub = paid ? addEmptyGen1(paid) : null;
   if (!hub) return { ...state, notice: short ?? "クレジットが足りない" };
   return commitMoney(state, hub, BUY_MECH_LABEL_JA);
 }
 
-/** 「新規機体作成 装甲パーツ300 と 500c」: the same mech_gen1 as a purchase. Never picks buy vs create itself. */
+/** 「新規機体作成 装甲パーツ300 と 500c」: the same mech_gen1 as a purchase (ammo 0: E1). Never picks buy vs create itself. */
 export function createNewMech(state: HangarState): HangarState {
   const cost = createMechCost();
   const short = moneyShortfallJa(state.hub, cost);
   if (short) return { ...state, notice: short };
   const paid = payMoneyCost(state.hub, cost);
-  const hub = paid ? addMechToHub(paid, "mech_gen1") : null;
+  const hub = paid ? addEmptyGen1(paid) : null;
   if (!hub) return { ...state, notice: "装甲パーツとクレジットが足りない" };
   return commitMoney(state, hub, createMechLabelJa());
 }
