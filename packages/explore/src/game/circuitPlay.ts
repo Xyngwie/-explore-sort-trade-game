@@ -513,6 +513,14 @@ export function consumeCircuitClick(world: World, pt: Vec2): boolean {
     return true;
   }
   if (pending.kind === "wing_recover") {
+    // fix/rescue-palette-desktop: a tap that hits no wreck / container keeps the
+    // pick armed (and the palette open), so a near miss costs one more tap, not
+    // the whole 僚機 → 回収 → 対象 again.
+    if (!recoverTargetAt(world, pt)) {
+      p.pending = pending;
+      pushLog(world, "回収する対象が無い（残骸かコンテナをタップ）。");
+      return true;
+    }
     issueWingmanRecover(world, pending.unitIds ?? [], pt);
     p.wingSelect = null;
     return true;

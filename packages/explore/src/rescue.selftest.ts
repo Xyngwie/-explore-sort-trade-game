@@ -147,6 +147,35 @@ const wa = (w: W) => w.wingmen[0]!;
   console.log("explore 4-2 N2/C2/C3 captain wreck rescue → manual, air support, normal return ok");
 }
 
+// fix/rescue-palette-desktop: a missed target tap keeps 回収 armed; the rescue then
+// completes with taps 僚機(1) → 回収(2) → 対象(3) — a miss adds only one tap.
+{
+  const world = releaseWorld();
+  const p = world.circuitPlay!;
+  p.captainTrueOne = true;
+  world.leader.alive = false; world.leader.hp = 0;
+  wa(world).pos = { x: 700, y: 400 };
+  let taps = 0;
+  assert.equal(handleMapTap(world, wa(world).pos, 24), "selected"); taps++;
+  assert.ok(pressWingPalette(world, "recover")); taps++;
+  assert.equal(handleMapTap(world, { x: 1500, y: 900 }, 24), "consumed"); taps++;
+  assert.equal(p.pending?.kind, "wing_recover", "miss keeps the pick armed");
+  assert.ok(p.wingSelect, "palette stays open");
+  assert.equal(handleMapTap(world, world.leader.pos, 24), "consumed"); taps++;
+  assert.equal(p.wingRecover!["wing-a"]?.id, "leader");
+  assert.equal(taps, 4, "with one miss: 4 taps (was 6)");
+  run(world, 4 + 9);
+  assert.equal(captainRescuer(world)?.id, "wing-a");
+  assert.ok(circuitButtons(world).some((b) => b.id === "air_support"));
+  assert.ok(requestExtract(world));
+  world.wingmen[1]!.pos = { ...world.boarding!.center };
+  wa(world).pos = { ...world.boarding!.center };
+  run(world, 16);
+  assert.equal(world.extracted, true);
+  assert.ok(!(world.rescueFeeCredits! > 0));
+  console.log("explore rescue palette miss-keeps-armed + rescue flow ok");
+}
+
 // compat: old 5-3 checkpoint without wingRecover / wingHold loads, then round-trips.
 {
   const old = { rules: true, release: true, carry: {}, wreckChannel: {}, loadout: {} } as unknown as Partial<CircuitPlayState>;
