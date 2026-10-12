@@ -227,9 +227,7 @@ export type InvadeFrontProgress = {
  */
 export type HubSnapshot = {
   credits: number;
-  materials: number;
   fleet: OwnedMech[];
-  ammoLoad: AmmoLoad;
   /** Typed materials / parts from sort Yield v2 (additive; missing → {}). */
   inventory: YieldBag;
   /**
@@ -242,14 +240,11 @@ export type HubSnapshot = {
    * missing / invalid → null. Alias key `invadeBoard` accepted on read.
    */
   frontProgress: InvadeFrontProgress | null;
-  importedMaterials: number;
   /**
    * Unopened salvage containers stocked on HUB (Module 2 skip / purchase).
    * Additive on HubSave v2 — missing / invalid → 0.
    */
   unopenedContainers: number;
-  selectedMechId: MechId;
-  selectedAmmoId: AmmoId;
   /**
    * HubSave v3: largest side N restored Perfect (Fully Awakened + locked).
    * 0 = none yet. Never decreases. Junk craft cap = max(2, N + 1).
@@ -257,8 +252,6 @@ export type HubSnapshot = {
   perfectMaxSize: number;
   /** HubSave v3: circuits lost on the battlefield (ownership lost). */
   fieldDrops: FieldCircuitDrop[];
-  /** General inventory lost on the battlefield; separate from Circuit fieldDrops. */
-  inventoryFieldDrops: FieldInventoryDrop[];
   /** HubSave v3: Explore mechs left behind; not wrecks / field drops. */
   lostMechs: LostMechReturnState[];
   /** HubSave v3: recently applied Explore sortie ids (apply-once guard). */
@@ -348,19 +341,13 @@ export type HubSave = HubSaveV3;
 
 export const INITIAL_HUB: HubSnapshot = {
   credits: 500,
-  materials: 250,
   fleet: [],
-  ammoLoad: { ...INITIAL_AMMO_LOAD },
   inventory: emptyYieldBag(),
   circuits: [],
   frontProgress: null,
-  importedMaterials: 0,
   unopenedContainers: 0,
-  selectedMechId: "mech_gen1",
-  selectedAmmoId: "ammo_standard",
   perfectMaxSize: 0,
   fieldDrops: [],
-  inventoryFieldDrops: [],
   lostMechs: [],
   appliedSortieIds: [],
 };
@@ -972,31 +959,9 @@ export function normalizeHubSnapshot(
     : fallback.fleet;
   const fleet = normalizeFleet(fleetIn);
 
-  const ammoLoad: AmmoLoad = emptyAmmoLoad();
-  const src =
-    ((raw as HubSnapshot | undefined)?.ammoLoad as AmmoLoad | undefined) ??
-    fallback.ammoLoad;
-  for (const id of AMMO_IDS) {
-    ammoLoad[id] = finiteNonNeg(src[id], fallback.ammoLoad[id] ?? 0);
-  }
-  let total = AMMO_IDS.reduce((s, id) => s + ammoLoad[id], 0);
-  if (total > HUB_LIMITS.maxAmmo) {
-    const scale = HUB_LIMITS.maxAmmo / total;
-    for (const id of AMMO_IDS) {
-      ammoLoad[id] = Math.floor(ammoLoad[id] * scale);
-    }
-  }
-
-  const selectedMechIdRaw = (raw as HubSnapshot | undefined)?.selectedMechId;
-  const selectedMechId =
-    selectedMechIdRaw && isMechId(String(selectedMechIdRaw))
-      ? (String(selectedMechIdRaw) as MechId)
-      : fallback.selectedMechId;
-  const selectedAmmoIdRaw = (raw as HubSnapshot | undefined)?.selectedAmmoId;
-  const selectedAmmoId =
-    selectedAmmoIdRaw && isAmmoId(String(selectedAmmoIdRaw))
-      ? (String(selectedAmmoIdRaw) as AmmoId)
-      : fallback.selectedAmmoId;
+  // fix/hub-save-legacy-retire (2026-10-12 神宮): materials / importedMaterials /
+  // ammoLoad / selectedMechId / selectedAmmoId / inventoryFieldDrops are no longer
+  // part of HubSave. Old values are read past (not converted) and vanish on the next save.
 
   const inventory = normalizeInventory(
     (raw as HubSnapshot | undefined)?.inventory,
@@ -1051,9 +1016,6 @@ export function normalizeHubSnapshot(
     circuits,
   );
   const fieldDrops = wreckDropsBack.fieldDrops;
-  const inventoryFieldDrops = normalizeInventoryFieldDrops(
-    rawRec?.inventoryFieldDrops ?? fallback.inventoryFieldDrops ?? [],
-  );
   const lostMechs = reconcileLostMechs(lostMechsRaw, fleet, circuits);
   const appliedSortieIds = normalizeAppliedSortieIds(
     rawRec?.appliedSortieIds ?? fallback.appliedSortieIds ?? [],
@@ -1072,30 +1034,18 @@ export function normalizeHubSnapshot(
       (raw as HubSnapshot | undefined)?.credits,
       fallback.credits,
     ),
-    materials: finiteNonNeg(
-      (raw as HubSnapshot | undefined)?.materials,
-      fallback.materials,
-    ),
     fleet,
-    ammoLoad,
     inventory,
     circuits,
     frontProgress,
-    importedMaterials: finiteNonNeg(
-      (raw as HubSnapshot | undefined)?.importedMaterials,
-      fallback.importedMaterials,
-    ),
     unopenedContainers: Math.floor(
       finiteNonNeg(
         (raw as HubSnapshot | undefined)?.unopenedContainers,
         fallback.unopenedContainers ?? 0,
       ),
     ),
-    selectedMechId,
-    selectedAmmoId,
     perfectMaxSize,
     fieldDrops,
-    inventoryFieldDrops,
     lostMechs,
     appliedSortieIds,
     sortieSelection,
@@ -1400,20 +1350,6 @@ export function clearHubSaveFromLocalStorage(
   const store = storage ?? defaultStorage();
   store?.removeItem(HUB_SAVE_STORAGE_KEY);
   store?.removeItem(HUB_SAVE_LEGACY_STORAGE_KEY);
-}
-
-/** Apply Module 2 import onto a hub snapshot (materials += n). */
-export function importMaterialsIntoHub(
-  hub: HubSnapshot,
-  importMaterials: number,
-): HubSnapshot {
-  const n = Math.max(0, Math.floor(importMaterials));
-  if (n <= 0) return hub;
-  return normalizeHubSnapshot({
-    ...hub,
-    importedMaterials: n,
-    materials: hub.materials + n,
-  });
 }
 
 /** Merge typed YieldBag into hub inventory (sort → trade v2). */

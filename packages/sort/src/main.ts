@@ -3,7 +3,6 @@ import {
   BASIC_MATERIAL_LABEL_JA,
   PART_LABEL_JA,
   buildSortToTradeUrlFromResult,
-  importedMaterialsFromResult,
   isBasicMaterialId,
   isPartId,
   resolveModuleBaseUrl,
@@ -336,37 +335,14 @@ function resultOverlayHtml(
   result: ReturnType<typeof toCraftingResult>,
   lastChain: number,
 ): string {
-  const importMats = importedMaterialsFromResult(result);
-  const bagEntries = Object.entries(result.yieldBag ?? {}).filter(
-    ([, n]) => (n ?? 0) > 0,
-  ) as Array<[YieldItemId, number]>;
-  const bagLine =
-    bagEntries.length === 0
-      ? `<span class="muted">YieldBag（空）</span>`
-      : bagEntries
-          .slice(0, 6)
-          .map(
-            ([id, n]) =>
-              `<span>${escapeHtml(labelYield(id))} ${n}</span>`,
-          )
-          .join("") +
-        (bagEntries.length > 6
-          ? `<span class="muted">+${bagEntries.length - 6}</span>`
-          : "");
-
   return `
     <div class="stage-overlay result-overlay" role="region" aria-label="仕分結果">
       ${buildResultRibbonHtml(handoffUrl)}
       ${buildResultYieldCompactHtml({
-        yieldFood: result.yieldFood,
-        yieldMaterial: result.yieldMaterial,
-        yieldEnergy: result.yieldEnergy,
-        scrapLossCount: result.scrapLossCount,
+        yieldBag: result.yieldBag,
         craftMultiplier: result.craftMultiplier,
         lastChain,
       })}
-      <div class="result-bag-line" aria-label="YieldBag">${bagLine}</div>
-      <p class="mono muted result-import">importMaterials ${importMats}</p>
     </div>
   `;
 }

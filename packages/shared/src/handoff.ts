@@ -55,11 +55,15 @@ export type ExploreToSortPayload = {
 
 /** sort → trade
  *
- * v1: importMaterials + craftMultiplier
- * v2 (additive): yieldBag of typed basic materials / parts for repair.
+ * v1: importMaterials + craftMultiplier (old URLs: importMaterials is still read as
+ *     the "returned from Sort" marker, but its number grants nothing).
+ * v2 (additive): yieldBag of the 4 resources.
+ * fix/hub-save-legacy-retire (2026-10-12 神宮): Sort always sends `fromSort=1` and
+ * no longer sends importMaterials. Double receipt stays on the existing handoffId.
  */
 export type SortToTradePayload = {
-  importMaterials: number;
+  /** Always true on a Sort return (URL `fromSort=1`; an old URL's importMaterials counts too). */
+  fromSort: true;
   craftMultiplier: number;
   /** Yield v2: typed bag (omit for v1-compatible handoff). */
   yieldBag?: YieldBag;
@@ -361,17 +365,6 @@ export function buildTradeToExplorePayloadFromFleet(
   };
 }
 
-export function importedMaterialsFromResult(
-  result: Pick<
-    CraftingPuzzleResult,
-    "yieldFood" | "yieldMaterial" | "yieldEnergy" | "craftMultiplier"
-  >,
-): number {
-  const refined =
-    result.yieldFood + result.yieldMaterial + result.yieldEnergy;
-  return Math.max(0, Math.floor(refined * result.craftMultiplier));
-}
-
 function parseNonNegInt(value: string | null, fallback: number): number {
   if (value == null || value === "") return fallback;
   const n = Number.parseInt(value, 10);
@@ -460,10 +453,7 @@ export function buildSortToTradeUrl(
   baseUrl: string = resolveModuleBaseUrl("trade"),
 ): string {
   const u = new URL(baseUrl);
-  u.searchParams.set(
-    "importMaterials",
-    String(Math.max(0, Math.floor(payload.importMaterials))),
-  );
+  u.searchParams.set("fromSort", "1");
   u.searchParams.set(
     "craftMultiplier",
     Number(payload.craftMultiplier).toFixed(3),
@@ -509,7 +499,7 @@ export function buildSortToTradePayloadFromResult(
           craftMultiplier,
         );
   const payload: SortToTradePayload = {
-    importMaterials: importedMaterialsFromResult(result),
+    fromSort: true,
     craftMultiplier,
   };
   if (Object.keys(yieldBag).length > 0) {
@@ -538,6 +528,7 @@ export function parseSortToTradeSearch(
   const raw = search.startsWith("?") ? search.slice(1) : search;
   const p = new URLSearchParams(raw);
   if (
+    !p.has("fromSort") &&
     !p.has("importMaterials") &&
     !p.has("craftMultiplier") &&
     !p.has("yieldBag") &&
@@ -546,7 +537,7 @@ export function parseSortToTradeSearch(
     return null;
   }
   const payload: SortToTradePayload = {
-    importMaterials: parseNonNegInt(p.get("importMaterials"), 0),
+    fromSort: true,
     craftMultiplier: Number.parseFloat(p.get("craftMultiplier") ?? "1") || 1,
   };
   const bag = parseYieldBagCompact(p.get("yieldBag"));

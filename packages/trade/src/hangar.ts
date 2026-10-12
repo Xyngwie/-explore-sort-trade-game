@@ -47,7 +47,6 @@ import {
   PIECES_PER_CONTAINER,
   addUnopenedContainers,
   buildExploreToSortUrl,
-  importMaterialsIntoHub,
   importYieldBagIntoHub,
   isCircuitLocked,
   spendUnopenedContainers,
@@ -72,7 +71,6 @@ import {
   removeCircuitFromHub,
   unequipCircuit,
   aggregateCircuitBonuses,
-  applyRepairDiscountToCost,
   applyDurabilityBufferToWear,
   buildWearReportsForSortie,
   applyExploreReturnToHub,
@@ -473,7 +471,6 @@ function commitHangarIngest(
     shouldMarkDoneAfterTradeWrite({
       saved,
       depositUnopenedContainers: Math.floor(Number(sort.depositUnopenedContainers) || 0),
-      importMaterials: Math.floor(Number(sort.importMaterials) || 0),
       yieldBag: !!sort.yieldBag && Object.keys(sort.yieldBag).length > 0,
     })
   ) {
@@ -517,11 +514,8 @@ export function ingestLocationSearch(
 
   const sort = parseSortToTradeSearch(search);
   if (sort) {
-    if (sort.importMaterials > 0) {
-      hub = importMaterialsIntoHub(hub, sort.importMaterials);
-      log = pushLog(log, `搬入 materials +${sort.importMaterials}`);
-      consumed = true;
-    }
+    // fix/hub-save-legacy-retire: an old URL's importMaterials grants nothing
+    // (資材 is gone); only the yieldBag / unopened containers below are received.
     if (sort.yieldBag && Object.keys(sort.yieldBag).length > 0) {
       hub = importYieldBagIntoHub(hub, sort.yieldBag);
       const keys = Object.entries(sort.yieldBag)
@@ -698,6 +692,7 @@ export function clearHandoffFromUrl(): void {
   if (typeof window === "undefined") return;
   const keys = [
     ...HANDOFF_QUERY_KEYS.sortToTrade,
+    ...HANDOFF_QUERY_KEYS.sortToTradeLegacy, // old Sort URL: importMaterials is read as a Sort return, then removed
     ...HANDOFF_QUERY_KEYS.exploreToHubWear,
     ...HANDOFF_QUERY_KEYS.invadeToTrade,
     ...HANDOFF_QUERY_KEYS.restoreToTrade,
@@ -756,7 +751,7 @@ export function grantDemoInventory(state: HangarState): HangarState {
   const next: HangarState = {
     ...state,
     hub,
-    log: pushLog(state.log, "デモ資材バッグ付与"),
+    log: pushLog(state.log, "デモ物資バッグ付与"),
     notice: "型付き在庫を加算",
   };
   return persistHangar(next);
@@ -857,7 +852,7 @@ export function buildSeedYieldBagForTypedRepair(
 
 /**
  * Stable playtest HubSnapshot: mixed fleet + wallet + YieldBag + ammo.
- * One tap replaces the need to 「機体を受領」 / 「デモ資材バッグ」 manually.
+ * One tap replaces the need to 「機体を受領」 / 「デモ物資バッグ」 manually.
  * Durability bands: operational ≥41, needs_repair 1..40 (MECH_FLEET_RULES).
  * Inventory/credits sized so typed repair (EXAMPLE_TYPED_REPAIR_COST) succeeds immediately.
  */
@@ -869,7 +864,6 @@ export function buildPlaytestSeedHub(): HubSnapshot {
   );
   return normalizeHubSnapshot({
     credits,
-    materials: 200,
     fleet: [
       createOwnedMech("mech_gen1", {
         instanceId: "seed_op_gen1",
@@ -884,15 +878,7 @@ export function buildPlaytestSeedHub(): HubSnapshot {
         durability: 25, // needs_repair band (1..40)
       }),
     ],
-    ammoLoad: {
-      ammo_standard: 40,
-      ammo_ap: 10,
-      ammo_hp: 5,
-    },
     inventory,
-    importedMaterials: 0,
-    selectedMechId: "mech_gen1",
-    selectedAmmoId: "ammo_standard",
   });
 }
 
@@ -1334,20 +1320,19 @@ function commitMoney(state: HangarState, hub: HubSnapshot, line: string): Hangar
   return persistHangar(next);
 }
 
-/** One pill of the hangar holdings bar (Cr・資材・弾薬・装甲パーツ・電力パーツ). */
+/** One pill of the hangar holdings bar (Cr・弾薬・装甲パーツ・電力パーツ). */
 export type HoldingPill = { key: string; labelJa: string; value: number };
 
 /**
  * The stock part of the holdings bar, read from the real stock (2026-10-12):
- * 弾薬 = `inventory.ammo` (M1; the old typed `ammoLoad` is not shown here and
- * is left untouched in the save), 装甲パーツ = `inventory.armor` (E3),
- * 電力パーツ = `inventory.power`. Cr and 資材 are `credits` / `materials`.
+ * 弾薬 = `inventory.ammo` (M1), 装甲パーツ = `inventory.armor` (E3),
+ * 電力パーツ = `inventory.power`, Cr = `credits`. 資材 left the save
+ * (fix/hub-save-legacy-retire, 2026-10-12 神宮).
  */
-export function holdingPills(hub: Pick<HubSnapshot, "credits" | "materials" | "inventory">): HoldingPill[] {
+export function holdingPills(hub: Pick<HubSnapshot, "credits" | "inventory">): HoldingPill[] {
   const n = (v: unknown) => Math.max(0, Math.floor(Number(v) || 0));
   return [
     { key: "credits", labelJa: "Cr", value: n(hub.credits) },
-    { key: "materials", labelJa: "資材", value: n(hub.materials) },
     { key: "ammo", labelJa: RESOURCE_LABEL_JA.ammo, value: n(hub.inventory?.ammo) },
     { key: "armor", labelJa: RESOURCE_LABEL_JA.armor, value: n(hub.inventory?.armor) },
     { key: "power", labelJa: RESOURCE_LABEL_JA.power, value: n(hub.inventory?.power) },
@@ -1529,7 +1514,7 @@ export function scrapMech(
 ): HangarState {
   const result = applyScrap(state.hub.fleet, instanceId, {
     credits: state.hub.credits,
-    materials: state.hub.materials,
+    junk: Math.max(0, Math.floor(state.hub.inventory?.junk ?? 0)),
   });
   if (!result) return { ...state, notice: "解体対象なし" };
   // M7: the scrapped mech's carried ammo goes back to the 「弾薬」 stock.
@@ -1539,12 +1524,13 @@ export function scrapMech(
     : 0;
   const inventory = { ...(state.hub.inventory ?? {}) };
   if (returnedAmmo > 0) inventory.ammo = ammoStock(state.hub) + returnedAmmo;
+  // fix/hub-save-legacy-retire (詳細 3 = B): scrap gives ジャンク (same amount as the old 資材).
+  inventory.junk = result.wallet.junk;
   const hub = normalizeHubSnapshot({
     ...state.hub,
     inventory,
     fleet: result.fleet,
     credits: result.wallet.credits,
-    materials: result.wallet.materials,
   });
   const next: HangarState = {
     ...state,
@@ -1553,7 +1539,7 @@ export function scrapMech(
     lastDeployedIds: state.lastDeployedIds.filter((id) => id !== instanceId),
     log: pushLog(
       state.log,
-      `解体 ${instanceId} → +${result.yielded.credits}c / +${result.yielded.materials}m${returnedAmmo > 0 ? ` · 弾薬 ${returnedAmmo} を倉庫へ` : ""}`,
+      `解体 ${instanceId} → +${result.yielded.credits}c / ${RESOURCE_LABEL_JA.junk} +${result.yielded.junk}${returnedAmmo > 0 ? ` · 弾薬 ${returnedAmmo} を倉庫へ` : ""}`,
     ),
     notice: "解体完了",
   };
@@ -2016,7 +2002,6 @@ export {
   canAffordRepair,
   canAffordYieldCost,
   formatCircuitBonusesJa,
-  applyRepairDiscountToCost,
   isCircuitLocked,
   CRAFT_SIGNATURE_STORAGE_KEY,
   VERIFY_TRUE_CIRCUIT_ID,

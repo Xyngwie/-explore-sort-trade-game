@@ -20,9 +20,9 @@
 | キー | 型 | 意味 |
 |---|---|---|
 | `credits` | number | 所持クレジット |
-| `materials` | number | 所持資材 |
+| ~~`materials`~~ | number | ~~所持資材~~（§12.12 で廃止） |
 | `fleet` | `MechId[]` | 配備済み機体（**上限なし**。2026-10-03 項目15 で上限3を撤廃。現行は `OwnedMech[]`、§12） |
-| `ammoLoad` | `Record<AmmoId, number>` | 弾種別所持 |
+| ~~`ammoLoad`~~ | `Record<AmmoId, number>` | ~~弾種別所持~~（§12.12 で廃止） |
 | `importedMaterials` | number | 直近の Module 2 搬入表示用（任意。0でも可） |
 | `selectedMechId` | MechId | UI選択（任意） |
 | `selectedAmmoId` | AmmoId | UI選択（任意） |
@@ -248,7 +248,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
   3. 格納庫を開いただけでは補充しない（出撃中に補充すると、帰還の上書きで消えるため）。
   4. 修正前の 5-3 の途中保存で、バッテリーの上限が 300 を超えているものは 300 に戻す。
 - **機体のお金（#266、feat/money-mech-economy）**: 新しい保存キーは無い。購入・作成は `fleet` に `mech_gen1` を 1 機足す。~~（`currentAmmo` 欠落 → 上の暫定ルールで満タン 28 を付与。在庫からは引かない）~~ → 変更（E1 = B・2026-10-12 神宮、fix/hangar-money-followups）: **`currentAmmo: 0`** で足す。出撃前の補充（M3）で在庫から積み、足りなければ出撃ボタンの近くに 1 行（M8）。購入で弾の合計（携行弾＋在庫）は増えない。残骸復活は `fleet` の大破機の `durability`・`status` だけを変える（`instanceId`・回路の `equippedTo`・`currentAmmo`・`battery` はそのまま）。通常修理は `inventory.armor` を足りない耐久の分だけ引き、クレジット・`materials` は変えない。どれも 1 回の操作で 1 回だけ保存する（URL に操作を載せないので読み直しで繰り返さない）。
-- **格納庫の所持欄（2026-10-12、fix/hangar-money-followups）**: 上の所持欄の「弾薬」は `inventory.ammo`、「装甲パーツ」（E3 で追加）は `inventory.armor`、「電力パーツ」は `inventory.power` を出す（trade `holdingPills`）。旧 `ammoLoad`（弾種別）はセーブに残し、書き換えない（出撃 URL の `startingAmmo` は今も `ammoLoad` の合計）。
+- **格納庫の所持欄（2026-10-12、fix/hangar-money-followups）**: 上の所持欄の「弾薬」は `inventory.ammo`、「装甲パーツ」（E3 で追加）は `inventory.armor`、「電力パーツ」は `inventory.power` を出す（trade `holdingPills`）。旧 `ammoLoad`（弾種別）はセーブに残し、書き換えない（出撃 URL の `startingAmmo` は今も `ammoLoad` の合計）。→ §12.12 でセーブから外した。
 - trade の旧 typed-repair（`repairTyped`）は機体を作り直すので、`currentAmmo` は未設定に、`battery` は 300／300 に戻る（旧コードは触らない方針。STATUS のバックログ）。
 
 ## 12.5a 置き去り機体（lostMechs）の保存対象と回収経路（2026-10-03 正本化）
@@ -387,3 +387,16 @@ HubSave のキーは増やしていない（`v` は 3 のまま）。
 - 5-3 の途中保存（`estg.sortieCheckpoint`）: 書く中身（`World.circuitPlay`）に `ability`・`wingMove`・`ammoFloor` が増えた（キーは変えない）。PR-B より前の途中保存はこの 3 つが無く、読み直しで `backfillCircuitPlayState` が作る（倍率は保存済みの装備から、移動の命令は無し、撃てない分は最初の 1 歩で計算し直す）。`circuitPlay` 自体が無い途中保存も今までどおり読める。
 - `hub.bulletinUnlocked` を格納庫に 1 行「掲示板が開いた」として出す（無いセーブは false で出さない）。
 - 回路・残骸（`lostMechs` の `kind: "wreck"`）は変えていない。selftest: `explore` `releaseProgress.selftest.ts`（古い HubSave＝回路と残骸付きの往復と出撃、PR-B 前の途中保存の読み直し）、`trade` `hangar.selftest.ts`。
+
+### 12.12 資材と旧キーの廃止（fix/hub-save-legacy-retire、2026-10-12 神宮 Q1 = C）
+
+正式な資源は 弾薬 `inventory.ammo`・装甲パーツ `inventory.armor`・電力パーツ `inventory.power`・ジャンク `inventory.junk` の 4 つだけ。
+
+1. **セーブから外したキー:** `materials`・`importedMaterials`・`ammoLoad`・`selectedMechId`・`selectedAmmoId`・`inventoryFieldDrops`。v3 の正規化は知っているキーだけを返すので、古いセーブは今までどおり読めて、次の保存でこのキーが消える。**変換はしない**（`materials` をジャンクに、`ammoLoad` を `inventory.ammo` に足すことはしない）。v1/v2 の読み込み（移行）はそのまま。上の「旧キーは残す」の記述（§12.5 の `ammoLoad` など）はこれで上書き。初期値の資材 250・デモの 200 は削除。
+2. **Invade からの出撃:** `startingAmmo` は `inventory.ammo`（Trade からの出撃 F1 と同じ）。
+3. **解体:** 今までの資材と同じ数のジャンクを受け取る（健在 40c／ジャンク 15、要修理 20c／10、大破 10c／5、第2世代は +10c／+5）。ログは「解体 id → +Xc / ジャンク +N」。古いログ「+Nm」も履歴に出る。
+4. **表示:** 格納庫の所持欄・Sort の結果画面・帰還の成果は 4 資源だけ。「資材」と「搬入 n」は出さない。
+5. **Sort→HUB の URL:** いつも `fromSort=1` を付け、`importMaterials` は付けない。Trade（と途中保存の完了判定 `sortie-checkpoint.ts`）は `fromSort`・`yieldBag`・`depositUnopenedContainers`・古い `importMaterials` のどれかで Sort からの帰還と読む。古い `importMaterials` の数は何も付与しない。二重受け取りの防止は `handoffId`。`importMaterials` だけの古い URL は完了の印も付けない（古い URL で 1 以上なら `yieldBag` も載っていたので、完了の判定は新旧で同じ）。
+6. **shared から外したもの:** `importMaterialsIntoHub`・`importedMaterialsFromResult`・回路の資材の修理割引 `applyRepairDiscountToCost`。食料→弾薬の対応は残す。帰還報告の `inventoryDrops`・`recoveredInventoryDropIds` は読み捨てる。
+
+互換テスト: shared `legacy-retire.selftest.ts`（1〜5・7〜10・12）、explore `selftest.ts`（6）、trade `legacy-retire.selftest.ts`（7〜9・11、古い履歴）。

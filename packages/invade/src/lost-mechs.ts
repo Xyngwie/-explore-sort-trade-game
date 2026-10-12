@@ -94,16 +94,10 @@ export function placeLostOnFront(hub: HubSnapshot, seed: number, aoiHalf: number
     movedDrops.push(d.dropId);
     return { ...d, frontSeed: s, cell };
   });
-  const inventoryFieldDrops = (hub.inventoryFieldDrops ?? []).map((d) => {
-    const cell = clampToFront(d.cell, aoiHalf);
-    if (d.frontSeed === s && sameCell(cell, d.cell)) return d;
-    movedInventoryDrops.push(d.dropId);
-    return { ...d, frontSeed: s, cell };
-  });
   const moves = moved.length + placed.length + movedDrops.length + movedInventoryDrops.length > 0;
   const changed = moves || removedWrecks.length > 0;
   return {
-    hub: moves ? normalizeHubSnapshot({ ...hub, lostMechs, fieldDrops, inventoryFieldDrops }) : hub,
+    hub: moves ? normalizeHubSnapshot({ ...hub, lostMechs, fieldDrops }) : hub,
     changed,
     moved,
     placed,

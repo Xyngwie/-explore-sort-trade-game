@@ -1,7 +1,7 @@
 import { loadHubSaveFromLocalStorage, saveHubSaveToLocalStorage, type HubSnapshot } from "@estg/shared";
 
 const PENDING_SORT_UNOPENED_KEY = "wreckline.pendingSortUnopenedBack.v1";
-const SORT_HANDOFF_KEYS = ["importMaterials", "craftMultiplier", "yieldBag", "depositUnopenedContainers"];
+const SORT_HANDOFF_KEYS = ["fromSort", "importMaterials" /* old URL marker */, "craftMultiplier", "yieldBag", "depositUnopenedContainers"];
 
 function readCount(raw: string | null): number {
   const value = Number.parseInt(raw ?? "", 10);

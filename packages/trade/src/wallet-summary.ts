@@ -14,7 +14,8 @@ import { parseYieldBagCompact, yieldBagTotal } from "@estg/shared";
  */
 const LAST_SORT_YIELD_TOTAL_KEY = "wreckline.lastSortYieldTotal.v0";
 const HANDOFF_QUERY_KEYS = [
-  "importMaterials",
+  "fromSort",
+  "importMaterials", // old URL marker (grants nothing)
   "craftMultiplier",
   "yieldBag",
   "depositUnopenedContainers",
@@ -27,7 +28,7 @@ function captureSortYieldFromHandoff() {
   if (params.has("yieldBag")) {
     const bag = parseYieldBagCompact(params.get("yieldBag"));
     localStorage.setItem(LAST_SORT_YIELD_TOTAL_KEY, String(yieldBagTotal(bag)));
-  } else if (params.has("importMaterials")) {
+  } else {
     localStorage.setItem(LAST_SORT_YIELD_TOTAL_KEY, "0");
   }
 }

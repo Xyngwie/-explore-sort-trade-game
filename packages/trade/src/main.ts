@@ -477,7 +477,7 @@ function render() {
   root.innerHTML = `
     <p class="pill">MODULE 3 · TRADE · HANGAR V0</p>
     <h1>BASE HUB</h1>
-    <p class="muted">次の出撃に向けて艦隊・資材・戻りインテルを整える拠点。</p>
+    <p class="muted">次の出撃に向けて艦隊・物資・戻りインテルを整える拠点。</p>
     ${
       state.notice
         ? `<p class="${noticeClass(state.notice)}">${escapeHtml(state.notice)}</p>`
@@ -494,12 +494,11 @@ function render() {
         <span class="stat-pill"><span class="stat-k">艦隊</span> ${ready.total}</span>
         <span class="stat-pill"><span class="stat-k">出撃</span> ${state.selectedDeployIds.length}/${HUB_LIMITS.maxSortieMechs}</span>
         <span class="stat-pill"><span class="stat-k">未開封</span> ${Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0))}</span>
-        <span class="stat-pill muted"><span class="stat-k">搬入</span> ${state.hub.importedMaterials}</span>
       </div>
       <div class="row">
         <button type="button" id="btn-seed">シード読込</button>
         <button type="button" class="secondary" id="btn-grant">機体を受領</button>
-        <button type="button" class="secondary" id="btn-inv">デモ資材</button>
+        <button type="button" class="secondary" id="btn-inv">デモ物資</button>
         <button type="button" class="secondary" id="btn-reset">初期化</button>
       </div>
       <details class="sortie-details">

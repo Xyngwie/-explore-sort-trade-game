@@ -106,13 +106,13 @@ export const MECH_FLEET_RULES = {
    */
   repairCredits: 0,
   repairArmorPerDurability: 1,
-  /** Scrap yields by status (base; gen2 gets a small bonus). */
+  /** Scrap yields by status (base; gen2 gets a small bonus). junk = inventory.junk（fix/hub-save-legacy-retire: 旧 materials と同じ量、詳細 3 = B）. */
   scrapByStatus: {
-    operational: { credits: 40, materials: 15 },
-    needs_repair: { credits: 20, materials: 10 },
-    destroyed: { credits: 10, materials: 5 },
+    operational: { credits: 40, junk: 15 },
+    needs_repair: { credits: 20, junk: 10 },
+    destroyed: { credits: 10, junk: 5 },
   },
-  gen2ScrapBonus: { credits: 10, materials: 5 },
+  gen2ScrapBonus: { credits: 10, junk: 5 },
 } as const;
 
 export type SortieReturnKind = "extract" | "fail" | "abort";
@@ -125,7 +125,8 @@ export type RepairCost = {
 
 export type ScrapYield = {
   credits: number;
-  materials: number;
+  /** ジャンク（`inventory.junk`）。旧「資材」と同じ量（2026-10-12 神宮 詳細 3 = B）。 */
+  junk: number;
 };
 
 /** Per-mech wear reported on explore return (hub applies durabilityAfter). */
@@ -353,10 +354,10 @@ export function scrapYield(
   const bonus =
     mech.catalogId === "mech_gen2"
       ? rules.gen2ScrapBonus
-      : { credits: 0, materials: 0 };
+      : { credits: 0, junk: 0 };
   return {
     credits: base.credits + bonus.credits,
-    materials: base.materials + bonus.materials,
+    junk: base.junk + bonus.junk,
   };
 }
 
@@ -366,10 +367,10 @@ export function scrapYield(
 export function applyScrap(
   fleet: readonly OwnedMech[],
   instanceId: string,
-  wallet: { credits: number; materials: number },
+  wallet: { credits: number; junk: number },
 ): {
   fleet: OwnedMech[];
-  wallet: { credits: number; materials: number };
+  wallet: { credits: number; junk: number };
   yielded: ScrapYield;
 } | null {
   const idx = fleet.findIndex((m) => m.instanceId === instanceId);
@@ -381,7 +382,7 @@ export function applyScrap(
     fleet: nextFleet,
     wallet: {
       credits: wallet.credits + yielded.credits,
-      materials: wallet.materials + yielded.materials,
+      junk: wallet.junk + yielded.junk,
     },
     yielded,
   };

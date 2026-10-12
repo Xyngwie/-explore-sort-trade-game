@@ -453,25 +453,8 @@ export function applySortieReport(
   };
   next = addFieldDrops(next, droppedToField);
 
-  const inventoryDrops = normalizeInventoryFieldDrops(report.inventoryDrops ?? []);
-  const existingInventoryDropIds = new Set(
-    next.inventoryFieldDrops.map((d) => d.dropId),
-  );
-  const droppedInventoryToField: FieldInventoryDrop[] = [];
-  for (const drop of inventoryDrops) {
-    if (existingInventoryDropIds.has(drop.dropId)) continue;
-    existingInventoryDropIds.add(drop.dropId);
-    droppedInventoryToField.push(drop);
-  }
-  if (droppedInventoryToField.length > 0) {
-    next = {
-      ...next,
-      inventoryFieldDrops: [
-        ...next.inventoryFieldDrops,
-        ...droppedInventoryToField,
-      ],
-    };
-  }
+  // fix/hub-save-legacy-retire: inventoryFieldDrops left HubSave (it was never
+  // written by Explore). report.inventoryDrops / recoveredInventoryDropIds are ignored.
 
   if (lostMechs.length > 0) {
     // newest first; a re-lost entry replaces its old row (same instanceId)
@@ -484,25 +467,7 @@ export function applySortieReport(
   const rec = recoverFieldDrops(next, report.recoveredDropIds);
   next = rec.hub;
 
-  const recoveredInventoryIds = new Set(report.recoveredInventoryDropIds ?? []);
   const recoveredInventory: string[] = [];
-  const remainingInventoryDrops: FieldInventoryDrop[] = [];
-  let recoveredBag = next.inventory;
-  for (const drop of next.inventoryFieldDrops) {
-    if (!recoveredInventoryIds.has(drop.dropId)) {
-      remainingInventoryDrops.push(drop);
-      continue;
-    }
-    recoveredBag = mergeYieldBags(recoveredBag, drop.inventory);
-    recoveredInventory.push(drop.dropId);
-  }
-  if (recoveredInventory.length > 0) {
-    next = {
-      ...next,
-      inventory: recoveredBag,
-      inventoryFieldDrops: remainingInventoryDrops,
-    };
-  }
 
   const owned = new Set(next.circuits.map((c) => c.circuitId));
   const acquired: HubCircuitRecord[] = [];
@@ -527,7 +492,7 @@ export function applySortieReport(
     lostForever,
     recovered: rec.recovered,
     acquired: acquired.map((c) => c.circuitId),
-    droppedInventoryToField,
+    droppedInventoryToField: [] as FieldInventoryDrop[],
     recoveredInventory,
     recoveredMechs: recoveredMechsResult.recovered,
   };

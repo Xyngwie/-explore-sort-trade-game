@@ -266,12 +266,9 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     Object.keys(seedHub.inventory).every((k) => ["ammo", "armor", "power", "junk"].includes(k)),
     "seed inventory holds only the four resources",
   );
-  assert.ok(
-    seedHub.ammoLoad.ammo_standard +
-      seedHub.ammoLoad.ammo_ap +
-      seedHub.ammoLoad.ammo_hp >
-      0,
-  );
+  for (const k of ["materials", "importedMaterials", "ammoLoad", "selectedMechId", "selectedAmmoId", "inventoryFieldDrops"]) {
+    assert.equal(k in seedHub, false, `seed has no ${k}`);
+  }
 
   let seeded = resetHangar(storage);
   seeded = loadPlaytestSeed(seeded, storage);
@@ -527,7 +524,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   assert.ok(repairTarget);
   // #266: the normal repair ignores the circuit repair discount (armor = missing durability, no credits / materials)
   const creditsBefore = hs.hub.credits;
-  const materialsBefore = hs.hub.materials;
+
   const missing = repairTarget!.durabilityMax - repairTarget!.durability;
   hs = { ...hs, hub: { ...hs.hub, inventory: { ...hs.hub.inventory, armor: missing + 4 } } };
   hs = repairMech(hs, repairTarget!.instanceId);
@@ -536,7 +533,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     "operational",
   );
   assert.equal(hs.hub.credits, creditsBefore, "no credits even with a repair discount");
-  assert.equal(hs.hub.materials, materialsBefore, "no materials");
+  assert.equal("materials" in hs.hub, false, "no materials");
   assert.equal(hs.hub.inventory.armor, 4, "armor = missing durability (no discount)");
   assert.ok(!formatCircuitBonusesJa(hubCircuitBonuses(hs.hub)).includes("修理"), "no repair-discount display");
 }
@@ -1060,7 +1057,6 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 
   // Skip deposit ingest: depositUnopenedContainers → Hub stock, no materials
   let depositHs = resetHangar(store);
-  const mats0 = depositHs.hub.materials;
   const inv0 = { ...depositHs.hub.inventory };
   const ingested = ingestLocationSearch(
     depositHs,
@@ -1068,7 +1064,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   );
   assert.equal(ingested.consumed, true);
   assert.equal(ingested.state.hub.unopenedContainers, 4);
-  assert.equal(ingested.state.hub.materials, mats0, "no false refine materials");
+  assert.equal("materials" in ingested.state.hub, false, "no materials");
   assert.deepEqual(ingested.state.hub.inventory, inv0);
   assert.ok(ingested.state.log.some((l) => l.includes("未開封コンテナ預け +4")));
 }
@@ -1285,8 +1281,8 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const url = buildExploreToHubWearUrl(payload);
   const applied = ingestLocationSearch(hs, new URL(url).search);
   assert.equal(applied.consumed, true);
-  assert.equal(applied.state.hub.inventoryFieldDrops.length, 1);
-  assert.equal(applied.state.hub.inventoryFieldDrops[0]!.dropId, drop.dropId);
+  // fix/hub-save-legacy-retire: inventoryFieldDrops left HubSave; report.inventoryDrops is ignored.
+  assert.equal("inventoryFieldDrops" in applied.state.hub, false);
   assert.deepEqual(applied.state.hub.inventory, {});
   const wreck = applied.state.hub.fleet.find((m) => m.instanceId === wreckId);
   assert.ok(wreck);
@@ -1297,7 +1293,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 
   const duplicate = ingestLocationSearch(applied.state, new URL(url).search);
   assert.equal(duplicate.consumed, true);
-  assert.equal(duplicate.state.hub.inventoryFieldDrops.length, 1);
+  assert.equal("inventoryFieldDrops" in duplicate.state.hub, false);
   assert.equal(duplicate.state.hub.appliedSortieIds.filter((id) => id === "sortie_inventory_1").length, 1);
 
   const recoveryPayload = toExploreToHubWearPayload(
@@ -1312,8 +1308,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     duplicate.state,
     new URL(buildExploreToHubWearUrl(recoveryPayload)).search,
   );
-  assert.deepEqual(recovered.state.hub.inventory, { ammo: 3, armor: 2 });
-  assert.equal(recovered.state.hub.inventoryFieldDrops.length, 0);
+  assert.deepEqual(recovered.state.hub.inventory, {}, "nothing to recover (no inventory field drops)");
   assert.equal(recovered.state.hub.appliedSortieIds.includes("sortie_inventory_2"), true);
 
   const legacy = normalizeHubSnapshot({
@@ -1331,7 +1326,8 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
     perfectMaxSize: 0,
     fieldDrops: [],
   });
-  assert.deepEqual(legacy.inventoryFieldDrops, []);
+  assert.equal("inventoryFieldDrops" in legacy, false);
+  assert.equal("materials" in legacy, false);
 }
 
 
@@ -1954,9 +1950,10 @@ console.log("trade hangar selftest: ok");
     "?importMaterials=4&craftMultiplier=1",
     refineStore,
   );
-  assert.equal(refined.state.hub.materials, refineStart.hub.materials + 4);
-  assert.equal(isSortieDoneMark(refineStore), true);
-  assert.deepEqual(JSON.parse(refineStore.getItem(SORTIE_CHECKPOINT_KEY)!), { v: 1, kind: "done" });
+  // old URL: importMaterials alone grants nothing and does not mark done
+  assert.equal("materials" in refined.state.hub, false);
+  assert.deepEqual(refined.state.hub.inventory, refineStart.hub.inventory);
+  assert.equal(isSortieDoneMark(refineStore), false);
 
   const yieldStore = memoryStorage();
   const yieldStart = createInitialHangar();
@@ -2091,7 +2088,7 @@ console.log("trade hangar selftest: ok");
   assert.equal(rp.durability, rp.durabilityMax);
   assert.equal(rp.currentAmmo, 20);
   assert.equal(s2.hub.credits, 3);
-  assert.equal(s2.hub.materials, 9);
+  assert.equal("materials" in s2.hub, false);
   assert.equal(s2.hub.inventory.armor, 5);
   assert.equal(repairMech(s2, "worn").notice, "機体なし", "second press: nothing to repair");
   assert.equal(repairMech(s2, "worn").hub.inventory.armor, 5);
@@ -2165,13 +2162,14 @@ console.log("trade hangar selftest: ok");
   assert.equal(s0.hub.fleet.length, 1, "old save loads");
   assert.equal(s0.hub.fleet[0]!.currentAmmo, 28, "A2 #1: an old mech without currentAmmo is full (not from stock)");
   assert.equal(s0.hub.inventory.ammo, 30, "A2 #1: the stock is not drawn for it");
-  assert.deepEqual(s0.hub.ammoLoad, { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 }, "old ammoLoad kept in the save");
+  assert.equal("ammoLoad" in s0.hub, false, "fix/hub-save-legacy-retire: old ammoLoad read past (not converted)");
+  assert.equal("materials" in s0.hub, false, "old materials read past");
 
   // holdings bar = the real stock (not ammoLoad 55, not a 4-resource sum)
   const bar = (h: typeof s0.hub) => Object.fromEntries(holdingPills(h).map((p) => [p.labelJa, p.value]));
-  assert.deepEqual(bar(s0.hub), { Cr: 5000, 資材: 42, 弾薬: 30, 装甲パーツ: 400, 電力パーツ: 9 });
-  assert.deepEqual(holdingPills(s0.hub).map((p) => p.labelJa), ["Cr", "資材", "弾薬", "装甲パーツ", "電力パーツ"], "E3: 装甲パーツ in the bar");
-  assert.deepEqual(bar({ ...s0.hub, inventory: {} }), { Cr: 5000, 資材: 42, 弾薬: 0, 装甲パーツ: 0, 電力パーツ: 0 }, "empty stock reads 0");
+  assert.deepEqual(bar(s0.hub), { Cr: 5000, 弾薬: 30, 装甲パーツ: 400, 電力パーツ: 9 });
+  assert.deepEqual(holdingPills(s0.hub).map((p) => p.labelJa), ["Cr", "弾薬", "装甲パーツ", "電力パーツ"], "no 資材 in the bar");
+  assert.deepEqual(bar({ ...s0.hub, inventory: {} }), { Cr: 5000, 弾薬: 0, 装甲パーツ: 0, 電力パーツ: 0 }, "empty stock reads 0");
 
   // E1 = B: bought / created mechs come with ammo 0; the ammo total does not grow
   const total = (h: typeof s0.hub) => (h.inventory.ammo ?? 0) + h.fleet.reduce((n, m) => n + (m.currentAmmo ?? 0), 0);
@@ -2202,7 +2200,7 @@ console.log("trade hangar selftest: ok");
   assert.equal(bar(dep.hub).弾薬, 0, "the bar follows the loading");
   assert.equal(total(dep.hub), total0, "loading moves ammo, never makes it");
   assert.match(dep.log[0] ?? "", /弾薬が足りません：僚機A 2\/28/, "M8: the usual shortage line");
-  assert.deepEqual(dep.hub.ammoLoad, { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 }, "ammoLoad untouched");
+  assert.equal("ammoLoad" in dep.hub, false);
 
   // repair spends armor parts → the bar drops by the same amount
   const worn = { ...dep, hub: { ...dep.hub, fleet: dep.hub.fleet.map((m) => (m.instanceId === boughtMech.instanceId ? { ...m, durability: 70, status: "needs_repair" as const } : m)) } };
@@ -2231,7 +2229,7 @@ console.log("trade hangar selftest: ok");
   const url = new URL(buildDeployUrl({ ...s0, selectedDeployIds: ["only"] })!);
   assert.equal(url.searchParams.get("startingAmmo"), "17", "F1: startingAmmo = inventory.ammo (not ammoLoad 55)");
   assert.equal(new URL(buildInvadeUrl(s0)).searchParams.get("startingAmmo"), "17", "F1: the Invade link too");
-  assert.deepEqual(s0.hub.ammoLoad, { ammo_standard: 40, ammo_ap: 10, ammo_hp: 5 }, "ammoLoad kept");
+  assert.equal("ammoLoad" in s0.hub, false, "ammoLoad read past");
   // F3: 「機体を受領」 → carried ammo at cap (attached, stock untouched), durability max, battery full
   const g = grantStarterFleet(s0);
   const added = g.hub.fleet.filter((m) => m.instanceId !== "only");
