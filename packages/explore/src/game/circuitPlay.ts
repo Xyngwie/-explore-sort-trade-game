@@ -1537,7 +1537,7 @@ export type WingmanPaletteAction = { id: string; label: string; next?: WingmanPa
 
 /**
  * N1: the wingman command palette as data (extensible: e.g. a future
- * 「攻撃」→「指定した敵」). Only a non-autonomous wingman gets 「移動」→「地点選択」,
+ * 「攻撃」→「指定した敵」). Only a non-autonomous wingman gets 「移動」 (arms the map pick),
  * and only once the captain carries the true 1×1 「4」 (the leader may be a
  * wreck: N3). Autonomous wingmen and locked actions give an empty list.
  */
@@ -1550,7 +1550,8 @@ export function wingmanPaletteActions(world: World, unitIds: string[]): WingmanP
   });
   if (ids.length === 0) return [];
   const out: WingmanPaletteAction[] = [];
-  if (p.captainTrueOne) out.push({ id: "move", label: "移動", next: [{ id: "point", label: "地点選択" }] });
+  // fix/explore-move-tap-panel: 「移動」 arms the map pick at once (「地点選択」 removed).
+  if (p.captainTrueOne) out.push({ id: "move", label: "移動", next: [] });
   // 項目4-2 C1a/b: a wingman with the 「回収」 circuit gets 「回収」 without the captain's 「4」.
   if (ids.some((id) => hasRecover(world, id))) out.push({ id: "recover", label: "回収", next: [] });
   return out;
@@ -1715,13 +1716,16 @@ export function closeWingPalette(world: World): void {
   if (p.pending?.kind === "wing_move" || p.pending?.kind === "wing_recover") p.pending = null;
 }
 
-/** P1: press a palette entry: 「移動」 → 「地点選択」 → wait for the map tap. */
+/** P1: press a palette entry: 「移動」 → wait for the map tap. */
 export function pressWingPalette(world: World, actionId: string): boolean {
   const p = playOf(world);
   const sel = p?.wingSelect;
   if (!p || !sel) return false;
-  if (sel.step === "root" && actionId === "move") { p.wingSelect = { ...sel, step: "move" }; return true; }
-  if (sel.step === "root" && actionId === "recover") return beginWingmanRecoverPick(world, sel.ids);
+  // fix/explore-move-tap-panel: 「移動」 arms the map pick directly (3 taps: wingman → 移動 → map).
+  // An old checkpoint can hold step "move" (the removed 「地点選択」 step): it reads as root,
+  // and "point" still arms the pick so nothing saved is stuck.
+  if (actionId === "move") return beginWingmanMovePick(world, sel.ids);
+  if (actionId === "recover") return beginWingmanRecoverPick(world, sel.ids);
   if (sel.step === "move" && actionId === "point") return beginWingmanMovePick(world, sel.ids);
   return false;
 }

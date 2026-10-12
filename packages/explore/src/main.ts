@@ -578,9 +578,7 @@ function wingPaletteHtml(): string {
     ? `<span class="wing-palette-hint">地図をタップして地点を指定</span>`
     : armedRecover
       ? `<span class="wing-palette-hint">回収する残骸かコンテナをタップ</span>`
-      : sel.step === "root"
-        ? acts.map((a) => `<button type="button" class="secondary" data-wing-act="${a.id}">${escapeHtml(a.label)}</button>`).join("")
-        : `<button type="button" class="secondary" data-wing-act="point">地点選択</button>`;
+      : acts.map((a) => `<button type="button" class="secondary" data-wing-act="${a.id}">${escapeHtml(a.label)}</button>`).join("");
   return `<div class="wing-palette open" role="group" aria-label="僚機">${allBtn}<span class="wing-palette-sel">${names}</span>${step}</div>`;
 }
 
