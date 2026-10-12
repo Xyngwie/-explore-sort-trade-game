@@ -41,7 +41,7 @@ import {
   tryDodge,
 } from "./circuitPlay";
 import type { Bullet, Unit, World } from "./types";
-import { wreckChannelOf } from "./circuitPlay";
+import { captainActive, wingRecoverWantsSalvage, wreckChannelOf } from "./circuitPlay";
 import { canTakeContainer } from "./carry";
 import { dropUnitCargoToField } from "./orders";
 
@@ -311,7 +311,8 @@ export function boardingRequirementsHud(world: World): BoardingRequirementsHud {
 }
 
 export function requestExtract(world: World): boolean {
-  if (world.phase !== "sortie" || !world.leader.alive) return false;
+  // 項目4-2 C2: a wingman carrying the captain's wreck can call the circle too.
+  if (world.phase !== "sortie" || !captainActive(world)) return false;
   if (isOperationTimedOut(world)) { pushLog(world, "時間切れのため新規の帰還要請は不可。進行中の搭乗円の完了を待つ。"); return false; }
   if (world.boarding) {
     if (secondExtractPull(world)) return true;
@@ -452,7 +453,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (focusing) {
       if (focus) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, focus, false); }
     } else if (intent.fireAt) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, intent.fireAt, false); }
-    if (!timedOut && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage, dt);
+    if (!timedOut && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage || wingRecoverWantsSalvage(world, w), dt);
   }
   updateEnemies(world, dt); updateBullets(world, dt); revealVision(world);
   // 項目4-1 C6: a destroyed carrier drops its containers on the spot (wrecks: circuitPlay placeCarried).

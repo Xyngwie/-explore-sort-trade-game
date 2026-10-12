@@ -483,7 +483,9 @@ const v2Text = JSON.stringify(v2Save);
     ],
   } as unknown as HubSnapshot);
   const built = buildMechCircuitsForDeploy(hub, ["owned_a", "owned_b"]);
-  assert.deepEqual(built, { owned_a: [{ circuitId: "ha", restoreState: "bypass", effect: 1, effectKey: "mmr" }] });
+  // 項目4-2 C1e: this record has no saved key, so it is drawn now from the 19 keys
+  // (was "mmr" from 18). A saved key is never redrawn — see the C1e block in circuit-actions.selftest.
+  assert.deepEqual(built, { owned_a: [{ circuitId: "ha", restoreState: "bypass", effect: 1, effectKey: "fast_round" }] });
 }
 
 // ---------------------------------------------------------------------------

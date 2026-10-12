@@ -45,6 +45,10 @@ export const FALSE_BOARD_EFFECT_KEYS = [
   "haul_speed",
   "cargo_slots",
   "cover_move",
+  // 項目4-2 C1 (2026-10-12 神宮): 「回収」 — the wingman's palette 「回収」→ tap a wreck / container.
+  // Appended last: saved effectKeys are never redrawn (keyMatchesBoard), so only
+  // circuits that get a key from now on can roll it (19 keys from here).
+  "recover",
 ] as const;
 
 export const TRUE_BOARD_EFFECT_KEYS = [

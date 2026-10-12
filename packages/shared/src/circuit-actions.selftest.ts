@@ -3,6 +3,8 @@
  */
 import assert from "node:assert/strict";
 import {
+  FALSE_BOARD_EFFECT_KEYS,
+  assignMissingEffectKeys,
   cargoSlotBonus,
   circuitTrueBoardRate,
   classifyCircuit,
@@ -75,5 +77,30 @@ const add = pt / 100;
 assert.equal(circuitTrueBoardRate(rated, 0.01), pt > 0 ? Math.min(0.31, 0.01 + add) : 0.01);
 assert.equal(circuitTrueBoardRate(rated, 0.33), pt > 0 ? 0.33 + add : 0.33);
 assert.equal(circuitTrueBoardRate(rated, 0.4), pt > 0 ? 0.4 + add : 0.4);
+
+// 項目4-2 C1e compat: 「回収」 (recover) is the 19th false-board key. Saved keys are kept
+// as they are; only a circuit that gets its key from now on can roll recover.
+{
+  assert.equal(FALSE_BOARD_EFFECT_KEYS.length, 19);
+  assert.equal(FALSE_BOARD_EFFECT_KEYS[18], "recover");
+  const OLD18 = FALSE_BOARD_EFFECT_KEYS.slice(0, 18);
+  const recs = Array.from({ length: 120 }, (_, i) => ({
+    circuitId: `c1e-${i}`,
+    circuitBoard: buildVerifyPerfectLockedBoard("t"),
+    restoreState: "bypass",
+    origin: "crafted",
+    equippedTo: null,
+  })) as unknown as Parameters<typeof assignMissingEffectKeys>[0];
+  const fresh = assignMissingEffectKeys(recs);
+  assert.ok(fresh.every((r) => typeof r.effectKey === "string" && (FALSE_BOARD_EFFECT_KEYS as readonly string[]).includes(r.effectKey!)));
+  assert.ok(fresh.some((r) => r.effectKey === "recover"), "new assignments can roll recover");
+  // An old save: every circuit already holds a key from the 18 → none is redrawn.
+  const saved = recs.map((r, i) => ({ ...r, effectKey: OLD18[i % 18] }));
+  const again = assignMissingEffectKeys(saved);
+  assert.deepEqual(again.map((r) => r.effectKey), saved.map((r) => r.effectKey));
+  assert.ok(again.every((r) => r.effectKey !== "recover"));
+  for (const r of saved) assert.equal(effectKeyForCircuit(r), r.effectKey);
+  console.log("shared 項目4-2 C1e recover key compat ok");
+}
 
 console.log("circuit-actions.selftest ok");

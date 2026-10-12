@@ -19,6 +19,7 @@
     "src/circuitPlay.selftest.ts",
     "src/releaseProgress.selftest.ts",
     "src/ammoRefill.selftest.ts",
-    "src/carry.selftest.ts"
+    "src/carry.selftest.ts",
+    "src/rescue.selftest.ts"
   ]
 }
