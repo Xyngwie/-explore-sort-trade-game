@@ -191,6 +191,22 @@ export function parseResourceHistoryLine(line: string): ResourceHistoryEntry | n
     };
   }
 
+  // fix/hub-save-legacy-retire: scrap now yields ジャンク (new log line).
+  m = raw.match(/解体 .+→ \+(\d+)c \/ ジャンク \+(\d+)/);
+  if (m) {
+    return {
+      polarity: "gain",
+      source: "hub",
+      title: "解体回収",
+      chips: [
+        { label: "credits", amount: Number(m[1]), unit: "c" },
+        { label: "ジャンク", amount: Number(m[2]) },
+      ],
+      raw,
+    };
+  }
+
+  // Old log lines (資材) still display as they were.
   m = raw.match(/解体 .+→ \+(\d+)c \/ \+(\d+)m/);
   if (m) {
     return {

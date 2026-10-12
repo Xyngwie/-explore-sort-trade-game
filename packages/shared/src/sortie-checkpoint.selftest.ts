@@ -131,7 +131,7 @@ assert.equal(exploreHubUrl(), resolveModuleBaseUrl("trade"));
   const loaded = loadHubSaveFromLocalStorage(store);
   assert.ok(loaded);
   assert.equal(loaded!.hub.credits, 9);
-  assert.equal(loaded!.hub.materials, 1);
+  assert.equal("materials" in loaded!.hub, false, "old materials read past, not kept");
   assert.equal(readSortieCheckpoint(store).status, "absent");
   assert.equal(exploreBootFromCheckpoint(readSortieCheckpoint(store)).action, "continue");
 
@@ -232,7 +232,6 @@ assert.equal(exploreHubUrl(), resolveModuleBaseUrl("trade"));
     shouldMarkDoneAfterTradeWrite({
       saved: true,
       depositUnopenedContainers: 2,
-      importMaterials: 0,
       yieldBag: false,
     }),
     true,
@@ -243,14 +242,13 @@ assert.equal(exploreHubUrl(), resolveModuleBaseUrl("trade"));
       depositUnopenedContainers: 0,
       importMaterials: 4,
       yieldBag: false,
-    }),
-    true,
+    } as never),
+    false, // fix/hub-save-legacy-retire: importMaterials alone no longer marks (old URLs with ≥1 also had a yieldBag)
   );
   assert.equal(
     shouldMarkDoneAfterTradeWrite({
       saved: true,
       depositUnopenedContainers: 0,
-      importMaterials: 0,
       yieldBag: true,
     }),
     true,
@@ -259,7 +257,6 @@ assert.equal(exploreHubUrl(), resolveModuleBaseUrl("trade"));
     shouldMarkDoneAfterTradeWrite({
       saved: false,
       depositUnopenedContainers: 2,
-      importMaterials: 4,
       yieldBag: true,
     }),
     false,
@@ -268,7 +265,6 @@ assert.equal(exploreHubUrl(), resolveModuleBaseUrl("trade"));
     shouldMarkDoneAfterTradeWrite({
       saved: true,
       depositUnopenedContainers: 0,
-      importMaterials: 0,
       yieldBag: false,
     }),
     false,

@@ -2971,7 +2971,8 @@ import {
   let hub0 = shared.normalizeHubSnapshot({
     ...shared.INITIAL_HUB,
     fleet: [mk("m1", 100, 20, 250), mk("m2", 90, 12, 212)],
-    ammoLoad: { ...shared.INITIAL_HUB.ammoLoad, standard: 30 } as never,
+    // fix/hub-save-legacy-retire: an old ammoLoad key is ignored; inventory.ammo is used
+    ammoLoad: { ammo_standard: 999, ammo_ap: 0, ammo_hp: 0 } as never,
     frontProgress: { seed: 777, cols: 8, rows: 8, cleared: [], mined: [] },
     ammoBatteryRepaired: true, // M6 済みのセーブ（弾数を補填せず残す）
   });
@@ -2993,6 +2994,14 @@ import {
   assert.deepEqual(inbound?.deployedInstanceIds, ["m1", "m2"], "hangar selection (default first 3 deployable)");
   assert.deepEqual(inbound?.mechCircuits?.m2?.map((c) => c.circuitId), ["c_wing"], "equipped circuits go along");
   assert.deepEqual(shared.parseInvadeToExploreSearch(search!)?.sectorX, 3, "sector kept");
+  // legacy-retire 6: Invade sortie startingAmmo = inventory.ammo (same as F1), not ammoLoad
+  assert.equal(inbound?.startingAmmo, hub0.inventory.ammo ?? 0, "Invade startingAmmo = inventory.ammo");
+  assert.notEqual(inbound?.startingAmmo, 999, "old ammoLoad is not used");
+  {
+    const hubAmmo = shared.normalizeHubSnapshot({ ...hub0, inventory: { ...hub0.inventory, ammo: 30 }, ammoLoad: { ammo_standard: 999, ammo_ap: 0, ammo_hp: 0 } } as never);
+    const s6 = shared.parseTradeToExploreSearch(invadeSquadSearch(invadeLink, hubAmmo)!);
+    assert.equal(s6?.startingAmmo, 30, "legacy-retire 6: startingAmmo = inventory.ammo 30");
+  }
   assert.equal(invadeSquadSearch("?deployedInstanceIds=m1&deployableMechs=1", hub0), null, "trade deploy link untouched");
   assert.equal(invadeSquadSearch(`${invadeLink}&deployedInstanceIds=m1&deployableMechs=1`, hub0), null, "link with a squad untouched");
   assert.equal(invadeSquadSearch(invadeLink, null), null, "no save → unchanged");

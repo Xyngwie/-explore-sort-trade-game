@@ -1,6 +1,6 @@
 # Sort Yield — 4資源モデル
 
-**現行仕様:** Sort の成果は次の4資源だけを扱う。
+**現行仕様:** 正式な資源は次の4つだけ（2026-10-12 神宮 Q1 = C、fix/hub-save-legacy-retire で「資材」`materials` を廃止）。Sort の成果もこの4資源だけを扱う。
 
 - `ammo` — 弾薬
 - `armor` — 装甲パーツ
@@ -46,7 +46,9 @@ const RESOURCE_IDS = ["ammo", "armor", "power", "junk"];
 
 Sort完了時のHUB搬入は `yieldBag` を正規の4資源成果として扱う。
 
-`搬入` は直前のSortで得られた4資源の合計、`資材` はHUBに現在保存されている4資源の合計として表示する。
+~~`搬入` は直前のSortで得られた4資源の合計、`資材` はHUBに現在保存されている4資源の合計として表示する。~~ → 変更（fix/hub-save-legacy-retire、2026-10-12）: Sort の結果画面・帰還の成果は 弾薬／装甲パーツ／電力パーツ／ジャンク の 4 つを個別に出す（0 も出す）。「資材」と「搬入 n」は出さない。
+
+Sort→HUB の URL は資材の数を載せず、いつも `fromSort=1` を付ける。Trade は `fromSort`・`yieldBag`・`depositUnopenedContainers`・古い `importMaterials` のどれかがあれば Sort からの帰還と読む。古い `importMaterials` の数は何も付与しない（二重受け取りの防止は今までどおり `handoffId`）。
 
 従来の `mat_*` / `part_*` 型付き素材体系は現行仕様では使用しない。
 

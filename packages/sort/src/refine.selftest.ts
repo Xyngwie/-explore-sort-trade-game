@@ -1106,17 +1106,16 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   );
 
   const compact = buildResultYieldCompactHtml({
-    yieldFood: 2,
-    yieldMaterial: 4,
-    yieldEnergy: 1,
-    scrapLossCount: 3,
+    yieldBag: { ammo: 2, armor: 4, power: 1 },
     craftMultiplier: 1.1,
     lastChain: 5,
   });
   assert(compact.includes("result-yield-compact"), "compact yield class");
-  assert(compact.includes("食 2"), "compact ammo");
-  assert(compact.includes("部 4"), "compact armor");
-  assert(compact.includes("電 1"), "compact power");
+  assert(compact.includes("弾薬 2"), "compact ammo");
+  assert(compact.includes("装甲パーツ 4"), "compact armor");
+  assert(compact.includes("電力パーツ 1"), "compact power");
+  assert(compact.includes("ジャンク 0"), "compact junk (4 kinds only)");
+  assert(!compact.includes("食") && !compact.includes("資材"), "no old labels");
   assert(compact.includes("craft 1.100"), "compact craft");
 
   assert(toStagePhase("briefing") === "briefing", "stage briefing");
@@ -1380,8 +1379,8 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   const skipUrl = buildEmptySkipToHubUrl(empty, "http://localhost:5175/");
   const skipParsed = new URL(skipUrl);
   assert(
-    skipParsed.searchParams.get("importMaterials") === "0",
-    "empty skip handoff importMaterials=0",
+    skipParsed.searchParams.get("fromSort") === "1" && !skipParsed.searchParams.has("importMaterials"),
+    "empty skip handoff fromSort=1 (no importMaterials)",
   );
   assert(
     skipParsed.searchParams.get("craftMultiplier") != null,
@@ -1396,7 +1395,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   assert(cta.includes("格納庫へ"), "empty skip CTA label");
   assert(!cta.includes("格納庫へ戻る"), "empty skip no legacy 戻る");
   assert(cta.includes('id="btn-skip-hub"'), "empty skip button id");
-  assert(cta.includes("importMaterials=0"), "CTA href carries handoff keys");
+  assert(cta.includes("fromSort=1"), "CTA href carries handoff keys");
 
   const withCraft = createRefineFromLocationSearch(
     "?salvagedContainers=0&totalStockPieces=0&isExtracted=1&craftMultiplier=1.100",
@@ -1447,7 +1446,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
     "empty skip deposits nothing",
   );
   assert(
-    emptyUrl.searchParams.get("importMaterials") === "0",
+    emptyUrl.searchParams.get("fromSort") === "1" && !emptyUrl.searchParams.has("importMaterials"),
     "empty skip still zero armor pieces",
   );
 
@@ -1455,7 +1454,8 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   const parsed = parseSortToTradeSearch(new URL(skipUrl).search);
   assert(parsed != null, "cargo skip parses as sort→trade");
   assert(parsed!.depositUnopenedContainers === 3, "deposit N cans");
-  assert(parsed!.importMaterials === 0, "no armor import");
+  assert(parsed!.fromSort === true, "fromSort marker");
+  assert(new URL(skipUrl).searchParams.get("fromSort") === "1" && !new URL(skipUrl).searchParams.has("importMaterials"), "fromSort=1, no importMaterials");
   assert(
     parsed!.yieldBag == null || Object.keys(parsed!.yieldBag).length === 0,
     "no yieldBag import",

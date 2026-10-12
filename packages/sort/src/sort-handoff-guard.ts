@@ -27,7 +27,6 @@ function armPendingHandoff(anchor: HTMLAnchorElement): void {
   }
   if (
     !url.searchParams.has("yieldBag") &&
-    !url.searchParams.has("importMaterials") &&
     !url.searchParams.has("depositUnopenedContainers")
   ) {
     return;

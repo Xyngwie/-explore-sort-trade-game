@@ -1,4 +1,7 @@
 import {
+  RESOURCE_IDS,
+  RESOURCE_LABEL_JA,
+  type YieldBag,
   buildSortToTradeUrl,
   buildSortToTradeUrlFromResult,
   CTA_CHIP,
@@ -69,20 +72,19 @@ export function buildResultRibbonHtml(handoffUrl: string): string {
 
 /** Compact yield lines for the result overlay (on-field, not a second screen). */
 export function buildResultYieldCompactHtml(opts: {
-  yieldFood: number;
-  yieldMaterial: number;
-  yieldEnergy: number;
-  scrapLossCount: number;
+  yieldBag: YieldBag | undefined;
   craftMultiplier: number;
   lastChain: number;
 }): string {
+  // fix/hub-save-legacy-retire (詳細 4): the result shows only the 4 resources.
   const m = opts.craftMultiplier.toFixed(3);
+  const bag = opts.yieldBag ?? {};
+  const cells = RESOURCE_IDS.map(
+    (id) => `<span data-resource="${id}">${escapeHtml(RESOURCE_LABEL_JA[id])} ${Math.max(0, Math.floor(bag[id] ?? 0))}</span>`,
+  ).join("");
   return `
     <div class="result-yield-compact" aria-label="精製結果要約">
-      <span>食 ${opts.yieldFood}</span>
-      <span>部 ${opts.yieldMaterial}</span>
-      <span>電 ${opts.yieldEnergy}</span>
-      <span class="muted">屑 ${opts.scrapLossCount}</span>
+      ${cells}
       <span class="muted">×${opts.lastChain || 1}</span>
       <span class="muted">craft ${escapeHtml(m)}</span>
     </div>
@@ -102,7 +104,7 @@ export function isEmptyCargoEntry(
 
 /**
  * Same sort→trade URL contract as a normal post-sort handoff with zero yield
- * (`importMaterials=0`, `craftMultiplier`, no `yieldBag`). Preserves HubSave
+ * (`fromSort=1`, `craftMultiplier`, no `yieldBag`). Preserves HubSave
  * apply path on trade (no-op resource / bag).
  */
 export function buildEmptySkipToHubUrl(
@@ -158,7 +160,7 @@ export function buildCargoSkipToHubUrl(
   const deposit = Math.max(0, Math.floor(s.inbound.salvagedContainers));
   return buildSortToTradeUrl(
     {
-      importMaterials: 0,
+      fromSort: true,
       craftMultiplier: resolveCraftMultiplier(s.inbound),
       ...(deposit > 0 ? { depositUnopenedContainers: deposit } : {}),
     },

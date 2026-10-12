@@ -83,7 +83,9 @@ export const CRAFT_SIGNATURE_STORAGE_KEY = "wreckline.craftSignature.v0";
 
 export const HANDOFF_QUERY_KEYS = {
   exploreToSort: ["salvagedContainers", "totalStockPieces", "isExtracted", "forcedRescueRecovered", "craftMultiplier", "circuitBonuses"] as const,
-  sortToTrade: ["importMaterials", "craftMultiplier", "yieldBag", "depositUnopenedContainers"] as const,
+  sortToTrade: ["fromSort", "craftMultiplier", "yieldBag", "depositUnopenedContainers"] as const,
+  /** Old Sort→Trade marker: still read as "returned from Sort", grants nothing. */
+  sortToTradeLegacy: ["importMaterials"] as const,
   tradeToExplore: [
     "deployableMechs",
     "startingAmmo",

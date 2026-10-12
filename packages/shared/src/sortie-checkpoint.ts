@@ -260,17 +260,17 @@ export function markDoneIfZeroContainersSaved(
 
 /**
  * Trade marks after a successful HubSave write that added unopened containers,
- * or that wrote importMaterials / yieldBag. A false write does not mark.
+ * or that wrote a yieldBag. A false write does not mark.
+ * fix/hub-save-legacy-retire: importMaterials no longer counts (an old URL with
+ * importMaterials ≥ 1 always carried a yieldBag too, so the result is the same).
  */
 export function shouldMarkDoneAfterTradeWrite(args: {
   saved: boolean;
   depositUnopenedContainers: number;
-  importMaterials: number;
   yieldBag: boolean;
 }): boolean {
   if (args.saved !== true) return false;
   if (Math.floor(Number(args.depositUnopenedContainers) || 0) >= 1) return true;
-  if (Math.floor(Number(args.importMaterials) || 0) >= 1) return true;
   if (args.yieldBag) return true;
   return false;
 }

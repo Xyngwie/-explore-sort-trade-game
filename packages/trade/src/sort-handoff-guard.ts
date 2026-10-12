@@ -4,8 +4,8 @@ const MAX_AGE_MS = 30 * 60 * 1000;
 function hasResourceGrant(search: string): boolean {
   const p = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   return (
+    // fix/hub-save-legacy-retire: importMaterials grants nothing now, so it needs no token.
     p.has("yieldBag") ||
-    p.has("importMaterials") ||
     p.has("depositUnopenedContainers")
   );
 }

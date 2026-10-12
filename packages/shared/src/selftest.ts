@@ -6,7 +6,6 @@ import {
   buildSortToTradeUrlFromResult,
   parseSortToTradeSearch,
   wingmanCountFromMechs,
-  importedMaterialsFromResult,
   buildTradeToExploreUrl,
   parseTradeToExploreSearch,
   buildTradeToExplorePayloadFromFleet,
@@ -40,7 +39,6 @@ import {
   createHubSave,
   parseHubSave,
   normalizeHubSnapshot,
-  importMaterialsIntoHub,
   importYieldBagIntoHub,
   upsertCircuitIntoHub,
   normalizeCircuits,
@@ -62,7 +60,6 @@ import {
 import {
   aggregateCircuitBonuses,
   applyDurabilityBufferToWear,
-  applyRepairDiscountToCost,
   encodeCircuitBonusesCompact,
   parseCircuitBonusesCompact,
   CIRCUIT_OUTCOME_BONUS,
@@ -183,16 +180,17 @@ const tradeUrl = buildSortToTradeUrlFromResult({
   craftMultiplier: 1.05,
 });
 const tradeParsed = parseSortToTradeSearch(new URL(tradeUrl).search);
-assert.equal(tradeParsed?.importMaterials, Math.floor(35 * 1.05));
+assert.equal(tradeParsed?.fromSort, true);
+assert.equal(new URL(tradeUrl).searchParams.get("fromSort"), "1");
+assert.ok(!new URL(tradeUrl).searchParams.has("importMaterials"));
 
 assert.equal(wingmanCountFromMechs(1), 0);
 assert.equal(wingmanCountFromMechs(3), 2);
 
-const hub = importMaterialsIntoHub(INITIAL_HUB, 80);
-assert.equal(hub.materials, INITIAL_HUB.materials + 80);
+const hub = INITIAL_HUB;
 const save = createHubSave(hub);
 assert.equal(save.v, 3);
-assert.equal(parseHubSave(save)?.hub.materials, hub.materials);
+assert.equal("materials" in (parseHubSave(save)?.hub ?? {}), false, "no materials key");
 
 const state = applyPuzzleResult(
   createExpeditionState({
@@ -210,7 +208,6 @@ const state = applyPuzzleResult(
 );
 assert.equal(state.yieldMaterial, 2);
 assert.equal(puzzleInputFromExpedition(state).totalStockPieces, 50);
-assert.equal(importedMaterialsFromResult(state), Math.floor(6 * 1.1));
 
 console.log("shared selftest: ok");
 
@@ -316,7 +313,7 @@ const fleet = [
   }),
 ];
 assert.equal(countDeployable(fleet), 1);
-const scrapped = applyScrap(fleet, "b", { credits: 0, materials: 0 });
+const scrapped = applyScrap(fleet, "b", { credits: 0, junk: 0 });
 assert.ok(scrapped);
 assert.equal(scrapped!.fleet.length, 1);
 assert.equal(scrapped!.fleet[0]!.instanceId, "a");
@@ -545,7 +542,7 @@ const payload = buildSortToTradePayloadFromResult({
   yieldEnergy: 12,
   craftMultiplier: 1,
 });
-assert.equal(payload.importMaterials, 42);
+assert.equal(payload.fromSort, true);
 assert.ok(payload.yieldBag);
 assert.deepEqual(payload.yieldBag, { ammo: 10, armor: 20, power: 12 });
 
@@ -556,13 +553,13 @@ const yieldUrl = buildSortToTradeUrlFromResult({
   craftMultiplier: 1,
 });
 const yieldParsed = parseSortToTradeSearch(new URL(yieldUrl).search);
-assert.equal(yieldParsed?.importMaterials, 42);
+assert.equal(yieldParsed?.fromSort, true);
 assert.equal(yieldParsed?.yieldBag?.armor, 20);
 assert.equal(yieldParsed?.yieldBag?.power, 12);
 
 // v1 URL without yieldBag still parses
 const v1Trade = parseSortToTradeSearch("importMaterials=9&craftMultiplier=1.000");
-assert.equal(v1Trade?.importMaterials, 9);
+assert.equal(v1Trade?.fromSort, true, "old URL still counts as a Sort return");
 assert.equal(v1Trade?.yieldBag, undefined);
 
 // explicit yieldBag on result wins over derivation
@@ -1241,7 +1238,7 @@ console.log("shared hub-circuits selftest: ok");
 
   const depositUrl = buildSortToTradeUrl(
     {
-      importMaterials: 0,
+      fromSort: true,
       craftMultiplier: 1,
       depositUnopenedContainers: 5,
     },
@@ -1249,7 +1246,7 @@ console.log("shared hub-circuits selftest: ok");
   );
   const depositParsed = parseSortToTradeSearch(new URL(depositUrl).search);
   assert.equal(depositParsed?.depositUnopenedContainers, 5);
-  assert.equal(depositParsed?.importMaterials, 0);
+  assert.equal(depositParsed?.fromSort, true);
   assert.ok(
     (HANDOFF_QUERY_KEYS.sortToTrade as readonly string[]).includes(
       "depositUnopenedContainers",
@@ -1672,12 +1669,6 @@ assert.equal(
   assert.ok(mixed.contributingCircuitIds.includes("a"));
   assert.ok(!mixed.contributingCircuitIds.includes("c"));
 
-  const discounted = applyRepairDiscountToCost(
-    { credits: 50, materials: 30 },
-    one,
-  );
-  assert.equal(discounted.credits, Math.ceil(50 * one.repairCostMul));
-  assert.equal(discounted.materials, Math.ceil(30 * one.repairCostMul));
 
   assert.equal(applyDurabilityBufferToWear(35, 10), 25);
   assert.equal(applyDurabilityBufferToWear(5, 10), 0);
@@ -2016,8 +2007,7 @@ console.log("shared circuit-effect selftest: ok");
     hub.fleet.map((m) => [m.instanceId, m.currentAmmo]),
     [["ammo-a", 7], ["ammo-b", 19], ["ammo-c", 3]],
   );
-  assert.equal(hub.ammoLoad.ammo_standard, 11);
-  assert.equal(hub.ammoLoad.ammo_ap, 2);
+  assert.equal("ammoLoad" in hub, false, "ammoLoad left the save");
 
   const roundTrip = parseHubSave(createHubSave(hub));
   assert.ok(roundTrip);
@@ -2025,7 +2015,7 @@ console.log("shared circuit-effect selftest: ok");
     roundTrip!.hub.fleet.map((m) => [m.instanceId, m.currentAmmo]),
     [["ammo-a", 7], ["ammo-b", 19], ["ammo-c", 3]],
   );
-  assert.deepEqual(roundTrip!.hub.ammoLoad, hub.ammoLoad);
+  assert.equal("ammoLoad" in roundTrip!.hub, false);
 
   const legacyMech = normalizeOwnedMech({
     instanceId: "legacy-ammo",

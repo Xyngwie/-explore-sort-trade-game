@@ -2,7 +2,6 @@ import { validateAndConsumeSortHandoff } from "./sort-handoff-guard";
 
 const RESOURCE_KEYS = [
   "yieldBag",
-  "importMaterials",
   "depositUnopenedContainers",
 ];
 

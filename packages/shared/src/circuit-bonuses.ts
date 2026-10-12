@@ -11,7 +11,7 @@ import { isCircuitOutcome } from "./circuit-board";
 export type CircuitOutcomeBonusRow = {
   /** Added to craft multiplier baseline 1.0 (sort / display). */
   craftMultiplierBonus: number;
-  /** Fraction off classic repair credits+materials (0..1). */
+  /** Fraction off classic repair (0..1). The old credits+materials discount helper is gone (fix/hub-save-legacy-retire). */
   repairDiscount: number;
   /** Wear points absorbed on sortie return (per deployed mech). */
   durabilityBuffer: number;
@@ -133,22 +133,6 @@ export function aggregateCircuitBonuses(
   out.craftMultiplier = 1 + out.craftMultiplierBonus;
   out.repairCostMul = 1 - out.repairDiscount;
   return out;
-}
-
-/** Scale classic repair cost by aggregated repairCostMul (ceil, min 0). */
-export function applyRepairDiscountToCost(
-  cost: { credits: number; materials: number },
-  repairDiscountOrBonuses: number | Pick<AggregatedCircuitBonuses, "repairDiscount" | "repairCostMul">,
-): { credits: number; materials: number } {
-  const mul =
-    typeof repairDiscountOrBonuses === "number"
-      ? 1 - clamp01(repairDiscountOrBonuses)
-      : repairDiscountOrBonuses.repairCostMul;
-  const m = Number.isFinite(mul) ? Math.min(1, Math.max(0, mul)) : 1;
-  return {
-    credits: Math.max(0, Math.ceil(cost.credits * m)),
-    materials: Math.max(0, Math.ceil(cost.materials * m)),
-  };
 }
 
 /**

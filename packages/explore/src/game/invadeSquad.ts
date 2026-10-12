@@ -31,7 +31,7 @@ export function invadeSquadSearch(search: string, hub: HubSnapshot | null): stri
   if ((inbound?.deployedInstanceIds ?? []).length > 0) return null;
   const ids = resolveSortieSelection(hub);
   if (ids.length === 0) return null;
-  const payload = buildTradeToExplorePayloadFromFleet(hub.fleet, ammoTotal(hub.ammoLoad), ids);
+  const payload = buildTradeToExplorePayloadFromFleet(hub.fleet, Math.max(0, Math.floor(hub.inventory?.ammo ?? 0)) /* fix/hub-save-legacy-retire: 倉庫の弾（F1 と同じ） */, ids);
   if ((payload.deployedInstanceIds ?? []).length === 0) return null;
   const mechCircuits = buildMechCircuitsForDeploy(hub, payload.deployedInstanceIds ?? []);
   if (Object.keys(mechCircuits).length > 0) payload.mechCircuits = mechCircuits;
