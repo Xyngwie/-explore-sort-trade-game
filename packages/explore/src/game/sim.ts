@@ -1,3 +1,4 @@
+import { tickEnemyTag } from "./enemyIdentity";
 import { decideWingman } from "./brain";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
 import { recoverStrandedDropsAtLiftOff } from "./circuitDrops";
@@ -387,6 +388,7 @@ function updateBoarding(world: World): void {
 function leaderAbortSalvageOnTimeout(world: World): void { for (const u of friendlyUnits(world)) { u.salvageId = null; u.salvageT = 0; } }
 
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
+  tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") return;
   world.elapsed += dt; world.timeLeft = Math.max(0, world.timeLeft - dt);
   if (world.timeLeft <= 0 && !world.operationTimedOut) {
