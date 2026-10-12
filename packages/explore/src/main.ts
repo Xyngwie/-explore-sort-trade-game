@@ -115,6 +115,9 @@ import {
   circuitButtons,
   handleMapTap,
   openWingPalette,
+  captainActive,
+  captainRescuer,
+  wingmanPaletteActions,
   paletteWingmen,
   pressWingPalette,
   refreshStarterCircuit,
@@ -137,6 +140,9 @@ import { refillBeforeSortie } from "./game/preSortieAmmo";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 /** 項目4-1 C8: the captain's 「積載 n/2・速度 N」 in the existing captain HUD line. */
 function leaderLoadHud(world: World): string {
+  // 項目4-2 N2: carrying the captain's wreck, the map tap drives that wingman.
+  const rescuer = captainRescuer(world);
+  if (rescuer) return `${rescuer.name}を操作中（隊長機の残骸を積載）・${loadLineJa(world, rescuer)}`;
   const line = loadLineJa(world, world.leader);
   return inCampAura(world, world.leader) && unitLoad(world, world.leader) <= 0 ? `${line}・軽装キャンプ圏` : line;
 }
@@ -566,11 +572,15 @@ function wingPaletteHtml(): string {
     .map(escapeHtml)
     .join("・");
   const armed = p.pending?.kind === "wing_move";
+  const armedRecover = p.pending?.kind === "wing_recover";
+  const acts = wingmanPaletteActions(world, sel.ids);
   const step = armed
     ? `<span class="wing-palette-hint">地図をタップして地点を指定</span>`
-    : sel.step === "root"
-      ? `<button type="button" class="secondary" data-wing-act="move">移動</button>`
-      : `<button type="button" class="secondary" data-wing-act="point">地点選択</button>`;
+    : armedRecover
+      ? `<span class="wing-palette-hint">回収する残骸かコンテナをタップ</span>`
+      : sel.step === "root"
+        ? acts.map((a) => `<button type="button" class="secondary" data-wing-act="${a.id}">${escapeHtml(a.label)}</button>`).join("")
+        : `<button type="button" class="secondary" data-wing-act="point">地点選択</button>`;
   return `<div class="wing-palette open" role="group" aria-label="僚機">${allBtn}<span class="wing-palette-sel">${names}</span>${step}</div>`;
 }
 
@@ -761,7 +771,7 @@ function directSaveNoteText(res: DirectSaveResult | null): string {
 function renderDom(): void {
   phaseWatch.markRendered(world.phase);
   renderedUnlockSignature = unlockSignature();
-  renderedLeaderAlive = world.leader.alive;
+  renderedLeaderAlive = captainActive(world);
   // U9: record the sortie result before any result button can be pressed.
   const directSave = ensureDirectSave();
   const result = world.phase === "result" ? toExploreResult(world) : null;
@@ -969,7 +979,7 @@ function renderDom(): void {
           ${buildKeyboardShortcutsOverlayHtml({ hidden: isShortcutsOverlayHidden(), isLocked: cmdLocked })}
         </div>
         <div class="row">
-          ${returnOpen() ? `<button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !world.leader.alive ? "disabled" : ""} title="${world.leader.alive ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!world.leader.alive ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>` : ""}
+          ${returnOpen() ? `<button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !captainActive(world) ? "disabled" : ""} title="${captainActive(world) ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!captainActive(world) ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>` : ""}
           ${circuitOrderHtml()}
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
@@ -1143,7 +1153,7 @@ function paintHudOnly(): void {
   const extractBtn = document.getElementById("btn-extract") as HTMLButtonElement | null;
   if (extractBtn) {
     const active = world.boarding != null;
-    const dead = !world.leader.alive;
+    const dead = !captainActive(world);
     extractBtn.disabled = active || timedOut || dead;
     extractBtn.textContent = dead
       ? "大破・帰還要請不可"
@@ -1198,7 +1208,7 @@ function frame(now: number): void {
     // C20-a: squad-level availability can change mid-sortie (only alive
     // wingmen count) → rebuild so hidden / shown commands stay in sync.
     if (unlockSignature() !== renderedUnlockSignature) renderDom();
-    if (world.leader.alive !== renderedLeaderAlive) renderDom();
+    if (captainActive(world) !== renderedLeaderAlive) renderDom();
     if (canvas) {
       const ctx = canvas.getContext("2d");
       if (ctx) renderWorld(ctx, world, canvas.width, canvas.height);
