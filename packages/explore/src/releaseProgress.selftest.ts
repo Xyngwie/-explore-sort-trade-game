@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 /**
  * PR-B (#269, 神宮 10/12 Go): unlock as you progress.
  * - public preview default = release (unlockMode.ts)
@@ -29,6 +30,7 @@ import {
   openWingPalette,
   paletteWingmen,
   pressWingPalette,
+  closeWingPalette,
   effectiveBatteryCapacity,
   issueWingmanMove,
   rangeMul,
@@ -193,7 +195,7 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   assert.equal(usableAmmo(w, w.leader), 28);
 }
 
-// --- N1: wingman palette 「移動」→「地点選択」, then stop and return fire ---
+// --- N1: wingman palette 「移動」 (fix/explore-move-tap-panel: no 「地点選択」 step), then stop and return fire ---
 {
   const none = sortie([falseCap()]);
   assert.deepEqual(wingmanPaletteActions(none, ["wing-a"]), [], "new save: wingmen are turrets, no palette actions");
@@ -201,7 +203,7 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   assert.deepEqual(issueWingmanMove(none, ["wing-a"], { x: 1, y: 1 }), []);
 
   const w = sortie([trueCap(), { ...makeRestoredTrueOneByOne("t-wb"), equippedTo: "wb" }]);
-  assert.deepEqual(wingmanPaletteActions(w, ["wing-a"]), [{ id: "move", label: "移動", next: [{ id: "point", label: "地点選択" }] }]);
+  assert.deepEqual(wingmanPaletteActions(w, ["wing-a"]), [{ id: "move", label: "移動", next: [] }]);
   assert.deepEqual(wingmanPaletteActions(w, ["wing-b"]), [], "autonomous wingman unchanged (no palette)");
   assert.deepEqual(wingmanPaletteActions(w, ["wing-a", "wing-b"]).map((a) => a.id), ["move"], "select-all still offers 移動");
   assert.equal(beginWingmanMovePick(w, ["wing-a", "wing-b"]), true);
@@ -308,15 +310,32 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   assert.deepEqual(w.circuitPlay!.wingSelect, { ids: ["wing-a"], step: "root" });
   assert.equal(handleMapTap(w, { x: wa.pos.x + 200, y: wa.pos.y }, 24), "move", "another tap moves the captain");
   assert.equal(w.circuitPlay!.wingSelect, null, "and closes the palette");
-  // card entry → 移動 → 地点選択 → map tap
+  // fix/explore-move-tap-panel: 3 taps — card (or wingman) → 移動 → map tap
   assert.equal(openWingPalette(w, ["wing-a"]), true);
-  assert.equal(pressWingPalette(w, "point"), false, "「地点選択」 only after 「移動」");
+  assert.equal(pressWingPalette(w, "point"), false, "no 「地点選択」 at the root");
   assert.equal(pressWingPalette(w, "move"), true);
-  assert.equal(pressWingPalette(w, "point"), true);
+  assert.equal(w.circuitPlay!.pending?.kind, "wing_move", "「移動」 arms the map pick at once");
   const dest = { x: wa.pos.x + 40, y: wa.pos.y + 10 };
   assert.equal(handleMapTap(w, dest, 24), "consumed", "the destination tap does not move the captain");
   assert.deepEqual(w.circuitPlay!.wingMove["wing-a"], dest);
   assert.equal(w.circuitPlay!.wingSelect, null, "palette closes after the order");
+  // cancel stays as before: the card (re-open) or another order button drops the armed 移動
+  openWingPalette(w, ["wing-a"]);
+  pressWingPalette(w, "move");
+  openWingPalette(w, ["wing-a"]);
+  assert.equal(w.circuitPlay!.pending, null, "card tap cancels the armed 移動");
+  pressWingPalette(w, "move");
+  beginCircuitButton(w, "air_support");
+  assert.notEqual(w.circuitPlay!.pending?.kind, "wing_move", "another order button cancels the armed 移動");
+  closeWingPalette(w);
+  w.circuitPlay!.pending = null;
+  // an old checkpoint saved mid 「移動」→「地点選択」 (step "move") still works
+  w.circuitPlay!.wingSelect = { ids: ["wing-a"], step: "move" };
+  assert.equal(pressWingPalette(w, "point"), true, "old step: 「地点選択」 still arms");
+  closeWingPalette(w);
+  w.circuitPlay!.wingSelect = { ids: ["wing-a"], step: "move" };
+  assert.equal(pressWingPalette(w, "move"), true, "old step: 「移動」 arms too");
+  closeWingPalette(w);
   // armed designated action takes over (existing cancel: the next tap is consumed)
   openWingPalette(w, ["wing-a"]);
   beginCircuitButton(w, "air_support");
@@ -326,7 +345,6 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   const two = sortie([trueCap()]);
   assert.equal(openWingPalette(two, paletteWingmen(two)), true);
   pressWingPalette(two, "move");
-  pressWingPalette(two, "point");
   const pt = { x: two.leader.pos.x + 60, y: two.leader.pos.y + 60 };
   handleMapTap(two, pt, 24);
   assert.deepEqual(Object.keys(two.circuitPlay!.wingMove).sort(), ["wing-a", "wing-b"], "「全僚機」 orders every wingman");
@@ -335,6 +353,14 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   two.wingmen[0]!.alive = false;
   stepCircuitPlay(two, 0.01);
   assert.equal(two.circuitPlay!.wingSelect, null);
+}
+
+// --- T42 (fix/explore-move-tap-panel): the 操作 panel over the map lets taps through; only its buttons take taps ---
+{
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const block = (sel: string) => css.match(new RegExp(`(^|\\n)${sel.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`))?.[2] ?? "";
+  assert.match(block(".kb-overlay"), /pointer-events:\s*none/, "panel frame: pointer-events none");
+  assert.match(css.match(/\.kb-hide,\s*\.kb-show\s*\{([^}]*)\}/)?.[1] ?? "", /pointer-events:\s*auto/, "panel buttons: auto");
 }
 
 console.log("releaseProgress.selftest ok");

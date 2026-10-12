@@ -406,7 +406,10 @@ button.cover-active {
   background: #0d1014cc;
   backdrop-filter: blur(2px);
   box-shadow: 0 4px 14px #00000055;
-  pointer-events: auto;
+  /* fix/explore-move-tap-panel (T42): the see-through 操作 panel over the map's
+     right edge lets map taps through (wrecks / wingmen under it); only its
+     buttons (隠す / キー) take taps. */
+  pointer-events: none;
   font-size: 0.65rem;
   line-height: 1.25;
   color: #c9d1d9;
@@ -434,6 +437,7 @@ button.cover-active {
 }
 .kb-hide,
 .kb-show {
+  pointer-events: auto;
   appearance: none;
   margin: 0;
   padding: 0.1rem 0.35rem;
