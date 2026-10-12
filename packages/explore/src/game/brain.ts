@@ -7,6 +7,7 @@ import {
 } from "./orders";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { rangeMul, visionMul } from "./circuitPlay";
+import { canTakeContainer } from "./carry";
 import type { Container, Unit, WingmanIntent, World } from "./types";
 
 function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number): Unit | null {
@@ -143,7 +144,10 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       return { ...react, trySalvage: false };
     }
     case "recover": {
-      // No hard carry MAX — keep channeling current crate, else seek next.
+      // 項目4-1 C4: full (cap 2, a wreck fills it) → stop seeking and stay with the leader.
+      if (!canTakeContainer(world, self)) {
+        return { moveTarget: escortOffset(leader, 0), fireAt: enemy && enemyDist < weaponRange ? enemy : null, trySalvage: false };
+      }
       if (self.salvageId) {
         return {
           moveTarget: null,

@@ -43,7 +43,8 @@ import {
 } from "@estg/shared";
 import { COVER_RADIUS, getCoverObjects } from "./coverObjects";
 import { dist, norm, type Vec2 } from "./math";
-import { spawnContainersAt } from "./orders";
+import { pushLog, spawnContainersAt } from "./orders";
+import { LOAD_PER_WRECK, loadLineJa, roomFor, wreckCarrierId } from "./carry";
 import type { Bullet, Unit, World } from "./types";
 import { IDENTITY_ABILITY_SCALE, releaseAbilityScale, type AbilityScale } from "./releaseAbility";
 
@@ -88,8 +89,12 @@ export type CircuitPlayState = {
   /** Last wreck tapped for the existing collect command. Not a save key. */
   collectTap: string | null;
   collectDown: boolean;
-  /** Wreck ids currently in the leader inventory. Not a save key. */
-  carried: string[];
+  /** 項目4-1: wreck spot ids each unit is carrying (unit id → ids). Rides in the 5-3 checkpoint; backfilled from the old leader-only `carried`. */
+  carry: Record<string, string[]>;
+  /** 項目4-1: an 8 s wreck pickup in progress per unit (unit id → wreck id + seconds). */
+  wreckChannel: Record<string, { id: string; t: number }>;
+  /** Pre-4-1 checkpoints: wreck ids in the leader inventory (read once by the backfill). */
+  carried?: string[];
   /** PR-B: release-only nine-ability scale per unit (releaseAbility.ts). Not a save key. */
   ability: Record<string, AbilityScale>;
   /** PR-B N1: point a non-autonomous wingman was ordered to move to. Not a save key. */
@@ -141,7 +146,8 @@ function blank(release: boolean): CircuitPlayState {
     pullOutside: false,
     collectTap: null,
     collectDown: false,
-    carried: [],
+    carry: {},
+    wreckChannel: {},
     ability: {},
     wingMove: {},
     ammoFloor: {},
@@ -365,6 +371,13 @@ export function backfillCircuitPlayState(play: Partial<CircuitPlayState> | null 
   if (!play.ability || typeof play.ability !== "object") play.ability = abilityFromLoadout(play.loadout ?? {});
   if (!play.wingMove || typeof play.wingMove !== "object") play.wingMove = {};
   if (!play.ammoFloor || typeof play.ammoFloor !== "object") play.ammoFloor = {};
+  // 項目4-1: per-unit carry. Old checkpoints only had the leader's `carried` list.
+  if (!play.carry || typeof play.carry !== "object") {
+    const old = Array.isArray(play.carried) ? play.carried.filter((id): id is string => typeof id === "string") : [];
+    play.carry = old.length > 0 ? { leader: old } : {};
+  }
+  delete play.carried;
+  if (!play.wreckChannel || typeof play.wreckChannel !== "object") play.wreckChannel = {};
 }
 
 export function refreshStarterCircuit(hub: HubSnapshot): HubSnapshot {
@@ -944,6 +957,7 @@ export function stepCircuitPlay(world: World, dt: number): void {
   if (!p?.rules) return;
   p.stepDt = dt;
   placeCarried(world);
+  tickWreckPickups(world, dt);
   if (p.cooldownSec > 0) p.cooldownSec = Math.max(0, p.cooldownSec - dt);
   for (const id of Object.keys(p.smg)) {
     const s = p.smg[id]!;
@@ -1262,18 +1276,90 @@ function wreckById(world: World, id: string): WreckSpot | null {
   return wreckSpots(world).find((w) => w.id === id) ?? null;
 }
 
+/** 項目4-1: carried wrecks ride on their carrier; a fallen carrier drops them where it fell (C6). */
 function placeCarried(world: World): void {
   const p = playOf(world);
-  if (!p || p.carried.length === 0) return;
-  const at = world.leader.pos;
-  const next: string[] = [];
-  for (const id of p.carried) {
-    const w = wreckById(world, id);
-    if (!w) continue;
-    w.move(at);
-    next.push(id);
+  if (!p) return;
+  for (const [unitId, ids] of Object.entries(p.carry ?? {})) {
+    const unit = friendlies(world).find((u) => u.id === unitId);
+    if (!unit || !unit.alive) {
+      if (unit && ids.length > 0) pushLog(world, `${unitName(unit)}が大破：積載していた残骸をその場に落とした。`);
+      delete p.carry[unitId];
+      continue;
+    }
+    const next: string[] = [];
+    for (const id of ids) {
+      const w = wreckById(world, id);
+      if (!w) continue;
+      w.move(unit.pos);
+      next.push(id);
+    }
+    if (next.length > 0) p.carry[unitId] = next;
+    else delete p.carry[unitId];
   }
-  p.carried = next;
+}
+
+function unitName(u: Unit): string {
+  return u.kind === "leader" ? "隊長機" : u.name;
+}
+
+/** Drop everything a unit carries where it stands (containers and wrecks). */
+function dropAllCargo(world: World, unit: Unit): void {
+  dropContainerStack(world, unit);
+  const p = playOf(world);
+  if (p?.carry?.[unit.id]) delete p.carry[unit.id];
+}
+
+/** Wrecks someone can pick up: not carried, and not the picker itself. */
+function freeWreckSpots(world: World, picker: Unit): WreckSpot[] {
+  return wreckSpots(world).filter((w) => w.id !== picker.id && wreckCarrierId(world, w.id) == null);
+}
+
+export function wreckChannelOf(world: World, unitId: string): { id: string; t: number } | null {
+  return playOf(world)?.wreckChannel?.[unitId] ?? null;
+}
+
+/** Start the 8 s wreck pickup for a unit (target must be within interactRadius). */
+export function startWreckPickup(world: World, unit: Unit, wreckId: string): "started" | "far" | "taken" | "none" {
+  const p = playOf(world);
+  if (!p || !unit.alive) return "none";
+  const w = wreckById(world, wreckId);
+  if (!w || w.id === unit.id) return "none";
+  if (wreckCarrierId(world, wreckId) != null) return "taken";
+  if (dist(unit.pos, w.pos) > world.balance.interactRadius) return "far";
+  p.wreckChannel[unit.id] = { id: wreckId, t: 0 };
+  unit.salvageId = null;
+  unit.salvageT = 0;
+  return "started";
+}
+
+/** 8 s channel; moving out of interactRadius cancels it. On completion the #269 swap makes room. */
+function tickWreckPickups(world: World, dt: number): void {
+  const p = playOf(world);
+  if (!p) return;
+  for (const [unitId, ch] of Object.entries(p.wreckChannel ?? {})) {
+    const unit = friendlies(world).find((u) => u.id === unitId);
+    const w = wreckById(world, ch.id);
+    if (!unit || !unit.alive || !w || wreckCarrierId(world, ch.id) != null || dist(unit.pos, w.pos) > world.balance.interactRadius) {
+      if (unit?.alive && w && wreckCarrierId(world, ch.id) == null) pushLog(world, `${unitName(unit)}：残骸の回収を中断（離れた）。`);
+      delete p.wreckChannel[unitId];
+      continue;
+    }
+    ch.t += dt;
+    if (ch.t < COLLECT_SECONDS) continue;
+    delete p.wreckChannel[unitId];
+    // #269: holding containers, taking a wreck drops the containers in place. When a
+    // wreck still does not fit (already carrying one), drop the whole inventory too.
+    if (roomFor(world, unit) < LOAD_PER_WRECK) dropContainerStack(world, unit);
+    if (roomFor(world, unit) < LOAD_PER_WRECK) {
+      const held = p.carry[unitId] ?? [];
+      if (held.length > 0) pushLog(world, `${unitName(unit)}：積載していた残骸をその場に降ろした。`);
+      delete p.carry[unitId];
+    }
+    p.carry[unitId] = [...(p.carry[unitId] ?? []), ch.id];
+    w.move(unit.pos);
+    pushLog(world, `${unitName(unit)}：残骸を積載（${loadLineJa(world, unit)}）。`);
+  }
 }
 
 function dropContainerStack(world: World, unit: Unit): void {
@@ -1288,11 +1374,6 @@ function dropContainerStack(world: World, unit: Unit): void {
   for (const c of spawned) c.glowT = glow;
 }
 
-function nearbySalvageTarget(world: World, unit: Unit): boolean {
-  return world.containers.some(
-    (c) => c.discovered && !c.taken && dist(unit.pos, c.pos) < world.balance.interactRadius,
-  );
-}
 
 /** Map tap used by the existing collect command. A miss clears the wreck tap. */
 export function noteCollectTap(world: World, pt: Vec2): void {
@@ -1311,31 +1392,42 @@ export function noteCollectTap(world: World, pt: Vec2): void {
 }
 
 /**
- * Collect press. Holding a container and a wreck tap drops that container stack
- * and takes the wreck. No tap and no nearby salvage target drops the whole
- * inventory in place. A nearby target keeps the existing salvage channel.
+ * Collect press (#269 + 項目4-1). A tapped wreck within interactRadius starts the
+ * 8 s pickup — empty-handed too; holding containers they are dropped when the wreck
+ * goes in (#269 swap). Without a tap the nearest cargo is taken: a container keeps
+ * the normal salvage channel, a wreck starts the 8 s pickup. Nothing near: drop the
+ * whole inventory in place.
  */
 export function applyCollectPress(world: World): void {
   const p = playOf(world);
   if (!p || !releaseOn(world) || !world.leader.alive) return;
   const leader = world.leader;
   const tap = p.collectTap;
-  const wreck = tap ? wreckById(world, tap) : null;
-  if (tap && wreck && leader.salvagedCount > 0) {
-    dropContainerStack(world, leader);
-    if (!p.carried.includes(tap)) p.carried.push(tap);
-    wreck.move(leader.pos);
-    p.collectTap = null;
-    return;
-  }
   if (tap) {
-    if (!wreck) p.collectTap = null;
+    const wreck = wreckById(world, tap);
+    if (!wreck || wreck.id === leader.id) { p.collectTap = null; return; }
+    const r = startWreckPickup(world, leader, tap);
+    if (r === "far") { pushLog(world, "残骸が遠い。近づいてから回収。"); return; }
+    p.collectTap = null;
+    if (r === "taken") { pushLog(world, "その残骸は積載中。"); return; }
+    if (r === "started") pushLog(world, `残骸を回収中（${COLLECT_SECONDS}秒）。`);
     return;
   }
-  if (nearbySalvageTarget(world, leader)) return;
-  dropContainerStack(world, leader);
-  placeCarried(world);
-  p.carried = [];
+  const radius = world.balance.interactRadius;
+  let crateD = Infinity;
+  for (const c of world.containers) if (c.discovered && !c.taken) crateD = Math.min(crateD, dist(leader.pos, c.pos));
+  let near: WreckSpot | null = null;
+  let wreckD = Infinity;
+  for (const w of freeWreckSpots(world, leader)) {
+    const d = dist(leader.pos, w.pos);
+    if (d < wreckD) { wreckD = d; near = w; }
+  }
+  if (near && wreckD <= radius && wreckD < crateD) {
+    if (startWreckPickup(world, leader, near.id) === "started") pushLog(world, `残骸を回収中（${COLLECT_SECONDS}秒）。`);
+    return;
+  }
+  if (crateD < radius) return;
+  dropAllCargo(world, leader);
 }
 
 export function focusTarget(world: World, unit: Unit): Unit | null {

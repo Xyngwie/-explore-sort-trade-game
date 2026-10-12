@@ -1017,25 +1017,19 @@ function advancePinned(
   assert.ok(raidBan!.includes("敵セル 1"));
 }
 
-// --- cargo slowdown scales with salvagedCount / soft ref (no hard MAX) ---
+// --- 項目4-1: speed by load (120/75/60/45/30/15/0 as a ratio of load 0) ---
 {
   const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
   const leader = world.leader;
-  const ref = BALANCE.cargoSpeedRefSlots;
-  assert.ok(Math.abs(cargoSpeedMul(leader, world.balance) - 1) < 1e-9);
-  leader.salvagedCount = ref;
-  assert.ok(
-    Math.abs(cargoSpeedMul(leader, world.balance) - BALANCE.cargoSpeedMulMin) < 1e-9,
-  );
-  leader.salvagedCount = ref / 2;
-  const mid = cargoSpeedMul(leader, world.balance);
-  assert.ok(mid < 1 && mid > BALANCE.cargoSpeedMulMin);
-  // Beyond soft ref still allowed (no hard MAX) and stays at min mul
-  leader.salvagedCount = ref * 5;
-  assert.ok(
-    Math.abs(cargoSpeedMul(leader, world.balance) - BALANCE.cargoSpeedMulMin) < 1e-9,
-  );
+  const ref = 2;
+  const table = [120, 75, 60, 45, 30, 15, 0];
+  for (let load = 0; load <= 6; load++) {
+    leader.salvagedCount = load;
+    assert.ok(Math.abs(cargoSpeedMul(leader, world) - table[load]! / 120) < 1e-9, `load ${load}`);
+  }
+  leader.salvagedCount = 9;
+  assert.equal(cargoSpeedMul(leader, world), 0, "load ≥ 6 stops");
 
   for (const e of world.enemies) {
     e.alive = false;
@@ -1091,7 +1085,7 @@ function advancePinned(
   assert.equal(world.camp!.stashedCount, 2);
   assert.equal(world.leader.salvagedCount, 0);
   assert.equal(world.salvaged, 2); // accounting unchanged
-  assert.ok(Math.abs(cargoSpeedMul(world.leader, world.balance) - 1) < 1e-9);
+  assert.ok(Math.abs(cargoSpeedMul(world.leader, world) - 1) < 1e-9);
 
   // Far relocate denied while stash remains
   world.leader.pos = { x: 100, y: 100 };
@@ -1245,7 +1239,7 @@ function advancePinned(
 
 
 
-// --- unlimited carry: salvaged beyond soft ref / former MAX ---
+// --- 項目4-1 C4: the load cap (2) applies to containers too ---
 {
   const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
@@ -1259,9 +1253,9 @@ function advancePinned(
   crate.taken = false;
   clearCoverNear(world, crate.pos);
   world.leader.pos = { ...crate.pos };
-  world.leader.salvagedCount = BALANCE.cargoSpeedRefSlots + 3;
+  world.leader.salvagedCount = 2;
   world.salvaged = world.leader.salvagedCount;
-  // Must still be able to channel another crate (no hard gate)
+  // Full: the crate is not taken
   for (let i = 0; i < 50; i++) {
     tickWorld(world, 0.1, {
       move: { x: 0, y: 0 },
@@ -1271,8 +1265,16 @@ function advancePinned(
     });
     if (crate.taken) break;
   }
-  assert.equal(crate.taken, true);
-  assert.ok(world.leader.salvagedCount > BALANCE.cargoSpeedRefSlots + 3);
+  assert.equal(crate.taken, false, "full (2/2): no third container");
+  assert.equal(world.leader.salvagedCount, 2);
+  world.leader.salvagedCount = 1;
+  world.salvaged = 1;
+  for (let i = 0; i < 50; i++) {
+    tickWorld(world, 0.1, { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: true });
+    if (crate.taken) break;
+  }
+  assert.equal(crate.taken, true, "1/2: one more container fits");
+  assert.equal(world.leader.salvagedCount, 2);
 }
 
 // --- escape-circle recovers ALL ground containers inside boarding circle ---

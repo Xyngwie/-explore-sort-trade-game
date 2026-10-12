@@ -41,6 +41,9 @@ import {
   tryDodge,
 } from "./circuitPlay";
 import type { Bullet, Unit, World } from "./types";
+import { wreckChannelOf } from "./circuitPlay";
+import { canTakeContainer } from "./carry";
+import { dropUnitCargoToField } from "./orders";
 
 export { isOperationTimedOut } from "./orders";
 
@@ -194,6 +197,12 @@ function updateBullets(world: World, dt: number): void {
 function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): void {
   if (!unit.alive) return;
   if (!want && !unit.salvageId) return;
+  // 項目4-1: no container pickup while an 8 s wreck pickup runs, or when full (C4).
+  if (wreckChannelOf(world, unit.id) || !canTakeContainer(world, unit)) {
+    unit.salvageId = null;
+    unit.salvageT = 0;
+    return;
+  }
   let crate = unit.salvageId
     ? world.containers.find((c) => c.id === unit.salvageId)
     : world.containers.find((c) => c.discovered && !c.taken && dist(unit.pos, c.pos) < world.balance.interactRadius);
@@ -434,7 +443,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);
     const intent = decideWingman(world, w, dt);
-    const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.wingmanSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed);
+    const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.moveSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed /* 項目4-1: load 0 is 120 for wingmen too (2026-10-07 7:36 神宮) */);
     w.moveTarget = timedOut ? null : cruise.target;
     if (timedOut) w.vel = { x: 0, y: 0 };
     else moveToward(w, w.moveTarget, cruise.speed, dt, world);
@@ -446,6 +455,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (!timedOut && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage, dt);
   }
   updateEnemies(world, dt); updateBullets(world, dt); revealVision(world);
+  // 項目4-1 C6: a destroyed carrier drops its containers on the spot (wrecks: circuitPlay placeCarried).
+  for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
   // A wipe during this tick rescues before a boarding circle can lift off (6A),

@@ -2075,7 +2075,7 @@ console.log("shared circuit-effect selftest: ok");
   const deployUrl = buildTradeToExploreUrl(deploy);
   const deployParsed = parseTradeToExploreSearch(new URL(deployUrl).search);
   assert.deepEqual(deployParsed?.mechCurrentAmmo, deploy.mechCurrentAmmo);
-  assert.equal(new URL(deployUrl).searchParams.has("startingAmmo"), false);
+  assert.equal(new URL(deployUrl).searchParams.has("startingAmmo"), true, "F1 (項目4-1): the stock is always sent (display only)");
 
   const returnPayload = toExploreToHubWearPayload(
     "extract",

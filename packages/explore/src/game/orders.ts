@@ -1,4 +1,5 @@
 import { circuitIncomingMul } from "./circuitPlay";
+import { loadSpeedRatio, roomFor, unitLoad } from "./carry";
 import { clamp, dist } from "./math";
 import type { Balance } from "./balance";
 import type { Container, Stance, Unit, World } from "./types";
@@ -105,9 +106,12 @@ export function onSalvageCompleted(world: World, unit: Unit): void {
   else pushLog(world, `${unit.name}：コンテナ回収完了。`);
 }
 
-export function cargoSpeedMul(unit: Unit, balance: Balance): number {
-  const ref = Math.max(1, balance.cargoSpeedRefSlots); const load = Math.min(1, Math.max(0, unit.salvagedCount / ref));
-  return 1 - load * (1 - balance.cargoSpeedMulMin);
+/**
+ * 項目4-1: speed by load (container 1, wreck 2) from the table 120/75/60/45/30/15/0,
+ * as a ratio of the load-0 speed (replaces the old slowdown down to ×0.45).
+ */
+export function cargoSpeedMul(unit: Unit, world: World): number {
+  return loadSpeedRatio(unitLoad(world, unit));
 }
 
 export function inCampAura(world: World, unit: Unit): boolean {
@@ -145,8 +149,8 @@ function applyCoverToMoveTarget(unit: Unit, world: World): void {
 
 export function unitMoveSpeedMul(unit: Unit, world: World): number {
   applyCoverToMoveTarget(unit, world);
-  let mul = cargoSpeedMul(unit, world.balance);
-  if (unit.salvagedCount <= 0 && inCampAura(world, unit)) mul *= world.balance.campLightSpeedMul;
+  let mul = cargoSpeedMul(unit, world);
+  if (unitLoad(world, unit) <= 0 && inCampAura(world, unit)) mul *= world.balance.campLightSpeedMul;
   return mul;
 }
 
@@ -229,7 +233,8 @@ export function pickUpFromCamp(world: World): "picked" | "denied" {
   if (camp.stashedCount <= 0) { pushLog(world, "キャンプに貨物なし。"); return "denied"; }
   let taken = 0; const near = friendliesNear(world, camp.pos, r);
   const order = [...near.filter((u) => u.kind === "leader"), ...near.filter((u) => u.kind !== "leader")];
-  for (const u of order) { if (camp.stashedCount <= 0) break; const n = camp.stashedCount; u.salvagedCount += n; camp.stashedCount = 0; taken += n; }
+  // 項目4-1 C4: each mech takes only what fits under its load cap.
+  for (const u of order) { if (camp.stashedCount <= 0) break; const n = Math.min(camp.stashedCount, roomFor(world, u)); if (n <= 0) continue; u.salvagedCount += n; camp.stashedCount -= n; taken += n; }
   if (taken <= 0) { pushLog(world, "付近に積込可能な友軍なし。"); return "denied"; }
   pushLog(world, `キャンプから積込：${taken}（残置場 ${camp.stashedCount}）。`); return "picked";
 }
@@ -251,7 +256,7 @@ export function spawnContainersAt(world: World, at: { x: number; y: number }, co
   return spawned;
 }
 
-function dropUnitCargoToField(world: World, unit: Unit): number { const n = unit.salvagedCount; if (n <= 0) return 0; abortSalvage(unit); unit.salvagedCount = 0; world.salvaged = Math.max(0, world.salvaged - n); const spawned = spawnContainersAt(world, unit.pos, n, { discovered: true, idPrefix: "purge" }); const glow = world.balance.deathDropGlowSec; for (const c of spawned) c.glowT = glow; return n; }
+export function dropUnitCargoToField(world: World, unit: Unit): number { const n = unit.salvagedCount; if (n <= 0) return 0; abortSalvage(unit); unit.salvagedCount = 0; world.salvaged = Math.max(0, world.salvaged - n); const spawned = spawnContainersAt(world, unit.pos, n, { discovered: true, idPrefix: "purge" }); const glow = world.balance.deathDropGlowSec; for (const c of spawned) c.glowT = glow; return n; }
 
 export function purgeCargo(world: World): "purged" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";

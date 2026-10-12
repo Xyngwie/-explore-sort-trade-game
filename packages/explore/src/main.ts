@@ -1,4 +1,5 @@
 import "./style.css";
+import { loadLineJa, unitLoad } from "./game/carry";
 import {
   CTA_CHIP,
   ammoShortLineJa,
@@ -134,6 +135,12 @@ import { resortiePlan, resortieSearch } from "./game/resortie";
 import { refillBeforeSortie } from "./game/preSortieAmmo";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
+/** 項目4-1 C8: the captain's 「積載 n/2・速度 N」 in the existing captain HUD line. */
+function leaderLoadHud(world: World): string {
+  const line = loadLineJa(world, world.leader);
+  return inCampAura(world, world.leader) && unitLoad(world, world.leader) <= 0 ? `${line}・軽装キャンプ圏` : line;
+}
+
 /** HubSave as it is now (null without a save / storage). */
 function freshHub(): HubSnapshot | null {
   try {
@@ -463,7 +470,7 @@ function sortieHelpText(): string {
     squadKeys.length === 0
       ? ""
       : `僚機方針は ${squadKeys.length === SQUAD_ORDER_KEYS.length ? "1–4" : squadKeys.join("・")}。`;
-  return `未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載に上限なし（多いほど遅延）。${keys}。${timeUpHelpSentence(isCampUnlocked(cmdLocked))}マップ上端の帰還 HUD。${squad}僚機に軽い癖（密着／囮／遠射）。`;
+  return `未発見コンテナは非表示。発見後に黄四角。敵撃破ドロップは発光＋DROP 表示。積載の上限は 2（コンテナ 1・残骸 2）。積むほど遅くなる。${keys}。${timeUpHelpSentence(isCampUnlocked(cmdLocked))}マップ上端の帰還 HUD。${squad}僚機に軽い癖（密着／囮／遠射）。`;
 }
 
 function debugUnlockToggleHtml(): string {
@@ -705,7 +712,7 @@ function wingPanelHtml(): string {
         <div class="wing-hp${hpPulse}" role="meter" aria-label="HP" aria-valuenow="${Math.max(0, Math.ceil(w.hp))}" aria-valuemin="0" aria-valuemax="${w.maxHp}">
           <div class="wing-hp-fill" style="width:${hpPct.toFixed(1)}%"></div>
         </div>
-        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · 積載 ${w.salvagedCount}${quirk}${cover}</div>
+        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · <span class="wing-load">${escapeHtml(loadLineJa(world, w))}</span>${quirk}${cover}</div>
         ${orderRow}
       </div>`;
     })
@@ -779,8 +786,9 @@ function renderDom(): void {
         ${invadeBannerHtml}
         <table>
           <tr><td>僚機</td><td>${world.wingmen.length}</td></tr>
-          <tr><td>積載上限</td><td>なし（速度で制約）</td></tr>
-          <tr><td>実弾</td><td>${world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)))}</td></tr>
+          <tr><td>積載上限</td><td>2（コンテナ 1・残骸 2）</td></tr>
+          <tr><td>実弾</td><td id="briefing-ammo-stock">${world.ammoStock}</td></tr>
+          <tr><td>隊長の携行弾</td><td>${world.leader.instanceId == null ? "—" : (world.currentAmmo[world.leader.instanceId] == null ? "—" : String(usableAmmo(world, world.leader)))}</td></tr>
           <tr><td>活動限界</td><td>${world.maxOperationTimeSec}s</td></tr>
           <tr><td>I/O v2 ids</td><td>${world.deployedInstanceIds.length ? world.deployedInstanceIds.join(", ") : "（なし・件数互換）"}</td></tr>
           <tr><td>戦線セクター</td><td>${
@@ -931,13 +939,7 @@ function renderDom(): void {
       ? `貨物 ${cargoEta.toFixed(1)}s / 離昇 ${(liftEta ?? 0).toFixed(1)}s`
       : `貨物到着 · 離昇 ${(liftEta ?? 0).toFixed(1)}s`
     : "待機（どこでも要請可）";
-  const speedMul = unitMoveSpeedMul(world.leader, world);
-  const speedHud =
-    speedMul >= 0.999
-      ? inCampAura(world, world.leader)
-        ? "速度 軽装キャンプ圏"
-        : "速度 100%"
-      : `速度 ${Math.round(speedMul * 100)}%（積載遅延）`;
+  const speedHud = leaderLoadHud(world);
   const campHud = campHudText(world, isCampUnlocked(cmdLocked));
   const coverHud = world.leader.inCover ? "カバー ON" : "カバー OFF";
   root.innerHTML = `
@@ -1156,13 +1158,7 @@ function paintHudOnly(): void {
 
   const speedEl = document.getElementById("hud-speed");
   if (speedEl) {
-    const mul = unitMoveSpeedMul(world.leader, world);
-    speedEl.textContent =
-      mul >= 0.999
-        ? inCampAura(world, world.leader)
-          ? "速度 軽装キャンプ圏"
-          : "速度 100%"
-        : `速度 ${Math.round(mul * 100)}%（積載遅延）`;
+    speedEl.textContent = leaderLoadHud(world);
   }
   const campEl = document.getElementById("hud-camp");
   if (campEl) {
