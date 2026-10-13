@@ -143,21 +143,22 @@ function placeContainers(): Container[] {
 function placeEnemies(
   spawn: { x: number; y: number },
   threat: DensityThreat,
+  n: number,
 ): Unit[] {
   const count = Math.max(1, threat.enemyCount);
   const enemies: Unit[] = [];
   const margin = 40;
   for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count + 0.35;
+    const angle = (Math.PI * 2 * i) / count + Math.random()*Math.PI*2;
     const raw = {
       x: spawn.x + Math.cos(angle) * threat.spawnDist,
       y: spawn.y + Math.sin(angle) * threat.spawnDist,
     };
     const pos = clampToWorld(raw.x, raw.y, margin);
-    const hp = Math.max(1, Math.round(BALANCE.enemyHp * (threat.enemyHpMul ?? 1)));
+    const hp = Math.max(1, Math.round(BALANCE.enemyHp));
     enemies.push(
       makeUnit({
-        id: `enemy-${i}`,
+        id: `enemy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${i}`,
         kind: "enemy",
         name: `敵${i + 1}`,
         pos,
@@ -169,7 +170,7 @@ function placeEnemies(
         capacity: 0,
       }),
     );
-    enemies[enemies.length - 1]!.enemyIdentity = makeEnemyIdentity(enemies[enemies.length - 1]!);
+    enemies[enemies.length - 1]!.enemyIdentity = makeEnemyIdentity(enemies[enemies.length - 1]!, Math.random, n);
   }
   return enemies;
 }
@@ -372,7 +373,7 @@ export function createWorld(boot: SortieBootstrap): World {
     maxOperationTimeSec: boot.maxOperationTimeSec,
     leader,
     wingmen,
-    enemies: placeEnemies(spawn, threat),
+    enemies: placeEnemies(spawn, threat, boot.invadeSector?.neighborCount ?? 0),
     containers: placeContainers(),
     extract: { pos: vec(160, 480), radius: 48 },
     boarding: null,
@@ -442,6 +443,10 @@ export function createWorld(boot: SortieBootstrap): World {
 }
 
 export function startSortie(world: World): void {
+  world.enemies = placeEnemies(world.leader.pos, world.densityThreat, world.invadeSector?.neighborCount ?? 0);
+  world.enemySupplies = [];
+  world.recallSpawns = undefined;
+  world.recoveredEnemyUnits = [];
   world.phase = "sortie";
   world.timeLeft = world.maxOperationTimeSec;
   world.operationTimedOut = false;

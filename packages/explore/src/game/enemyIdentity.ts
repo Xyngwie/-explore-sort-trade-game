@@ -1,35 +1,61 @@
-/**
- * Enemy PR1 (feat/enemy-id-stats, CIRCUIT_SQUAD_DESIGN_V0 §11 E1 = C / F1 = B):
- * each enemy carries a model number, durability and false-board circuit data.
- * Data only — no behaviour (PR2). The UI shows only 「所属不明」 (tap and info
- * panel); circuit contents stay hidden until brought home (E4, PR4).
- *
- * Decided 2026-10-12 23:48 神宮 (CIRCUIT_SQUAD_DESIGN_V0 §11.2a, all A): every enemy is `mech_gen1`;
- * durability = the enemy's current HP (no balance change); one 2×2 false-board
- * circuit with a random false-board effect type, effect value 0 (no effect yet).
- */
+/** Enemy identity: independently sampled per sortie. Circuit strength follows
+ * the Invade cell number; contents stay hidden until the wreck comes home.
+ * Existing checkpoint identities are kept, not rerolled on resume. */
 import { FALSE_BOARD_EFFECT_KEYS, type MechId } from "@estg/shared";
 import type { Unit, World } from "./types";
 
 export const ENEMY_UNKNOWN_JA = "所属不明";
 export const ENEMY_TAG_SEC = 3;
 
-export type EnemyCircuitData = { circuitId: string; side: number; effectKey: string; effect: number; trueBoard: false };
-export type EnemyIdentity = { modelId: MechId; durability: number; circuits: EnemyCircuitData[] };
+export type EnemyCircuitData = {
+  circuitId: string;
+  side: number;
+  effectKey: string;
+  effect: number;
+  trueBoard: false;
+};
+export type EnemyIdentity = {
+  modelId: MechId;
+  durability: number;
+  circuits: EnemyCircuitData[];
+};
 
-export function makeEnemyIdentity(unit: Pick<Unit, "id" | "maxHp">, rng: () => number = Math.random): EnemyIdentity {
-  const key = FALSE_BOARD_EFFECT_KEYS[Math.floor(rng() * FALSE_BOARD_EFFECT_KEYS.length) % FALSE_BOARD_EFFECT_KEYS.length]!;
+export function makeEnemyIdentity(
+  unit: Pick<Unit, "id" | "maxHp">,
+  rng: () => number = Math.random,
+  n = 0,
+): EnemyIdentity {
+  const tier = Math.floor(Math.min(8, Math.max(0, n)) / 3);
+  const nonce = `${Date.now().toString(36)}-${rng().toString(36).slice(2)}-${unit.id}`;
   return {
     modelId: "mech_gen1",
     durability: Math.max(1, Math.round(unit.maxHp)),
-    circuits: [{ circuitId: `enemy-circ-${unit.id}`, side: 2, effectKey: key, effect: 0, trueBoard: false }],
+    circuits: Array.from({ length: 1 + tier }, (_, i) => ({
+      circuitId: `enemy-circ-${nonce}-${i}`,
+      side: 2 + tier,
+      effectKey:
+        FALSE_BOARD_EFFECT_KEYS[
+          Math.floor(rng() * FALSE_BOARD_EFFECT_KEYS.length) %
+            FALSE_BOARD_EFFECT_KEYS.length
+        ]!,
+      effect: (2 + tier) ** 2 * (0.3 + rng() * 0.7),
+      trueBoard: false as const,
+    })),
   };
 }
 
 /** Old checkpoints (no identity on enemies) get one on load; existing ones are kept. */
-export function backfillEnemyIdentities(world: World, rng: () => number = Math.random): void {
+export function backfillEnemyIdentities(
+  world: World,
+  rng: () => number = Math.random,
+): void {
   for (const e of world.enemies ?? []) {
-    if (e.kind === "enemy" && !e.enemyIdentity) e.enemyIdentity = makeEnemyIdentity(e, rng);
+    if (e.kind === "enemy" && !e.enemyIdentity)
+      e.enemyIdentity = makeEnemyIdentity(
+        e,
+        rng,
+        world.invadeSector?.neighborCount ?? 0,
+      );
   }
 }
 
@@ -39,13 +65,21 @@ export function enemyDisplayNameJa(_e: Unit): string {
 }
 
 /** Nearest live enemy within `max` of `pt` (only ones the squad can see). */
-export function enemyAt(world: World, pt: { x: number; y: number }, max: number, seen: (e: Unit) => boolean): Unit | null {
+export function enemyAt(
+  world: World,
+  pt: { x: number; y: number },
+  max: number,
+  seen: (e: Unit) => boolean,
+): Unit | null {
   let best: Unit | null = null;
   let bd = max;
   for (const e of world.enemies) {
     if (!e.alive || !seen(e)) continue;
     const d = Math.hypot(e.pos.x - pt.x, e.pos.y - pt.y);
-    if (d <= bd) { bd = d; best = e; }
+    if (d <= bd) {
+      bd = d;
+      best = e;
+    }
   }
   return best;
 }

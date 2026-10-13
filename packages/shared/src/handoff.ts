@@ -1,3 +1,4 @@
+import { parseEnemyWrecks, type EnemyWreckReturn } from "./enemy-wreck-return";
 import {
   PIECES_PER_CONTAINER,
   resolveModuleBaseUrl,
@@ -219,6 +220,7 @@ export function parseMechCircuitsCompact(
 
 /** explore → hub wear return (salvage still goes explore → sort). */
 export type ExploreToHubWearPayload = {
+  enemyWrecks?: EnemyWreckReturn[];
   returnKind: SortieReturnKind;
   mechWear: Array<{ instanceId: string; durabilityAfter: number }>;
   /** Canonical per-instance carried ammo snapshot on return. */
@@ -835,6 +837,7 @@ export function buildExploreToHubWearUrl(
 ): string {
   const u = new URL(baseUrl);
   u.searchParams.set("returnKind", payload.returnKind);
+  if (payload.enemyWrecks?.length) u.searchParams.set("enemyWrecks", JSON.stringify(payload.enemyWrecks));
   u.searchParams.set("mechWear", encodeMechWearCompact(payload.mechWear));
   if (payload.mechCurrentAmmo && payload.mechCurrentAmmo.length > 0) {
     const encodedAmmo = encodeMechCurrentAmmoCompact(payload.mechCurrentAmmo);
@@ -885,6 +888,7 @@ export function parseExploreToHubWearSearch(
   const mechCurrentAmmo = parseMechCurrentAmmoCompact(p.get("mechCurrentAmmo"));
   const mechBattery = parseMechBatteryCompact(p.get("mechBattery"));
   return {
+    enemyWrecks: parseEnemyWrecks(p.get("enemyWrecks")),
     returnKind: kindRaw,
     mechWear: parseMechWearCompact(p.get("mechWear")),
     ...(mechCurrentAmmo.length > 0 ? { mechCurrentAmmo } : {}),

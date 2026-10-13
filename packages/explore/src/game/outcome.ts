@@ -1,3 +1,4 @@
+import { enemyWreckReturns } from "./enemyRecovery";
 import {
   applyDurabilityBufferToWear,
   buildExploreToHubWearUrl,
@@ -276,6 +277,7 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
         : {}),
     },
   );
+  payload.enemyWrecks = enemyWreckReturns(world);
   return payload;
 }
 

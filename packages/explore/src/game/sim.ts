@@ -1,3 +1,4 @@
+import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
 import { decideWingman } from "./brain";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
@@ -111,7 +112,7 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
     pos: { ...from.pos },
     vel: { x: dir.x * speed, y: dir.y * speed },
     ttl: world.balance.bulletTtlSec,
-    damage: fromEnemy ? world.balance.enemyDamage : world.balance.bulletDamage * attackMul(world, from.id),
+    damage: fromEnemy ? world.balance.enemyDamage * enemyDamageMultiplier(from) : world.balance.bulletDamage * attackMul(world, from.id),
     fromEnemy,
     ownerId: from.id,
   };
@@ -120,10 +121,22 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
 
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): void {
   if (!from.alive || !target.alive) return;
-  if (!fromEnemy && circuitTryWeapon(world, from, target)) return;
+  if (fromEnemy && from.cooldown > 0) return;
+  if (fromEnemy) {
+    from.instanceId = from.id;
+    world.currentAmmo[from.id] = from.enemyState?.ammo ?? 0;
+  }
+  if (circuitTryWeapon(world, from, target)) {
+    if (fromEnemy && from.enemyState) from.enemyState.ammo = world.currentAmmo[from.id] ?? 0;
+    return;
+  }
   if (from.cooldown > 0) return;
-  const range = world.balance.weaponRange * (fromEnemy ? 1 : rangeMul(world, from.id));
+  const range = world.balance.weaponRange * (fromEnemy ? 1 + enemyRate(from,"escort_range") : rangeMul(world, from.id));
   if (dist(from.pos, target.pos) > range) return;
+  if (fromEnemy) {
+    if (!from.enemyState || from.enemyState.ammo <= 0) return;
+    from.enemyState.ammo -= 1;
+  }
   if (!fromEnemy) {
     if (from.instanceId == null) return;
     const currentAmmo = world.currentAmmo[from.instanceId];
@@ -152,11 +165,11 @@ function updateBullets(world: World, dt: number): void {
     bendHoming(world, b, dt);
     b.pos.x += b.vel.x * dt;
     b.pos.y += b.vel.y * dt;
-    const targets = b.fromEnemy ? friendlyUnits(world) : world.enemies;
+    const targets = b.fromEnemy ? [...friendlyUnits(world), ...world.enemies].filter(u => u.id !== b.ownerId) : world.enemies;
     for (const t of targets) {
       if (!t.alive) continue;
       if (dist(b.pos, t.pos) <= t.radius + world.balance.bulletHitPadding) {
-        if (b.fromEnemy && tryDodge(world, t, b)) continue;
+        if (tryDodge(world, t, b)) continue;
         b.alive = false;
         const shooter = b.fromEnemy
           ? world.enemies.find((u) => u.id === b.ownerId)
@@ -169,12 +182,13 @@ function updateBullets(world: World, dt: number): void {
           }
         }
         let hitDmg = b.damage;
-        if (b.fromEnemy) {
+        if (b.fromEnemy && t.kind !== "enemy") {
           hitDmg *= campDamageTakenMul(world, t);
           world.combatHitsTaken += 1;
         }
         noteEmpHit(world, t, b);
         if (!b.fromEnemy) noteDamageBreaksSuppress(world, t);
+        if (t.kind === "enemy") hitDmg /= enemyArmorMultiplier(t);
         t.hp -= hitDmg;
         if (t.kind === "wingman" && t.alive) t.hitWarnT = world.balance.wingHitWarnSec;
         if (t.hp <= 0) {
@@ -184,7 +198,7 @@ function updateBullets(world: World, dt: number): void {
             ? "敵"
             : friendlyUnits(world).find((u) => u.id === b.ownerId)?.name ?? "分隊";
           reportBattle(world, `${killer} が ${t.name} を撃破`, t.pos);
-          if (t.kind === "enemy") spawnEnemyDeathDrops(world, t.pos);
+          if (t.kind === "enemy") handleEnemyDeaths(world);
         } else if (!inCamera(world, t.pos) || !inCamera(world, b.pos)) {
           reportBattle(world, `${t.name} が被弾 (−${Math.round(hitDmg)})`, t.pos);
         }
@@ -226,41 +240,25 @@ function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): voi
   }
 }
 
-function updateEnemies(world: World, dt: number): void {
+export function updateEnemies(world: World, dt: number): void {
+  backfillEnemyState(world);
   for (const e of world.enemies) {
     if (!e.alive) continue;
     e.cooldown = Math.max(0, e.cooldown - dt);
-    let nearest: Unit | null = null;
-    let best = Infinity;
-    for (const u of friendlyUnits(world)) {
-      if (!u.alive) continue;
-      const d = dist(e.pos, u.pos);
-      if (d < best) {
-        best = d;
-        nearest = u;
-      }
-    }
-    if (!nearest) continue;
-    const emp = enemyEmpMul(world, e);
-    const lured = applyLure(world, e, dt);
-    const held = enemyHeld(world, e);
-    if (!lured && !held && best < world.balance.visionRange * world.balance.enemyChaseVisionMul) {
-      if (best > world.balance.weaponRange) {
-        const dx = nearest.pos.x - e.pos.x;
-        const dy = nearest.pos.y - e.pos.y;
-        const len = Math.hypot(dx, dy) || 1;
-        moveToward(e, {
-          x: nearest.pos.x - (dx / len) * world.balance.weaponRange,
-          y: nearest.pos.y - (dy / len) * world.balance.weaponRange,
-        }, world.balance.enemySpeed * emp.speed, dt, world);
-      } else {
-        e.vel = { x: 0, y: 0 };
-      }
-    }
-    if (best <= world.balance.weaponRange) {
-      const cd = e.cooldown;
-      tryFire(world, e, nearest, true);
-      if (e.cooldown !== cd && emp.interval !== 1) e.cooldown *= emp.interval;
+    const st = e.enemyState!;
+    const nearest = nearestEnemyTarget(world, e);
+    const emp = enemyEmpMul(world,e);
+    if (st.activity > st.capacity*.1 && applyLure(world,e,dt)) {
+      if (Math.hypot(e.vel.x,e.vel.y)>0) st.activity = Math.max(st.capacity*.1, st.activity - .5*dt);
+    } else if (!enemyHeld(world,e)) {
+      const speed = enemySpeed(world,e)*emp.speed;
+      if (!lootEnemy(world,e,dt,speed)) moveEnemy(world,e,enemyDestination(world,e,nearest),speed,dt);
+    } else e.vel = {x:0,y:0};
+    // Stationary / full / low-power enemies can still return fire.
+    if (nearest) {
+      const cd=e.cooldown;
+      tryFire(world,e,nearest,true);
+      if(e.cooldown!==cd)e.cooldown*=emp.interval;
     }
   }
 }
@@ -323,6 +321,7 @@ export function requestExtract(world: World): boolean {
   const center = { ...world.leader.pos };
   const radius = world.balance.boardingRadius;
   world.boarding = { center, radius, requestedAt: world.elapsed, cargoArrived: false };
+  scheduleRecall(world);
   world.extract = { pos: { ...center }, radius };
   for (const w of world.wingmen) if (w.alive) applyOrder(world, w, "patrol", { waypoint: center });
   pushLog(world, `帰還要請。搭乗円展開（半径 ${radius}）。僚機は円中心を哨戒。貨物 ${world.balance.boardingCargoDelaySec}s／離昇 ${world.balance.boardingLiftOffDelaySec}s。`);
@@ -356,6 +355,8 @@ function resolveBoardingLiftOff(world: World): void {
     ...recoveredOldWrecks,
   ];
   if (wreckNames.length > 0) pushLog(world, `残骸を回収：${wreckNames.join("・")}（大破のまま格納庫へ）。`);
+  world.recoveredEnemyUnits = world.enemies.filter(e => !e.alive && e.hp <= 0 && dist(e.pos, boarding.center) <= boarding.radius && captainIn);
+  for (const e of world.recoveredEnemyUnits) if (e.enemyState) e.enemyState.recovered = true;
   const recoveredDrops = recoverStrandedDropsAtLiftOff(world, boarding, captainIn);
   if (recoveredDrops.length > 0) pushLog(world, `落とし物の回路を回収：${recoveredDrops.length}件。`);
   noteCircuitExtract(world, captainIn);
@@ -457,7 +458,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     } else if (intent.fireAt) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, intent.fireAt, false); }
     if (!timedOut && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage || wingRecoverWantsSalvage(world, w), dt);
   }
-  updateEnemies(world, dt); updateBullets(world, dt); revealVision(world);
+  spawnRecall(world);
+  updateEnemies(world, dt); updateBullets(world, dt); handleEnemyDeaths(world); collectSupplies(world); revealVision(world);
   // 項目4-1 C6: a destroyed carrier drops its containers on the spot (wrecks: circuitPlay placeCarried).
   for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);

@@ -966,7 +966,7 @@ function advancePinned(
   assert.ok(bootForced.note.includes("強制交戦") || bootForced.note.includes(ENGAGE_BRIEFING_LABEL.forced));
   const worldForced = legacyWorld(bootForced);
   assert.equal(worldForced.enemies.length, 5);
-  assert.ok(worldForced.enemies[0]!.maxHp > BALANCE.enemyHp); // hp mul
+  assert.equal(worldForced.enemies[0]!.maxHp, BALANCE.enemyHp); // enemy strength now comes from circuits, not hull tiers
   assert.equal(worldForced.invadeSector?.engage, "forced");
 
   const bootRaid = bootstrapFromSearch(
@@ -2707,7 +2707,8 @@ import {
   const runSortie = (search: string) => {
     const w = legacyWorld(bootstrapFromSearch(search));
     startSortie(w);
-    for (const e of w.enemies) { e.alive = false; e.hp = 0; }
+    // This fixture checks deployed-state persistence, not combat / enemy loot.
+    w.enemies = [];
     w.currentAmmo.m1 = 21; // leader fired 7 of 28 (unset → full)
     w.leader.pos = { x: 700, y: 400 };
     for (const u of w.wingmen) u.pos = { x: 700, y: 400 };

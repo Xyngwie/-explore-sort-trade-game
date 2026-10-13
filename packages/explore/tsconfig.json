@@ -22,6 +22,7 @@
     "src/carry.selftest.ts",
     "src/rescue.selftest.ts",
     "src/statusBadges.selftest.ts",
-    "src/enemyIdentity.selftest.ts"
+    "src/enemyIdentity.selftest.ts",
+    "src/enemyBehavior.selftest.ts"
   ]
 }

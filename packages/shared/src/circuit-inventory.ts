@@ -40,8 +40,9 @@ import { mergeYieldBags } from "./sort-yield";
 
 /** Board 評価値 — same computation as trade's sell price / hub brief. */
 export function circuitEffectValue(
-  rec: Pick<HubCircuitRecord, "circuitBoard" | "locked">,
+  rec: Pick<HubCircuitRecord, "circuitBoard" | "locked" | "enemyEffect">,
 ): number {
+  if (rec.enemyEffect != null) return rec.enemyEffect;
   try {
     return computeCircuitEffectForBoard(rec.circuitBoard, {
       perfect: rec.circuitBoard.perfect ?? rec.locked,
@@ -53,7 +54,7 @@ export function circuitEffectValue(
 
 /** Effect used in play: only Fully Awakened / Bypass count; others → 0. */
 export function circuitActiveEffect(
-  rec: Pick<HubCircuitRecord, "circuitBoard" | "locked" | "restoreState">,
+  rec: Pick<HubCircuitRecord, "circuitBoard" | "locked" | "restoreState" | "enemyEffect">,
 ): number {
   return isCircuitRestoreStateActive(rec.restoreState) ? circuitEffectValue(rec) : 0;
 }
