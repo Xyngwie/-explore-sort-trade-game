@@ -103,6 +103,8 @@ export const HANDOFF_QUERY_KEYS = {
   invadeToTrade: ["sectorX", "sectorY", "density", "intelFlags"] as const,
   /** Module 4: invade → explore (sector + optional engage combat handoff). */
   invadeToExplore: [
+    "invadeRank",
+    "neighborCount",
     "sectorX",
     "sectorY",
     "density",

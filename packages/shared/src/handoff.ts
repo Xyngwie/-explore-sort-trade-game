@@ -1049,6 +1049,10 @@ export type EnemyCellCoord = { sx: number; sy: number };
  * enemyCells: compact query `sx,sy;sx,sy;...` (see encodeEnemyCells)
  */
 export type InvadeToExplorePayload = {
+  /** Rank zero when absent (legacy handoff). */
+  invadeRank?: number;
+  /** Adjacent mine count displayed as the selected cell number (0..8). */
+  neighborCount?: number;
   sectorX: number;
   sectorY: number;
   density: number;
@@ -1283,6 +1287,10 @@ export function parseInvadeToTradeSearch(
 }
 
 function applyEngageParams(u: URL, payload: InvadeToExplorePayload): void {
+  if (payload.neighborCount != null && Number.isInteger(payload.neighborCount) && payload.neighborCount >= 0 && payload.neighborCount <= 8) u.searchParams.set("neighborCount", String(payload.neighborCount));
+  else u.searchParams.delete("neighborCount");
+  if (payload.invadeRank != null && Number.isSafeInteger(payload.invadeRank) && payload.invadeRank >= 0) u.searchParams.set("invadeRank", String(payload.invadeRank));
+  else u.searchParams.delete("invadeRank");
   if (payload.engage != null && isEngageMode(payload.engage)) {
     u.searchParams.set("engage", payload.engage);
   }
@@ -1310,6 +1318,10 @@ export function parseInvadeToExploreSearch(
   const base = sectorPayloadFromParams(p);
   if (base == null) return null;
   const payload: InvadeToExplorePayload = { ...base };
+  const count = Number(p.get("neighborCount"));
+  if (p.has("neighborCount") && Number.isInteger(count) && count >= 0 && count <= 8) payload.neighborCount = count;
+  const rank = Number(p.get("invadeRank"));
+  if (p.has("invadeRank") && Number.isSafeInteger(rank) && rank >= 0) payload.invadeRank = rank;
   const engageRaw = (p.get("engage") ?? "").trim();
   if (isEngageMode(engageRaw)) payload.engage = engageRaw;
   const enemyCells = parseEnemyCells(p.get("enemyCells"));

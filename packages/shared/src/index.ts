@@ -27,3 +27,5 @@ export * from "./first-clear";
 export * from "./mech-ammo";
 
 export * from "./enemy-wreck-return";
+
+export * from "./invade-rank";

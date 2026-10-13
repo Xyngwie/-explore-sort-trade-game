@@ -1,6 +1,8 @@
 import "./style.css";
 import {
   CTA_CHIP,
+  invadeRankOf,
+  unlockedInvadeRank,
   CTA_COPY,
   FIRST_CLEAR_DISCOVERY_LINE_JA,
   HANDOFF_QUERY_KEYS,
@@ -53,6 +55,7 @@ import {
 } from "./touchFlag";
 import {
   clearPersistedFrontProgress,
+  changeFrontRank,
   loadOrCreateFrontSession,
   persistFrontSessionWithClear,
   readStoredHub,
@@ -123,7 +126,8 @@ let firstClearOnThisBoard = firstClearDiscoveredOnBoard(readStoredHub(), board.s
 function saveFrontProgress(): void {
   const justWon = board.status === "won" && lastSavedStatus !== "won";
   const r = persistFrontSessionWithClear(board, selected, undefined, { justWon });
-  lastSavedStatus = board.status;
+  if (r.saved) lastSavedStatus = board.status;
+  else lastBoardLog = "進捗を保存できませんでした。段位の更新は保存されていません。";
   if (r.discovered) firstClearOnThisBoard = true;
 }
 
@@ -186,6 +190,40 @@ function cellSortieBarHtml(sel: SectorSel | null): string {
   const extra = lines.join("");
   const at = html.indexOf("</p>");
   return at < 0 ? html + extra : html.slice(0, at + 4) + extra + html.slice(at + 4);
+}
+
+let rankListPage = Math.floor(invadeRankOf(readStoredHub()).current / 100);
+const RANK_PAGE_SIZE = 100;
+function rankPanelHtml(): string {
+  const hub = readStoredHub();
+  const progress = invadeRankOf(hub);
+  const max = unlockedInvadeRank(hub);
+  const start = Math.min(rankListPage * RANK_PAGE_SIZE, Math.floor(max / RANK_PAGE_SIZE) * RANK_PAGE_SIZE);
+  const ranks = Array.from({length:Math.min(RANK_PAGE_SIZE,max-start+1)},(_,i)=>start+i);
+  const options = ranks.map(i=>`<option value="${i}" ${i===progress.current?'selected':''}>${i}段</option>`).join('');
+  const lower = ranks.filter(i=>i<progress.current).map(i=>`<option value="${i}">${i}段</option>`).join('');
+  const locked = forcedLockActive();
+  return `<section class="card" id="rank-panel"><h2>段位</h2><p>挑戦中 ${progress.current}段 · 解放済み 0〜${max}段</p>
+    ${max>=RANK_PAGE_SIZE ? `<p>一覧 ${start}〜${start+ranks.length-1}段 <button type="button" id="rank-page-prev" ${start===0?'disabled':''}>前の100段</button><button type="button" id="rank-page-next" ${start+ranks.length>max?'disabled':''}>次の100段</button></p>` : ''}
+    <label>次に挑む段 <select id="rank-select" ${locked || board.status!=='won'?'disabled':''}>${options}</select></label>
+    <button type="button" id="btn-rank-start" ${locked || board.status!=='won'?'disabled':''}>選んだ段に挑む</button>
+    <label>撤退先 <select id="rank-retreat-select" ${locked || !lower?'disabled':''}>${lower}</select></label>
+    <button type="button" id="btn-rank-retreat" ${locked || !lower || board.status==='won'?'disabled':''}>この盤面を諦めて下の段へ</button>
+  </section>`;
+}
+function moveToRank(rank:number, retreat:boolean):void {
+  if(forcedLockActive())return;
+  const current=invadeRankOf(readStoredHub()).current;
+  if(retreat ? rank>=current || board.status==='won' : board.status!=='won')return;
+  if(!window.confirm(`${retreat?'この盤面を諦めて':'新しい盤面で'}${rank}段に挑みますか？`))return;
+  const session=changeFrontRank(rank);
+  if(!session){lastBoardLog='段を変更できませんでした。保存状態を確認してください。';render();return;}
+  board=session.board; selected=session.focus; lastSavedStatus=board.status;
+  firstClearOnThisBoard=firstClearDiscoveredOnBoard(readStoredHub(),board.seed);
+  lostByCell=session.lostByCell;dropsByCell=session.dropsByCell;wrecksByCell=session.wrecksByCell;
+  skipped=false;flagMode=false;forcedLockHistoryArmed=false;
+  rankListPage=Math.floor(rank/RANK_PAGE_SIZE);
+  lastBoardLog=`${rank}段の盤を開始`;render();
 }
 
 /** Single under-grid CTA cluster: 探索へ (+ engage chip) · 格納庫へ. */
@@ -321,6 +359,8 @@ function sectorPayload(
     sectorX: sel.sx,
     sectorY: sel.sy,
     density: densityAfterBoard(info.density, board),
+    invadeRank: invadeRankOf(readStoredHub()).current,
+    neighborCount: getCell(board,sel.sx,sel.sy)?.adjacent ?? 0,
     intelFlags: mergeBoardIntel(baseIntelFlags(sel.sx, sel.sy), board),
   };
   if (engage != null) {
@@ -579,6 +619,7 @@ function render(): void {
       }
       ${progressFeelHtml()}
       ${dangerLegendHtml()}
+      ${rankPanelHtml()}
       <div class="grid front-ms${forcedLockActive() ? " locked" : ""}" style="--cols:${cols}">${cellsHtml.join("")}</div>
       ${cellSortieBarHtml(selected)}
       <div class="actions">
@@ -610,6 +651,10 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     render();
   });
 
+  root.querySelector("#rank-page-prev")?.addEventListener("click",()=>{rankListPage=Math.max(0,rankListPage-1);render();});
+  root.querySelector("#rank-page-next")?.addEventListener("click",()=>{rankListPage++;render();});
+  root.querySelector("#btn-rank-start")?.addEventListener("click",()=>moveToRank(Number(root.querySelector<HTMLSelectElement>("#rank-select")?.value),false));
+  root.querySelector("#btn-rank-retreat")?.addEventListener("click",()=>moveToRank(Number(root.querySelector<HTMLSelectElement>("#rank-retreat-select")?.value),true));
   root.querySelector("#btn-regen")?.addEventListener("click", () => {
     if (forcedLockActive()) return;
     const ok = window.confirm(

@@ -1,3 +1,4 @@
+import { normalizeInvadeRank, type InvadeRankProgress } from "./invade-rank";
 import {
   AMMO_IDS,
   type AmmoId,
@@ -276,6 +277,8 @@ export type HubSnapshot = {
    * from the board). Written once, together with the discovered "4" 1×1.
    */
   firstInvadeClear?: FirstInvadeClear;
+  /** Rank selection and highest completed rank; absent in legacy saves. */
+  invadeRank?: InvadeRankProgress;
   /**
    * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
    * hangar (instanceIds, at most `HUB_LIMITS.maxSortieMechs`). Trade's deploy
@@ -1055,6 +1058,7 @@ export function normalizeHubSnapshot(
     ...(airSupportCooldownSec != null ? { airSupportCooldownSec } : {}),
     ...(bulletinUnlocked ? { bulletinUnlocked: true } : {}),
     ...(firstInvadeClear ? { firstInvadeClear } : {}),
+    ...(normalizeInvadeRank(rawRec?.invadeRank) ? { invadeRank: normalizeInvadeRank(rawRec?.invadeRank)! } : {}),
     ...(ammoBatteryRepaired ? { ammoBatteryRepaired: true } : {}),
   };
   // Ammo rules (mech-ammo.ts): per-mech cap clamp into the stock, M5 reload, M6 once.
