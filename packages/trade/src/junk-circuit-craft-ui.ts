@@ -1,4 +1,9 @@
 import {
+  CIRCUIT_PURCHASE_PRICE,
+  purchaseCircuit,
+  purchaseMaxSide,
+} from "./circuit-purchase";
+import {
   RESTORE_MAX_SIDE,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
@@ -18,15 +23,15 @@ import {
 const CARD_ID = "junk-circuit-craft";
 const SIZE_SELECT_ID = "junk-circuit-craft-size";
 
-function makeCircuitId(): string {
+function makeCircuitId(prefix = "junk_craft"): string {
   try {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-      return `junk_craft_${crypto.randomUUID()}`;
+      return `${prefix}_${crypto.randomUUID()}`;
     }
   } catch {
     // Fall through to the compatibility generator.
   }
-  return `junk_craft_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function getHub() {
@@ -38,9 +43,62 @@ function getHub() {
 function optionLabel(o: JunkCraftOption): string {
   const cost = `ジャンク${o.junk}・${o.credits}c`;
   if (o.reason === "over_cap") return `${o.side}×${o.side}（${cost}・未解放）`;
-  if (o.reason === "no_junk") return `${o.side}×${o.side}（${cost}・ジャンク不足）`;
-  if (o.reason === "no_credits") return `${o.side}×${o.side}（${cost}・クレジット不足）`;
+  if (o.reason === "no_junk")
+    return `${o.side}×${o.side}（${cost}・ジャンク不足）`;
+  if (o.reason === "no_credits")
+    return `${o.side}×${o.side}（${cost}・クレジット不足）`;
   return `${o.side}×${o.side}（${cost}）`;
+}
+
+function currentTrueBoardRate(): number {
+  return resolvePerfectCircuitInjectRate({
+    search: window.location.search,
+    hostname: window.location.hostname,
+    isDev: Boolean(import.meta.env.DEV),
+    envRate:
+      (import.meta.env.VITE_PERFECT_CIRCUIT_RATE as string | undefined) ??
+      (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ??
+      null,
+  });
+}
+
+function buyCircuit(
+  button: HTMLButtonElement,
+  status: HTMLElement | null,
+): void {
+  if (button.disabled) return;
+  const cap = purchaseMaxSide(getHub());
+  if (
+    !window.confirm(
+      `回路を購入しますか？\n${CIRCUIT_PURCHASE_PRICE}c\n2×2〜${cap}×${cap} のランダムな中古回路`,
+    )
+  )
+    return;
+  button.disabled = true;
+  const loaded = loadHubSaveFromLocalStorage();
+  if (!loaded) {
+    if (status)
+      status.textContent = "セーブを読み込めませんでした。購入していません。";
+    return;
+  }
+  const result = purchaseCircuit(
+    backfillPerfectMaxSize(normalizeHubSnapshot(loaded.hub)),
+    {
+      circuitId: makeCircuitId("circuit_buy"),
+      trueBoardRate: currentTrueBoardRate(),
+    },
+  );
+  if (!result.ok) {
+    if (status) status.textContent = "クレジットが足りません。";
+    return;
+  }
+  if (!saveHubSaveToLocalStorage(result.hub)) {
+    if (status)
+      status.textContent =
+        "購入を保存できませんでした。画面を読み直して確認してください。";
+    return;
+  }
+  window.location.reload();
 }
 
 function craftCircuit(side: number): void {
@@ -57,7 +115,10 @@ function craftCircuit(side: number): void {
       (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ??
       null,
   });
-  const result = craftJunkCircuit(getHub(), side, { circuitId: makeCircuitId(), trueBoardRate });
+  const result = craftJunkCircuit(getHub(), side, {
+    circuitId: makeCircuitId(),
+    trueBoardRate,
+  });
   if (!result.ok) return;
   saveHubSaveToLocalStorage(result.hub);
   window.location.reload();
@@ -72,6 +133,7 @@ function render(card: HTMLElement): void {
   // Default to the smallest enabled size so nobody spends a lot by accident.
   const firstEnabled = options.find((o) => o.enabled) ?? null;
 
+  const purchaseCap = purchaseMaxSide(hub);
   card.id = CARD_ID;
   card.innerHTML = `
     <h2 style="font-size:1rem;margin:0 0 0.5rem">回路作成</h2>
@@ -94,10 +156,21 @@ function render(card: HTMLElement): void {
         回路を作成
       </button>
     </div>
+    <hr />
+    <h2 style="font-size:1rem;margin:0 0 0.5rem">回路購入</h2>
+    <p class="muted">2×2〜${purchaseCap}×${purchaseCap} のランダムな中古回路を1枚購入します。</p>
+    <button type="button" class="secondary" data-circuit-purchase ${hub.credits >= CIRCUIT_PURCHASE_PRICE ? "" : "disabled"}>回路を購入 · ${CIRCUIT_PURCHASE_PRICE}c</button>
+    <p class="muted" data-circuit-purchase-status role="status">${hub.credits >= CIRCUIT_PURCHASE_PRICE ? "" : "クレジットが足りません。"}</p>
   `;
 
+  const buy = card.querySelector<HTMLButtonElement>("[data-circuit-purchase]");
+  buy?.addEventListener("click", () =>
+    buyCircuit(buy, card.querySelector("[data-circuit-purchase-status]")),
+  );
   const select = card.querySelector<HTMLSelectElement>(`#${SIZE_SELECT_ID}`);
-  const button = card.querySelector<HTMLButtonElement>("[data-junk-circuit-craft]");
+  const button = card.querySelector<HTMLButtonElement>(
+    "[data-junk-circuit-craft]",
+  );
   const sync = () => {
     const side = Number(select?.value);
     const opt = options.find((o) => o.side === side);
@@ -132,7 +205,10 @@ function install(): void {
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
   const observer = new MutationObserver(install);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
   window.addEventListener("DOMContentLoaded", install, { once: true });
   install();
 }
