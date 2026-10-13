@@ -1000,8 +1000,8 @@ function withSortieSelection(state: HangarState, ids: readonly string[], notice 
 }
 
 /**
- * Hangar checkbox. At most `HUB_LIMITS.maxSortieMechs` (3) mechs; a 4th is
- * refused. The last selected mech cannot be unchecked (an empty selection
+ * Hangar checkbox with no squad size limit. The last selected mech cannot
+ * be unchecked (an empty selection
  * would fall back to the default squad).
  */
 export function setDeploySelection(
@@ -1019,7 +1019,7 @@ export function setDeploySelection(
   return withSortieSelection(state, current.filter((id) => id !== instanceId));
 }
 
-/** 「先頭から3機」: the first maxSortieMechs deployable mechs in fleet order (the default squad). */
+/** Select all deployable mechs in fleet order (the default squad). */
 export function selectAllDeployable(state: HangarState): HangarState {
   return withSortieSelection(
     state,
