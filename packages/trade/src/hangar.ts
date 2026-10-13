@@ -3,7 +3,7 @@
  * Pure transitions + localStorage persistence via shared hub-save.
  */
 
-import {
+import { squadEquipmentError,
   isWreckRow,
   RESOURCE_LABEL_JA,
   CRAFT_SIGNATURE_STORAGE_KEY,
@@ -1058,9 +1058,9 @@ export function wreckCountLineJa(hub: Pick<HubSnapshot, "lostMechs">): string | 
 }
 
 export function buildDeployUrl(state: HangarState): string | null {
-  // Only the chosen mechs (at most 3) go out — and only they take wear.
+  // Only the chosen mechs go out — and only they take wear.
   const ids = selectionAfter(state.hub, state.selectedDeployIds);
-  if (ids.length === 0) return null;
+  if (ids.length === 0 || squadEquipmentError(state.hub, ids)) return null;
   // F1 (2026-10-12): startingAmmo = the hub ammo stock (`inventory.ammo`, M1), not the old typed ammoLoad.
   const ammo = Math.max(0, Math.floor(state.hub.inventory.ammo ?? 0));
   const payload = buildTradeToExplorePayloadFromFleet(

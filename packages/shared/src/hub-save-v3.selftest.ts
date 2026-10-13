@@ -270,7 +270,7 @@ const v2Text = JSON.stringify(v2Save);
   const hub = normalizeHubSnapshot({ ...INITIAL_HUB, fleet: [mech("owned_a"), mech("owned_b")], circuits: recs } as unknown as HubSnapshot);
   const byId = new Map(hub.circuits.map((c) => [c.circuitId, c]));
   assert.equal(byId.get("e2")!.equippedTo, "owned_a", "newest updatedAt kept");
-  assert.equal(byId.get("e1")!.equippedTo, null, "over slot → stash");
+  assert.equal(byId.get("e1")!.equippedTo, "owned_a", "existing equipment retained even over squad budget");
   assert.equal(byId.get("e3")!.equippedTo, null, "missing mech → stash");
   assert.equal(byId.get("e3")!.restoreState, "unrestored");
   assert.equal(byId.get("e3")!.outcome, "offline", "deprecated mirror");
@@ -278,8 +278,7 @@ const v2Text = JSON.stringify(v2Save);
   assert.equal(byId.get("e3")!.origin, "crafted");
 
   const full = equipCircuit(hub, "e1", "owned_a");
-  assert.equal(full.ok, false);
-  assert.equal(full.reason, "slot_full");
+  assert.equal(full.ok, true, "already equipped is idempotent");
   const eq = equipCircuit(hub, "e1", "owned_b");
   assert.equal(eq.ok, true);
   assert.equal(eq.hub.circuits.find((c) => c.circuitId === "e1")!.equippedTo, "owned_b");

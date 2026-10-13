@@ -16,7 +16,7 @@ import {
   qualityBonusPt,
   readAirSupportCooldownSec,
   readBulletinUnlocked,
-  slotCapacity,
+  weaponCategory,
   type HubSnapshot,
 } from "./circuit-actions";
 import { resolveCluesForCircuitBoard } from "./circuit-clues";
@@ -39,10 +39,10 @@ const fals = makeFalseOneByOne("false-1x1");
 assert.equal(classifyCircuit(truth).oneByOne, "true");
 assert.equal(classifyCircuit(fals).oneByOne, "false");
 assert.equal(resolveCluesForCircuitBoard(truth.circuitBoard)[0]?.[0], 4);
-assert.equal(slotCapacity([fals]), 1);
-assert.equal(slotCapacity([truth]), 2);
-assert.equal(slotCapacity([fals], truth), 2);
-assert.equal(slotCapacity([], fals), 1);
+assert.equal(weaponCategory("mmr"), "weapon");
+assert.equal(weaponCategory("lmg"), "weapon");
+assert.equal(weaponCategory("emp_round"), "special_ammo");
+assert.equal(weaponCategory("cargo_slots"), null);
 
 const keyed = { ...fals, effectKey: "smg" as const };
 assert.equal(effectKeyForCircuit(keyed), "smg");

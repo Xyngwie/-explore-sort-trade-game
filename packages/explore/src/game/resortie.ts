@@ -5,12 +5,12 @@
  * `destroyed`), with their saved carried ammo, durability and battery.
  * Since item 15 (2026-10-03) the squad follows the hangar's saved sortie
  * selection (`HubSave.sortieSelection`, resolved by `resolveSortieSelection`:
- * selected mechs that can still sortie, in fleet order, ≤3; no selection left →
- * the first 3 deployable) — the same value the hangar shows, so 再出撃 and the
+ * selected mechs that can still sortie, in fleet order; no selection left →
+ * all deployable mechs) — the same value the hangar shows, so 再出撃 and the
  * hangar never disagree. Without a save holding this return, it falls back to
  * the previous deploy's mechs.
  */
-import {
+import { squadEquipmentError,
   HANDOFF_QUERY_KEYS,
   applyExploreReturnToHub,
   buildMechCircuitsForDeploy,
@@ -101,7 +101,7 @@ export function resortieSearch(
   const startingAmmo = hub.inventory?.ammo != null ? Math.max(0, Math.floor(hub.inventory.ammo)) : inbound?.startingAmmo ?? 0;
   const payload = buildTradeToExplorePayloadFromFleet(hub.fleet, startingAmmo, previousIds);
   const deployedInstanceIds = payload.deployedInstanceIds ?? [];
-  if (deployedInstanceIds.length === 0) return null;
+  if (deployedInstanceIds.length === 0 || squadEquipmentError(hub, deployedInstanceIds)) return null;
   const keep = new Set(deployedInstanceIds);
   // Mechs that were not in the previous deploy (e.g. a left-behind mech just
   // recovered, or a newly selected one) take their equipped circuits from the

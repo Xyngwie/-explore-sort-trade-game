@@ -42,6 +42,8 @@ export function unequipHubCircuit(hub: HubSnapshot, circuitId: string): EquipRes
  * falls under the existing "not found" text (no new wording — 神宮's call).
  */
 export function equipRefusalMessageJa(reason: EquipResult["reason"]): string {
+  if (reason === "squad_full") return "出撃部隊の回路上限を超えます。装備を外すか出撃する機体を変更してください。";
+  if (reason === "category_full") return "武器種・特殊弾は、それぞれ1機に1枚まで装備できます。";
   if (reason === "slot_full") return "その機体の回路枠がいっぱいです。";
   if (reason === "no_mech") return "装備先の機体がありません。";
   return "回路が見つかりません。";

@@ -8,7 +8,9 @@ import {
   hubVisibleCircuits,
   loadHubSaveWithStatus,
   saveHubSaveToLocalStorage,
-  slotCapacity,
+  squadCircuitLimit,
+  squadCircuitUsage,
+  resolveSortieSelection,
   type HubCircuitRecord,
   type HubSnapshot,
 } from "@estg/shared";
@@ -89,19 +91,19 @@ function render(): void {
   card.id = CARD_ID;
   card.className = "card";
 
+  const budget = `<p>出撃部隊の回路：${squadCircuitUsage(hub, resolveSortieSelection(hub))}/${squadCircuitLimit(hub)}枚。武器種・特殊弾は各機体に各1枚まで。</p>`;
   const equipped = circuits.filter((c) => c.equippedTo != null);
   const rows = fleet.length === 0
     ? `<p class="muted">装備先の機体がありません。</p>`
     : fleet.map((mech) => {
         const mine = circuits.filter((c) => c.equippedTo === mech.instanceId);
-        const cap = slotCapacity(mine);
         const names = mine.length === 0
           ? "なし"
           : mine.map((c) => `${esc(c.circuitId)}（${stateLabel(c)}）`).join("、");
         return `<div class="fleet-row">
           <div class="row" style="justify-content:space-between;align-items:center">
             <strong>${esc(mech.catalogId)}</strong>
-            <span class="muted">${mine.length}/${cap}枠</span>
+            <span class="muted">装備 ${mine.length}枚</span>
           </div>
           <div class="muted" style="font-size:0.8rem">${names}</div>
         </div>`;
@@ -134,7 +136,7 @@ function render(): void {
         </div>`}
     <div style="margin-top:0.75rem">
       <div class="muted" style="font-size:0.75rem;margin-bottom:0.35rem">現在の装備状況（${equipped.length}枚）</div>
-      ${rows}
+      ${budget}${rows}
     </div>
   `;
 

@@ -19,7 +19,6 @@ import {
   assignMissingEffectKeys,
   boardGivesBulletin,
   isTrueOneByOne,
-  slotCapacity,
 } from "./circuit-actions";
 import {
   canDeploy,
@@ -279,6 +278,8 @@ export type HubSnapshot = {
   firstInvadeClear?: FirstInvadeClear;
   /** Rank selection and highest completed rank; absent in legacy saves. */
   invadeRank?: InvadeRankProgress;
+  /** Starter equipment was already granted/checked; never re-equip after manual removal. */
+  starterCircuitGranted?: boolean;
   /**
    * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
    * hangar (instanceIds, without a size limit). Trade's deploy
@@ -565,8 +566,8 @@ export function mechSlotCapacity(_mech?: Pick<OwnedMech, "instanceId"> | null): 
 
 /**
  * Equip integrity (§6.2): equippedTo pointing at a missing mech → stash;
- * more equipped than a mech's slots → keep the newest (updatedAt, then list
- * order), the rest go to stash. No squad-wide cap yet (U3).
+ * Existing equipment is preserved; squad/category limits are checked when
+ * equipping and before sortie, never by silently detaching saved circuits.
  */
 function enforceEquipIntegrity(
   circuits: HubCircuitRecord[],
@@ -575,7 +576,6 @@ function enforceEquipIntegrity(
   lostMechIds: ReadonlySet<string> = new Set(),
 ): HubCircuitRecord[] {
   const mechs = new Map(fleet.map((m) => [m.instanceId, m]));
-  const byMech = new Map<string, number[]>();
   const out = circuits.map((c) => ({ ...c }));
   out.forEach((c, i) => {
     if (c.equippedTo == null) return;
@@ -584,25 +584,7 @@ function enforceEquipIntegrity(
       c.equippedTo = null;
       return;
     }
-    const arr = byMech.get(c.equippedTo) ?? [];
-    arr.push(i);
-    byMech.set(c.equippedTo, arr);
   });
-  for (const [, idxs] of byMech) {
-    const equipped = idxs.map((i) => out[i]!);
-    const cap = slotCapacity(equipped);
-    if (idxs.length <= cap) continue;
-    const ranked = [...idxs].sort((a, b) => {
-      const pa = isTrueOneByOne(out[a]!) ? 1 : 0;
-      const pb = isTrueOneByOne(out[b]!) ? 1 : 0;
-      if (pa !== pb) return pb - pa;
-      const ta = out[a]!.updatedAt ?? "";
-      const tb = out[b]!.updatedAt ?? "";
-      if (ta !== tb) return ta < tb ? 1 : -1;
-      return a - b;
-    });
-    for (const i of ranked.slice(cap)) out[i]!.equippedTo = null;
-  }
   return out;
 }
 
@@ -1055,6 +1037,7 @@ export function normalizeHubSnapshot(
     ...(firstInvadeClear ? { firstInvadeClear } : {}),
     ...(normalizeInvadeRank(rawRec?.invadeRank) ? { invadeRank: normalizeInvadeRank(rawRec?.invadeRank)! } : {}),
     ...(ammoBatteryRepaired ? { ammoBatteryRepaired: true } : {}),
+    ...(rawRec?.starterCircuitGranted === true || circuits.some(c => c.circuitId.startsWith("false-1x1-")) ? { starterCircuitGranted: true } : {}),
   };
   // Ammo rules (mech-ammo.ts): per-mech cap clamp into the stock, M5 reload, M6 once.
   return applyHubAmmoRules(snapshot, { reloadIds: [...integrityReload] });

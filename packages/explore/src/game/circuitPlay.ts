@@ -20,6 +20,8 @@ import {
   EMP_SLOW_BASE,
   EMP_SLOW_CAP,
   GUN_EFFECT_ORDER,
+  WEAPON_EFFECT_KEYS,
+  SPECIAL_AMMO_EFFECT_KEYS,
   MECH_AMMO_BASE_CAPACITY,
   ORDER_MOVE_SPEED,
   SMG_CYCLE,
@@ -1097,7 +1099,9 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
   if (!playOf(world)?.rules || from.instanceId == null) return false;
   const ammo = usableAmmo(world, from);
   const carried = world.currentAmmo[from.instanceId] ?? 0;
-  const fi = abilityOf(world, from.id).fireInterval;
+  const special = SPECIAL_AMMO_EFFECT_KEYS.find(key => selfKey(world, from.id, key)) ?? null;
+  const combined = WEAPON_EFFECT_KEYS.some(key => key === m.gun);
+  const fi = abilityOf(world, from.id).fireInterval / (combined && special === "fast_round" ? 1 + gunR(world, from.id, special) : 1);
   const reach = dist(from.pos, target.pos);
   if (ammo <= 0 && m.melee > 0 && reach <= from.radius + target.radius) {
     target.hp -= (from.kind === "enemy" ? world.balance.enemyDamage : world.balance.bulletDamage) * (1 + m.melee) * m.attack;
@@ -1169,6 +1173,21 @@ function spawnShot(
   angleOff: number,
   extra?: { homingId?: string; bend?: number; empSlow?: number },
 ): void {
+  // A weapon and a special round are independent categories: apply the round
+  // to every projectile (including SMG bursts and shotgun pellets).
+  const weapon = modsFor(world, from.id).gun;
+  if (WEAPON_EFFECT_KEYS.some(key => key === weapon)) {
+    const round = SPECIAL_AMMO_EFFECT_KEYS.find(key => selfKey(world, from.id, key));
+    if (round === "fast_round") speedMul *= 1.5;
+    if (round === "homing_round") {
+      speedMul *= 0.75;
+      extra = { ...extra, homingId: to.id, bend: Math.min(0.3, gunR(world, from.id, round)) };
+    }
+    if (round === "emp_round") {
+      emp = true;
+      extra = { ...extra, empSlow: Math.min(EMP_SLOW_CAP, EMP_SLOW_BASE + gunR(world, from.id, round)) };
+    }
+  }
   const base = Math.atan2(to.pos.y - from.pos.y, to.pos.x - from.pos.x) + angleOff;
   const speed = world.balance.bulletSpeed * speedMul * abilityOf(world, from.id).bulletSpeed;
   const b: Bullet = {

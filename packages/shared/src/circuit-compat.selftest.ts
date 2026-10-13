@@ -83,7 +83,7 @@ function oldSave(): Record<string, unknown> {
   const mine = hub.circuits.filter((c) => c.equippedTo === "cap");
   assert.deepEqual(mine.map((c) => c.circuitId), ["old-2x2"], "(a) the 2×2 stays on the captain");
   const granted = ensureCaptainFalseOneByOne(hub);
-  assert.equal(granted, hub, "(a) Q2: a captain with a circuit gets no false 1×1");
+  assert.deepEqual(granted, { ...hub, starterCircuitGranted: true }, "(a) existing equipment is retained, starter check recorded");
   assert.equal(granted.circuits.filter((c) => c.equippedTo === "cap").length, 1);
 }
 

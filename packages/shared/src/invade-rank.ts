@@ -1,3 +1,4 @@
+import { weaponCategory } from "./circuit-actions";
 /** Persistent rank progression. First clear of rank r unlocks r+1, never farming rewards. */
 import type { HubSnapshot } from "./hub-save";
 export type InvadeRankProgress = { current: number; highestCleared: number };
@@ -72,4 +73,19 @@ export function squadCircuitLimit(hub: Pick<HubSnapshot, "invadeRank" | "firstIn
 export function squadCircuitUsage(hub: Pick<HubSnapshot, "circuits">, deployedInstanceIds: readonly string[]): number {
   const selected = new Set(deployedInstanceIds);
   return hub.circuits.filter(c => c.equippedTo != null && selected.has(c.equippedTo)).length;
+}
+
+/** Old equipment is retained; invalid selected squads must be corrected before sortie. */
+export function squadEquipmentError(hub: HubSnapshot, ids: readonly string[]): "squad_full" | "category_full" | null {
+  if (squadCircuitUsage(hub, ids) > squadCircuitLimit(hub)) return "squad_full";
+  for (const id of new Set(ids)) {
+    const seen = new Set<string>();
+    for (const c of hub.circuits.filter(c => c.equippedTo === id)) {
+      const category = weaponCategory(c.effectKey);
+      if (!category) continue;
+      if (seen.has(category)) return "category_full";
+      seen.add(category);
+    }
+  }
+  return null;
 }
