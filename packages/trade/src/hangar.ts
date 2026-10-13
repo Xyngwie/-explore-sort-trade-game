@@ -1012,9 +1012,6 @@ export function setDeploySelection(
   const current = state.selectedDeployIds;
   if (selected) {
     if (current.includes(instanceId)) return state;
-    if (current.length >= HUB_LIMITS.maxSortieMechs) {
-      return { ...state, notice: `出撃は最大 ${HUB_LIMITS.maxSortieMechs} 機まで（他の機体を外してから選んでください）` };
-    }
     return withSortieSelection(state, [...current, instanceId]);
   }
   if (!current.includes(instanceId)) return state;
@@ -1026,7 +1023,7 @@ export function setDeploySelection(
 export function selectAllDeployable(state: HangarState): HangarState {
   return withSortieSelection(
     state,
-    selectDeployableInstanceIds(state.hub.fleet).slice(0, HUB_LIMITS.maxSortieMechs),
+    selectDeployableInstanceIds(state.hub.fleet),
   );
 }
 

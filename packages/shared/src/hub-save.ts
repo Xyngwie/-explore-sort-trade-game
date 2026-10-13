@@ -281,7 +281,7 @@ export type HubSnapshot = {
   invadeRank?: InvadeRankProgress;
   /**
    * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
-   * hangar (instanceIds, at most `HUB_LIMITS.maxSortieMechs`). Trade's deploy
+   * hangar (instanceIds, without a size limit). Trade's deploy
    * URL and Explore's 再出撃 both read it via `resolveSortieSelection`.
    */
   sortieSelection?: string[];
@@ -358,11 +358,6 @@ export const INITIAL_HUB: HubSnapshot = {
 };
 
 export const HUB_LIMITS = {
-  /**
-   * Mechs per sortie (leader + 2 wingmen). The fleet itself has no cap
-   * (2026-10-03 item 15: the old `maxMechs: 3` and load-time truncation are gone).
-   */
-  maxSortieMechs: 3,
   maxAmmo: 100,
   materialUnitPrice: 10,
   /**
@@ -1065,7 +1060,7 @@ export function normalizeHubSnapshot(
   return applyHubAmmoRules(snapshot, { reloadIds: [...integrityReload] });
 }
 
-/** Unique instanceIds that exist in the fleet, at most maxSortieMechs. */
+/** Unique instanceIds that exist in the fleet. */
 function normalizeSortieSelection(raw: unknown, fleet: readonly OwnedMech[]): string[] {
   if (!Array.isArray(raw)) return [];
   const ids = new Set(fleet.map((m) => m.instanceId));
@@ -1075,7 +1070,6 @@ function normalizeSortieSelection(raw: unknown, fleet: readonly OwnedMech[]): st
     const id = item.trim();
     if (!id || !ids.has(id) || out.includes(id)) continue;
     out.push(id);
-    if (out.length >= HUB_LIMITS.maxSortieMechs) break;
   }
   return out;
 }
@@ -1084,23 +1078,22 @@ function normalizeSortieSelection(raw: unknown, fleet: readonly OwnedMech[]): st
  * The squad for the next sortie: the saved selection's mechs that can still
  * sortie (left-behind mechs are no longer in `fleet`; wrecked / needs_repair
  * cannot deploy), in fleet order. When nothing of the selection remains (or
- * there is no selection yet), the first `maxSortieMechs` deployable mechs.
+ * there is no selection yet), all deployable mechs.
  */
 export function resolveSortieSelection(hub: Pick<HubSnapshot, "fleet" | "sortieSelection">): string[] {
   const chosen = new Set(hub.sortieSelection ?? []);
   const deployable = hub.fleet.filter(canDeploy);
   const kept = deployable.filter((m) => chosen.has(m.instanceId)).map((m) => m.instanceId);
-  if (kept.length > 0) return kept.slice(0, HUB_LIMITS.maxSortieMechs);
-  return deployable.slice(0, HUB_LIMITS.maxSortieMechs).map((m) => m.instanceId);
+  if (kept.length > 0) return kept;
+  return deployable.map((m) => m.instanceId);
 }
 
-/** Save the hangar's sortie selection (deployable mechs only, at most maxSortieMechs, fleet order). */
+/** Save the hangar's sortie selection (deployable mechs only, fleet order). */
 export function setSortieSelection(hub: HubSnapshot, ids: readonly string[]): HubSnapshot {
   const want = new Set(ids);
   const sortieSelection = hub.fleet
     .filter((m) => canDeploy(m) && want.has(m.instanceId))
-    .map((m) => m.instanceId)
-    .slice(0, HUB_LIMITS.maxSortieMechs);
+    .map((m) => m.instanceId);
   return { ...hub, sortieSelection };
 }
 

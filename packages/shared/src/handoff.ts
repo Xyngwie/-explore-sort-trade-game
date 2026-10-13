@@ -1002,7 +1002,7 @@ export function toExploreToHubWearPayload(
 /** Map hub deployableMechs → explore wingman count (leader always present). */
 export function wingmanCountFromMechs(deployableMechs: number): number {
   const n = Math.floor(deployableMechs);
-  return Math.max(0, Math.min(2, n - 1));
+  return Number.isSafeInteger(n) ? Math.max(0, n - 1) : 0;
 }
 
 // ---------------------------------------------------------------------------

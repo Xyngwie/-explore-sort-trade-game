@@ -12,6 +12,8 @@ import {
   completeInvadeRank,
   selectInvadeRank,
   rankEnemyMultiplier,
+  squadCircuitLimit,
+  squadCircuitUsage,
 } from "./invade-rank";
 import {
   buildInvadeToExploreUrl,
@@ -21,8 +23,10 @@ import {
 const initial = normalizeHubSnapshot(INITIAL_HUB);
 assert.deepEqual(invadeRankOf(initial), { current: 0, highestCleared: -1 });
 assert.equal(unlockedInvadeRank(initial), 0);
+assert.equal(squadCircuitLimit(initial), 1);
 const first = completeInvadeRank(initial);
 assert.equal(unlockedInvadeRank(first), 1);
+assert.equal(squadCircuitLimit(first), 2);
 assert.equal(first.invadeRank!.highestCleared, 0);
 assert.deepEqual(
   completeInvadeRank(first),
@@ -34,6 +38,10 @@ assert.equal(unlockedInvadeRank(second), 2);
 const lower = selectInvadeRank(second, 0)!;
 assert.equal(unlockedInvadeRank(completeInvadeRank(lower)), 2);
 assert.equal(lower.invadeRank!.highestCleared, 1);
+assert.equal(squadCircuitLimit(lower), 3);
+assert.equal(squadCircuitUsage({ circuits: [
+  { equippedTo: "a" }, { equippedTo: "a" }, { equippedTo: "b" }, { equippedTo: null },
+] as typeof initial.circuits }, ["a", "a"]), 2);
 assert.equal(selectInvadeRank(second, 3), null);
 assert.equal(selectInvadeRank(second, -1), null);
 assert.equal(selectInvadeRank(second, 1.5), null);

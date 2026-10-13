@@ -130,3 +130,8 @@ export const HANDOFF_QUERY_KEYS = {
     "circuitPerfect",
   ] as const,
 };
+
+/** Keep legacy ids for the first two wingmen; extra members have unique ids. */
+export function exploreUnitId(index:number):string {
+  return index===0 ? "leader" : index===1 ? "wing-a" : index===2 ? "wing-b" : `wing-${index-1}`;
+}

@@ -2,6 +2,7 @@ import { makeEnemyIdentity } from "./enemyIdentity";
 import {
   DEFAULT_EXPEDITION_LOADOUT,
   rankEnemyMultiplier,
+  exploreUnitId,
   parseInvadeToExploreSearch,
   parseTradeToExploreSearch,
   wingmanCountFromMechs,
@@ -238,7 +239,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     mechBattery[row.instanceId] = { ...row.battery };
   }
   const circuitIdsByUnit: Record<string, string[]> = {};
-  const unitIds = ["leader", "wing-a", "wing-b"];
+  const unitIds = deployedInstanceIds.map((_, i) => exploreUnitId(i));
   for (let i = 0; i < Math.min(unitIds.length, deployedInstanceIds.length); i += 1) {
     const entries = inbound?.mechCircuits?.[deployedInstanceIds[i]!] ?? [];
     const ids = [...new Set(entries.map((entry) => entry.circuitId.trim()).filter(Boolean))];
@@ -341,16 +342,15 @@ export function createWorld(boot: SortieBootstrap): World {
 
   const wingmen: Unit[] = [];
   for (let i = 0; i < boot.wingmanCount; i++) {
-    const tag = i === 0 ? "a" : "b";
     const instanceId = boot.deployedInstanceIds[i + 1] ?? null;
     wingmen.push(
       makeUnit({
-        id: `wing-${tag}`,
+        id: exploreUnitId(i + 1),
         kind: "wingman",
         name: i === 0 ? "僚機A" : i === 1 ? "僚機B" : `僚機${i + 1}`,
         pos: {
-          x: spawn.x - 40,
-          y: spawn.y + (i === 0 ? -40 : 40),
+          x: Math.max(20, spawn.x - 40 - (Math.floor(i / 2) % 4) * 30),
+          y: Math.min(BALANCE.worldH - 20, Math.max(20, spawn.y + (i % 2 === 0 ? -1 : 1) * (40 + Math.floor(i / 8) * 30))),
         },
         hp: BALANCE.wingmanHp,
         maxHp: BALANCE.wingmanHp,

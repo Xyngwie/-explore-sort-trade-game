@@ -64,3 +64,12 @@ export function rankEnemyMultiplier(rank: number): number {
     Math.pow(1.01, Math.max(0, Number.isFinite(rank) ? Math.floor(rank) : 0)),
   );
 }
+
+/** Every equipped circuit, including true/false 1×1, uses one squad slot. */
+export function squadCircuitLimit(hub: Pick<HubSnapshot, "invadeRank" | "firstInvadeClear">): number {
+  return Math.min(Number.MAX_SAFE_INTEGER, unlockedInvadeRank(hub) + 1);
+}
+export function squadCircuitUsage(hub: Pick<HubSnapshot, "circuits">, deployedInstanceIds: readonly string[]): number {
+  const selected = new Set(deployedInstanceIds);
+  return hub.circuits.filter(c => c.equippedTo != null && selected.has(c.equippedTo)).length;
+}

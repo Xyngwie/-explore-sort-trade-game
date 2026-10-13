@@ -8,6 +8,7 @@
  */
 import {
   AIR_SUPPORT_COOLDOWN_SEC,
+  exploreUnitId,
   AIR_SUPPORT_COST,
   COLLECT_SECONDS,
   COVER_DR_BASE,
@@ -360,7 +361,7 @@ export function attachCircuitPlay(world: World, hub: HubSnapshot | null, release
   const play = blank(release);
   play.cooldownSec = readAirSupportCooldownSec(hub);
   const ids = world.deployedInstanceIds;
-  const unitIds = ["leader", "wing-a", "wing-b"];
+  const unitIds = ids.map((_, i) => exploreUnitId(i));
   if (hub) {
     for (let i = 0; i < Math.min(ids.length, unitIds.length); i++) {
       const inst = ids[i]!;
@@ -387,7 +388,7 @@ export function attachCircuitPlay(world: World, hub: HubSnapshot | null, release
 /** PR-B: the release scale of every unit from its loaded circuits (Q4 rows already skipped). */
 export function abilityFromLoadout(loadout: Record<string, ClassifiedCircuit[]>): Record<string, AbilityScale> {
   const out: Record<string, AbilityScale> = {};
-  for (const id of ["leader", "wing-a", "wing-b"]) {
+  for (const id of new Set(["leader", "wing-a", "wing-b", ...Object.keys(loadout)])) {
     const list = loadout[id] ?? [];
     const ones = list.filter((c) => c.side === 1);
     out[id] = releaseAbilityScale({
