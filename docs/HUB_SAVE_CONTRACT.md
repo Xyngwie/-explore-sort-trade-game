@@ -400,3 +400,11 @@ HubSave のキーは増やしていない（`v` は 3 のまま）。
 6. **shared から外したもの:** `importMaterialsIntoHub`・`importedMaterialsFromResult`・回路の資材の修理割引 `applyRepairDiscountToCost`。食料→弾薬の対応は残す。帰還報告の `inventoryDrops`・`recoveredInventoryDropIds` は読み捨てる。
 
 互換テスト: shared `legacy-retire.selftest.ts`（1〜5・7〜10・12）、explore `selftest.ts`（6）、trade `legacy-retire.selftest.ts`（7〜9・11、古い履歴）。
+
+### 敵の残骸持ち帰り（敵 PR2〜PR5 draft）
+
+- 敵由来の残骸は `fleet` の通常の `mech_gen1` 大破機にする。回路は `origin: enemy_drop`、同じ `instanceId` に装備されたまま取得する。回収前に回路の中身を公開しない。
+- `HubCircuitRecord.enemyEffect?: number` は敵でサンプリングした有効値（一辺²×random(0.3〜1.0)）を持ち帰るための追加項目。通常の回路評価は従来どおり盤から計算する。敵由来・bypassのときだけ有限値0〜盤面積を許可する。Restoreの新しい結果を書き込むとこの項目を外し、盤の採点に戻す。
+- 新しい帰還URLの `enemyWrecks` は `{instanceId, circuits}[]` のJSON。既存の `sortieId` の重複適用防止と、取得済みの機体・回路ID照合を併用する。localStorageが共有されない開発用ポート間でも持ち帰れる。旧URLでは空として扱う。
+- 旧HubSave v3は追加項目なしで読める。旧ビルドで新しい敵回路を保存し直すと `enemyEffect` が落ち、旧来の盤評価に戻る（機体・回路ID・盤・装備は残る）。新機能の有効値の保持にはこの変更を含むビルドを使う。
+- 出撃中の敵状態・補給ドロップ・出現予約は既存の途中保存本文に入り、HubSaveの新しいトップレベルキーは作らない。古い途中保存の敵は欠けた状態を補完し、既存の帰還円には新しい増援を追加しない。

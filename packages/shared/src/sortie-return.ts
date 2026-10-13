@@ -1,3 +1,4 @@
+import { applyEnemyWrecks } from "./enemy-wreck-return";
 /**
  * U9 (CIRCUIT_DATA_MODEL_V0 §5.4・§9 U9): apply one Explore sortie return to
  * the hub. Explore calls this when the sortie reaches its result (direct save
@@ -126,6 +127,7 @@ export function applyExploreReturnToHub(
       }
     }
   }
+  next = applyEnemyWrecks(next, wear.enemyWrecks ?? []);
   const returned: HubSnapshot = {
     ...next,
     fleet: applyReturnedMechState(

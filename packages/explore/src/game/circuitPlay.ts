@@ -30,6 +30,7 @@ import {
   addDestroyedGen1,
   classifyCircuit,
   effectRate,
+  cargoSlotBonus,
   ensureCaptainFalseOneByOne,
   hasTrueOneByOne,
   loadHubSaveFromLocalStorage,
@@ -187,6 +188,8 @@ function releaseOn(world: World): boolean {
 }
 
 function own(world: World, unitId: string): ClassifiedCircuit[] {
+  const enemy = world.enemies.find(e => e.id === unitId);
+  if (enemy) return (enemy.enemyIdentity?.circuits ?? []).map(c => ({ ...c, r: effectRate(c.effect), effectKey: c.effectKey as CircuitEffectKey, oneByOne: null, conductive: c.effect > 0, cargoSlots: c.effectKey === 'cargo_slots' ? cargoSlotBonus(c.effect) : 0, perfectPt: 0, false20: false, true20: false }));
   return playOf(world)?.loadout[unitId] ?? [];
 }
 
@@ -294,6 +297,7 @@ export function modsFor(world: World, unitId: string): UnitMods {
       break;
     }
   }
+  if (world.enemies.some(e => e.id === unitId)) return m;
   const add = (key: CircuitEffectKey, field: keyof UnitMods) => {
     const r = trueRate(world, key);
     if (r > 0 && typeof m[field] === "number") (m[field] as number) += r;
@@ -335,7 +339,7 @@ export function modsFor(world: World, unitId: string): UnitMods {
 /** PR-B: the unit's release ability scale (×1 everywhere outside release). */
 export function abilityOf(world: World, unitId: string): AbilityScale {
   const p = playOf(world);
-  if (!p?.rules || !p.release) return IDENTITY_ABILITY_SCALE;
+  if (world.enemies.some(e => e.id === unitId) || !p?.rules || !p.release) return IDENTITY_ABILITY_SCALE;
   return p.ability[unitId] ?? abilityOfRelease(unitId);
 }
 
@@ -624,7 +628,7 @@ export function applyCircuitHubSide(world: World, hub: HubSnapshot): HubSnapshot
     const { airSupportCooldownSec: _drop, ...rest } = next;
     next = rest;
   }
-  const n = p.airWrecks.filter((w) => w.recovered).length;
+  const n = p.airWrecks.filter((w) => w.recovered && ![...world.enemies,...(world.recoveredEnemyUnits ?? [])].some(e=>e.id===w.id)).length;
   for (let i = 0; i < n; i++) next = addDestroyedGen1(next);
   return next;
 }
@@ -1095,7 +1099,7 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
   const fi = abilityOf(world, from.id).fireInterval;
   const reach = dist(from.pos, target.pos);
   if (ammo <= 0 && m.melee > 0 && reach <= from.radius + target.radius) {
-    target.hp -= world.balance.bulletDamage * (1 + m.melee) * m.attack;
+    target.hp -= (from.kind === "enemy" ? world.balance.enemyDamage : world.balance.bulletDamage) * (1 + m.melee) * m.attack;
     noteDamageBreaksSuppress(world, target);
     if (target.hp <= 0) { target.hp = 0; target.alive = false; }
     from.cooldown = world.balance.fireCooldown;
@@ -1171,8 +1175,8 @@ function spawnShot(
     pos: { ...from.pos },
     vel: { x: Math.cos(base) * speed, y: Math.sin(base) * speed },
     ttl: world.balance.bulletTtlSec,
-    damage: world.balance.bulletDamage * damageMul,
-    fromEnemy: false,
+    damage: (from.kind === "enemy" ? world.balance.enemyDamage : world.balance.bulletDamage) * damageMul,
+    fromEnemy: from.kind === "enemy",
     ownerId: from.id,
     ...(emp ? { emp: true, empSlow: extra?.empSlow } : {}),
     ...(extra?.homingId ? { homingId: extra.homingId, bend: extra.bend } : {}),
@@ -1183,7 +1187,7 @@ function spawnShot(
 
 export function bendHoming(world: World, b: Bullet, dt: number): void {
   if (!b.homingId || b.bend == null || !b.alive) return;
-  const foe = world.enemies.find((e) => e.id === b.homingId);
+  const foe = [...world.enemies, ...friendlies(world)].find((e) => e.id === b.homingId);
   if (!foe?.alive) return;
   const want = Math.atan2(foe.pos.y - b.pos.y, foe.pos.x - b.pos.x);
   const have = Math.atan2(b.vel.y, b.vel.x);
@@ -1196,7 +1200,7 @@ export function bendHoming(world: World, b: Bullet, dt: number): void {
 }
 
 export function tryDodge(world: World, unit: Unit, b: Bullet): boolean {
-  if (!playOf(world)?.rules || !b.fromEnemy || !unit.alive) return false;
+  if (!playOf(world)?.rules || (unit.kind !== "enemy" && !b.fromEnemy) || !unit.alive) return false;
   const m = modsFor(world, unit.id);
   if (!(m.dodge > 0) && !selfKey(world, unit.id, "dodge")) return false;
   const hit = unit.radius + world.balance.bulletHitPadding;
@@ -1294,8 +1298,8 @@ type WreckSpot = { id: string; pos: Vec2; move: (at: Vec2) => void };
 
 function wreckSpots(world: World): WreckSpot[] {
   const out: WreckSpot[] = [];
-  for (const u of friendlies(world)) {
-    if (u.alive || !u.instanceId) continue;
+  for (const u of [...friendlies(world), ...world.enemies]) {
+    if (u.alive || (u.kind === "enemy" && u.hp > 0) || (u.kind !== "enemy" && !u.instanceId) || u.enemyState?.recovered) continue;
     out.push({
       id: u.id,
       pos: u.pos,
@@ -1317,7 +1321,7 @@ function wreckSpots(world: World): WreckSpot[] {
     });
   }
   for (const w of playOf(world)?.airWrecks ?? []) {
-    if (w.recovered) continue;
+    if (w.recovered || world.enemies.some(e=>e.id===w.id)) continue;
     out.push({
       id: `a:${w.id}`,
       pos: w.pos,

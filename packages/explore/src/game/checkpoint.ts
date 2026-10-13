@@ -1,3 +1,4 @@
+import { backfillEnemyState } from "./enemyBehavior";
 import { backfillEnemyIdentities } from "./enemyIdentity";
 /**
  * Sortie / result snapshots for the one shared checkpoint key.
@@ -14,6 +15,8 @@ export function snapshotSortieWorld(world: World): unknown {
 export function snapshotResultWorld(world: World): unknown {
   const copy = JSON.parse(JSON.stringify(world)) as World;
   copy.enemies = [];
+  // Recovered enemy identities survive the result checkpoint for a refused-write retry.
+  copy.recoveredEnemyUnits = world.recoveredEnemyUnits ?? [];
   copy.bullets = [];
   copy.coverObjects = [];
   copy.phase = "result";
@@ -34,6 +37,7 @@ export function worldFromCheckpointBody(body: unknown): World | null {
   world.logs = world.logs ?? [];
   // Enemy PR1: an old checkpoint has enemies without identity data.
   backfillEnemyIdentities(world);
+  backfillEnemyState(world);
   // #270: JSON turns the circuit fog Uint8Array into a plain object; rebuild it.
   const play = world.circuitPlay as { fogOpen?: unknown } | undefined;
   if (play && play.fogOpen != null && !(play.fogOpen instanceof Uint8Array)) {

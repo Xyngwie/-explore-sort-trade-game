@@ -222,7 +222,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   const bullets = world.bullets.length;
   tickWorld(world, 0.2, { move: { x: 1, y: 0 }, clickMove: null, fire: true, interact: false });
   assert.ok(world.leader.pos.x > x0, "focus does not freeze movement");
-  assert.equal(world.bullets.length, bullets, "focus does not fire outside range");
+  assert.equal(world.bullets.filter(b => b.ownerId === world.leader.id).length, bullets, "focus does not fire outside range (enemy-versus-enemy shots are independent)");
   assert.equal(world.circuitPlay!.order?.kind, "focus");
 }
 

@@ -240,6 +240,15 @@ export function renderWorld(
     }
   }
 
+  for (const e of world.enemies) {
+    if (e.alive || e.enemyState?.recovered || wreckCarrierId(world,e.id) || !isEnemySeen(world,e)) continue;
+    drawCraft(ctx,tx(e.pos.x),ty(e.pos.y),e.radius*sx,'#8a9099',e.heading);
+    ctx.fillStyle='#c3c8cf'; ctx.font='11px sans-serif'; ctx.fillText('残骸',tx(e.pos.x),ty(e.pos.y)-12);
+  }
+  for (const d of world.enemySupplies ?? []) {
+    if (![world.leader,...world.wingmen].some(u=>u.alive && Math.hypot(u.pos.x-d.pos.x,u.pos.y-d.pos.y)<world.balance.visionRange)) continue;
+    ctx.fillStyle='#75d99b';ctx.fillRect(tx(d.pos.x)-4,ty(d.pos.y)-4,8,8);
+  }
   // Bullets
   ctx.fillStyle = "#e8eaed";
   for (const b of world.bullets) {

@@ -77,6 +77,8 @@ export type HubCircuitRecord = {
   acquiredAt?: string;
   /** Reserved: row key of the future circuit→command/stat table (unset for now). */
   effectKey?: string;
+  /** Sampled enemy false-board effect; discarded when Restore supplies a new result. */
+  enemyEffect?: number;
   /**
    * @deprecated Legacy 3-value mirror of `restoreState` kept so existing callers
    * keep working (`unrestored` → "offline"). Derived on normalize; do not set
@@ -469,6 +471,7 @@ export function normalizeCircuitRecord(
     equippedTo: sanitizeMechInstanceId(obj.equippedTo),
     outcome,
   };
+  if (rec.origin === "enemy_drop" && rec.restoreState === "bypass" && typeof obj.enemyEffect === "number" && Number.isFinite(obj.enemyEffect) && obj.enemyEffect >= 0) rec.enemyEffect = Math.min(board.cols * board.rows, obj.enemyEffect);
   const acquiredAt = sanitizeIso(obj.acquiredAt);
   if (acquiredAt) rec.acquiredAt = acquiredAt;
   const updatedAt = sanitizeIso(obj.updatedAt);

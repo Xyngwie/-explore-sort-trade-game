@@ -169,8 +169,9 @@ function loopOn(board: CircuitBoardState): boolean {
   }
 }
 
-function activeEffect(rec: Pick<HubCircuitRecord, "circuitBoard" | "locked" | "restoreState">): number {
+function activeEffect(rec: Pick<HubCircuitRecord, "circuitBoard" | "locked" | "restoreState" | "enemyEffect">): number {
   if (!isCircuitRestoreStateActive(rec.restoreState)) return 0;
+  if (rec.enemyEffect != null && rec.restoreState === "bypass") return rec.enemyEffect;
   try {
     return computeCircuitEffectForBoard(rec.circuitBoard, {
       perfect: rec.circuitBoard.perfect ?? rec.locked,
