@@ -434,7 +434,7 @@ Issue #269 最初のコメントの仕様と、お金まわり Issue #266 の仕
 - **E2 = B:** 倒した敵はすべて残骸になる。落とす弾薬と電力は、倒したときの状態（残弾と活動量）で決まる。→ D1 = B・D2 = B（§11.2、23:54）。電力の式の数字は未決。
 - **E3 = A:** 回収しなかった残骸は出撃の終わりに消える。
 - **E4 = A:** 回収した残骸は、その型番の大破機になる（回路は付いたまま）。回路の中身はそこで分かる。
-- **E5 = B:** 盤が大きいほど、出てくる敵の型番が高く、回路の数も多い。
+- **E5 = B:** ~~盤が大きいほど、出てくる敵の型番が高く、回路の数も多い。~~ → 変更（2026-10-13 神宮）: 型番は上がらない（機体の性能はどれも同じ、MECH_FLEET §1）。強さはマスの数字で回路の枚数と大きさが増える（§11.4）。
 - **E6 = A:** 同じマスへ出撃するたびに、新しい敵が出る。
 - **E7:** E1 で扱う（別の決定は要らない）。
 - **F1 = B:** 「所属不明」は敵をタップしたときと情報欄にだけ出す（地図の上には常には出さない）。
@@ -477,3 +477,91 @@ Issue #269 最初のコメントの仕様と、お金まわり Issue #266 の仕
 5. **PR5 `feat/recall-strays`（案）:** 帰還要請でゾンビを出す（数は Invade の盤のマスの数字。Z1〜Z5 の決定後）。
 
 進め方: PR-C（僚機の頭上の赤字）を終えてから PR1 に入る。
+
+### 11.4 PR2〜PR5 の仕様（2026-10-13 18:11 神宮の決定。Issue #285 と同じ内容）
+
+PR2 の前の案（型番の決め方〔項目 5〕と型番ごとの強さ〔項目 6〕）は取り下げ。機体の性能はどれも同じで、世代の差は無い。
+
+###### 敵の決定（2026-10-12〜13 神宮。参謀経由）
+
+####### 強さ
+- 機体の性能はどれも同じ（MECH_FLEET §1）。世代の差は無し。
+  - 「型番で強さを変える」「mech_gen2 は HP 1.3 倍」と、E5 の「型番が上がる」は取り下げ。
+- 強さは出撃したマスの数字 n（0〜8）で決める。
+  - 回路の枚数: 1 ＋ floor(n/3)
+  - 回路の大きさ: 一辺 2 ＋ floor(n/3)（2×2〜4×4）
+- 効果値は 一辺 × 一辺 × random(0.3〜1.0)。効き方はこちらの回路と同じ式（2%×√効果値）。
+
+####### 行動
+- 動き方は 4 種類。見た目では分からない（B3 = A）。
+  - 突っ込む: 遊撃 raid_attack・接近戦 melee・SMG smg・散弾 shotgun
+  - 距離を取る: 帯同 escort_range・MMR mmr・LMG lmg・高速弾 fast_round・誘導弾 homing_round・EMP 弾 emp_round
+  - その場を守る（待ち伏せ）: 地点防衛 point_defense_armor・カバー戦闘 cover_fight・カバー間移動 cover_move・回避 dodge・周回戦闘 orbit_speed
+  - 漁る: 偵察 scout_activity・運搬 haul_speed・積載力 cargo_slots・回収 recover
+  - 回路が複数のときにどの種類になるか（例: 1 枚目の回路で決める）は、まだ決めていない。
+- 見つける前は、種類ごとにうろつく。視界は 220。
+- 見つけたら射程 160 まで詰め、そのあとは種類ごとに戦う。
+- 誘引で動き出す、今の「動かない敵」は残す。
+- 敵どうしは協力しない。敵どうしもお互いに敵。
+- 待ち伏せの種類は活動量が少ない。近くの電力パーツを狙い、通りかかった敵と戦って落とし物を取る。
+
+####### 出てくるときの弾と活動量
+- 弾（満タン 28）: 10 機のうち 7 機は 3〜8 発、2 機は 9〜20 発、1 機は満タン。
+- 活動量（満タン 300）: 同じ割合で 15〜35%、35〜70%、満タン。
+
+####### 出撃中の弾と活動量
+- 撃つと弾が減る。0 になったら、近くのコンテナか残骸を漁りに行く。
+- 活動量は動いている間だけ 1 秒に 0.5 減る。満タンの 10% より下には減らない。10% になったらうろつくのをやめるが、撃つことはできる。
+
+####### 残骸
+- E2: 倒した敵はすべて残骸になる。
+- E3: 回収しなかった残骸は出撃の終わりに消える。
+- E4: 持ち帰った残骸は大破機になる。回路は付いたままで、中身はそこで初めて分かる。
+- E6: 同じマスへ出撃するたびに新しい敵が出る。
+- F1: 「所属不明」はタップしたときと情報欄だけ（PR1 #284 で済み）。
+
+####### 落とし物
+- D1 = B: 残っていた弾を全部落とす。
+- D2: 電力パーツの数は残りの活動量と同じ数（60 では割らない）。
+- D3 = B: コンテナの仕組みは残す。敵もこちらの機体と同じように積荷を持ち、壊れると落とす。
+- D4 = A: 弾と電力パーツは近づくと自動で拾い、積載に数えない。機体の上限（弾倉・最大活動量）を超える分は地面に残る。
+
+####### ゾンビ（帰還要請のはぐれ機体）
+- Z3 = A: 出撃中の最初の帰還要請のときだけ出る。
+- Z1 = A: 搭乗円のまわりの視界の外、ランダムな向きに出る。
+- Z2 = B: 離昇まで少しずつ出る。
+- 数は Invade のマスの数字。マスの数字が 0、または Invade を通らない出撃では出ない。
+- Z4 = B: 回路の無い弱い専用の敵。倒すと回路の無い残骸になる。世界観: 回路を失った機体が、帰還要請の信号で目を覚ましたもの。
+- Z5 = A: 搭乗円に入っても特に何も起きない。
+
+###### PR の分け方
+- **PR2 `feat/enemy-circuit-behavior`:** 回路で動く敵。回路の枚数・大きさ・効果値、4 種類の行動、視界、敵どうしの敵対、弾と活動量の分布と減り方。
+- **PR3 `feat/enemy-wrecks-drops`:** 残骸と落とし物（E2・E3・D1〜D4）。
+- **PR4 `feat/enemy-wreck-recovery`:** 持ち帰った残骸を大破機にする（E4）。HubSave に入れる。
+- **PR5 `feat/recall-strays`:** ゾンビ（Z1〜Z5）。
+
+###### 今のコードの事実（main `aa4fc87`）
+- 敵の数字（`packages/explore/src/game/balance.ts`）: 速さ `enemySpeed` 70、HP `enemyHp` 100、1 発 `enemyDamage` 5、1 秒に 1 発（`fireCooldown` 1.0）、射程 `weaponRange` 160。
+- 追い始める距離は 167（`visionRange` 220 × `enemyChaseVisionMul` 0.76）。
+- 弾は減らず、活動量は無い。倒すとコンテナを 0〜2 個落とす（`enemyDeathDropMax`、`sim.ts` の `spawnEnemyDeathDrops`）。
+- 敵の動き: `packages/explore/src/game/sim.ts` の `updateEnemies`（いちばん近い味方を追い、射程の中で撃つ）。敵の配置: `game/world.ts` の `placeEnemies`。
+- PR1 のデータ（`game/enemyIdentity.ts`）: `Unit.enemyIdentity = { modelId: "mech_gen1", durability: number, circuits: [{ circuitId, side: 2, effectKey, effect: 0, trueBoard: false }] }`。
+  - 古い途中保存は `checkpoint.ts` の `worldFromCheckpointBody` → `backfillEnemyIdentities` で補う。
+  - 「所属不明」: `world.enemyTag`、`noteEnemyTap`。
+- 関係するファイル:
+  - 回路の効果: `game/circuitPlay.ts`（`modsFor`・`effectiveBatteryCapacity`・`sortieAmmoCap`）、`packages/shared/src/circuit-actions.ts`（`FALSE_BOARD_EFFECT_KEYS`）
+  - 積載: `game/carry.ts`
+  - 残骸: `game/wrecks.ts`
+  - 帰還要請・搭乗円: `game/sim.ts`（boarding）
+  - Invade のマスの数字: `packages/invade/src/board.ts`
+  - HubSave: `packages/shared/src/hub-save.ts`（契約 `docs/HUB_SAVE_CONTRACT.md`）
+- 設計メモ: `docs/CIRCUIT_SQUAD_DESIGN_V0.md` §11。
+
+###### どの PR でも必ずやること
+- 古いセーブ・途中保存・URL がそのまま読めることを確かめる互換テストを入れる。
+  - 敵のデータ・弾・活動量が無い古い途中保存は、読み込むときに補う。
+  - PR4 は HubSave v3 を読む／書く往復で、古いビルドとの往復も確かめる。
+- 「抽出」という言葉は使わない（「帰還」）。
+- `.github/` は触らない。
+- マージの前に、main の最新の Deploy Modules Preview が success であることを確かめる。
+
