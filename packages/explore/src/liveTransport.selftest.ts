@@ -18,7 +18,8 @@ function world() {
     w.circuitPlay!.ability[u.id] = {...IDENTITY_ABILITY_SCALE};
     u.pos = {x:400,y:400}; u.moveTarget = null;
   }
-  for (const e of w.enemies) { e.alive=false; e.hp=0; }
+  backfillEnemyState(w);
+  for (const e of w.enemies) { e.alive=false; e.hp=0; e.enemyState!.deathHandled=true; }
   for (const c of w.containers) { c.discovered=false; c.pos={x:20,y:20}; }
   return w;
 }
