@@ -426,3 +426,7 @@ Invade→ExploreのURLに`invadeRank`を追加し、古いURLでは0段。敵の
 `starterCircuitGranted?: boolean`を追加。一度初期装備を付与・確認したらtrueを保存する。旧セーブに既存の`false-1x1-*`がある場合も付与済みと読む。初期回路を取り外し／売却した後、再付与せず、初期の1枚枠を他の回路に使える。古いビルドはこの任意キーを保持しないため、最新版でのプレイが必要。
 
 `slotCapacity`は廃止。新しい共有関数は`squadCircuitLimit`・`squadCircuitUsage`・`squadEquipmentError`・`weaponCategory`。装備拒否理由は`squad_full`・`category_full`を追加。武器種と特殊弾は別に解決し、SMGの各発・散弾の各ペレットにも特殊弾の速度／誘導／EMPが適用される。弾数上限はMMR÷5・LMG×2の武器種だけで決まる。新規の敵回路生成も各カテゴリの重複を避ける（既存の途中保存の回路は維持）。
+
+### 生存機体の積載と活動量消費（draft #290）
+
+`battery.activity`は移動時間を保持するため小数を許可する（capacityは整数のまま）。fleet・lostMechs・World・途中保存・帰還のmechBattery・compact URL全体で小数を維持する。compact URLは最大6桁。HUB充電はパーツの在庫と対象バッテリーを一回の保存で更新し、拒否されたら成功として扱わない。新しいHubSaveトップレベルキーは追加しない。旧セーブの整数も読めるが、旧ビルドは小数を切り捨てる。生存機体の搭載IDは既存のWorld.circuitPlay.carryに入り、帰還時の機体・回路・弾薬はそれぞれのinstanceIdを維持する。積んだだけでfleetや回路を複製しない。仕様はLIVE_MECH_TRANSPORT_V0.md。

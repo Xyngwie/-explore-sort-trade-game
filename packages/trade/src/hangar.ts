@@ -3,7 +3,7 @@
  * Pure transitions + localStorage persistence via shared hub-save.
  */
 
-import { squadEquipmentError,
+import { squadEquipmentError, chargeMechPower,
   isWreckRow,
   RESOURCE_LABEL_JA,
   CRAFT_SIGNATURE_STORAGE_KEY,
@@ -2019,4 +2019,13 @@ export const BULLETIN_UNLOCKED_LINE_JA = "掲示板が開いた";
 export function bulletinUnlockedLineHtml(hub: { bulletinUnlocked?: boolean } | null | undefined): string {
   if (!readBulletinUnlocked(hub)) return "";
   return `<p class="bulletin-unlocked" data-bulletin-unlocked style="margin:0.25rem 0 0.5rem;font-weight:600">${BULLETIN_UNLOCKED_LINE_JA}</p>`;
+}
+
+/** Manual charge is saved atomically: refused writes do not consume stock. */
+export function chargeMech(state: HangarState, id: string, storage?: Pick<Storage, "setItem">): HangarState {
+  const result = chargeMechPower(state.hub, id);
+  if (result.reason) return { ...state, notice: result.reason === "full" ? "充電済みです。" : result.reason === "no_power" ? "電力パーツがありません。" : "機体がありません。" };
+  if (!saveHubSaveToLocalStorage(result.hub, storage)) return { ...state, notice: "充電を保存できませんでした。電力パーツは消費していません。再読込してください。" };
+  const mech = result.hub.fleet.find(m => m.instanceId === id)!;
+  return { ...state, hub: result.hub, notice: `充電：電力パーツ ${result.spent}個 → 活動量 ${Number(mech.battery.activity.toFixed(2))}/${mech.battery.capacity}${mech.battery.activity < mech.battery.capacity ? "（在庫不足で途中まで充電）" : ""}` };
 }

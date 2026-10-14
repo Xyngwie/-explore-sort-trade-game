@@ -330,15 +330,10 @@ export function collectSupplies(world: World): void {
           (world.currentAmmo[u.instanceId] ?? cap) + a;
         d.ammo -= a;
         if (b) {
-          const p = Math.min(
-            d.power,
-            Math.max(
-              0,
-              (effectiveBatteryCapacity(world, u) ?? b.capacity) - b.activity,
-            ),
-          );
-          b.activity += p;
-          d.power -= p;
+          const effectiveCap = effectiveBatteryCapacity(world, u) ?? b.capacity;
+          const p = Math.min(d.power, Math.max(0, effectiveCap * (1 - b.activity / b.capacity)));
+          b.activity = Number(Math.min(b.capacity, b.activity + p * b.capacity / effectiveCap).toFixed(10));
+          d.power = Number(Math.max(0, d.power - p).toFixed(10));
         }
       }
     }

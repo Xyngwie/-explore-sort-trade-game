@@ -702,7 +702,7 @@ function encodeLostMechs(raw: readonly LostMechReturnState[] | undefined): strin
       ...(m.currentAmmo == null ? {} : { currentAmmo: Math.max(0, Math.floor(m.currentAmmo)) }),
       battery: {
         capacity,
-        activity: Math.max(0, Math.min(capacity, Math.floor(m.battery.activity))),
+        activity: Math.max(0, Math.min(capacity, m.battery.activity)),
       },
       circuitIds: [...new Set(m.circuitIds.map((id) => id.trim()).filter(Boolean))],
       // optional location / time / copy (only keys that are set)
@@ -741,7 +741,7 @@ function parseLostMechs(raw: string | null): LostMechReturnState[] {
         currentAmmo: currentAmmo == null ? undefined : Math.max(0, Math.floor(currentAmmo)),
         battery: {
           capacity: Math.max(1, Math.floor(capacity)),
-          activity: Math.max(0, Math.min(Math.max(1, Math.floor(capacity)), Math.floor(activity))),
+          activity: Math.max(0, Math.min(Math.max(1, Math.floor(capacity)), activity)),
         },
         circuitIds,
         ...normalizeLostMechExtras(obj),
@@ -765,7 +765,7 @@ function encodeMechBatteryCompact(
       if (!id || (allow && !allow.has(id)) || seen.has(id)) return "";
       seen.add(id);
       const capacity = Math.max(1, Math.floor(row.battery.capacity));
-      const activity = Math.max(0, Math.min(capacity, Math.floor(row.battery.activity)));
+      const activity = Math.max(0, Math.min(capacity, Number(row.battery.activity.toFixed(6))));
       return encodeURIComponent(id) + ":" + capacity + ":" + activity;
     })
     .filter(Boolean)
@@ -781,7 +781,7 @@ function parseMechBatteryCompact(raw: string | null): MechBatteryRow[] {
     if (fields.length !== 3) continue;
     const instanceId = decodeURIComponent(fields[0] ?? "").trim();
     const capacity = Number.parseInt(fields[1] ?? "", 10);
-    const activity = Number.parseInt(fields[2] ?? "", 10);
+    const activity = Number.parseFloat(fields[2] ?? "");
     if (!instanceId || !Number.isFinite(capacity) || !Number.isFinite(activity) || capacity <= 0 || seen.has(instanceId)) {
       continue;
     }
@@ -790,7 +790,7 @@ function parseMechBatteryCompact(raw: string | null): MechBatteryRow[] {
       instanceId,
       battery: {
         capacity: Math.floor(capacity),
-        activity: Math.max(0, Math.min(Math.floor(capacity), Math.floor(activity))),
+        activity: Math.max(0, Math.min(Math.floor(capacity), activity)),
       },
     });
   }

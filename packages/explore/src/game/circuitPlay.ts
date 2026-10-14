@@ -20,6 +20,7 @@ import {
   EMP_SLOW_BASE,
   EMP_SLOW_CAP,
   GUN_EFFECT_ORDER,
+  weaponCategory,
   WEAPON_EFFECT_KEYS,
   SPECIAL_AMMO_EFFECT_KEYS,
   MECH_AMMO_BASE_CAPACITY,
@@ -93,7 +94,7 @@ export type CircuitPlayState = {
   /** Last wreck tapped for the existing collect command. Not a save key. */
   collectTap: string | null;
   collectDown: boolean;
-  /** 項目4-1: wreck spot ids each unit is carrying (unit id → ids). Rides in the 5-3 checkpoint; backfilled from the old leader-only `carried`. */
+  /** 項目4-1: wreck / live mech ids each unit is carrying (unit id → ids). Rides in the 5-3 checkpoint; backfilled from the old leader-only `carried`. */
   carry: Record<string, string[]>;
   /** 項目4-1: an 8 s wreck pickup in progress per unit (unit id → wreck id + seconds). */
   wreckChannel: Record<string, { id: string; t: number }>;
@@ -216,7 +217,7 @@ function anyone(world: World, key: CircuitEffectKey): boolean {
 
 /** 項目4-2 N2: the wingman carrying the captain's wreck (manual control, air support, 帰還要請). */
 export function captainRescuer(world: World): Unit | null {
-  if (world.leader.alive || !world.leader.instanceId) return null;
+  if (!world.leader.instanceId) return null;
   const by = wreckCarrierId(world, world.leader.id);
   if (!by) return null;
   return world.wingmen.find((w) => w.id === by && w.alive) ?? null;
@@ -231,8 +232,14 @@ function hasRecover(world: World, unitId: string): boolean {
   return !!selfKey(world, unitId, "recover");
 }
 
+/** Carried non-weapon bonuses add to the carrier; each weapon stays on its owner. */
+function personalEffects(world: World, unitId: string): ClassifiedCircuit[] {
+  const borrowed = (playOf(world)?.carry[unitId] ?? []).flatMap(id => own(world, id))
+    .filter(c => c.effectKey != null && !weaponCategory(c.effectKey));
+  return [...own(world, unitId), ...borrowed];
+}
 function selfKey(world: World, unitId: string, key: CircuitEffectKey): ClassifiedCircuit | null {
-  return own(world, unitId).find((c) => c.effectKey === key && c.effect > 0) ?? null;
+  return (weaponCategory(key) ? own(world, unitId) : personalEffects(world, unitId)).find((c) => c.effectKey === key && c.effect > 0) ?? null;
 }
 
 function trueRate(world: World, key: CircuitEffectKey): number {
@@ -276,7 +283,7 @@ export function modsFor(world: World, unitId: string): UnitMods {
   };
   const p = playOf(world);
   if (!p?.rules) return m;
-  const list = own(world, unitId);
+  const list = personalEffects(world, unitId);
   for (const c of list) {
     if (!(c.effect > 0) || !c.effectKey || c.trueBoard) continue;
     const r = c.r;
@@ -970,7 +977,7 @@ function tickOrder(world: World, dt: number): void {
             ammos.push({ id, floor, usable: a - floor, cap: sortieAmmoCap(world, u) });
           }
           const b = world.mechBattery[id];
-          if (b) { act += b.activity; acts.push({ id, cap: effectiveBatteryCapacity(world, u) ?? b.capacity }); }
+          if (b) { act += b.activity; acts.push({ id, cap: b.capacity }); }
         }
         if (ammos.length > 0) {
           // Share the ready rounds evenly up to each cap; nothing is thrown away
@@ -979,11 +986,14 @@ function tickOrder(world: World, dt: number): void {
           ammos.forEach((r, i) => { world.currentAmmo[r.id] = r.floor + shares[i]!; });
         }
         if (acts.length > 0) {
-          const avg = Math.floor(act / acts.length);
-          for (const row of acts) {
-            const b = world.mechBattery[row.id];
-            if (b) b.activity = Math.min(row.cap, avg);
-          }
+          // Continuous equalisation preserves fractional movement charge.
+          const ordered = [...acts].sort((a, b) => a.cap - b.cap);
+          let remaining = act;
+          ordered.forEach((row, index) => {
+            const share = Math.min(row.cap, remaining / (ordered.length - index));
+            world.mechBattery[row.id]!.activity = share;
+            remaining -= share;
+          });
         }
       }
       assignOrder(world, null);
@@ -1354,25 +1364,57 @@ function wreckSpots(world: World): WreckSpot[] {
   return out;
 }
 
+/** Living friendlies can also be loaded; their weapons remain independent. */
+function pickupSpots(world: World): WreckSpot[] {
+  return [...wreckSpots(world), ...friendlies(world).filter(u => u.alive && u.instanceId).map(u => ({
+    id: u.id, pos: u.pos, move: (at: Vec2) => { u.pos = { ...at }; u.vel = { x: 0, y: 0 }; },
+  }))];
+}
+function pickupById(world: World, id: string): WreckSpot | null {
+  return pickupSpots(world).find(w => w.id === id) ?? null;
+}
+
+/** Release one passenger; independent movement resumes after dismount. */
+export function unloadMech(world: World, id: string): boolean {
+  const p = playOf(world);
+  const by = wreckCarrierId(world, id);
+  if (!p || !by) return false;
+  p.carry[by] = (p.carry[by] ?? []).filter(value => value !== id);
+  if (!p.carry[by]!.length) delete p.carry[by];
+  const passenger = friendlies(world).find(u => u.id === id);
+  const carrier = friendlies(world).find(u => u.id === by);
+  if (carrier && !passenger) pickupById(world, id)?.move(carrier.pos);
+  if (passenger && carrier) {
+    passenger.pos = passenger.alive ? { x: Math.min(world.balance.worldW - 20, Math.max(20, carrier.pos.x + carrier.radius + passenger.radius + 8)), y: carrier.pos.y } : { ...carrier.pos };
+    passenger.vel = { x: 0, y: 0 };
+    passenger.moveTarget = null;
+    if (passenger.kind === "wingman") {
+      delete p.wingMove[id]; delete p.wingRecover?.[id]; delete p.wingHold?.[id];
+    }
+  }
+  return true;
+}
+
 function wreckById(world: World, id: string): WreckSpot | null {
   return wreckSpots(world).find((w) => w.id === id) ?? null;
 }
 
 /** 項目4-1: carried wrecks ride on their carrier; a fallen carrier drops them where it fell (C6). */
-function placeCarried(world: World): void {
+export function placeCarried(world: World): void {
   const p = playOf(world);
   if (!p) return;
   for (const [unitId, ids] of Object.entries(p.carry ?? {})) {
     const unit = friendlies(world).find((u) => u.id === unitId);
     if (!unit || !unit.alive) {
       if (unit && ids.length > 0) pushLog(world, `${unitName(unit)}が大破：積載していた残骸をその場に落とした。`);
+      for (const id of [...ids]) unloadMech(world, id);
       delete p.carry[unitId];
       continue;
     }
     const next: string[] = [];
     for (const id of ids) {
-      const w = wreckById(world, id);
-      if (!w) continue;
+      const w = pickupById(world, id);
+      if (!w || id === unitId) continue;
       w.move(unit.pos);
       next.push(id);
     }
@@ -1389,7 +1431,7 @@ function unitName(u: Unit): string {
 function dropAllCargo(world: World, unit: Unit): void {
   dropContainerStack(world, unit);
   const p = playOf(world);
-  if (p?.carry?.[unit.id]) delete p.carry[unit.id];
+  if (p?.carry?.[unit.id]) { for (const id of [...p.carry[unit.id]!]) unloadMech(world, id); delete p.carry[unit.id]; }
 }
 
 /** Wrecks someone can pick up: not carried, and not the picker itself. */
@@ -1404,10 +1446,10 @@ export function wreckChannelOf(world: World, unitId: string): { id: string; t: n
 /** Start the 8 s wreck pickup for a unit (target must be within interactRadius). */
 export function startWreckPickup(world: World, unit: Unit, wreckId: string): "started" | "far" | "taken" | "none" {
   const p = playOf(world);
-  if (!p || !unit.alive) return "none";
-  const w = wreckById(world, wreckId);
+  if (!p || !unit.alive || wreckCarrierId(world, unit.id)) return "none";
+  const w = pickupById(world, wreckId);
   if (!w || w.id === unit.id) return "none";
-  if (wreckCarrierId(world, wreckId) != null) return "taken";
+  if (wreckCarrierId(world, wreckId) != null || (p.carry[wreckId] ?? []).includes(unit.id)) return "taken";
   if (dist(unit.pos, w.pos) > world.balance.interactRadius) return "far";
   p.wreckChannel[unit.id] = { id: wreckId, t: 0 };
   unit.salvageId = null;
@@ -1421,8 +1463,8 @@ function tickWreckPickups(world: World, dt: number): void {
   if (!p) return;
   for (const [unitId, ch] of Object.entries(p.wreckChannel ?? {})) {
     const unit = friendlies(world).find((u) => u.id === unitId);
-    const w = wreckById(world, ch.id);
-    if (!unit || !unit.alive || !w || wreckCarrierId(world, ch.id) != null || dist(unit.pos, w.pos) > world.balance.interactRadius) {
+    const w = pickupById(world, ch.id);
+    if (!unit || !unit.alive || wreckCarrierId(world, unitId) != null || (p.carry[ch.id] ?? []).includes(unitId) || !w || wreckCarrierId(world, ch.id) != null || dist(unit.pos, w.pos) > world.balance.interactRadius) {
       if (unit?.alive && w && wreckCarrierId(world, ch.id) == null) pushLog(world, `${unitName(unit)}：残骸の回収を中断（離れた）。`);
       delete p.wreckChannel[unitId];
       continue;
@@ -1436,11 +1478,25 @@ function tickWreckPickups(world: World, dt: number): void {
     if (roomFor(world, unit) < LOAD_PER_WRECK) {
       const held = p.carry[unitId] ?? [];
       if (held.length > 0) pushLog(world, `${unitName(unit)}：積載していた残骸をその場に降ろした。`);
+      for (const id of [...held]) unloadMech(world, id);
       delete p.carry[unitId];
     }
     p.carry[unitId] = [...(p.carry[unitId] ?? []), ch.id];
+    const target = friendlies(world).find(u => u.id === ch.id);
+    // Flatten the target's cargo onto its new carrier; overflow stays on the field.
+    if (target?.alive) {
+      const moved = Math.min(target.salvagedCount, Math.max(0, Math.floor(roomFor(world, unit))));
+      unit.salvagedCount += moved; target.salvagedCount -= moved;
+      dropContainerStack(world, target);
+      for (const id of [...(p.carry[target.id] ?? [])]) {
+        unloadMech(world, id);
+        if (roomFor(world, unit) >= LOAD_PER_WRECK) p.carry[unitId]!.push(id);
+      }
+      target.moveTarget = null; target.salvageId = null; target.salvageT = 0;
+      delete p.wingRecover?.[target.id]; delete p.wingMove[target.id]; delete p.wingHold?.[target.id];
+    }
     w.move(unit.pos);
-    pushLog(world, `${unitName(unit)}：残骸を積載（${loadLineJa(world, unit)}）。`);
+    pushLog(world, `${unitName(unit)}：${target?.alive ? "機体" : "残骸"}を積載（${loadLineJa(world, unit)}）。`);
   }
 }
 
@@ -1568,16 +1624,18 @@ export type WingmanPaletteAction = { id: string; label: string; next?: WingmanPa
 export function wingmanPaletteActions(world: World, unitIds: string[]): WingmanPaletteAction[] {
   const p = playOf(world);
   if (!p?.rules || !p.release || world.phase !== "sortie") return [];
-  const ids = unitIds.filter((id) => {
-    const u = world.wingmen.find((w) => w.id === id);
-    return !!u && u.alive && !p.wingTrueOne[id];
-  });
-  if (ids.length === 0) return [];
+  const liveIds = unitIds.filter(id => world.wingmen.some(w => w.id === id && w.alive));
+  if (!liveIds.length) return [];
+  const ids = liveIds.filter(id => !p.wingTrueOne[id] && !wreckCarrierId(world, id));
   const out: WingmanPaletteAction[] = [];
-  // fix/explore-move-tap-panel: 「移動」 arms the map pick at once (「地点選択」 removed).
-  if (p.captainTrueOne) out.push({ id: "move", label: "移動", next: [] });
-  // 項目4-2 C1a/b: a wingman with the 「回収」 circuit gets 「回収」 without the captain's 「4」.
-  if (ids.some((id) => hasRecover(world, id))) out.push({ id: "recover", label: "回収", next: [] });
+  if (ids.length && p.captainTrueOne) out.push({ id: "move", label: "移動", next: [] });
+  if (ids.some(id => hasRecover(world, id))) out.push({ id: "recover", label: "回収", next: [] });
+  if (liveIds.length === 1) {
+    const id = liveIds[0]!;
+    if (wreckCarrierId(world, id)) out.push({ id: "unload", label: "降ろす", next: [] });
+    else if (world.leader.alive && !wreckCarrierId(world, world.leader.id)) out.push({ id: "load", label: "積載", next: [] });
+    if ((p.carry[id] ?? []).length) out.push({ id: "unload-cargo", label: "積荷を降ろす", next: [] });
+  }
   return out;
 }
 
@@ -1586,7 +1644,7 @@ function recoverIds(world: World, unitIds: string[]): string[] {
   const p = playOf(world);
   return unitIds.filter((id) => {
     const u = world.wingmen.find((w) => w.id === id);
-    return !!u && u.alive && !p?.wingTrueOne[id] && hasRecover(world, id);
+    return !!u && u.alive && !wreckCarrierId(world, id) && !p?.wingTrueOne[id] && hasRecover(world, id);
   });
 }
 
@@ -1600,12 +1658,12 @@ export function beginWingmanRecoverPick(world: World, unitIds: string[]): boolea
 }
 
 /** Nearest free wreck (including the captain's) or found container near a tap. */
-function recoverTargetAt(world: World, pt: Vec2): { kind: "wreck" | "crate"; id: string } | null {
+function recoverTargetAt(world: World, pt: Vec2, ignored: ReadonlySet<string> = new Set()): { kind: "wreck" | "crate"; id: string } | null {
   const max = Math.max(40, world.balance.interactRadius * 1.5);
   let best: { kind: "wreck" | "crate"; id: string } | null = null;
   let d = max;
-  for (const w of wreckSpots(world)) {
-    if (wreckCarrierId(world, w.id) != null) continue;
+  for (const w of pickupSpots(world)) {
+    if (ignored.has(w.id) || wreckCarrierId(world, w.id) != null) continue;
     const dd = dist(w.pos, pt);
     if (dd <= d) { d = dd; best = { kind: "wreck", id: w.id }; }
   }
@@ -1623,11 +1681,12 @@ export function issueWingmanRecover(world: World, unitIds: string[], pt: Vec2): 
   if (!p) return [];
   const ids = recoverIds(world, unitIds);
   if (ids.length === 0) return [];
-  const target = recoverTargetAt(world, pt);
+  const target = recoverTargetAt(world, pt, new Set(ids));
   if (!target) { pushLog(world, "回収する対象が無い（残骸かコンテナをタップ）。"); return []; }
   p.wingRecover ??= {};
   p.wingHold ??= {};
-  const what = target.kind === "crate" ? "コンテナ" : target.id === world.leader.id ? "隊長機の残骸" : "残骸";
+  const liveTarget = friendlies(world).some(u => u.id === target.id && u.alive);
+  const what = target.kind === "crate" ? "コンテナ" : liveTarget ? "機体" : target.id === world.leader.id ? "隊長機の残骸" : "残骸";
   for (const id of ids) {
     const u = world.wingmen.find((w) => w.id === id)!;
     if (target.id === id) continue;
@@ -1647,7 +1706,7 @@ function recoverMove(world: World, unit: Unit): Vec2 | null {
   const rec = p.wingRecover?.[unit.id];
   if (rec) {
     if (rec.kind === "wreck") {
-      const w = wreckById(world, rec.id);
+      const w = pickupById(world, rec.id);
       if (w) return dist(unit.pos, w.pos) <= world.balance.interactRadius * 0.6 ? { ...unit.pos } : { ...w.pos };
     } else {
       const c = world.containers.find((x) => x.id === rec.id);
@@ -1676,10 +1735,10 @@ function tickWingmanRecover(world: World): void {
       if ((p.carry[id] ?? []).includes(rec.id)) {
         delete p.wingRecover[id];
         p.wingHold[id] = { x: u.pos.x, y: u.pos.y, manual: false };
-        if (rec.id === world.leader.id) pushLog(world, `${u.name}が隊長機の残骸を積載。手動操作・航空支援・帰還要請が戻った（地図タップで${u.name}を移動）。`);
+        if (rec.id === world.leader.id) pushLog(world, `${u.name}が${world.leader.alive ? "隊長機" : "隊長機の残骸"}を積載。手動操作・航空支援・帰還要請が戻った（地図タップで${u.name}を移動）。`);
         continue;
       }
-      const w = wreckById(world, rec.id);
+      const w = pickupById(world, rec.id);
       const by = w ? wreckCarrierId(world, rec.id) : null;
       if (!w || (by && by !== id)) { pushLog(world, `${u.name}：回収の対象が無くなった。`); delete p.wingRecover[id]; continue; }
       if (wreckChannelOf(world, id)) continue;
@@ -1712,7 +1771,7 @@ export function wingRecoverWantsSalvage(world: World, unit: Unit): boolean {
 /** N1: arm the map pick for 「移動」→「地点選択」 (one wingman or several). */
 export function beginWingmanMovePick(world: World, unitIds: string[]): boolean {
   const p = playOf(world);
-  if (!p || wingmanPaletteActions(world, unitIds).length === 0) return false;
+  if (!p || !wingmanPaletteActions(world, unitIds).some(a => a.id === "move")) return false;
   p.pending = { kind: "wing_move", pick: "map", unitIds: [...unitIds] };
   return true;
 }
@@ -1748,6 +1807,24 @@ export function pressWingPalette(world: World, actionId: string): boolean {
   // fix/explore-move-tap-panel: 「移動」 arms the map pick directly (3 taps: wingman → 移動 → map).
   // An old checkpoint can hold step "move" (the removed 「地点選択」 step): it reads as root,
   // and "point" still arms the pick so nothing saved is stuck.
+  if (actionId === "unload-cargo" && sel.ids.length === 1) {
+    const carrier = friendlies(world).find(u => u.id === sel.ids[0] && u.alive);
+    if (!carrier) return false;
+    dropAllCargo(world, carrier);
+    pushLog(world, "積荷をその場に降ろした。");
+    return true;
+  }
+  if (actionId === "load" && sel.ids.length === 1 && world.leader.alive) {
+    const result = startWreckPickup(world, world.leader, sel.ids[0]!);
+    if (result === "far") pushLog(world, "機体が遠い。近づいてから積載してください。");
+    if (result === "started") pushLog(world, "機体を積載中（8秒）。");
+    return result === "started";
+  }
+  if (actionId === "unload" && sel.ids.length === 1) {
+    const released = unloadMech(world, sel.ids[0]!);
+    if (released) pushLog(world, "機体を降ろした。");
+    return released;
+  }
   if (actionId === "move") return beginWingmanMovePick(world, sel.ids);
   if (actionId === "recover") return beginWingmanRecoverPick(world, sel.ids);
   if (sel.step === "move" && actionId === "point") return beginWingmanMovePick(world, sel.ids);
@@ -1795,7 +1872,7 @@ export function handleMapTap(world: World, pt: Vec2, wingPickRadius: number): "c
  */
 export function issueWingmanMove(world: World, unitIds: string[], pt: Vec2): string[] {
   const p = playOf(world);
-  if (!p || wingmanPaletteActions(world, unitIds).length === 0) return [];
+  if (!p || !wingmanPaletteActions(world, unitIds).some(a => a.id === "move")) return [];
   const moved: string[] = [];
   for (const id of unitIds) {
     const u = world.wingmen.find((w) => w.id === id);

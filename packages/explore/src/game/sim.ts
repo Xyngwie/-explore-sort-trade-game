@@ -1,3 +1,4 @@
+import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
 import { decideWingman } from "./brain";
@@ -44,7 +45,8 @@ import {
 } from "./circuitPlay";
 import type { Bullet, Unit, World } from "./types";
 import { captainActive, wingRecoverWantsSalvage, wreckChannelOf } from "./circuitPlay";
-import { canTakeContainer } from "./carry";
+import { canTakeContainer, wreckCarrierId } from "./carry";
+import { placeCarried, captainRescuer } from "./circuitPlay";
 import { dropUnitCargoToField } from "./orders";
 
 export { isOperationTimedOut } from "./orders";
@@ -63,7 +65,7 @@ function circuitLocomotion(world: World, unit: Unit, fallback: Vec2 | null, fall
 }
 
 function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, world: World): void {
-  if (!target || !unit.alive) {
+  if (!target || !unit.alive || speed <= 0 || wreckCarrierId(world, unit.id) || Object.values(world.circuitPlay?.wreckChannel ?? {}).some(ch => ch.id === unit.id)) {
     unit.vel = { x: 0, y: 0 };
     return;
   }
@@ -73,10 +75,14 @@ function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, 
     return;
   }
   const dir = norm({ x: target.x - unit.pos.x, y: target.y - unit.pos.y });
-  unit.vel = { x: dir.x * speed, y: dir.y * speed };
-  unit.heading = Math.atan2(dir.y, dir.x);
-  unit.pos.x = clamp(unit.pos.x + unit.vel.x * dt, 20, world.balance.worldW - 20);
-  unit.pos.y = clamp(unit.pos.y + unit.vel.y * dt, 20, world.balance.worldH - 20);
+  const travelTime = Math.min(d / speed, movementTimeAvailable(world, unit, dt));
+  const before = { ...unit.pos };
+  unit.pos.x = clamp(before.x + dir.x * speed * travelTime, 20, world.balance.worldW - 20);
+  unit.pos.y = clamp(before.y + dir.y * speed * travelTime, 20, world.balance.worldH - 20);
+  const moved = dist(before, unit.pos);
+  unit.vel = moved > 0 ? { x: dir.x * speed, y: dir.y * speed } : { x: 0, y: 0 };
+  if (moved > 0) unit.heading = Math.atan2(dir.y, dir.x);
+  consumeMovementPower(world, unit, moved / speed);
 }
 
 function revealVision(world: World): void {
@@ -391,6 +397,7 @@ function leaderAbortSalvageOnTimeout(world: World): void { for (const u of frien
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") return;
+  beginMovementPowerTick(world);
   world.elapsed += dt; world.timeLeft = Math.max(0, world.timeLeft - dt);
   if (world.timeLeft <= 0 && !world.operationTimedOut) {
     world.operationTimedOut = true;
@@ -402,6 +409,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     }
   }
   stepCircuitPlay(world, dt);
+  expireEmptyBatteries(world);
   const timedOut = isOperationTimedOut(world);
   const waitingBoarding = timedOut && world.boarding != null;
   const leader = world.leader;
@@ -411,10 +419,10 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   const leaderDown = !leader.alive;
   if (leaderDown) noteLeaderDown(world);
   leader.cooldown = Math.max(0, leader.cooldown - dt);
-  if (leaderDown || timedOut) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
+  if (leaderDown || timedOut || wreckCarrierId(world, leader.id)) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
   else {
     let fallback: Vec2 | null = leader.moveTarget;
-    if (input.move.x !== 0 || input.move.y !== 0) { const n = norm(input.move); fallback = { x: leader.pos.x + n.x * world.balance.wasdMoveLookahead, y: leader.pos.y + n.y * world.balance.wasdMoveLookahead }; }
+    if (input.move.x !== 0 || input.move.y !== 0) { const n = norm(input.move); const reach = Math.max(world.balance.wasdMoveLookahead, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed * dt); fallback = { x: leader.pos.x + n.x * reach, y: leader.pos.y + n.y * reach }; }
     else if (input.clickMove) fallback = { ...input.clickMove };
     const locked = movementLocked(world);
     const cruise = circuitLocomotion(world, leader, locked ? null : fallback, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed);
@@ -422,6 +430,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (!locked) updateCoverMovement(world, leader, input.move, dt);
     moveToward(leader, leader.moveTarget, cruise.speed, dt, world);
   }
+  placeCarried(world);
   if (!leaderDown) {
     const focusing = world.circuitPlay?.rules === true && world.circuitPlay.order?.kind === "focus";
     const focus = focusTarget(world, leader);
@@ -433,7 +442,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
       if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false);
     }
-    if (!timedOut && !movementLocked(world)) {
+    if (!timedOut && !wreckCarrierId(world, leader.id) && !movementLocked(world)) {
       const playEdge = world.circuitPlay;
       if (playEdge?.rules) {
         if (input.interact && !playEdge.collectDown) applyCollectPress(world);
@@ -446,24 +455,35 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   for (const w of world.wingmen) {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);
+    const riding = wreckCarrierId(world, w.id) != null;
     const intent = decideWingman(world, w, dt);
     const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.moveSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed /* 項目4-1: load 0 is 120 for wingmen too (2026-10-07 7:36 神宮) */);
-    w.moveTarget = timedOut ? null : cruise.target;
+    w.moveTarget = timedOut || riding ? null : cruise.target;
+    // A living captain riding a wingman controls that carrier with WASD too.
+    if (!timedOut && captainRescuer(world)?.id === w.id && (input.move.x || input.move.y)) {
+      const direction = norm(input.move);
+      const reach = Math.max(world.balance.wasdMoveLookahead, cruise.speed * dt);
+      w.moveTarget = { x: w.pos.x + direction.x * reach, y: w.pos.y + direction.y * reach };
+    }
     if (timedOut) w.vel = { x: 0, y: 0 };
     else moveToward(w, w.moveTarget, cruise.speed, dt, world);
+    placeCarried(world);
     const focusing = world.circuitPlay?.rules === true && world.circuitPlay.order?.kind === "focus";
     const focus = focusTarget(world, w);
     if (focusing) {
       if (focus) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, focus, false); }
     } else if (intent.fireAt) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, intent.fireAt, false); }
-    if (!timedOut && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage || wingRecoverWantsSalvage(world, w), dt);
+    if (!timedOut && !riding && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage || wingRecoverWantsSalvage(world, w), dt);
   }
+  placeCarried(world);
   spawnRecall(world);
   updateEnemies(world, dt); updateBullets(world, dt); handleEnemyDeaths(world); collectSupplies(world); revealVision(world);
   // 項目4-1 C6: a destroyed carrier drops its containers on the spot (wrecks: circuitPlay placeCarried).
   for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
+  placeCarried(world);
+  if (!world.leader.alive) noteLeaderDown(world);
   // A wipe during this tick rescues before a boarding circle can lift off (6A),
   // except a timeout that is already waiting on that circle (5-2b).
   if (!(isOperationTimedOut(world) && world.boarding) && maybeAutoRescue(world)) return;

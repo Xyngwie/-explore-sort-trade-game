@@ -727,7 +727,7 @@ export function normalizeLostMechs(
     if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(activity)) continue;
     const battery: MechBatteryState = {
       capacity: Math.floor(capacity),
-      activity: Math.max(0, Math.min(Math.floor(capacity), Math.floor(activity))),
+      activity: Math.max(0, Math.min(Math.floor(capacity), activity)),
     };
     const circuitIds = Array.isArray(obj.circuitIds)
       ? [...new Set(obj.circuitIds.filter((id): id is string => typeof id === "string").map((id) => id.trim()).filter(Boolean))]

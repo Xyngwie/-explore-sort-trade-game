@@ -29,3 +29,5 @@ export * from "./mech-ammo";
 export * from "./enemy-wreck-return";
 
 export * from "./invade-rank";
+
+export * from "./mech-power";
