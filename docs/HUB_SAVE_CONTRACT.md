@@ -267,7 +267,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 | フィールド | 型 | 既定・正規化 | 書くもの | PR |
 |---|---|---|---|---|
 | `inventoryFieldDrops` | `FieldInventoryDrop[]`：`{ dropId, frontSeed, cell, inventory: YieldBag, cause, droppedAt }` | 欠落は `[]`。`dropId` は `/^[a-zA-Z0-9_.:-]{1,160}$/`、`frontSeed` は uint32、`cell` は `FrontCellCoord`、`cause` は `FIELD_DROP_CAUSES` 以外なら `wreck_not_carried`、`droppedAt` が不正なら 1970-01-01。読めない要素・同じ `dropId` は 1 件ずつ捨てる。回路の `fieldDrops` とは別 | `applySortieReport`（帰還報告の `inventoryDrops`）。回収（`recoveredInventoryDropIds`）すると `inventory` に足して一覧から外す | #199 |
-| `sortieSelection` | `string[]`（任意）：格納庫で選んだ出撃機の `instanceId` | 欠落は付けない（`undefined`）。正規化（`normalizeSortieSelection`）で `fleet` にいない ID・重複を除き、先頭から最大 3 件（`HUB_LIMITS.maxSortieMechs`）。**使う側は必ず shared `resolveSortieSelection(hub)` を通す**: 選択のうち出撃できる機体（`canDeploy`）を `fleet` の順に最大 3 機。選択がない（初回・旧セーブ）か、選んだ機体がどれも出撃できない（置き去りで `fleet` にいない・大破・要修理）ときは **`fleet` の先頭から出撃できる 3 機**。書くときは `setSortieSelection(hub, ids)`（出撃できる機体だけ・`fleet` の順・最大 3） | trade 格納庫（チェックボックス・「先頭から3機」・出撃リンク押下時に出撃した機体を保存）。Explore の「再出撃」と trade の出撃 URL はどちらもこの値を `resolveSortieSelection` で読む | 項目15 |
+| `sortieSelection` | `string[]`（任意）：格納庫で選んだ出撃機の `instanceId` | 正規化でfleetにないIDと重複を除き、人数上限なしで保持する。`resolveSortieSelection(hub)`で出撃可能な選択機をfleet順に解決し、選択がない・選択機が全て出撃不能なら出撃可能な全機体を既定とする。`setSortieSelection`も人数制限なし | trade格納庫（チェックボックス・全機体選択）・Explore再出撃 | 2026-10-13追加決定 |
 | `lostMechs` | `LostMechReturnState[]`：`{ instanceId, currentAmmo: number \| undefined, battery, circuitIds: string[] }` ＋任意（回収の 1 本目の PR）`frontSeed`（uint32）・`cell`（`FrontCellCoord`）・`lostAt`（ISO）・`lostSortieId`・`catalogId`・`durability`・`durabilityMax`・`status` | 欠落は `[]`。`instanceId` が空・重複、`battery.capacity` が 1 未満・数でない、`currentAmmo` が数でない行は 1 件ずつ捨てる。`currentAmmo` は切り捨て・0 以上（**上限 28 の丸めはしない**）。任意の項目は不正な値だけを 1 つずつ捨て、行は残す（古い行は任意の項目を持たないまま読み書きできる）。**`fleet` にいる機体の行は捨てる**（機体は 1 か所）。**`circuitIds` は毎回の正規化で「`equippedTo` がこの機体の回路」にそろえる**（行の順を先に、ほかのその回路を後ろに）。件数の上限はない | `applySortieReport`（帰還報告の `lostMechs`）。新しいものを先頭に足す。再び現れてまた置き去りになった機体は同じ項目を更新して先頭へ。回収（帰還の `recoveredLostMechInstanceIds`）で外して `fleet` に戻す | #206・回収の 1 本目 |
 
 `applySortieReport`（`circuit-inventory.ts`）の追加の動き:
@@ -318,7 +318,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
 - `HANDOFF_QUERY_KEYS.exploreToHubWear` は `returnKind`・`mechWear`・`mechCurrentAmmo`・`recoveredLostMechInstanceIds`（回収の 1 本目の PR で追加）・`abandonedMechInstanceIds`（2 本目で追加）・`recoveredDropIds`（F の回収で追加）・`frontSeed`・`dropCell`・`rescueFee`（項目5-2）。trade が取り込んだ後に URL から消すのはこれら（と他の受け渡しのキー）なので、`sortieId` などは URL に残る（`returnKind`・`mechWear` が消えるので再読み込みで再反映はされない）。`tradeToExplore` にも `mechBattery` は入っていない。
 - **直接保存（U9、設計 §5.4・§9 U9）**: Explore は結果画面を最初に描くとき（どの結果ボタンを押すより前）に、この帰還と同じ内容を HubSave に書く（`explore/src/game/hubDirectSave.ts`）。「Sort へ」「再出撃」「格納庫へ」のどれを選んでも、大破・置き去り（`lostMechs`）・摩耗・携行弾・バッテリーは 1 回だけ記録される。HubSave がない（ローカル開発で explore :5173 と trade :5175 の `localStorage` が別、または Explore を直接開いた）ときは書かず、「格納庫へ」の帰還 URL で trade が反映する。
 - trade は帰還 URL を開いたとき、Explore が保存済みの帰還（`sortieId` が `appliedSortieIds` にある）なら再適用せず「探索帰還 … · 反映済み（Explore が出撃終了時に保存）」と出す。帰還 URL だけの場合（旧来・ローカル開発）は 1 回だけ反映する。
-- **再出撃（2026-10-03 参謀の決定・案 A）**: 結果画面の「再出撃」は、直接保存した HubSave から部隊を組み直す（`explore/src/game/resortie.ts`）。出撃機は「前回の出撃機のうちまだ出撃できる機体」（`canDeploy`。置き去りの機体は `fleet` にいない、大破は `destroyed`）で、保存した携行弾・耐久・バッテリーを使う。回路と回路ボーナス・Invade のセクターは前回の出撃 URL から引き継ぐ（前回の出撃にいなかった機体＝回収したばかりの機体や新しく選んだ機体の回路は HubSave の装着から載せる。回収の 2 本目の PR）。出撃できる機体がいなければ再出撃せず結果画面に注記を出す。HubSave にこの帰還がないとき（保存できなかった）は、前回の出撃 URL の機体に同じ帰還をメモリ上で当てて組み直す。**項目15（2026-10-03）以降、HubSave から組み直すときの出撃機は格納庫の選択**（`sortieSelection` を `resolveSortieSelection` で解決した機体。§12.5）で、格納庫に表示される選択と同じになる（`resortiePlan`）。置き去り（`fleet` にいない）・大破・要修理の機体は除き、選んだ機体がどれも出撃できなければ先頭から出撃できる 3 機。trade の出撃リンクは押したときに出撃した機体を `sortieSelection` に保存するので、通常は「前回の出撃機のうちまだ出撃できる機体」と一致する。HubSave にこの帰還がないときは従来どおり前回の出撃 URL の機体。
+- **再出撃（2026-10-03 参謀の決定・案 A）**: 結果画面の「再出撃」は、直接保存した HubSave から部隊を組み直す（`explore/src/game/resortie.ts`）。出撃機は「前回の出撃機のうちまだ出撃できる機体」（`canDeploy`。置き去りの機体は `fleet` にいない、大破は `destroyed`）で、保存した携行弾・耐久・バッテリーを使う。回路と回路ボーナス・Invade のセクターは前回の出撃 URL から引き継ぐ（前回の出撃にいなかった機体＝回収したばかりの機体や新しく選んだ機体の回路は HubSave の装着から載せる。回収の 2 本目の PR）。出撃できる機体がいなければ再出撃せず結果画面に注記を出す。HubSave にこの帰還がないとき（保存できなかった）は、前回の出撃 URL の機体に同じ帰還をメモリ上で当てて組み直す。**項目15（2026-10-03）以降、HubSave から組み直すときの出撃機は格納庫の選択**（`sortieSelection` を `resolveSortieSelection` で解決した機体。§12.5）で、格納庫に表示される選択と同じになる（`resortiePlan`）。置き去り（`fleet` にいない）・大破・要修理の機体は除き、選んだ機体がどれも出撃できなければ出撃可能な全機体。trade の出撃リンクは押したときに出撃した機体を `sortieSelection` に保存するので、通常は「前回の出撃機のうちまだ出撃できる機体」と一致する。HubSave にこの帰還がないときは従来どおり前回の出撃 URL の機体。
 - **Invade の盤（回収の 3 本目の PR）**: Invade は URL のキーを足していない。置き去り機の印・移動は HubSave の `lostMechs`・`fieldDrops`・`inventoryFieldDrops` を直接読み書きする（§12.5「Invade での表示・移動」）。
 - **Explore での置き去り・再出現・回収（回収の 2 本目の PR。`explore/src/game/lostMechs.ts`・`invadeSquad.ts`・`outcome.ts`）**:
   - **出撃の場所**: Invade のセクター（`sectorX`・`sectorY`）があり、HubSave に `frontProgress.seed` があるときだけ、その出撃は「Invade を通った出撃」（`World.sortieLocation = { frontSeed, cell }`。`cell` は `FrontCellCoord` の範囲 ±32）。Invade の Explore リンクには seed が載らないので、`frontSeed` は出撃時の HubSave から取る。それ以外（格納庫からの直接出撃・HubSave がない）は場所なし。
@@ -332,7 +332,7 @@ UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。
   - **回収**: 離昇時（隊長搭乗）に、搭乗円の内側にある落とし物を回収（`World.recoveredDropIds` → 帰還の `recoveredDropIds`）。
   - **反映**: 直接保存と帰還 URL の両方で `applyExploreReturnToHub` が `recoverFieldDrops` を実行し、回収した回路を `circuits` に `equippedTo: null`（倉庫）で戻す。既に同じ `circuitId` を持っている場合は場に残り、倉庫には戻らない。
   - **結果画面**: 倉庫へ戻した回路だけを出す（既に持っていて場に残ったものは出さない）。
-- **出撃 URL（項目15）**: trade の出撃 URL（`deployedInstanceIds`・`mechDurability` など）には選んだ出撃機（最大 3 機）だけを載せる。摩耗・携行弾・バッテリーの書き戻しも、帰還に載った機体（＝出撃した機体）だけに当たる。
+- **出撃 URL（項目15）**: trade の出撃 URL（`deployedInstanceIds`・`mechDurability` など）には選んだ出撃機（人数上限なし）だけを載せる。摩耗・携行弾・バッテリーの書き戻しも、帰還に載った機体（＝出撃した機体）だけに当たる。
 
 ### 12.7 explore での使い方（#203・#206・携行弾の修正・U9）
 
@@ -408,3 +408,21 @@ HubSave のキーは増やしていない（`v` は 3 のまま）。
 - 新しい帰還URLの `enemyWrecks` は `{instanceId, circuits}[]` のJSON。既存の `sortieId` の重複適用防止と、取得済みの機体・回路ID照合を併用する。localStorageが共有されない開発用ポート間でも持ち帰れる。旧URLでは空として扱う。
 - 旧HubSave v3は追加項目なしで読める。旧ビルドで新しい敵回路を保存し直すと `enemyEffect` が落ち、旧来の盤評価に戻る（機体・回路ID・盤・装備は残る）。新機能の有効値の保持にはこの変更を含むビルドを使う。
 - 出撃中の敵状態・補給ドロップ・出現予約は既存の途中保存本文に入り、HubSaveの新しいトップレベルキーは作らない。古い途中保存の敵は欠けた状態を補完し、既存の帰還円には新しい増援を追加しない。
+
+### Invade段位と部隊装備上限（draft）
+
+`invadeRank?: { current: number; highestCleared: number }` を追加する。初期はcurrent=0、highestCleared=-1。解放済みの最高段はhighestCleared+1。最高クリア段より高い段をクリアしたときだけ最高記録を更新し、低い段の再クリアでは増えない。盤面のクリア・初クリアの発見・段位の更新は同じHubSaveへの書き込みで保存する。保存に失敗した場合は発見成功と表示しない。
+
+旧セーブに段位キーが無ければ0段から始める。明示的なfirstInvadeClearがある場合だけ0段クリア済みとして扱い、盤の見た目からは推測しない。段を選び直すと盤を作り直すが、最高記録と倉庫の持ち物は維持する。段変更と新しい盤は一回の書き込みで保存し、失敗時は画面の盤を切り替えない。
+
+Invade→ExploreのURLに`invadeRank`を追加し、古いURLでは0段。敵のHPと攻撃力だけに1.01^段を一回掛け、途中保存には既存のWorld本文として保持する。再開・再出撃で倍率を重ねず、報酬は増やさない。
+
+受け渡しにはマスの数字`neighborCount`（0〜8）も追加する。段位とは独立し、敵の回路の枚数・サイズと初回帰還要請時の増援数に使う。旧URLでは0として読む。#287では生成関数のみが数字に対応し、実際のInvade→Exploreの接続が抜けていたため今回修正する。
+
+出撃人数の上限は撤廃し、`sortieSelection`は全ての有効な重複なしinstanceIdを保持する。選択が無い場合は出撃可能な全機体を既定とする。部隊の回路上限は初期1枚で、最高クリア段＋2（未クリアは1）。真・偽1×1も1枚と数える。機体別の枚数制限は廃止。武器種4種類と特殊弾3種類は各機体に各1枚まで。
+
+部隊装備上限の検証は選択した出撃機に限定する。倉庫・予備機・置き去り機の装備は数えない。予備機を選択した結果、上限を超えた場合は出撃／再出撃を拒否し、格納庫での変更を案内する。既存の装備は読み込み時に外さず保持する。同じ部隊内の付け替えや上限超過を減らす操作は可能。
+
+`starterCircuitGranted?: boolean`を追加。一度初期装備を付与・確認したらtrueを保存する。旧セーブに既存の`false-1x1-*`がある場合も付与済みと読む。初期回路を取り外し／売却した後、再付与せず、初期の1枚枠を他の回路に使える。古いビルドはこの任意キーを保持しないため、最新版でのプレイが必要。
+
+`slotCapacity`は廃止。新しい共有関数は`squadCircuitLimit`・`squadCircuitUsage`・`squadEquipmentError`・`weaponCategory`。装備拒否理由は`squad_full`・`category_full`を追加。武器種と特殊弾は別に解決し、SMGの各発・散弾の各ペレットにも特殊弾の速度／誘導／EMPが適用される。弾数上限はMMR÷5・LMG×2の武器種だけで決まる。新規の敵回路生成も各カテゴリの重複を避ける（既存の途中保存の回路は維持）。

@@ -85,15 +85,14 @@ const FALSE_SET = new Set<string>(FALSE_BOARD_EFFECT_KEYS);
 const TRUE_SET = new Set<string>(TRUE_BOARD_EFFECT_KEYS);
 const ALL_KEYS = new Set<string>(CIRCUIT_EFFECT_KEYS);
 
-export const GUN_EFFECT_ORDER = [
-  "smg",
-  "shotgun",
-  "mmr",
-  "lmg",
-  "fast_round",
-  "homing_round",
-  "emp_round",
-] as const;
+export const WEAPON_EFFECT_KEYS = ["smg", "shotgun", "mmr", "lmg"] as const;
+export const SPECIAL_AMMO_EFFECT_KEYS = ["fast_round", "homing_round", "emp_round"] as const;
+export const GUN_EFFECT_ORDER = [...WEAPON_EFFECT_KEYS, ...SPECIAL_AMMO_EFFECT_KEYS] as const;
+export function weaponCategory(key: string | null | undefined): "weapon" | "special_ammo" | null {
+  if (WEAPON_EFFECT_KEYS.some(k => k === key)) return "weapon";
+  if (SPECIAL_AMMO_EFFECT_KEYS.some(k => k === key)) return "special_ammo";
+  return null;
+}
 
 export type GunEffectKey = (typeof GUN_EFFECT_ORDER)[number];
 
@@ -281,15 +280,6 @@ export function isTrueOneByOne(rec: HubCircuitRecord): boolean {
   return classifyCircuit(rec).oneByOne === "true";
 }
 
-/** Base slot 1. A true 1×1 adds one slot and itself occupies one. False 1×1 does not. */
-export function slotCapacity(
-  equipped: readonly HubCircuitRecord[],
-  incoming?: HubCircuitRecord | null,
-): number {
-  const grant = equipped.some(isTrueOneByOne) || (incoming != null && isTrueOneByOne(incoming));
-  return 1 + (grant ? 1 : 0);
-}
-
 function oneByOneEdges(): string {
   const n = edgeCount(1, 1);
   const marks = Array.from({ length: n }, () => 1 as EdgeMark);
@@ -400,18 +390,19 @@ export function hasTrueTwenty(hub: HubSnapshot): boolean {
 }
 
 /**
- * New captain starts with one false 1×1 in the only slot.
- * No-op when the first mech already has a circuit, or the fleet is empty.
+ * Grant starter equipment once. Manual removal/sale must free the initial
+ * squad slot rather than silently generating another starter circuit.
  */
 export function ensureCaptainFalseOneByOne(hub: HubSnapshot): HubSnapshot {
+  if (hub.starterCircuitGranted) return hub;
   const captain = hub.fleet[0];
   if (!captain) return hub;
   const mine = hub.circuits.filter((c) => c.equippedTo === captain.instanceId);
-  if (mine.length > 0) return hub;
+  if (mine.length > 0) return { ...hub, starterCircuitGranted: true };
   const rawId = `false-1x1-${captain.instanceId}`;
   const rec = { ...makeFalseOneByOne(rawId.length <= 64 ? rawId : rawId.slice(0, 64)), equippedTo: captain.instanceId };
   // M5: equipping the starter 1×1 returns the captain's ammo and reloads.
-  return reloadMechAmmo({ ...hub, circuits: [rec, ...hub.circuits] }, captain.instanceId).hub;
+  return reloadMechAmmo({ ...hub, starterCircuitGranted: true, circuits: [rec, ...hub.circuits] }, captain.instanceId).hub;
 }
 
 /**

@@ -4,6 +4,8 @@ import "./style.css";
 import { loadLineJa, unitLoad } from "./game/carry";
 import {
   CTA_CHIP,
+  squadEquipmentError,
+  resolveSortieSelection,
   ammoShortLineJa,
   parseTradeToExploreSearch,
   CTA_COPY,
@@ -163,6 +165,13 @@ function freshHub(): HubSnapshot | null {
  * Deploy query this page was opened with; 再出撃 replaces it with one rebuilt from HubSave.
  * An Invade sortie link (sector only) takes the hangar's sortie selection along (invadeSquad.ts).
  */
+function sortieEquipmentNote(): string {
+  const hub = freshHub();
+  if (!hub) return "";
+  const ids = world.deployedInstanceIds.length ? world.deployedInstanceIds : resolveSortieSelection(hub);
+  const error = squadEquipmentError(hub, ids);
+  return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
+}
 let bootSearch = invadeSquadSearch(window.location.search, freshHub()) ?? window.location.search;
 /** M8: shortage line shown by the briefing 出撃 button (Explore-built squads only). */
 let preSortieAmmoNote = "";
@@ -845,12 +854,14 @@ function renderDom(): void {
               : ""
           }
         </table>
-        <div class="row"><button type="button" id="btn-start">出撃</button></div>
+        <div class="row"><button type="button" id="btn-start" ${sortieEquipmentNote() ? "disabled" : ""}>出撃</button></div>
+        ${sortieEquipmentNote() ? `<p class="warn">${escapeHtml(sortieEquipmentNote())}</p>` : ""}
         ${preSortieAmmoNote ? `<p class="warn" id="ammo-short-presortie">${escapeHtml(preSortieAmmoNote)}</p>` : ""}
         <p class="help">${briefingHelpText(cmdLocked)}</p>
       </div>`;
     bindDebugUnlockToggle();
     document.getElementById("btn-start")?.addEventListener("click", () => {
+      if (sortieEquipmentNote()) return;
       startSortie(world);
       armExploreSortieBack();
       needsDom = true;
@@ -922,7 +933,7 @@ function renderDom(): void {
       </div>`;
     document.getElementById("btn-again")?.addEventListener("click", () => {
       // 再出撃 (案 A + item 15): rebuild the squad from HubSave — the hangar's
-      // saved sortie selection (deployable only, ≤3), with saved ammo /
+      // saved sortie selection (deployable only, no size limit), with saved ammo /
       // durability / battery. No save → the previous sortie's mechs.
       const payload = exploreReturnPayload(world);
       if (payload && world.deployedInstanceIds.length > 0) {
@@ -931,7 +942,8 @@ function renderDom(): void {
         const filled = plan.fromSave ? refillBeforeSortie(plan.hub, plan.ids) : { hub: plan.hub, line: "" };
         const next = resortieSearch(bootSearch, filled.hub, plan.ids);
         if (!next) {
-          resortieNote = "再出撃できる機体がありません（格納庫で修理・受領してください）。";
+          const error = squadEquipmentError(filled.hub, plan.ids);
+          resortieNote = error ? "回路の装備制限により再出撃できません。格納庫で装備か出撃機を変更してください。" : "再出撃できる機体がありません（格納庫で修理・受領してください）。";
           renderDom();
           return;
         }

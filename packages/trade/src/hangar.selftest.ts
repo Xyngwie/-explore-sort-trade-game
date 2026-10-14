@@ -1560,7 +1560,7 @@ console.log("trade hangar selftest: ok");
   console.log("trade U9 direct save / legacy return URL once ok");
 }
 
-// Item 15: no fleet cap; hangar picks up to 3 sortie mechs (saved in HubSave.sortieSelection).
+// Item 15: no fleet cap; hangar selects any number of sortie mechs (saved in HubSave.sortieSelection).
 {
   const prevLs = (globalThis as unknown as { localStorage: Storage }).localStorage;
   const store = memoryStorage();
@@ -1572,17 +1572,18 @@ console.log("trade hangar selftest: ok");
     saveHubSaveToLocalStorage(hub, store);
     const ids = hub.fleet.map((m) => m.instanceId);
     assert.equal(ids.length, 5);
-    assert.equal(HUB_LIMITS.maxSortieMechs, 3);
+    assert.equal((HUB_LIMITS as Record<string, unknown>).maxSortieMechs, undefined);
 
-    // (1) load keeps all 5; default selection = first 3 deployable
+    // (1) load keeps all 5; default selection = all deployable
     let hs = createInitialHangar(store);
     assert.equal(hs.hub.fleet.length, 5, "5 mechs not truncated on load");
-    assert.deepEqual(hs.selectedDeployIds, ids.slice(0, 3));
+    assert.deepEqual(hs.selectedDeployIds, ids);
 
-    // (2) 4th refused; unchecking the last refused
-    const full = setDeploySelection(hs, ids[3]!, true);
-    assert.deepEqual(full.selectedDeployIds, ids.slice(0, 3), "4th refused");
-    assert.ok(full.notice.includes("最大"));
+    // (2) the fourth and fifth can be selected; the last selection stays.
+    hs = setDeploySelection(hs, ids[3]!, false);
+    hs = setDeploySelection(hs, ids[3]!, true);
+    assert.deepEqual(hs.selectedDeployIds, ids, "fourth accepted");
+    hs = setDeploySelection(hs, ids[3]!, false);
     hs = setDeploySelection(hs, ids[0]!, false);
     hs = setDeploySelection(hs, ids[4]!, true);
     assert.deepEqual(hs.selectedDeployIds, [ids[1], ids[2], ids[4]], "fleet order");
@@ -1602,10 +1603,10 @@ console.log("trade hangar selftest: ok");
     assert.equal(re.hub.fleet.length, 5);
     assert.deepEqual(re.hub.sortieSelection, [ids[1], ids[2], ids[4]]);
     assert.deepEqual(re.selectedDeployIds, [ids[1], ids[2], ids[4]]);
-    // 先頭から3機
-    const firstThree = selectAllDeployable(re);
-    assert.deepEqual(firstThree.selectedDeployIds, ids.slice(0, 3));
-    assert.deepEqual(createInitialHangar(store).selectedDeployIds, ids.slice(0, 3));
+    // 出撃可能な全機体
+    const allSelected = selectAllDeployable(re);
+    assert.deepEqual(allSelected.selectedDeployIds, ids);
+    assert.deepEqual(createInitialHangar(store).selectedDeployIds, ids);
 
     // wear only on the chosen mechs (simulated return of the sortie set)
     const deployed = markDeployed(re, [ids[1]!, ids[2]!, ids[4]!]);

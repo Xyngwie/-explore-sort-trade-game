@@ -498,3 +498,32 @@ function circuitButtonsIds(world: ReturnType<typeof createWorld>): string[] {
 }
 
 console.log("circuitPlay.selftest ok");
+
+// Every weapon composes with each special round; ammo cap remains weapon-based.
+for (const weapon of ["smg", "shotgun", "mmr", "lmg"] as const) {
+  for (const round of ["fast_round", "homing_round", "emp_round"] as const) {
+    const world = createWorld(bootstrapFromSearch(""));
+    startSortie(world);
+    attachReleaseMechanics(world);
+    world.commandUnlock.mode = "all_unlocked";
+    world.circuitPlay!.release = false;
+    world.leader.instanceId = "cap";
+    world.currentAmmo.cap = 20;
+    world.leader.cooldown = 0;
+    world.circuitPlay!.loadout.leader = [classified({ effectKey: weapon, r: 0.2 }), classified({ effectKey: round, r: 0.2 })];
+    const enemy = world.enemies[0]!;
+    enemy.alive = true;
+    enemy.pos = { x: world.leader.pos.x + 40, y: world.leader.pos.y };
+    const before = world.bullets.length;
+    assert.equal(circuitTryWeapon(world, world.leader, enemy), true);
+    const shots = world.bullets.slice(before);
+    assert.equal(shots.length, weapon === "shotgun" ? 5 : 1);
+    for (const shot of shots) {
+      const speed = Math.hypot(shot.vel.x, shot.vel.y);
+      assert.ok(Math.abs(speed - world.balance.bulletSpeed * (round === "fast_round" ? 1.5 : round === "homing_round" ? 0.75 : 1)) < 1e-6);
+      if (round === "homing_round") assert.equal(shot.homingId, enemy.id);
+      if (round === "emp_round") assert.equal(shot.emp, true);
+    }
+  }
+}
+console.log("All 12 weapon/special-round combinations PASS");

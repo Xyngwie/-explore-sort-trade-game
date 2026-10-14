@@ -1,7 +1,7 @@
 /** Enemy identity: independently sampled per sortie. Circuit strength follows
  * the Invade cell number; contents stay hidden until the wreck comes home.
  * Existing checkpoint identities are kept, not rerolled on resume. */
-import { FALSE_BOARD_EFFECT_KEYS, type MechId } from "@estg/shared";
+import { weaponCategory, FALSE_BOARD_EFFECT_KEYS, type MechId } from "@estg/shared";
 import type { Unit, World } from "./types";
 
 export const ENEMY_UNKNOWN_JA = "所属不明";
@@ -27,21 +27,21 @@ export function makeEnemyIdentity(
 ): EnemyIdentity {
   const tier = Math.floor(Math.min(8, Math.max(0, n)) / 3);
   const nonce = `${Date.now().toString(36)}-${rng().toString(36).slice(2)}-${unit.id}`;
-  return {
-    modelId: "mech_gen1",
-    durability: Math.max(1, Math.round(unit.maxHp)),
-    circuits: Array.from({ length: 1 + tier }, (_, i) => ({
-      circuitId: `enemy-circ-${nonce}-${i}`,
-      side: 2 + tier,
-      effectKey:
-        FALSE_BOARD_EFFECT_KEYS[
-          Math.floor(rng() * FALSE_BOARD_EFFECT_KEYS.length) %
-            FALSE_BOARD_EFFECT_KEYS.length
-        ]!,
-      effect: (2 + tier) ** 2 * (0.3 + rng() * 0.7),
-      trueBoard: false as const,
-    })),
-  };
+  const usedCategories = new Set<string>();
+  const circuits: EnemyCircuitData[] = Array.from({ length: 1 + tier }, (_, i) => {
+    const candidates = FALSE_BOARD_EFFECT_KEYS.filter(key => {
+      const category = weaponCategory(key);
+      return !category || !usedCategories.has(category);
+    });
+    const effectKey = candidates[Math.floor(rng() * candidates.length) % candidates.length]!;
+    const category = weaponCategory(effectKey);
+    if (category) usedCategories.add(category);
+    return {
+      circuitId: `enemy-circ-${nonce}-${i}`, side: 2 + tier, effectKey,
+      effect: (2 + tier) ** 2 * (0.3 + rng() * 0.7), trueBoard: false,
+    };
+  });
+  return { modelId: "mech_gen1", durability: Math.max(1, Math.round(unit.maxHp)), circuits };
 }
 
 /** Old checkpoints (no identity on enemies) get one on load; existing ones are kept. */

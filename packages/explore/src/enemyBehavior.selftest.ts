@@ -295,3 +295,27 @@ for (const [n, count, side] of [
 console.log(
   "enemy behavior / looting / drops / recovery / recall / compatibility: PASS",
 );
+
+{
+  const base=createWorld(bootstrapFromSearch('?sectorX=0&sectorY=0&density=.1'));
+  const high=createWorld(bootstrapFromSearch('?sectorX=0&sectorY=0&density=.1&invadeRank=84'));
+  const factor=Math.pow(1.01,84);
+  assert.equal(high.balance.enemyDamage,base.balance.enemyDamage*factor);
+  assert.equal(high.enemies[0]!.maxHp,base.enemies[0]!.maxHp*factor);
+  assert.equal(high.leader.maxHp,base.leader.maxHp);
+  startSortie(high);assert.equal(high.enemies[0]!.maxHp,base.enemies[0]!.maxHp*factor,'restart does not compound rank scaling');
+  const restored=worldFromCheckpointBody(snapshotSortieWorld(high))!;
+  assert.equal(restored.invadeSector!.invadeRank,84);assert.equal(restored.balance.enemyDamage,high.balance.enemyDamage);
+  console.log('Explore rank damage, HP, unchanged squad and checkpoint PASS');
+}
+
+{
+  const boot = bootstrapFromSearch('?sectorX=0&sectorY=0&density=.1&neighborCount=8&invadeRank=1');
+  const world = createWorld(boot); startSortie(world);
+  assert.equal(world.invadeSector!.neighborCount, 8);
+  assert.equal(world.enemies[0]!.enemyIdentity!.circuits.length, 3);
+  assert.ok(world.enemies[0]!.enemyIdentity!.circuits.every(c => c.side === 4));
+  assert.equal(requestExtract(world), true);
+  assert.equal(world.recallSpawns!.length, 8, 'real handoff cell number schedules all eight strays');
+  console.log('Invade cell number handoff -> circuit strength and recall wave PASS');
+}

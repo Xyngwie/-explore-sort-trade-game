@@ -1,5 +1,5 @@
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
-import { effectRate, cargoSlotBonus, type HubSnapshot } from "@estg/shared";
+import { effectRate, cargoSlotBonus, rankEnemyMultiplier, type HubSnapshot } from "@estg/shared";
 import { makeEnemyIdentity, type EnemyCircuitData } from "./enemyIdentity";
 import { dist, clamp, type Vec2 } from "./math";
 import type { Unit, World } from "./types";
@@ -394,8 +394,8 @@ export function spawnRecall(world: World): void {
       kind: "enemy",
       pos,
       vel: { x: 0, y: 0 },
-      hp: world.balance.enemyHp,
-      maxHp: world.balance.enemyHp,
+      hp: world.balance.enemyHp * rankEnemyMultiplier(world.invadeSector?.invadeRank ?? 0),
+      maxHp: world.balance.enemyHp * rankEnemyMultiplier(world.invadeSector?.invadeRank ?? 0),
       alive: true,
       cooldown: 0,
       salvagedCount: 0,

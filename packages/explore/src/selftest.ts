@@ -166,6 +166,19 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   assert.equal(boot.ammoStock, 40);
 }
 
+// Unlimited squad: IDs and circuit ownership remain unique beyond the old third unit.
+{
+  const boot = bootstrapFromSearch("?deployableMechs=6&deployedInstanceIds=a,b,c,d,e,f&mechCircuits=f~sixth*fa*8");
+  assert.equal(boot.wingmanCount, 5);
+  const world = legacyWorld(boot);
+  const units = [world.leader, ...world.wingmen];
+  assert.equal(units.length, 6);
+  assert.equal(new Set(units.map(u => u.id)).size, 6);
+  assert.deepEqual(units.map(u => u.instanceId), ["a", "b", "c", "d", "e", "f"]);
+  assert.deepEqual(boot.equippedByUnit[units[5]!.id], ["sixth"]);
+  assert.equal(boot.equippedByUnit[units[2]!.id], undefined);
+}
+
 // --- per-mech current ammo: canonical instanceId state, no shared-ammo fallback ---
 {
   const world = legacyWorld(
@@ -2781,7 +2794,7 @@ import {
   {
     const plan0 = resortiePlan(search, w, payload, store);
     assert.equal(plan0.fromSave, true);
-    assert.deepEqual(plan0.ids, ["m1"], "no selection → first 3 deployable (m2 lost, m3 wrecked)");
+    assert.deepEqual(plan0.ids, ["m1"], "no selection → all deployable (m2 lost, m3 wrecked)");
     const mk = (id: string) => shared.createOwnedMech("mech_gen1", { instanceId: id, durability: 100 });
     const wide = shared.normalizeHubSnapshot({ ...saved, fleet: [...saved.fleet, mk("m4"), mk("m5"), mk("m6")] });
     const sel = { ...wide, sortieSelection: ["m5", "m2", "m3", "m1"] };
@@ -2793,10 +2806,10 @@ import {
     const reSel = resortieSearch(search, plan.hub, plan.ids);
     assert.deepEqual(reSel?.deployedInstanceIds, ["m1", "m5"]);
     assert.deepEqual(legacyWorld(bootstrapFromSearch(reSel!.search)).deployedInstanceIds, ["m1", "m5"]);
-    // nothing selected can sortie → default first 3 deployable
+    // nothing selected can sortie → default all deployable
     const gone = memStore();
     assert.ok(shared.saveHubSaveToLocalStorage({ ...wide, sortieSelection: ["m3"] }, gone));
-    assert.deepEqual(resortiePlan(search, w, payload, gone).ids, ["m1", "m4", "m5"]);
+    assert.deepEqual(resortiePlan(search, w, payload, gone).ids, ["m1", "m4", "m5", "m6"]);
     // no save holding this return → previous deploy's mechs
     assert.equal(resortiePlan(search, w, payload, memStore()).fromSave, false);
   }
@@ -2992,7 +3005,7 @@ import {
   const search = invadeSquadSearch(invadeLink, hub0);
   assert.ok(search, "Invade link without deploy keys → squad from HubSave");
   const inbound = shared.parseTradeToExploreSearch(search!);
-  assert.deepEqual(inbound?.deployedInstanceIds, ["m1", "m2"], "hangar selection (default first 3 deployable)");
+  assert.deepEqual(inbound?.deployedInstanceIds, ["m1", "m2"], "hangar selection (default all deployable)");
   assert.deepEqual(inbound?.mechCircuits?.m2?.map((c) => c.circuitId), ["c_wing"], "equipped circuits go along");
   assert.deepEqual(shared.parseInvadeToExploreSearch(search!)?.sectorX, 3, "sector kept");
   // legacy-retire 6: Invade sortie startingAmmo = inventory.ammo (same as F1), not ammoLoad

@@ -5,6 +5,9 @@
 
 import {
   INITIAL_HUB,
+  ensureInvadeRank,
+  completeInvadeRank,
+  selectInvadeRank,
   clearFrontProgressInHub,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
@@ -76,8 +79,8 @@ function readHub(
 ): HubSnapshot {
   const loaded = loadHubSaveFromLocalStorage(storage ?? undefined);
   return loaded?.hub
-    ? normalizeHubSnapshot(loaded.hub)
-    : normalizeHubSnapshot(INITIAL_HUB);
+    ? ensureInvadeRank(normalizeHubSnapshot(loaded.hub))
+    : ensureInvadeRank(normalizeHubSnapshot(INITIAL_HUB));
 }
 
 /** Load front board from HubSave, or generate a seeded board and persist it. */
@@ -135,10 +138,11 @@ export function persistFrontSessionWithClear(
   let discovered = false;
   if (opts?.justWon === true && board.status === "won") {
     const r = recordFirstInvadeClear(next, board.seed ?? null);
-    next = r.hub;
+    next = completeInvadeRank(r.hub);
     discovered = r.discovered;
   }
-  return { saved: saveHubSaveToLocalStorage(next, storage ?? undefined), discovered };
+  const saved = saveHubSaveToLocalStorage(next, storage ?? undefined);
+  return { saved, discovered: saved && discovered };
 }
 
 /** Hub as stored now (for the clear banner line). */
@@ -170,3 +174,17 @@ export function regenerateFrontSession(
 }
 
 export type { InvadeFrontProgress };
+
+/** Change rank and board in one write; refused writes do not switch the screen. */
+export function changeFrontRank(rank:number, storage?: Pick<Storage,"getItem"|"setItem">|null):FrontSession|null {
+  const hub=selectInvadeRank(readHub(storage),rank);
+  if(!hub)return null;
+  const board=generateBoard(AOI_HALF,randomBoardSeed());
+  const focus={sx:0,sy:0};
+  const snap=captureFrontProgress(board,focus);
+  if(!snap)return null;
+  const placed=placeLostOnFront(setFrontProgressInHub(hub,snap),board.seed!,board.aoiHalf);
+  if(!saveHubSaveToLocalStorage(placed.hub,storage ?? undefined))return null;
+  const {hub:next,...placement}=placed;
+  return {board,focus,restored:false,placement,lostByCell:lostMechsByCell(next,board.seed!),dropsByCell:fieldDropsByCell(next,board.seed!),wrecksByCell:wrecksByCell(next,board.seed!)};
+}

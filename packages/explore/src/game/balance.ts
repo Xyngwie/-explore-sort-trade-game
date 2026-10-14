@@ -109,7 +109,7 @@ export const BALANCE = {
   cameraLeadYFrac: 0.5,
 } as const;
 
-export type Balance = typeof BALANCE;
+export type Balance = Omit<typeof BALANCE, "enemyDamage"> & { readonly enemyDamage: number };
 
 /** Clamp density to 0..1. */
 export function clampDensity(density: number): number {

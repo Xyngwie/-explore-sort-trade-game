@@ -1,3 +1,4 @@
+import { normalizeInvadeRank, type InvadeRankProgress } from "./invade-rank";
 import {
   AMMO_IDS,
   type AmmoId,
@@ -18,7 +19,6 @@ import {
   assignMissingEffectKeys,
   boardGivesBulletin,
   isTrueOneByOne,
-  slotCapacity,
 } from "./circuit-actions";
 import {
   canDeploy,
@@ -276,9 +276,13 @@ export type HubSnapshot = {
    * from the board). Written once, together with the discovered "4" 1×1.
    */
   firstInvadeClear?: FirstInvadeClear;
+  /** Rank selection and highest completed rank; absent in legacy saves. */
+  invadeRank?: InvadeRankProgress;
+  /** Starter equipment was already granted/checked; never re-equip after manual removal. */
+  starterCircuitGranted?: boolean;
   /**
    * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
-   * hangar (instanceIds, at most `HUB_LIMITS.maxSortieMechs`). Trade's deploy
+   * hangar (instanceIds, without a size limit). Trade's deploy
    * URL and Explore's 再出撃 both read it via `resolveSortieSelection`.
    */
   sortieSelection?: string[];
@@ -355,11 +359,6 @@ export const INITIAL_HUB: HubSnapshot = {
 };
 
 export const HUB_LIMITS = {
-  /**
-   * Mechs per sortie (leader + 2 wingmen). The fleet itself has no cap
-   * (2026-10-03 item 15: the old `maxMechs: 3` and load-time truncation are gone).
-   */
-  maxSortieMechs: 3,
   maxAmmo: 100,
   materialUnitPrice: 10,
   /**
@@ -567,8 +566,8 @@ export function mechSlotCapacity(_mech?: Pick<OwnedMech, "instanceId"> | null): 
 
 /**
  * Equip integrity (§6.2): equippedTo pointing at a missing mech → stash;
- * more equipped than a mech's slots → keep the newest (updatedAt, then list
- * order), the rest go to stash. No squad-wide cap yet (U3).
+ * Existing equipment is preserved; squad/category limits are checked when
+ * equipping and before sortie, never by silently detaching saved circuits.
  */
 function enforceEquipIntegrity(
   circuits: HubCircuitRecord[],
@@ -577,7 +576,6 @@ function enforceEquipIntegrity(
   lostMechIds: ReadonlySet<string> = new Set(),
 ): HubCircuitRecord[] {
   const mechs = new Map(fleet.map((m) => [m.instanceId, m]));
-  const byMech = new Map<string, number[]>();
   const out = circuits.map((c) => ({ ...c }));
   out.forEach((c, i) => {
     if (c.equippedTo == null) return;
@@ -586,25 +584,7 @@ function enforceEquipIntegrity(
       c.equippedTo = null;
       return;
     }
-    const arr = byMech.get(c.equippedTo) ?? [];
-    arr.push(i);
-    byMech.set(c.equippedTo, arr);
   });
-  for (const [, idxs] of byMech) {
-    const equipped = idxs.map((i) => out[i]!);
-    const cap = slotCapacity(equipped);
-    if (idxs.length <= cap) continue;
-    const ranked = [...idxs].sort((a, b) => {
-      const pa = isTrueOneByOne(out[a]!) ? 1 : 0;
-      const pb = isTrueOneByOne(out[b]!) ? 1 : 0;
-      if (pa !== pb) return pb - pa;
-      const ta = out[a]!.updatedAt ?? "";
-      const tb = out[b]!.updatedAt ?? "";
-      if (ta !== tb) return ta < tb ? 1 : -1;
-      return a - b;
-    });
-    for (const i of ranked.slice(cap)) out[i]!.equippedTo = null;
-  }
   return out;
 }
 
@@ -1055,13 +1035,15 @@ export function normalizeHubSnapshot(
     ...(airSupportCooldownSec != null ? { airSupportCooldownSec } : {}),
     ...(bulletinUnlocked ? { bulletinUnlocked: true } : {}),
     ...(firstInvadeClear ? { firstInvadeClear } : {}),
+    ...(normalizeInvadeRank(rawRec?.invadeRank) ? { invadeRank: normalizeInvadeRank(rawRec?.invadeRank)! } : {}),
     ...(ammoBatteryRepaired ? { ammoBatteryRepaired: true } : {}),
+    ...(rawRec?.starterCircuitGranted === true || circuits.some(c => c.circuitId.startsWith("false-1x1-")) ? { starterCircuitGranted: true } : {}),
   };
   // Ammo rules (mech-ammo.ts): per-mech cap clamp into the stock, M5 reload, M6 once.
   return applyHubAmmoRules(snapshot, { reloadIds: [...integrityReload] });
 }
 
-/** Unique instanceIds that exist in the fleet, at most maxSortieMechs. */
+/** Unique instanceIds that exist in the fleet. */
 function normalizeSortieSelection(raw: unknown, fleet: readonly OwnedMech[]): string[] {
   if (!Array.isArray(raw)) return [];
   const ids = new Set(fleet.map((m) => m.instanceId));
@@ -1071,7 +1053,6 @@ function normalizeSortieSelection(raw: unknown, fleet: readonly OwnedMech[]): st
     const id = item.trim();
     if (!id || !ids.has(id) || out.includes(id)) continue;
     out.push(id);
-    if (out.length >= HUB_LIMITS.maxSortieMechs) break;
   }
   return out;
 }
@@ -1080,23 +1061,22 @@ function normalizeSortieSelection(raw: unknown, fleet: readonly OwnedMech[]): st
  * The squad for the next sortie: the saved selection's mechs that can still
  * sortie (left-behind mechs are no longer in `fleet`; wrecked / needs_repair
  * cannot deploy), in fleet order. When nothing of the selection remains (or
- * there is no selection yet), the first `maxSortieMechs` deployable mechs.
+ * there is no selection yet), all deployable mechs.
  */
 export function resolveSortieSelection(hub: Pick<HubSnapshot, "fleet" | "sortieSelection">): string[] {
   const chosen = new Set(hub.sortieSelection ?? []);
   const deployable = hub.fleet.filter(canDeploy);
   const kept = deployable.filter((m) => chosen.has(m.instanceId)).map((m) => m.instanceId);
-  if (kept.length > 0) return kept.slice(0, HUB_LIMITS.maxSortieMechs);
-  return deployable.slice(0, HUB_LIMITS.maxSortieMechs).map((m) => m.instanceId);
+  if (kept.length > 0) return kept;
+  return deployable.map((m) => m.instanceId);
 }
 
-/** Save the hangar's sortie selection (deployable mechs only, at most maxSortieMechs, fleet order). */
+/** Save the hangar's sortie selection (deployable mechs only, fleet order). */
 export function setSortieSelection(hub: HubSnapshot, ids: readonly string[]): HubSnapshot {
   const want = new Set(ids);
   const sortieSelection = hub.fleet
     .filter((m) => canDeploy(m) && want.has(m.instanceId))
-    .map((m) => m.instanceId)
-    .slice(0, HUB_LIMITS.maxSortieMechs);
+    .map((m) => m.instanceId);
   return { ...hub, sortieSelection };
 }
 

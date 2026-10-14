@@ -1,6 +1,6 @@
 /** Enemy PR1 (feat/enemy-id-stats): identity data, hidden circuits, 「所属不明」 tag, old checkpoint backfill. */
 import assert from "node:assert/strict";
-import { FALSE_BOARD_EFFECT_KEYS } from "@estg/shared";
+import { weaponCategory, FALSE_BOARD_EFFECT_KEYS } from "@estg/shared";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import { snapshotSortieWorld, worldFromCheckpointBody } from "./game/checkpoint";
 import { ENEMY_TAG_SEC, ENEMY_UNKNOWN_JA, backfillEnemyIdentities, enemyAt, enemyDisplayNameJa, makeEnemyIdentity, noteEnemyTap, tickEnemyTag } from "./game/enemyIdentity";
@@ -65,3 +65,14 @@ for (const e of w.enemies) assert.equal(e.hp, e.maxHp);
   console.log("enemy checkpoint compat ok");
 }
 console.log("enemyIdentity.selftest ok");
+
+for (let seed = 0; seed < 100; seed++) {
+  let rngState = seed + 1;
+  const identity = makeEnemyIdentity({ id: "test", maxHp: 100 }, () => {
+    rngState = (rngState * 1664525 + 1013904223) >>> 0;
+    return rngState / 4294967296;
+  }, 8);
+  const categories = identity.circuits.map(c => weaponCategory(c.effectKey)).filter(Boolean);
+  assert.equal(categories.length, new Set(categories).size, "generated enemies respect per-mech categories");
+  assert.equal(identity.circuits.length, 3, "circuit count still follows tile difficulty");
+}

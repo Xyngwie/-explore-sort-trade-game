@@ -1,3 +1,4 @@
+import { squadCircuitLimit } from "./invade-rank";
 /**
  * First Invade clear + the "4" 1×1 discovery (神宮 10/12 Go; S1–S3 of 10/7).
  * Save compatibility: HubSave, the 5-3 checkpoint, circuits and wrecks.
@@ -34,7 +35,6 @@ import {
   makeFalseOneByOne,
   makeRestoredTrueOneByOne,
   makeTrueOneByOne,
-  slotCapacity,
 } from "./circuit-actions";
 
 function mech(instanceId: string, over: Partial<OwnedMech> = {}): OwnedMech {
@@ -120,7 +120,7 @@ let afterFirst: HubSnapshot;
   assert.equal(resolveCluesForCircuitBoard(four.circuitBoard)[0]?.[0], 4, "(2) clue 4");
   assert.equal(isTrueOneByOne(four), false, "(2) not a true 1×1 until restored");
   assert.equal(classifyCircuit(four).effect, 0);
-  assert.equal(slotCapacity([four]), 1, "(2) no extra slot before Restore");
+  assert.equal(squadCircuitLimit(r.hub), 2, "(2) first clear raises squad budget regardless of Restore");
   assert.equal(r.hub.lostMechs.length, 1, "(2) wreck untouched");
   assert.equal(r.hub.credits, 777, "(2) no money reward");
   assert.equal(firstClearDiscoveredOnBoard(r.hub, 4242), true);
@@ -189,7 +189,7 @@ console.log("first-clear (3) no second discovery (sweep / reload / double save /
   assert.equal(four.locked, true, "(4) Perfect lock after Restore");
   assert.equal(isTrueOneByOne(four), true, "(4) now the true 1×1");
   const eq = equipCircuit(back, FIRST_CLEAR_CIRCUIT_ID, "cap");
-  assert.equal(eq.ok, true, "(4) equips next to the false 1×1 (true 1×1 adds a slot)");
+  assert.equal(eq.ok, true, "(4) equips next to the false 1×1 (first clear raises the squad budget)");
   const mine = eq.hub.circuits.filter((c) => c.equippedTo === "cap");
   assert.equal(mine.length, 2);
   const unrestored = equipCircuit(
@@ -197,7 +197,7 @@ console.log("first-clear (3) no second discovery (sweep / reload / double save /
     FIRST_CLEAR_CIRCUIT_ID,
     "cap",
   );
-  assert.equal(unrestored.ok, false, "(4) the unrestored 「4」 does not fit next to the false 1×1");
+  assert.equal(unrestored.ok, true, "(4) unrestored circuits count one slot within the unlocked squad budget");
   assert.equal(makeTrueOneByOne("y").restoreState, "unrestored");
 }
 console.log("first-clear (4) Restore then equip ok");

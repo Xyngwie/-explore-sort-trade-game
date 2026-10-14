@@ -3,7 +3,7 @@
  * Pure transitions + localStorage persistence via shared hub-save.
  */
 
-import {
+import { squadEquipmentError,
   isWreckRow,
   RESOURCE_LABEL_JA,
   CRAFT_SIGNATURE_STORAGE_KEY,
@@ -1000,8 +1000,8 @@ function withSortieSelection(state: HangarState, ids: readonly string[], notice 
 }
 
 /**
- * Hangar checkbox. At most `HUB_LIMITS.maxSortieMechs` (3) mechs; a 4th is
- * refused. The last selected mech cannot be unchecked (an empty selection
+ * Hangar checkbox with no squad size limit. The last selected mech cannot
+ * be unchecked (an empty selection
  * would fall back to the default squad).
  */
 export function setDeploySelection(
@@ -1012,9 +1012,6 @@ export function setDeploySelection(
   const current = state.selectedDeployIds;
   if (selected) {
     if (current.includes(instanceId)) return state;
-    if (current.length >= HUB_LIMITS.maxSortieMechs) {
-      return { ...state, notice: `出撃は最大 ${HUB_LIMITS.maxSortieMechs} 機まで（他の機体を外してから選んでください）` };
-    }
     return withSortieSelection(state, [...current, instanceId]);
   }
   if (!current.includes(instanceId)) return state;
@@ -1022,11 +1019,11 @@ export function setDeploySelection(
   return withSortieSelection(state, current.filter((id) => id !== instanceId));
 }
 
-/** 「先頭から3機」: the first maxSortieMechs deployable mechs in fleet order (the default squad). */
+/** Select all deployable mechs in fleet order (the default squad). */
 export function selectAllDeployable(state: HangarState): HangarState {
   return withSortieSelection(
     state,
-    selectDeployableInstanceIds(state.hub.fleet).slice(0, HUB_LIMITS.maxSortieMechs),
+    selectDeployableInstanceIds(state.hub.fleet),
   );
 }
 
@@ -1061,9 +1058,9 @@ export function wreckCountLineJa(hub: Pick<HubSnapshot, "lostMechs">): string | 
 }
 
 export function buildDeployUrl(state: HangarState): string | null {
-  // Only the chosen mechs (at most 3) go out — and only they take wear.
+  // Only the chosen mechs go out — and only they take wear.
   const ids = selectionAfter(state.hub, state.selectedDeployIds);
-  if (ids.length === 0) return null;
+  if (ids.length === 0 || squadEquipmentError(state.hub, ids)) return null;
   // F1 (2026-10-12): startingAmmo = the hub ammo stock (`inventory.ammo`, M1), not the old typed ammoLoad.
   const ammo = Math.max(0, Math.floor(state.hub.inventory.ammo ?? 0));
   const payload = buildTradeToExplorePayloadFromFleet(

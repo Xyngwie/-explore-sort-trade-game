@@ -1,6 +1,8 @@
 import { makeEnemyIdentity } from "./enemyIdentity";
 import {
   DEFAULT_EXPEDITION_LOADOUT,
+  rankEnemyMultiplier,
+  exploreUnitId,
   parseInvadeToExploreSearch,
   parseTradeToExploreSearch,
   wingmanCountFromMechs,
@@ -144,6 +146,7 @@ function placeEnemies(
   spawn: { x: number; y: number },
   threat: DensityThreat,
   n: number,
+  rank = 0,
 ): Unit[] {
   const count = Math.max(1, threat.enemyCount);
   const enemies: Unit[] = [];
@@ -155,7 +158,7 @@ function placeEnemies(
       y: spawn.y + Math.sin(angle) * threat.spawnDist,
     };
     const pos = clampToWorld(raw.x, raw.y, margin);
-    const hp = Math.max(1, Math.round(BALANCE.enemyHp));
+    const hp = BALANCE.enemyHp * rankEnemyMultiplier(rank);
     enemies.push(
       makeUnit({
         id: `enemy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${i}`,
@@ -207,6 +210,8 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
           sectorX: sectorIn.sectorX,
           sectorY: sectorIn.sectorY,
           density: sectorIn.density,
+          invadeRank: sectorIn.invadeRank ?? 0,
+          ...(sectorIn.neighborCount != null ? {neighborCount: sectorIn.neighborCount} : {}),
           intelFlags: sectorIn.intelFlags ? [...sectorIn.intelFlags] : [],
           ...(sectorIn.engage != null ? { engage: sectorIn.engage } : {}),
           ...(sectorIn.enemyCells != null && sectorIn.enemyCells.length > 0
@@ -234,7 +239,7 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
     mechBattery[row.instanceId] = { ...row.battery };
   }
   const circuitIdsByUnit: Record<string, string[]> = {};
-  const unitIds = ["leader", "wing-a", "wing-b"];
+  const unitIds = deployedInstanceIds.map((_, i) => exploreUnitId(i));
   for (let i = 0; i < Math.min(unitIds.length, deployedInstanceIds.length); i += 1) {
     const entries = inbound?.mechCircuits?.[deployedInstanceIds[i]!] ?? [];
     const ids = [...new Set(entries.map((entry) => entry.circuitId.trim()).filter(Boolean))];
@@ -319,7 +324,8 @@ export function createWorld(boot: SortieBootstrap): World {
     enemyCells: boot.invadeSector?.enemyCells,
     neighborCount: boot.invadeSector?.neighborCount,
   });
-  const balance = balanceForThreat(threat);
+  const baseBalance = balanceForThreat(threat);
+  const balance = { ...baseBalance, enemyDamage: baseBalance.enemyDamage * rankEnemyMultiplier(boot.invadeSector?.invadeRank ?? 0) };
 
   const leaderId = boot.deployedInstanceIds[0] ?? null;
   const leader = makeUnit({
@@ -336,16 +342,15 @@ export function createWorld(boot: SortieBootstrap): World {
 
   const wingmen: Unit[] = [];
   for (let i = 0; i < boot.wingmanCount; i++) {
-    const tag = i === 0 ? "a" : "b";
     const instanceId = boot.deployedInstanceIds[i + 1] ?? null;
     wingmen.push(
       makeUnit({
-        id: `wing-${tag}`,
+        id: exploreUnitId(i + 1),
         kind: "wingman",
         name: i === 0 ? "僚機A" : i === 1 ? "僚機B" : `僚機${i + 1}`,
         pos: {
-          x: spawn.x - 40,
-          y: spawn.y + (i === 0 ? -40 : 40),
+          x: Math.max(20, spawn.x - 40 - (Math.floor(i / 2) % 4) * 30),
+          y: Math.min(BALANCE.worldH - 20, Math.max(20, spawn.y + (i % 2 === 0 ? -1 : 1) * (40 + Math.floor(i / 8) * 30))),
         },
         hp: BALANCE.wingmanHp,
         maxHp: BALANCE.wingmanHp,
@@ -373,7 +378,7 @@ export function createWorld(boot: SortieBootstrap): World {
     maxOperationTimeSec: boot.maxOperationTimeSec,
     leader,
     wingmen,
-    enemies: placeEnemies(spawn, threat, boot.invadeSector?.neighborCount ?? 0),
+    enemies: placeEnemies(spawn, threat, boot.invadeSector?.neighborCount ?? 0, boot.invadeSector?.invadeRank ?? 0),
     containers: placeContainers(),
     extract: { pos: vec(160, 480), radius: 48 },
     boarding: null,
@@ -414,6 +419,7 @@ export function createWorld(boot: SortieBootstrap): World {
           sectorX: boot.invadeSector.sectorX,
           sectorY: boot.invadeSector.sectorY,
           density: boot.invadeSector.density,
+          invadeRank: boot.invadeSector.invadeRank ?? 0,
           intelFlags: [...boot.invadeSector.intelFlags],
           ...(boot.invadeSector.engage != null
             ? { engage: boot.invadeSector.engage }
@@ -443,7 +449,7 @@ export function createWorld(boot: SortieBootstrap): World {
 }
 
 export function startSortie(world: World): void {
-  world.enemies = placeEnemies(world.leader.pos, world.densityThreat, world.invadeSector?.neighborCount ?? 0);
+  world.enemies = placeEnemies(world.leader.pos, world.densityThreat, world.invadeSector?.neighborCount ?? 0, world.invadeSector?.invadeRank ?? 0);
   world.enemySupplies = [];
   world.recallSpawns = undefined;
   world.recoveredEnemyUnits = [];

@@ -4,7 +4,7 @@
  * explore link carries only the sector (sectorX / sectorY / density / intel /
  * engage). When such a link has no deploy keys, Explore builds them from
  * HubSave the same way trade's 出撃 link does: the hangar's sortie selection
- * (`resolveSortieSelection`, ≤3 deployable mechs) with their durability,
+ * (`resolveSortieSelection`, all selected deployable mechs) with their durability,
  * carried ammo, battery, equipped circuits and circuit bonuses.
  */
 import {

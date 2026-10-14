@@ -186,6 +186,7 @@ assert.ok(!new URL(tradeUrl).searchParams.has("importMaterials"));
 
 assert.equal(wingmanCountFromMechs(1), 0);
 assert.equal(wingmanCountFromMechs(3), 2);
+assert.equal(wingmanCountFromMechs(8), 7);
 
 const hub = INITIAL_HUB;
 const save = createHubSave(hub);
@@ -342,7 +343,7 @@ assert.equal(legacy!.hub.fleet.length, 2);
 assert.equal(legacy!.hub.fleet[0]!.catalogId, "mech_gen1");
 assert.equal(legacy!.hub.fleet[0]!.status, "operational");
 assert.ok(legacy!.hub.fleet[0]!.instanceId.startsWith("migrated_"));
-assert.equal(HUB_LIMITS.maxSortieMechs, 3);
+assert.equal((HUB_LIMITS as Record<string, unknown>).maxSortieMechs, undefined);
 assert.equal((HUB_LIMITS as Record<string, unknown>).maxMechs, undefined, "fleet cap removed (item 15)");
 
 // Item 15: no fleet cap — 5 mechs survive normalize, save/load and legacy migration.
@@ -357,13 +358,13 @@ assert.equal((HUB_LIMITS as Record<string, unknown>).maxMechs, undefined, "fleet
   const six = addMechToHub(hub5, "mech_gen2");
   assert.equal(six?.fleet.length, 6, "addMechToHub has no cap");
 
-  // sortieSelection: unknown ids dropped, at most 3, kept through save/load
+  // sortieSelection: unknown ids and duplicates dropped, kept through save/load
   const sel = normalizeHubSnapshot({ ...hub5, sortieSelection: ["f5", "nope", "f2", "f5", "f1", "f3"] });
-  assert.deepEqual(sel.sortieSelection, ["f5", "f2", "f1"]);
-  assert.deepEqual(deserializeHubSave(serializeHubSave(createHubSave(sel)))?.hub.sortieSelection, ["f5", "f2", "f1"]);
-  // resolve: fleet order; default = first 3 deployable
-  assert.deepEqual(resolveSortieSelection(sel), ["f1", "f2", "f5"]);
-  assert.deepEqual(resolveSortieSelection(hub5), ["f1", "f2", "f3"], "no selection → first 3 deployable");
+  assert.deepEqual(sel.sortieSelection, ["f5", "f2", "f1", "f3"]);
+  assert.deepEqual(deserializeHubSave(serializeHubSave(createHubSave(sel)))?.hub.sortieSelection, ["f5", "f2", "f1", "f3"]);
+  // resolve: fleet order; default = all deployable
+  assert.deepEqual(resolveSortieSelection(sel), ["f1", "f2", "f3", "f5"]);
+  assert.deepEqual(resolveSortieSelection(hub5), ["f1", "f2", "f3", "f4", "f5"], "no selection → all deployable");
   // needs_repair / lost mechs drop out; nothing left → default
   const worn = normalizeHubSnapshot({
     ...sel,
@@ -371,10 +372,10 @@ assert.equal((HUB_LIMITS as Record<string, unknown>).maxMechs, undefined, "fleet
       .filter((m) => m.instanceId !== "f5") // left behind (lostMechs)
       .map((m) => (m.instanceId === "f2" ? { ...m, durability: 20 } : m)),
   });
-  assert.deepEqual(resolveSortieSelection(worn), ["f1"]);
+  assert.deepEqual(resolveSortieSelection(worn), ["f1", "f3"]);
   assert.deepEqual(resolveSortieSelection({ ...worn, sortieSelection: ["f2"] }), ["f1", "f3", "f4"]);
-  // set: deployable only, at most 3, fleet order
-  assert.deepEqual(setSortieSelection(hub5, ["f4", "f1", "f2", "f3"]).sortieSelection, ["f1", "f2", "f3"]);
+  // set: deployable only, fleet order
+  assert.deepEqual(setSortieSelection(hub5, ["f4", "f1", "f2", "f3"]).sortieSelection, ["f1", "f2", "f3", "f4"]);
   assert.deepEqual(setSortieSelection(worn, ["f2", "f4"]).sortieSelection, ["f4"]);
   console.log("shared fleet cap removal / sortie selection ok");
 }

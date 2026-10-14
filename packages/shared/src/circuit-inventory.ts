@@ -3,12 +3,14 @@
  * §2.2 / §2.3 / §5 / §7). No UI, no storage. The effect→bonus conversion is
  * still undecided, so these only expose facts (restoreState / effect value).
  */
-import { slotCapacity } from "./circuit-actions";
+import { weaponCategory } from "./circuit-actions";
+import { squadCircuitLimit, squadCircuitUsage } from "./invade-rank";
 import { reloadMechAmmo } from "./mech-ammo";
 import { isCircuitRestoreStateActive } from "./circuit-board";
 import { computeCircuitEffectForBoard } from "./circuit-clues";
 import {
   HUB_LIMITS,
+  resolveSortieSelection,
   circuitSize,
   isPerfectRestoredCircuit,
   normalizeCircuitRecord,
@@ -78,7 +80,7 @@ export type EquipResult = {
   hub: HubSnapshot;
   ok: boolean;
   /** `on_lost_mech`: the circuit is attached to a left-behind mech (lostMechs) — it comes back only with the mech. */
-  reason?: "no_circuit" | "no_mech" | "slot_full" | "on_lost_mech";
+  reason?: "no_circuit" | "no_mech" | "slot_full" | "squad_full" | "category_full" | "on_lost_mech";
 };
 
 /** True when the circuit is attached to a left-behind mech (`lostMechs`). */
@@ -115,10 +117,16 @@ export function equipCircuit(
   const others = hub.circuits.filter(
     (c) => c.equippedTo === mechInstanceId && c.circuitId !== circuitId,
   );
-  if (others.length >= slotCapacity(others, rec)) return { hub, ok: false, reason: "slot_full" };
+  const category = weaponCategory(rec.effectKey);
+  if (category && others.some(c => weaponCategory(c.effectKey) === category))
+    return { hub, ok: false, reason: "category_full" };
   const circuits = hub.circuits.map((c) =>
     c.circuitId === circuitId ? { ...c, equippedTo: mechInstanceId } : c,
   );
+  const selected = resolveSortieSelection(hub);
+  if (squadCircuitUsage({ circuits }, selected) > squadCircuitLimit(hub) &&
+      squadCircuitUsage({ circuits }, selected) > squadCircuitUsage(hub, selected))
+    return { hub, ok: false, reason: "squad_full" };
   let next = normalizeHubSnapshot({ ...hub, circuits });
   // M5: every equip / swap returns the ammo and reloads (old holder too).
   for (const id of new Set([mechInstanceId, ...(rec.equippedTo ? [rec.equippedTo] : [])])) {

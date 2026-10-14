@@ -1,6 +1,9 @@
 import "./style.css";
 import {
   CTA_COPY,
+  squadEquipmentError,
+  squadCircuitLimit,
+  squadCircuitUsage,
   BASIC_MATERIAL_LABEL_JA,
   PART_LABEL_JA,
   isBasicMaterialId,
@@ -176,10 +179,7 @@ function fleetCards(s: HangarState): string {
       const pct = Math.round((m.durability / m.durabilityMax) * 100);
       const deployable = canDeploy(m);
       const checked = s.selectedDeployIds.includes(m.instanceId);
-      // Item 15: at most 3 sortie mechs — a 4th unchecked box can't be ticked.
-      const selectionFull =
-        s.selectedDeployIds.length >= HUB_LIMITS.maxSortieMechs && !checked;
-      const selectDisabled = !deployable || selectionFull;
+      const selectDisabled = !deployable;
       // #266: wreck → 残骸復活, worn → 通常修理 (none at full durability). Never disabled;
       // a shortfall is shown as a notice when pressed.
       const moneyAct = reviveMechCost(m)
@@ -200,7 +200,7 @@ function fleetCards(s: HangarState): string {
             <input type="checkbox" data-act="select" data-id="${escapeHtml(m.instanceId)}" ${
               selectDisabled ? "disabled" : ""
             } ${checked && deployable ? "checked" : ""} title="${
-              selectionFull ? `出撃は最大 ${HUB_LIMITS.maxSortieMechs} 機まで` : ""
+              ""
             }" />
             出撃
           </label>
@@ -332,6 +332,8 @@ function unopenedPanel(s: HangarState): string {
 function nextSortiePanel(s: HangarState): string {
   const ready = buildNextSortieReadiness(s);
   const digest = buildNextSortieReturnDigest(s);
+  const equipmentError = squadEquipmentError(s.hub, ready.selectedIds);
+  const equipmentNote = equipmentError === "squad_full" ? "出撃部隊の回路上限を超えています。装備を外すか出撃機を変更してください。" : equipmentError === "category_full" ? "武器種・特殊弾は各機体に各1枚までです。装備を変更してください。" : "";
   const deployUrl = buildDeployUrl(s);
   const invadeUrl = buildInvadeUrl(s);
   const restoreUrl = buildRestoreUrl(s);
@@ -399,6 +401,8 @@ function nextSortiePanel(s: HangarState): string {
         <span class="pill sortie-ready">${escapeHtml(ready.readinessLabelJa)}</span>
       </div>
       <p class="muted sortie-sub">帰還を確認し、短距離で次へ。戦線 / 探索 / 修復 / 仕分（未開封）。</p>
+      <p>出撃部隊の回路 ${squadCircuitUsage(s.hub, ready.selectedIds)}/${squadCircuitLimit(s.hub)}枚</p>
+      ${equipmentNote ? `<p class="warn">${escapeHtml(equipmentNote)}</p>` : ""}
       <div class="sortie-returns" aria-label="帰還ワンライナー">
         <h3 class="sortie-h3">帰還サマリー</h3>
         <p class="${hasExplore ? "ok" : "muted"} sortie-line">探索: ${escapeHtml(digest.exploreJa)}</p>
@@ -492,7 +496,7 @@ function render() {
           .map((p) => `<span class="stat-pill" data-wallet-key="${p.key}"><span class="stat-k">${escapeHtml(p.labelJa)}</span> ${p.value}</span>`)
           .join("")}
         <span class="stat-pill"><span class="stat-k">艦隊</span> ${ready.total}</span>
-        <span class="stat-pill"><span class="stat-k">出撃</span> ${state.selectedDeployIds.length}/${HUB_LIMITS.maxSortieMechs}</span>
+        <span class="stat-pill"><span class="stat-k">出撃</span> ${state.selectedDeployIds.length}</span>
         <span class="stat-pill"><span class="stat-k">未開封</span> ${Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0))}</span>
       </div>
       <div class="row">
@@ -516,14 +520,14 @@ function render() {
     <div class="card">
       <div class="sortie-head">
         <h2 style="font-size:1rem;margin:0">ハンガー</h2>
-        <button type="button" class="secondary compact" id="btn-select-all">先頭から${HUB_LIMITS.maxSortieMechs}機</button>
+        <button type="button" class="secondary compact" id="btn-select-all">出撃可能な全機体</button>
       </div>
       ${bulletinUnlockedLineHtml(state.hub)}
       <div class="row mech-money-row">
         <button type="button" id="btn-buy-mech">${escapeHtml(BUY_MECH_LABEL_JA)}</button>
         <button type="button" id="btn-create-mech">${escapeHtml(createMechLabelJa())}</button>
       </div>
-      <p class="muted" style="margin:0.25rem 0 0.5rem">出撃する機体を最大 ${HUB_LIMITS.maxSortieMechs} 機まで選択（選択は保存され、次回・再出撃でも使われます）。</p>
+      <p class="muted" style="margin:0.25rem 0 0.5rem">出撃する機体を選択（人数制限なし）（選択は保存され、次回・再出撃でも使われます）。</p>
       <div class="fleet-list">${fleetCards(state)}</div>
     </div>
 

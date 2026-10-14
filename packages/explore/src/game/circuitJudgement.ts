@@ -1,4 +1,4 @@
-import type { MechCircuitEntry } from "@estg/shared";
+import { exploreUnitId, type MechCircuitEntry } from "@estg/shared";
 
 export type EquippedByUnit = Record<string, string[]>;
 
@@ -21,7 +21,7 @@ export function buildEquippedByUnit(
   const out: EquippedByUnit = {};
   if (!mechCircuits) return out;
 
-  const unitIds = ["leader", "wing-a", "wing-b"];
+  const unitIds = deployedInstanceIds.map((_, i) => exploreUnitId(i));
   for (let i = 0; i < Math.min(unitIds.length, deployedInstanceIds.length); i += 1) {
     const instanceId = deployedInstanceIds[i]!;
     const entries = mechCircuits[instanceId];
