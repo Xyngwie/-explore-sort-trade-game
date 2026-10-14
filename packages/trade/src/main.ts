@@ -17,6 +17,7 @@ import {
 import {
   MECH_STATUS_LABEL_JA,
   buildDeployUrl,
+  chargeMech,
   buildInvadeUrl,
   buildRestoreUrl,
   canDeploy,
@@ -209,8 +210,10 @@ function fleetCards(s: HangarState): string {
           耐久 ${m.durability}/${m.durabilityMax}
           <span class="${durabilityBarClass(m.status)}"><span style="width:${pct}%"></span></span>
         </div>
+        <p class="muted">活動量 ${Number(m.battery.activity.toFixed(2))}/${m.battery.capacity}</p>
         <div class="row">
           ${moneyAct}
+          <button type="button" class="secondary fleet-act" data-act="charge" data-id="${escapeHtml(m.instanceId)}" ${m.battery.activity >= m.battery.capacity ? "disabled" : ""}>充電</button>
           <button type="button" class="secondary fleet-act" data-act="scrap" data-id="${escapeHtml(m.instanceId)}">解体</button>
         </div>
       </div>`;
@@ -758,6 +761,7 @@ function render() {
         if (!moneyClickAllowed()) return;
         state = act === "repair" ? repairMech(state, id) : reviveWreck(state, id);
       }
+      else if (act === "charge") state = chargeMech(state, id);
       else if (act === "select-circuit") state = selectCircuit(state, id);
       else if (act === "sell-rare") state = sellRareItem(state, id, 1);
       else if (act === "sell-circuit") {

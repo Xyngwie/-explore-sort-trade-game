@@ -1,7 +1,8 @@
+import { effectiveActivity } from "./game/power";
 import { ENEMY_UNKNOWN_JA, enemyAt, noteEnemyTap } from "./game/enemyIdentity";
 import { isEnemySeen } from "./game/render";
 import "./style.css";
-import { loadLineJa, unitLoad } from "./game/carry";
+import { loadLineJa, unitLoad, wreckCarrierId } from "./game/carry";
 import {
   CTA_CHIP,
   squadEquipmentError,
@@ -146,8 +147,9 @@ const root = document.querySelector<HTMLDivElement>("#app")!;
 function leaderLoadHud(world: World): string {
   // 項目4-2 N2: carrying the captain's wreck, the map tap drives that wingman.
   const rescuer = captainRescuer(world);
-  if (rescuer) return `${rescuer.name}を操作中（隊長機の残骸を積載）・${loadLineJa(world, rescuer)}`;
-  const line = loadLineJa(world, world.leader);
+  if (rescuer) return `${rescuer.name}を操作中（${world.leader.alive ? "隊長機" : "隊長機の残骸"}を積載）・${loadLineJa(world, rescuer)}`;
+  const activity = effectiveActivity(world, world.leader);
+  const line = loadLineJa(world, world.leader) + (activity == null ? "" : `・活動量 ${Number(activity.toFixed(1))}`);
   return inCampAura(world, world.leader) && unitLoad(world, world.leader) <= 0 ? `${line}・軽装キャンプ圏` : line;
 }
 
@@ -591,7 +593,7 @@ function wingPaletteHtml(): string {
   const step = armed
     ? `<span class="wing-palette-hint">地図をタップして地点を指定</span>`
     : armedRecover
-      ? `<span class="wing-palette-hint">回収する残骸かコンテナをタップ</span>`
+      ? `<span class="wing-palette-hint">回収する機体・残骸・コンテナをタップ</span>`
       : acts.map((a) => `<button type="button" class="secondary" data-wing-act="${a.id}">${escapeHtml(a.label)}</button>`).join("");
   return `<div class="wing-palette open" role="group" aria-label="僚機">${allBtn}<span class="wing-palette-sel">${names}</span>${step}</div>`;
 }
@@ -734,7 +736,7 @@ function wingPanelHtml(): string {
         <div class="wing-hp${hpPulse}" role="meter" aria-label="HP" aria-valuenow="${Math.max(0, Math.ceil(w.hp))}" aria-valuemin="0" aria-valuemax="${w.maxHp}">
           <div class="wing-hp-fill" style="width:${hpPct.toFixed(1)}%"></div>
         </div>
-        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · <span class="wing-load">${escapeHtml(loadLineJa(world, w))}</span>${quirk}${cover}</div>
+        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · <span class="wing-load">${escapeHtml(loadLineJa(world, w))}</span>${wreckCarrierId(world, w.id) ? "・搭載中" : ""}${effectiveActivity(world, w) == null ? "" : `・活動量 ${Number(effectiveActivity(world, w)!.toFixed(1))}`}${quirk}${cover}</div>
         ${orderRow}
       </div>`;
     })

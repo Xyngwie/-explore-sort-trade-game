@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "selftest": "tsx src/selftest.ts && tsx src/coverBehavior.selftest.ts && tsx src/checkpoint.selftest.ts && tsx src/circuitPlay.selftest.ts && tsx src/releaseProgress.selftest.ts && tsx src/ammoRefill.selftest.ts && tsx src/carry.selftest.ts && tsx src/rescue.selftest.ts && tsx src/statusBadges.selftest.ts && tsx src/enemyIdentity.selftest.ts && tsx src/enemyBehavior.selftest.ts",
+    "selftest": "tsx src/selftest.ts && tsx src/coverBehavior.selftest.ts && tsx src/checkpoint.selftest.ts && tsx src/circuitPlay.selftest.ts && tsx src/releaseProgress.selftest.ts && tsx src/ammoRefill.selftest.ts && tsx src/carry.selftest.ts && tsx src/rescue.selftest.ts && tsx src/statusBadges.selftest.ts && tsx src/enemyIdentity.selftest.ts && tsx src/enemyBehavior.selftest.ts && tsx src/liveTransport.selftest.ts",
     "test": "npm run typecheck && npm run selftest"
   },
   "dependencies": {

@@ -75,7 +75,7 @@ export function buildSortieOutcome(world: World): ExploreSortieOutcome | null {
         ? { instanceId: id, durability }
         : { instanceId: id, durability, currentAmmo },
     );
-    // Carry the deployed battery through (Explore does not consume it yet);
+    // Carry the remaining battery through (including fractional movement cost);
     // never report createOwnedMech's default 300/300 for a mech we were not given.
     const battery = world.mechBattery[id];
     return battery ? { ...mech, battery: { ...battery } } : mech;

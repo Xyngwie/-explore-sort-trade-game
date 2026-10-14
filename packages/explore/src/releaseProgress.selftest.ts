@@ -198,13 +198,13 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
 // --- N1: wingman palette 「移動」 (fix/explore-move-tap-panel: no 「地点選択」 step), then stop and return fire ---
 {
   const none = sortie([falseCap()]);
-  assert.deepEqual(wingmanPaletteActions(none, ["wing-a"]), [], "new save: wingmen are turrets, no palette actions");
+  assert.deepEqual(wingmanPaletteActions(none, ["wing-a"]).map(a => a.id), ["load"], "turret can be loaded but not ordered to move");
   assert.equal(beginWingmanMovePick(none, ["wing-a"]), false);
   assert.deepEqual(issueWingmanMove(none, ["wing-a"], { x: 1, y: 1 }), []);
 
   const w = sortie([trueCap(), { ...makeRestoredTrueOneByOne("t-wb"), equippedTo: "wb" }]);
-  assert.deepEqual(wingmanPaletteActions(w, ["wing-a"]), [{ id: "move", label: "移動", next: [] }]);
-  assert.deepEqual(wingmanPaletteActions(w, ["wing-b"]), [], "autonomous wingman unchanged (no palette)");
+  assert.deepEqual(wingmanPaletteActions(w, ["wing-a"]).map(a => a.id), ["move", "load"]);
+  assert.deepEqual(wingmanPaletteActions(w, ["wing-b"]).map(a => a.id), ["load"], "autonomous wing can also be loaded");
   assert.deepEqual(wingmanPaletteActions(w, ["wing-a", "wing-b"]).map((a) => a.id), ["move"], "select-all still offers 移動");
   assert.equal(beginWingmanMovePick(w, ["wing-a", "wing-b"]), true);
   const wa = w.wingmen[0]!;
@@ -297,15 +297,15 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
 {
   const locked = sortie([falseCap()]);
   const wa0 = locked.wingmen[0]!;
-  assert.equal(handleMapTap(locked, { ...wa0.pos }, 24), "move", "no 「4」: a tap on a wingman moves the captain (nothing locked is shown)");
-  assert.equal(openWingPalette(locked, ["wing-a"]), false, "no 「4」: the card opens nothing");
-  assert.deepEqual(paletteWingmen(locked), []);
+  assert.equal(handleMapTap(locked, { ...wa0.pos }, 24), "selected", "no 4 needed for loading a wingman");
+  assert.equal(openWingPalette(locked, ["wing-a"]), true, "loading available without 4");
+  assert.deepEqual(paletteWingmen(locked), ["wing-a", "wing-b"]);
 
   const w = sortie([trueCap(), { ...makeRestoredTrueOneByOne("t-wb"), equippedTo: "wb" }]);
   const wa = w.wingmen[0]!;
   const wb = w.wingmen[1]!;
-  assert.deepEqual(paletteWingmen(w), ["wing-a"], "autonomous wing-b stays out of the palette");
-  assert.equal(handleMapTap(w, { ...wb.pos }, 24), "move", "a tap on the autonomous wingman moves the captain");
+  assert.deepEqual(paletteWingmen(w), ["wing-a", "wing-b"], "autonomous wing-b exposes loading too");
+  assert.equal(handleMapTap(w, { ...wb.pos }, 24), "selected", "autonomous wing exposes its loading palette");
   assert.equal(handleMapTap(w, { x: wa.pos.x + 20, y: wa.pos.y }, 24), "selected", "within ~24px selects");
   assert.deepEqual(w.circuitPlay!.wingSelect, { ids: ["wing-a"], step: "root" });
   assert.equal(handleMapTap(w, { x: wa.pos.x + 200, y: wa.pos.y }, 24), "move", "another tap moves the captain");

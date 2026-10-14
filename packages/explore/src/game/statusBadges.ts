@@ -27,7 +27,7 @@ export function wingmanStatusBadges(world: World, unit: Unit): StatusBadge[] {
   if (unit.maxHp > 0 && unit.hp < unit.maxHp * 0.5) out.push("装甲低下");
   const b = unit.instanceId ? world.mechBattery[unit.instanceId] : undefined;
   const cap = effectiveBatteryCapacity(world, unit);
-  if (b && cap != null && cap > 0 && b.activity < cap * 0.5) out.push("活動量低下");
+  if (b && cap != null && cap > 0 && b.activity < b.capacity * 0.5) out.push("活動量低下");
   const loadCap = unitLoadCap(world, unit);
   if (loadCap > 0 && unitLoad(world, unit) >= loadCap) out.push("積載上限");
   return out;

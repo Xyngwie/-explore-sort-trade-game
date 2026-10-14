@@ -2618,7 +2618,7 @@ import {
     assert.deepEqual(returnPayload!.lostMechs, [{
       instanceId: "m2",
       currentAmmo: 7,
-      battery: { capacity: 300, activity: 212 },
+      battery: { capacity: 300, activity: w.mechBattery.m2!.activity },
       circuitIds: ["circuit_lost"],
       frontSeed: 4242,
       cell: { sx: 2, sy: -1 },
@@ -2762,8 +2762,8 @@ import {
   assert.ok(saved.appliedSortieIds?.includes(payload.sortieId!), "sortieId recorded");
   assert.deepEqual(
     payload.mechBattery?.map((r) => [r.instanceId, r.battery.activity]),
-    [["m1", 250], ["m2", 212], ["m3", 180]],
-    "return carries the deployed battery",
+    ["m1", "m2", "m3"].map(id => [id, w.mechBattery[id]!.activity]),
+    "return carries remaining battery after movement",
   );
   // the 格納庫 URL carries the same return
   assert.deepEqual(parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(w)!).search)?.sortieId, payload.sortieId);
@@ -3056,7 +3056,9 @@ import {
   assert.ok(typeof row.lostAt === "string" && row.lostAt.length > 0, "lostAt");
   assert.equal(row.catalogId, "mech_gen1", "copy kept");
   assert.equal(row.currentAmmo, 12);
-  assert.deepEqual(row.battery, { capacity: 300, activity: 212 });
+  assert.equal(row.battery.capacity, 300);
+  assert.ok(Math.abs(row.battery.activity - first.w.mechBattery.m2!.activity) < 1e-6, "lost battery retains movement consumption");
+  const leftBattery = { ...row.battery };
   assert.deepEqual(row.circuitIds, ["c_wing"]);
   assert.equal(saved.circuits.find((c) => c.circuitId === "c_wing")?.equippedTo, "m2", "circuit stays on the lost mech");
   assert.equal(first.payload.abandonedMechInstanceIds, undefined);
@@ -3108,7 +3110,7 @@ import {
   const back = saved.fleet.find((m) => m.instanceId === "m2");
   assert.ok(back, "back in the fleet");
   assert.equal(back!.currentAmmo, 12, "ammo as left");
-  assert.deepEqual(back!.battery, { capacity: 300, activity: 212 }, "battery as left");
+  assert.deepEqual(back!.battery, leftBattery, "battery as left");
   assert.equal(saved.circuits.find((c) => c.circuitId === "c_wing")?.equippedTo, "m2", "circuit still equipped");
   assert.ok(shared.resolveSortieSelection(saved).includes("m2"), "selectable in the hangar");
   assert.ok(leftBehindResultHtml(third.w).includes("置き去りだった機体 m2 を回収"));

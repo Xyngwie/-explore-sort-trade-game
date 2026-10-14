@@ -7,7 +7,7 @@ import {
 } from "./orders";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { rangeMul, visionMul, wingRecoverWantsSalvage } from "./circuitPlay";
-import { canTakeContainer } from "./carry";
+import { canTakeContainer, wreckCarrierId } from "./carry";
 import type { Container, Unit, WingmanIntent, World } from "./types";
 
 function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number): Unit | null {
@@ -85,7 +85,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
   const leader = world.leader;
   // No wing_mobility (release mode, no unlocking circuit): stand still and only
   // shoot enemies already within weapon range. No follow / chase / collect.
-  if (!isWingmanMobileFor(world, self.id)) {
+  if (!isWingmanMobileFor(world, self.id) || wreckCarrierId(world, self.id)) {
     // 項目4-2 C1: a palette 「回収」 runs its own salvage channel (circuitPlay) — keep it.
     if (self.salvageId && !wingRecoverWantsSalvage(world, self)) abortSalvage(self);
     return {

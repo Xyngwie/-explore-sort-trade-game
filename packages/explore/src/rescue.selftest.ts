@@ -54,11 +54,11 @@ const wa = (w: W) => w.wingmen[0]!;
 // C1a/b: palette 「回収」 without the captain's 「4」; 移動 only with the 「4」.
 {
   const world = releaseWorld();
-  assert.deepEqual(wingmanPaletteActions(world, ["wing-a"]).map((a) => a.id), ["recover"]);
-  assert.deepEqual(wingmanPaletteActions(world, ["wing-b"]), [], "no circuit, no 4 → no palette");
+  assert.deepEqual(wingmanPaletteActions(world, ["wing-a"]).map((a) => a.id), ["recover", "load"]);
+  assert.deepEqual(wingmanPaletteActions(world, ["wing-b"]).map(a => a.id), ["load"], "loading without circuit or 4");
   world.circuitPlay!.captainTrueOne = true;
-  assert.deepEqual(wingmanPaletteActions(world, ["wing-a"]).map((a) => a.id), ["move", "recover"]);
-  assert.deepEqual(wingmanPaletteActions(world, ["wing-b"]).map((a) => a.id), ["move"]);
+  assert.deepEqual(wingmanPaletteActions(world, ["wing-a"]).map((a) => a.id), ["move", "recover", "load"]);
+  assert.deepEqual(wingmanPaletteActions(world, ["wing-b"]).map((a) => a.id), ["move", "load"]);
   console.log("explore 4-2 C1a/b palette 回収 without the 4 ok");
 }
 

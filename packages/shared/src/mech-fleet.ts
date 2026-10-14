@@ -53,8 +53,8 @@ export function normalizeBattery(
   const activityNum =
     typeof activityRaw === "number" ? activityRaw : Number(activityRaw);
   const activity = Number.isFinite(activityNum)
-    ? Math.max(0, Math.min(capacity, Math.floor(activityNum)))
-    : Math.max(0, Math.min(capacity, Math.floor(defaults.activity)));
+    ? Math.max(0, Math.min(capacity, activityNum))
+    : Math.max(0, Math.min(capacity, defaults.activity));
   return { capacity, activity };
 }
 
