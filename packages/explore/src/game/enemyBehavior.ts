@@ -1,3 +1,4 @@
+import { showCombatFeedback } from "./combatFeedback";
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
 import { effectRate, cargoSlotBonus, rankEnemyMultiplier, type HubSnapshot } from "@estg/shared";
 import { makeEnemyIdentity, type EnemyCircuitData } from "./enemyIdentity";
@@ -329,11 +330,13 @@ export function collectSupplies(world: World): void {
         world.currentAmmo[u.instanceId] =
           (world.currentAmmo[u.instanceId] ?? cap) + a;
         d.ammo -= a;
+        showCombatFeedback(world, u, "ammo", a);
         if (b) {
           const effectiveCap = effectiveBatteryCapacity(world, u) ?? b.capacity;
           const p = Math.min(d.power, Math.max(0, effectiveCap * (1 - b.activity / b.capacity)));
           b.activity = Number(Math.min(b.capacity, b.activity + p * b.capacity / effectiveCap).toFixed(10));
           d.power = Number(Math.max(0, d.power - p).toFixed(10));
+          showCombatFeedback(world, u, "power", p);
         }
       }
     }

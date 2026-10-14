@@ -1,3 +1,4 @@
+import { combatFeedback, feedbackLabel } from "./combatFeedback";
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
@@ -382,6 +383,22 @@ export function renderWorld(
   ctx.beginPath();
   ctx.arc(tx(world.leader.pos.x), ty(world.leader.pos.y), vision * sx, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.save();
+  const feedbackPx = 12 * cssW / (ctx.canvas.clientWidth || cssW);
+  ctx.font = `bold ${feedbackPx}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.lineWidth = 3;
+  for (const event of combatFeedback(world)) {
+    const unit = [world.leader, ...world.wingmen, ...world.enemies].find(u => u.id === event.unitId);
+    if (!unit?.alive || (unit.kind === "enemy" && !isEnemySeen(world, unit))) continue;
+    const x = tx(unit.pos.x), y = ty(unit.pos.y) - feedbackPx * (2 + (1.8 - event.ttl) + (event.kind === "power" ? 1.4 : 0));
+    ctx.globalAlpha = Math.min(1, event.ttl * 2);
+    ctx.strokeStyle = "#102030";
+    ctx.fillStyle = event.kind === "empty" ? "#ffd27a" : event.kind === "ammo" ? "#8cf0b0" : "#8bd5ff";
+    ctx.strokeText(feedbackLabel(event), x, y);
+    ctx.fillText(feedbackLabel(event), x, y);
+  }
+  ctx.restore();
 }
 
 function quirkShort(q: "cling" | "decoy" | "sniper"): string {
@@ -411,6 +428,8 @@ function drawCraft(ctx: CanvasRenderingContext2D, x: number, y: number, r: numbe
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+
+
 }
 
 export function worldFromCanvas(canvas: HTMLCanvasElement, world: World, clientX: number, clientY: number): { x: number; y: number } {
