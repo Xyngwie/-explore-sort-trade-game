@@ -1,3 +1,4 @@
+import { enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
@@ -128,12 +129,16 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): void {
   if (!from.alive || !target.alive) return;
   if (fromEnemy && from.cooldown > 0) return;
+  const previousEnemyAmmo = from.enemyState?.ammo ?? 0;
   if (fromEnemy) {
     from.instanceId = from.id;
     world.currentAmmo[from.id] = from.enemyState?.ammo ?? 0;
   }
   if (circuitTryWeapon(world, from, target)) {
-    if (fromEnemy && from.enemyState) from.enemyState.ammo = world.currentAmmo[from.id] ?? 0;
+    if (fromEnemy && from.enemyState) {
+      from.enemyState.ammo = world.currentAmmo[from.id] ?? 0;
+      enemyAmmoFeedback(world, from, previousEnemyAmmo);
+    }
     return;
   }
   if (from.cooldown > 0) return;
@@ -142,6 +147,7 @@ function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): vo
   if (fromEnemy) {
     if (!from.enemyState || from.enemyState.ammo <= 0) return;
     from.enemyState.ammo -= 1;
+    enemyAmmoFeedback(world, from, previousEnemyAmmo);
   }
   if (!fromEnemy) {
     if (from.instanceId == null) return;
@@ -397,6 +403,7 @@ function leaderAbortSalvageOnTimeout(world: World): void { for (const u of frien
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") return;
+  tickCombatFeedback(world, dt);
   beginMovementPowerTick(world);
   world.elapsed += dt; world.timeLeft = Math.max(0, world.timeLeft - dt);
   if (world.timeLeft <= 0 && !world.operationTimedOut) {

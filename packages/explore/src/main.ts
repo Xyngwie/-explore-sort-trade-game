@@ -858,6 +858,7 @@ function renderDom(): void {
         </table>
         <div class="row"><button type="button" id="btn-start" ${sortieEquipmentNote() ? "disabled" : ""}>出撃</button></div>
         ${sortieEquipmentNote() ? `<p class="warn">${escapeHtml(sortieEquipmentNote())}</p>` : ""}
+        ${Object.values(world.mechBattery).some(b => b.activity <= 0) ? `<p class="warn" id="power-empty-presortie">活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。</p>` : ""}
         ${preSortieAmmoNote ? `<p class="warn" id="ammo-short-presortie">${escapeHtml(preSortieAmmoNote)}</p>` : ""}
         <p class="help">${briefingHelpText(cmdLocked)}</p>
       </div>`;

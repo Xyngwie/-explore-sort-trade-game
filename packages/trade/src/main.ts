@@ -337,6 +337,8 @@ function nextSortiePanel(s: HangarState): string {
   const digest = buildNextSortieReturnDigest(s);
   const equipmentError = squadEquipmentError(s.hub, ready.selectedIds);
   const equipmentNote = equipmentError === "squad_full" ? "出撃部隊の回路上限を超えています。装備を外すか出撃機を変更してください。" : equipmentError === "category_full" ? "武器種・特殊弾は各機体に各1枚までです。装備を変更してください。" : "";
+  const emptyActivity = s.hub.fleet.filter(m => ready.selectedIds.includes(m.instanceId) && m.battery.activity <= 0);
+  const powerWarning = emptyActivity.length ? `出撃部隊に活動量0の機体が${emptyActivity.length}機あります。出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。` : "";
   const deployUrl = buildDeployUrl(s);
   const invadeUrl = buildInvadeUrl(s);
   const restoreUrl = buildRestoreUrl(s);
@@ -406,6 +408,7 @@ function nextSortiePanel(s: HangarState): string {
       <p class="muted sortie-sub">帰還を確認し、短距離で次へ。戦線 / 探索 / 修復 / 仕分（未開封）。</p>
       <p>出撃部隊の回路 ${squadCircuitUsage(s.hub, ready.selectedIds)}/${squadCircuitLimit(s.hub)}枚</p>
       ${equipmentNote ? `<p class="warn">${escapeHtml(equipmentNote)}</p>` : ""}
+      ${powerWarning ? `<p class="warn" id="power-empty-presortie">${escapeHtml(powerWarning)}</p>` : ""}
       <div class="sortie-returns" aria-label="帰還ワンライナー">
         <h3 class="sortie-h3">帰還サマリー</h3>
         <p class="${hasExplore ? "ok" : "muted"} sortie-line">探索: ${escapeHtml(digest.exploreJa)}</p>
