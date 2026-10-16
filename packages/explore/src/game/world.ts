@@ -503,4 +503,17 @@ export function startSortie(world: World): void {
     u.salvagedCount = 0;
     u.inCover = false;
   }
+  faceAtSortieStart(world);
+}
+
+/** Facing PR1 (神宮 10/17): allies face the sortie direction (toward the map centre); enemies face the nearest ally. */
+export function faceAtSortieStart(world: World): void {
+  const allies = [world.leader, ...world.wingmen];
+  const out = Math.atan2(BALANCE.worldH / 2 - world.leader.pos.y, BALANCE.worldW / 2 - world.leader.pos.x);
+  for (const u of allies) { u.heading = out; u.moveHeading = out; u.aimWant = null; }
+  for (const e of world.enemies) {
+    let best = allies[0]!, bd = Infinity;
+    for (const a of allies) { const d = (a.pos.x - e.pos.x) ** 2 + (a.pos.y - e.pos.y) ** 2; if (d < bd) { bd = d; best = a; } }
+    e.heading = Math.atan2(best.pos.y - e.pos.y, best.pos.x - e.pos.x); e.moveHeading = null; e.aimWant = null;
+  }
 }

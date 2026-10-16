@@ -4,6 +4,9 @@ import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import { snapshotSortieWorld, worldFromCheckpointBody } from "./game/checkpoint";
 import { aimAt, turnRate, updateFacing, wrapAngle, TURN_RATE_RAD, FIRE_HALF_ARC_RAD } from "./game/facing";
 import { loadSpeedRatio } from "./game/carry";
+import { inMeleeArc } from "./game/circuitPlay";
+import { escortOffset } from "./game/brain";
+import { BALANCE } from "./game/balance";
 
 const near = (a: number, b: number) => Math.abs(wrapAngle(a - b)) < 1e-6;
 const w = createWorld(bootstrapFromSearch("")); startSortie(w);
@@ -43,4 +46,24 @@ r.leader.heading = 0; r.leader.moveHeading = Math.PI; updateFacing(r, 1);
 assert.ok(near(Math.abs(r.leader.heading), Math.PI / 2), "old checkpoint turns normally");
 // Hub save unchanged by facing.
 assert.ok(!/aimWant|moveHeading/.test(serializeHubSave(createHubSave(INITIAL_HUB))), "facing is not saved to HUB");
+// 10/17 details. 1: sortie start facing.
+{
+  const s0 = createWorld(bootstrapFromSearch("")); startSortie(s0);
+  const out = Math.atan2(BALANCE.worldH / 2 - s0.leader.pos.y, BALANCE.worldW / 2 - s0.leader.pos.x);
+  for (const u of [s0.leader, ...s0.wingmen]) assert.ok(near(u.heading, out), "ally faces sortie direction");
+  for (const e of s0.enemies) {
+    const a = [s0.leader, ...s0.wingmen].sort((p, q) => Math.hypot(p.pos.x - e.pos.x, p.pos.y - e.pos.y) - Math.hypot(q.pos.x - e.pos.x, q.pos.y - e.pos.y))[0]!;
+    assert.ok(near(e.heading, Math.atan2(a.pos.y - e.pos.y, a.pos.x - e.pos.x)), "enemy faces nearest ally");
+  }
+}
+// 2: load 6 → no turning.
+L.salvagedCount = 6; assert.equal(turnRate(w, L), 0); L.salvagedCount = 0;
+// 3: melee arc ±135°.
+L.heading = 0;
+assert.equal(inMeleeArc(L, at(130)), true); assert.equal(inMeleeArc(L, at(-134)), true);
+assert.equal(inMeleeArc(L, at(140)), false, "rear 90° blind for melee");
+// 4: formation follows the leader's travel, not its facing.
+L.moveHeading = 0; L.heading = Math.PI / 2;
+const slotA = escortOffset(L, 30);
+L.heading = -Math.PI / 2; assert.deepEqual(escortOffset(L, 30), slotA, "facing does not move the formation");
 console.log("facing: 90°/s, 3° arc, aim over move, cargo ratio, enemies, checkpoint/hub compat PASS");

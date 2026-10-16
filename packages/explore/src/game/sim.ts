@@ -28,7 +28,7 @@ import {
   bendHoming,
   circuitMoveTarget,
   circuitSpeed,
-  circuitTryWeapon,
+  circuitTryWeapon, meleeReady,
   abilityOf,
   usableAmmo,
   visionMul,
@@ -130,7 +130,7 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
 
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): void {
   if (!from.alive || !target.alive) return;
-  if (!aimAt(from, target)) return; // turn first; fire only inside the 3° arc
+  if (!aimAt(from, target) && !meleeReady(world, from, target)) return; // guns need the 3° arc; melee the ±135° arc
   if (fromEnemy && from.cooldown > 0) return;
   const previousEnemyAmmo = from.enemyState?.ammo ?? 0;
   if (fromEnemy) {

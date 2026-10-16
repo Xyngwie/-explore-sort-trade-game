@@ -845,7 +845,7 @@ function alwaysMove(world: World, unit: Unit): Vec2 | null {
     }
   }
   if (selfKey(world, unit.id, "read_ahead")) {
-    const h = world.leader.heading;
+    const h = world.leader.moveHeading ?? world.leader.heading;
     const lim = world.balance.visionRange * modsFor(world, unit.id).vision;
     return nearestFog(world, unit.pos, (c) => dist(world.leader.pos, c) <= lim && angleDelta(Math.atan2(c.y - world.leader.pos.y, c.x - world.leader.pos.x), h) <= Math.PI / 2);
   }
@@ -870,7 +870,7 @@ function alwaysMove(world: World, unit: Unit): Vec2 | null {
     return mine;
   }
   if (selfKey(world, unit.id, "march")) {
-    const h = world.leader.heading;
+    const h = world.leader.moveHeading ?? world.leader.heading;
     const distF = world.balance.escortFollowDist;
     return {
       x: world.leader.pos.x + Math.cos(h) * distF,
@@ -894,7 +894,7 @@ function orderMove(world: World, unit: Unit): Vec2 | null {
   const order = playOf(world)?.order;
   if (!order) return null;
   if (order.kind === "protect" && unit.id === order.allyId) {
-    const h = world.leader.heading;
+    const h = world.leader.moveHeading ?? world.leader.heading;
     const d = world.balance.escortFollowDist;
     return {
       x: world.leader.pos.x - Math.cos(h) * d,
@@ -1104,6 +1104,16 @@ function gunR(world: World, unitId: string, gun: GunEffectKey): number {
   return selfKey(world, unitId, gun)?.r ?? 0;
 }
 
+/** Melee works inside the 270° peripheral arc (±135°), not only the 3° muzzle arc. */
+export const MELEE_HALF_ARC_RAD = (135 * Math.PI) / 180;
+export function inMeleeArc(from: Unit, target: Unit): boolean {
+  return angleDelta(Math.atan2(target.pos.y - from.pos.y, target.pos.x - from.pos.x), from.heading) <= MELEE_HALF_ARC_RAD;
+}
+export function meleeReady(world: World, from: Unit, target: Unit): boolean {
+  if (!playOf(world)?.rules || from.instanceId == null) return false;
+  return usableAmmo(world, from) <= 0 && modsFor(world, from.id).melee > 0 && dist(from.pos, target.pos) <= from.radius + target.radius && inMeleeArc(from, target);
+}
+
 export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolean {
   const m = modsFor(world, from.id);
   if (!playOf(world)?.rules || from.instanceId == null) return false;
@@ -1113,7 +1123,7 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
   const combined = WEAPON_EFFECT_KEYS.some(key => key === m.gun);
   const fi = abilityOf(world, from.id).fireInterval / (combined && special === "fast_round" ? 1 + gunR(world, from.id, special) : 1);
   const reach = dist(from.pos, target.pos);
-  if (ammo <= 0 && m.melee > 0 && reach <= from.radius + target.radius) {
+  if (ammo <= 0 && m.melee > 0 && reach <= from.radius + target.radius && inMeleeArc(from, target)) {
     target.hp -= (from.kind === "enemy" ? world.balance.enemyDamage : world.balance.bulletDamage) * (1 + m.melee) * m.attack;
     noteDamageBreaksSuppress(world, target);
     if (target.hp <= 0) { target.hp = 0; target.alive = false; }

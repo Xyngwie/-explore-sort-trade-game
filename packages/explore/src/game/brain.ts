@@ -43,7 +43,7 @@ function nearestDiscoveredContainer(
   return best;
 }
 
-function escortOffset(
+export function escortOffset(
   leader: Unit,
   side: number,
   opts?: { followMul?: number; sideMul?: number },
@@ -51,8 +51,9 @@ function escortOffset(
   const b = BALANCE;
   const follow = b.escortFollowDist * (opts?.followMul ?? 1);
   const sideOff = side * (opts?.sideMul ?? 1);
-  const hx = Math.cos(leader.heading);
-  const hy = Math.sin(leader.heading);
+  const lh = leader.moveHeading ?? leader.heading; // formation follows travel, not facing
+  const hx = Math.cos(lh);
+  const hy = Math.sin(lh);
   return {
     x: leader.pos.x - hx * follow + -hy * sideOff,
     y: leader.pos.y - hy * follow + hx * sideOff,

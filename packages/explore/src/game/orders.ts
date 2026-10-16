@@ -87,7 +87,7 @@ export function scatterSearch(world: World): "applied" | "denied" {
   if (isOperationTimedOut(world)) { pushLog(world, "時間切れのため散開不可（移動ロック）。"); return "denied"; }
   const living: Unit[] = [world.leader, ...world.wingmen.filter((w) => w.alive)];
   if (living.length === 0) return "denied";
-  const base = world.leader.heading; const origin = world.leader.pos; const distOut = world.balance.scatterSearchDist; const n = living.length; const pad = 20;
+  const base = world.leader.moveHeading ?? world.leader.heading; const origin = world.leader.pos; const distOut = world.balance.scatterSearchDist; const n = living.length; const pad = 20;
   for (let i = 0; i < n; i++) {
     const unit = living[i]!; const angle = base + (Math.PI * 2 * i) / n;
     const target = { x: clamp(origin.x + Math.cos(angle) * distOut, pad, world.balance.worldW - pad), y: clamp(origin.y + Math.sin(angle) * distOut, pad, world.balance.worldH - pad) };
