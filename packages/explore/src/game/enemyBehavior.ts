@@ -1,5 +1,6 @@
 import { showCombatFeedback } from "./combatFeedback";
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
+import { noteMoveHeading } from "./facing";
 import { effectRate, cargoSlotBonus, rankEnemyMultiplier, type HubSnapshot } from "@estg/shared";
 import { makeEnemyIdentity, type EnemyCircuitData } from "./enemyIdentity";
 import { dist, clamp, type Vec2 } from "./math";
@@ -141,7 +142,7 @@ export function moveEnemy(
       s.activity - (0.5 * travelled) / Math.max(speed, 0.001),
     );
     e.vel = { x: dx * speed, y: dy * speed };
-    e.heading = Math.atan2(dy, dx);
+    noteMoveHeading(e, Math.atan2(dy, dx));
   }
 }
 export function nearestEnemyTarget(world: World, e: Unit): Unit | null {

@@ -127,6 +127,7 @@ for (const [n, count, side] of [
   s.activity = s.capacity * 0.1;
   e.pos = { x: 400, y: 400 };
   w.leader.pos = { x: 440, y: 400 };
+  e.heading = 0; // facing PR1: already aimed at the leader
   s.ammo = 28;
   moveEnemy(w, e, { x: 500, y: 400 }, 70, 1);
   assert.deepEqual(e.pos, { x: 400, y: 400 });

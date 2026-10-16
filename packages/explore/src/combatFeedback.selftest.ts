@@ -12,7 +12,7 @@ e.enemyIdentity!.circuits = [];
 initializeEnemy(e, () => .5);
 e.pos = { ...w.leader.pos, x: w.leader.pos.x + 60 };
 e.enemyState!.ammo = 1; e.enemyState!.activity = e.enemyState!.capacity * .1;
-e.cooldown = 0;
+e.cooldown = 0; e.heading = Math.PI; // facing PR1: already aimed at the leader
 getCoverObjects(w).splice(0);
 updateEnemies(w, .01);
 assert.equal(e.enemyState!.ammo, 0);
@@ -48,7 +48,7 @@ gunner.enemyIdentity!.circuits[0]!.effectKey = "shotgun";
 initializeEnemy(gunner, () => .5);
 attachCircuitPlay(armed, null, false);
 gunner.pos = { ...armed.leader.pos, x: armed.leader.pos.x + 60 };
-gunner.enemyState!.ammo = 1; gunner.enemyState!.activity = 0; gunner.cooldown = 0;
+gunner.enemyState!.ammo = 1; gunner.enemyState!.activity = 0; gunner.cooldown = 0; gunner.heading = Math.PI;
 getCoverObjects(armed).splice(0);
 updateEnemies(armed, .01);
 assert.equal(gunner.enemyState!.ammo, 0);

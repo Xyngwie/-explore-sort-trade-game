@@ -1,3 +1,4 @@
+import { SPAWN_POINT } from "./balance";
 import type { Vec2 } from "./math";
 import type { World } from "./types";
 
@@ -6,7 +7,7 @@ export type CoverObject = { id: string; pos: Vec2; radius: number };
 const COVER_COUNT = 10;
 export const COVER_RADIUS = 30;
 const MIN_SEPARATION = 110;
-const SPAWN = { x: 180, y: 500 };
+const SPAWN = SPAWN_POINT;
 const SPAWN_AVOID_RADIUS = 170;
 
 const layouts = new WeakMap<object, CoverObject[]>();

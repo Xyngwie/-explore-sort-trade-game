@@ -11,6 +11,7 @@ import {
 } from "@estg/shared";
 import {
   BALANCE,
+  SPAWN_POINT,
   balanceForThreat,
   ENGAGE_BRIEFING_LABEL,
   threatFromInvadeSector,
@@ -18,7 +19,7 @@ import {
 } from "./balance";
 import type { Container, InvadeSectorContext, Unit, World } from "./types";
 import { quirkForWingmanIndex } from "./types";
-import { vec } from "./math";
+import { vec, type Vec2 } from "./math";
 import { defaultCommandUnlockState } from "./commandUnlock";
 import { buildEquippedByUnit, type EquippedByUnit } from "./circuitJudgement";
 import { resolveCommandUnlockMode } from "./unlockMode";
@@ -70,7 +71,7 @@ function clampToWorld(x: number, y: number, margin: number): { x: number; y: num
 function placeContainers(): Container[] {
   const count = BALANCE.fieldContainerCount;
   const margin = 90;
-  const spawnAvoid = vec(180, 500);
+  const spawnAvoid = vec(SPAWN_POINT.x, SPAWN_POINT.y);
   const avoidR = 140;
   const spots: { x: number; y: number }[] = [];
 
@@ -315,8 +316,16 @@ export function bootstrapFromSearch(search: string): SortieBootstrap {
   };
 }
 
+/** Wingmen sit evenly on a ring around the spawn (8 per ring, then an outer ring). */
+export function wingmanRingPos(spawn: Vec2, i: number, n: number): Vec2 {
+  const ring = Math.floor(i / 8), inRing = Math.min(8, n - ring * 8), k = i % 8;
+  const a = -Math.PI / 2 + (Math.PI * 2 * (k + 0.5)) / Math.max(1, inRing);
+  const r = 50 + ring * 35;
+  return { x: spawn.x + Math.cos(a) * r, y: spawn.y + Math.sin(a) * r };
+}
+
 export function createWorld(boot: SortieBootstrap): World {
-  const spawn = vec(180, 500);
+  const spawn = vec(SPAWN_POINT.x, SPAWN_POINT.y);
   const density = boot.invadeSector?.density ?? null;
   const threat = threatFromInvadeSector({
     density,
@@ -348,10 +357,7 @@ export function createWorld(boot: SortieBootstrap): World {
         id: exploreUnitId(i + 1),
         kind: "wingman",
         name: i === 0 ? "僚機A" : i === 1 ? "僚機B" : `僚機${i + 1}`,
-        pos: {
-          x: Math.max(20, spawn.x - 40 - (Math.floor(i / 2) % 4) * 30),
-          y: Math.min(BALANCE.worldH - 20, Math.max(20, spawn.y + (i % 2 === 0 ? -1 : 1) * (40 + Math.floor(i / 8) * 30))),
-        },
+        pos: wingmanRingPos(spawn, i, boot.wingmanCount),
         hp: BALANCE.wingmanHp,
         maxHp: BALANCE.wingmanHp,
         radius: BALANCE.unitRadius,
@@ -380,7 +386,7 @@ export function createWorld(boot: SortieBootstrap): World {
     wingmen,
     enemies: placeEnemies(spawn, threat, boot.invadeSector?.neighborCount ?? 0, boot.invadeSector?.invadeRank ?? 0),
     containers: placeContainers(),
-    extract: { pos: vec(160, 480), radius: 48 },
+    extract: { pos: vec(SPAWN_POINT.x, SPAWN_POINT.y), radius: 48 },
     boarding: null,
     camp: null,
     bullets: [],
@@ -439,7 +445,7 @@ export function createWorld(boot: SortieBootstrap): World {
         }
       : null,
     densityThreat: { ...threat },
-    camera: { x: 0, y: 200, w: 720, h: 420 },
+    camera: { x: SPAWN_POINT.x - 360, y: SPAWN_POINT.y - 210, w: 720, h: 420 },
     combatHitsTaken: 0,
     commandUnlock: defaultCommandUnlockState(
       resolveCommandUnlockMode(),
@@ -502,5 +508,22 @@ export function startSortie(world: World): void {
     u.salvageT = 0;
     u.salvagedCount = 0;
     u.inCover = false;
+  }
+  faceAtSortieStart(world);
+}
+
+/** Facing PR1 (神宮 10/17): the leader faces up the screen, wingmen face outward from the spawn; enemies face the nearest ally. */
+export function faceAtSortieStart(world: World): void {
+  const allies = [world.leader, ...world.wingmen];
+  const up = -Math.PI / 2;
+  for (const u of allies) {
+    const dx = u.pos.x - SPAWN_POINT.x, dy = u.pos.y - SPAWN_POINT.y;
+    const out = u.kind === "leader" || Math.hypot(dx, dy) < 1 ? up : Math.atan2(dy, dx);
+    u.heading = out; u.moveHeading = out; u.aimWant = null;
+  }
+  for (const e of world.enemies) {
+    let best = allies[0]!, bd = Infinity;
+    for (const a of allies) { const d = (a.pos.x - e.pos.x) ** 2 + (a.pos.y - e.pos.y) ** 2; if (d < bd) { bd = d; best = a; } }
+    e.heading = Math.atan2(best.pos.y - e.pos.y, best.pos.x - e.pos.x); e.moveHeading = null; e.aimWant = null;
   }
 }

@@ -137,7 +137,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   world.circuitPlay!.captainOneByOne = true;
   world.leader.instanceId = "leader-1";
   world.currentAmmo["leader-1"] = 3;
-  world.leader.cooldown = 0;
+  world.leader.cooldown = 0; world.leader.heading = 0; // facing PR1: muzzle at the enemy
   world.circuitPlay!.loadout.leader = [classified({ effectKey: "shotgun", r: 0.2 })];
   const enemy = world.enemies[0]!;
   enemy.alive = true;
@@ -184,6 +184,7 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   const enemy = world.enemies[0]!;
   enemy.alive = true;
   enemy.pos = { x: world.leader.pos.x + 200, y: world.leader.pos.y };
+  for (const u of world.wingmen) u.pos = { ...world.leader.pos }; // spawn ring (10/17): keep the old distance to the lure
   world.circuitPlay!.order = { kind: "suppress", enemyId: enemy.id, left: 8 };
   world.circuitPlay!.loadout.leader = [classified({ effectKey: "lure", trueBoard: true, r: 0 })];
   stepCircuitPlay(world, 0.05);

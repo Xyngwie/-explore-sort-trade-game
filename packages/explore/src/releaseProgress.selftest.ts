@@ -131,7 +131,7 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   // fire interval ×2 and bullet speed ×0.5 on the default gun
   const foe = w.enemies[0]!;
   foe.alive = true; foe.hp = 999; foe.pos = { x: w.leader.pos.x + 60, y: w.leader.pos.y };
-  w.leader.cooldown = 0;
+  w.leader.cooldown = 0; w.leader.heading = 0; // facing PR1
   const before = w.bullets.length;
   tickWorld(w, 0.01, idle);
   const shot = w.bullets.slice(before).find((b) => b.ownerId === "leader");

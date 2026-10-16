@@ -44,6 +44,7 @@ function load(w: ReturnType<typeof world>, picker=w.leader, target=w.wingmen[0]!
  const foe=w.enemies[0]!;foe.alive=true;foe.hp=foe.maxHp=100000;foe.pos={x:440,y:400};
  backfillEnemyState(w);
  foe.enemyState!.ammo=0;foe.enemyState!.activity=0;
+ w.leader.heading=0;passenger.heading=0; // facing PR1: both muzzles at the foe
  const beforeA=w.currentAmmo.a!,beforeB=w.currentAmmo.b!;
  tickWorld(w,0.01,idle);
  assert.equal(w.currentAmmo.a,beforeA-1);assert.equal(w.currentAmmo.b,beforeB-1,'both weapons fire');
