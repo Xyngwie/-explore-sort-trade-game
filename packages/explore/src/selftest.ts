@@ -194,6 +194,7 @@ function wing(world: ReturnType<typeof createWorld>): Unit {
   const enemy = world.enemies[0]!;
   enemy.alive = true;
   enemy.pos = { x: world.leader.pos.x + world.balance.weaponRange * 0.5, y: world.leader.pos.y };
+  world.leader.heading = 0; // facing PR1: leader starts facing up; aim it at the enemy
   const beforeB = world.currentAmmo.owned_b;
   const beforeC = world.currentAmmo.owned_c;
   tickWorld(world, 0.05, idleInput());
@@ -225,7 +226,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
     foe.alive = true;
     foe.hp = foe.maxHp;
     foe.pos = { x: shooter.pos.x + world.balance.weaponRange * 0.5, y: shooter.pos.y };
-    shooter.cooldown = 0;
+    shooter.cooldown = 0; shooter.heading = 0; // facing PR1: aim at the foe
     const ammo0 = world.currentAmmo[instanceId];
     assert.equal(ammo0, MECH_AMMO_BASE_CAPACITY, `${label}: ${unitId} sorties full`);
     tickWorld(world, 0.02, idleInput());
@@ -617,6 +618,7 @@ function assertEveryDeployedUnitFires(search: string, label: string): void {
     x: world.leader.pos.x + world.balance.weaponRange * 0.5,
     y: world.leader.pos.y,
   };
+  world.leader.heading = 0; // facing PR1
   const ammoBefore = world.currentAmmo.owned_a;
   const bulletsBefore = world.bullets.length;
   // fire: false — auto reaction should still shoot
@@ -1932,7 +1934,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.ok(w.leader.pos.x > startX, "move works in release");
   const foe = w.enemies.find((e) => e.alive)!;
   foe.pos = { x: w.leader.pos.x + w.balance.weaponRange * 0.5, y: w.leader.pos.y };
-  w.leader.cooldown = 0;
+  w.leader.cooldown = 0; w.leader.heading = 0; // facing PR1
   const leaderInstanceId = w.deployedInstanceIds[0];
   assert.ok(leaderInstanceId, "release fixture must have a leader instanceId");
   w.currentAmmo[leaderInstanceId] = 28;

@@ -13,6 +13,9 @@
  * Prefer editing this file (or the re-export index `./constants.ts`) over
  * sprinkling literals in brain/sim/orders.
  */
+/** Player spawn (2026-10-17: moved to the map centre). Single source for every spawn-relative rule. */
+export const SPAWN_POINT = { x: 700, y: 500 } as const;
+
 export const BALANCE = {
   worldW: 1400,
   worldH: 1000,
