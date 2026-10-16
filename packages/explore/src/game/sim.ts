@@ -1,4 +1,5 @@
 import { enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
+import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
@@ -82,7 +83,7 @@ function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, 
   unit.pos.y = clamp(before.y + dir.y * speed * travelTime, 20, world.balance.worldH - 20);
   const moved = dist(before, unit.pos);
   unit.vel = moved > 0 ? { x: dir.x * speed, y: dir.y * speed } : { x: 0, y: 0 };
-  if (moved > 0) unit.heading = Math.atan2(dir.y, dir.x);
+  if (moved > 0) noteMoveHeading(unit, Math.atan2(dir.y, dir.x));
   consumeMovementPower(world, unit, moved / speed);
 }
 
@@ -112,7 +113,8 @@ function inCamera(world: World, pos: Vec2): boolean {
 }
 
 function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): void {
-  const dir = norm({ x: to.pos.x - from.pos.x, y: to.pos.y - from.pos.y });
+  void to; // muzzle is fixed forward
+  const dir = { x: Math.cos(from.heading), y: Math.sin(from.heading) };
   const speed = world.balance.bulletSpeed * (fromEnemy ? 1 : abilityOf(world, from.id).bulletSpeed);
   const b: Bullet = {
     alive: true,
@@ -128,6 +130,7 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
 
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): void {
   if (!from.alive || !target.alive) return;
+  if (!aimAt(from, target)) return; // turn first; fire only inside the 3° arc
   if (fromEnemy && from.cooldown > 0) return;
   const previousEnemyAmmo = from.enemyState?.ammo ?? 0;
   if (fromEnemy) {
@@ -156,7 +159,6 @@ function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): vo
     world.currentAmmo[from.instanceId] = currentAmmo - 1;
   }
   from.cooldown = world.balance.fireCooldown * (fromEnemy ? 1 : abilityOf(world, from.id).fireInterval);
-  from.heading = angleOf(from.pos, target.pos);
   if (from.kind === "wingman") from.engageWarnT = world.balance.wingEngageWarnSec;
   spawnBullet(world, from, target, fromEnemy);
 }
@@ -489,6 +491,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
+  updateFacing(world, dt);
   placeCarried(world);
   if (!world.leader.alive) noteLeaderDown(world);
   // A wipe during this tick rescues before a boarding circle can lift off (6A),

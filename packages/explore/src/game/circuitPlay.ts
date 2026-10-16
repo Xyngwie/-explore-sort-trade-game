@@ -1198,7 +1198,7 @@ function spawnShot(
       extra = { ...extra, empSlow: Math.min(EMP_SLOW_CAP, EMP_SLOW_BASE + gunR(world, from.id, round)) };
     }
   }
-  const base = Math.atan2(to.pos.y - from.pos.y, to.pos.x - from.pos.x) + angleOff;
+  const base = from.heading + angleOff; // muzzle fixed forward (facing PR1)
   const speed = world.balance.bulletSpeed * speedMul * abilityOf(world, from.id).bulletSpeed;
   const b: Bullet = {
     alive: true,
@@ -1212,7 +1212,6 @@ function spawnShot(
     ...(extra?.homingId ? { homingId: extra.homingId, bend: extra.bend } : {}),
   };
   world.bullets.push(b);
-  from.heading = base;
 }
 
 export function bendHoming(world: World, b: Bullet, dt: number): void {
