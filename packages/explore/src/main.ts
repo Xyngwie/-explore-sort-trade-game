@@ -314,7 +314,7 @@ window.addEventListener(
 const keys = new Set<string>();
 const input: PlayerInput = {
   move: { x: 0, y: 0 },
-  clickMove: null,
+  clickMove: world.leader.playerMoveTarget ? { ...world.leader.playerMoveTarget } : null,
   fire: false,
   interact: false,
 };
@@ -377,6 +377,7 @@ function syncMoveFromKeys(): void {
   if (keys.has("a") || keys.has("arrowleft")) x -= 1;
   if (keys.has("d") || keys.has("arrowright")) x += 1;
   input.move = { x, y };
+  if (x !== 0 || y !== 0) input.clickMove = null;
   input.fire = keys.has(" ") || keys.has("f");
   input.interact = keys.has("e");
 }

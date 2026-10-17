@@ -18,9 +18,10 @@ export type FailReason = "timeout" | "leader_down" | "extract_missed" | null;
 export type UnitKind = "leader" | "wingman" | "enemy";
 import type { EnemyIdentity } from "./enemyIdentity";
 export type Unit = {
-  id: string; kind: UnitKind; name: string; pos: Vec2; vel: Vec2; heading: number; moveHeading?: number | null; aimWant?: number | null; hp: number; maxHp: number; radius: number; alive: boolean; stance: Stance; waypoint: Vec2 | null; moveTarget: Vec2 | null; cooldown: number; patrolAngle: number; salvageId: string | null; salvageT: number; salvagedCount: number; capacity: number; instanceId: string | null;
+  id: string; kind: UnitKind; name: string; pos: Vec2; vel: Vec2; heading: number; moveHeading?: number | null; aimWant?: number | null; hp: number; maxHp: number; radius: number; alive: boolean; stance: Stance; waypoint: Vec2 | null; moveTarget: Vec2 | null; /** Explicit captain click input, distinct from resolved AI targets; optional in old checkpoints. */ playerMoveTarget?: Vec2 | null; cooldown: number; patrolAngle: number; salvageId: string | null; salvageT: number; salvagedCount: number; capacity: number; instanceId: string | null;
   /** Enemy PR1: model / durability / hidden false-board circuits (enemies only; optional for old checkpoints). */ enemyIdentity?: EnemyIdentity; enemyState?: import("./enemyBehavior").EnemyState;
   inCover: boolean; coverEscapeT?: number; coverId?: string | null; quirk: WingmanQuirk | null; hitWarnT: number; engageWarnT: number;
+  /** Player-issued individual stance; optional for old checkpoints, cleared by the next order or completed recovery. */ individualOrder?: boolean;
   /** C20-b: holding in place after an order it could not follow ("stop"); cleared by the next order. */ holdOrder?: boolean; /** C20-b: seconds left of the 「？」 above the wingman. */ questionT?: number;
 };
 export type Container = { id: string; pos: Vec2; taken: boolean; discovered: boolean; glowT: number; };
