@@ -384,7 +384,7 @@ export function renderWorld(
     if (!u.alive) continue;
     const R = viewRange(world, u);
     const cx = tx(u.pos.x), cy = ty(u.pos.y);
-    ctx.fillStyle = "#ffffff08"; ctx.strokeStyle = "#ffffff18";
+    ctx.fillStyle = "rgba(126,182,255,0.035)"; ctx.strokeStyle = "rgba(126,182,255,0.10)"; // faction blue (under our command)
     for (const [half, r] of [[PERIPHERY_HALF_RAD, R], [FRONT_HALF_RAD, R * FRONT_RANGE_MUL]] as const) {
       ctx.beginPath(); ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, r * sx, u.heading - half, u.heading + half);
