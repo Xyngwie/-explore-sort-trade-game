@@ -164,4 +164,28 @@ function mem(): Storage {
   assert(exploreBackAction("result").block === false, "result back stays enabled");
 }
 
+{
+  // 10/17 compat: an old checkpoint with a combined supply drop restores as ammo + power side by side.
+  const world = createWorld(bootstrapFromSearch("?deployableMechs=2&startingAmmo=30"));
+  startSortie(world);
+  const snap = JSON.parse(JSON.stringify(snapshotSortieWorld(world)));
+  const w0 = (snap.world ?? snap) as any;
+  w0.enemySupplies = [
+    { id: "supply-old", pos: { x: 300, y: 300 }, ammo: 4, power: 20 },
+    { id: "supply-dry", pos: { x: 400, y: 300 }, ammo: 0, power: 7 },
+  ];
+  const restored = worldFromCheckpointBody(snap);
+  assert(restored, "old supply checkpoint restores");
+  const ds = restored!.enemySupplies!;
+  assert(ds.length === 3, "combined → 2, zero side not created");
+  const a = ds.find((d) => d.id === "supply-old-ammo"), p = ds.find((d) => d.id === "supply-old-power");
+  assert(a && a.kind === "ammo" && a.ammo === 4 && a.power === 0, "ammo half");
+  assert(p && p.kind === "power" && p.power === 20 && p.ammo === 0, "power half");
+  assert(a!.pos.y === 300 && p!.pos.y === 300 && a!.pos.x < 300 && p!.pos.x > 300, "side by side at the same spot");
+  assert(!ds.some((d) => d.id === "supply-dry-ammo"), "no zero ammo drop");
+  // New checkpoints round-trip the split drops unchanged.
+  const again = worldFromCheckpointBody(snapshotSortieWorld(restored!));
+  assert(JSON.stringify(again!.enemySupplies) === JSON.stringify(ds), "split drops round-trip");
+}
+
 console.log("explore checkpoint.selftest ok");
