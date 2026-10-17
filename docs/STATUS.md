@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / carried-aim 作業宣言（2026-10-17）
+- Who: Codex / ユーザー直接指示
+- What: feat/carried-aim。搭載機の独立照準・旋回と、積載完了時の荷物投下
+- Why: EXPLORE_FACING_AIM_V0 §5・§8の次のPRをdraftまで進める
+- Scope: 搭載機は自身の正面3°・90°/秒。荷物は運ぶ側へ移さず地面へ。装備回路・弾薬・活動量は維持。機体の積載2・容量・速度表を維持。盾そのものは後続PRで実装
+- Status: draft #304。実装・全npm test・Explore本番ビルド・390px幅ブラウザーの実際の8秒積載と荷物投下・途中再開がPASS。最新CI確認待ち、未マージ・未デプロイ。Q1=Aで確定。搭載機は敵を狙わない間は最後の向きを保つ。main #303はマージ・デプロイ39044761270成功、配信アセット一致を確認済み
+
 ## Codex / projectile-hit-all 作業宣言（2026-10-17）
 - Who: Codex / ユーザー直接指示
 - What: feat/projectile-hit-all。弾の全機体衝突、障害物の射撃・移動遮断、吸い込み廃止、誤射判断・学習用記録
