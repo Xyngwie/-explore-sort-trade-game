@@ -1,5 +1,6 @@
 import { enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
-import { canSee, enemyVisibleToSquad, updateSquadIntel, updateSquadMemory } from "./vision";
+import { canSee, enemyVisibleToSquad, squadSees, updateSquadIntel, updateSquadMemory } from "./vision";
+import { revealStrays } from "./strayScatter";
 import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
@@ -89,6 +90,7 @@ function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, 
 }
 
 function revealVision(world: World): void {
+  revealStrays(world, (pos) => squadSees(world, pos)); // PR2: same cones as everything else
   for (const u of friendlyUnits(world)) {
     if (!u.alive) continue;
     for (const c of world.containers) {

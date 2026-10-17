@@ -1,5 +1,6 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
+import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { layoutLabels } from "./labelLayout";
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
@@ -308,13 +309,25 @@ export function renderWorld(
   // Left-behind mechs waiting on this front cell (lostMechs.ts): recovered at
   // lift-off when inside the boarding circle; hidden once recovered.
   const recoveredLost = new Set(world.recoveredLostMechIds ?? []);
-  for (const m of world.strandedMechs ?? []) {
+  for (let m of world.strandedMechs ?? []) {
     if (recoveredLost.has(m.instanceId)) continue;
     if (wreckCarrierId(world, `s:${m.instanceId}`) != null) continue; // drawn on its carrier (項目4-1)
+    if (!strayShown(m)) continue; // 10/17: hidden in fog until found
+    // PR2: seen now → real; else its faint image. An old checkpoint (no found flag, no image) shows it faint.
+    const sv = seenOrGhost("stray", m.instanceId, m.pos) ?? (m.found === undefined ? { pos: m.pos, alpha: GHOST_ALPHA } : null);
+    if (!sv) continue;
+    ctx.save(); ctx.globalAlpha = sv.alpha;
+    m = { ...m, pos: sv.pos };
     drawCraft(ctx, tx(m.pos.x), ty(m.pos.y), 9 * sx, "#8a9099", Math.PI / 2);
-    ctx.fillStyle = "#c3c8cf";
+    if (m.wreck) {
+      // Our own wreck: ally-coloured outline and 「置き去り：<name>」.
+      ctx.strokeStyle = "#7eb6ff"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(tx(m.pos.x), ty(m.pos.y), 13 * sx, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
+      ctx.fillStyle = "#7eb6ff";
+    } else ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
-    ctx.fillText(m.wreck ? m.name : `${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+    ctx.fillText(m.wreck ? strayWreckLabel(m.instanceId) : strayStoppedLabel(m.instanceId), tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+    ctx.restore();
   }
 
   // 項目5-1b W6: this sortie's wrecks stay where they were destroyed (gray, 「残骸 僚機A」).
@@ -336,8 +349,13 @@ export function renderWorld(
   // Dropped circuits waiting on this front cell (circuitDrops.ts): recovered at
   // lift-off when inside the boarding circle; hidden once recovered.
   const recoveredDrops = new Set(world.recoveredDropIds ?? []);
-  for (const d of world.strandedDrops ?? []) {
+  for (let d of world.strandedDrops ?? []) {
     if (recoveredDrops.has(d.dropId)) continue;
+    if (!strayShown(d)) continue; // 10/17: hidden in fog until found
+    const dv = seenOrGhost("drop", d.dropId, d.pos) ?? (d.found === undefined ? { pos: d.pos, alpha: GHOST_ALPHA } : null);
+    if (!dv) continue;
+    ctx.save(); ctx.globalAlpha = dv.alpha;
+    d = { ...d, pos: dv.pos };
     ctx.fillStyle = "#e2b842";
     ctx.fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
     ctx.strokeStyle = "#ffeaa7";
@@ -345,6 +363,7 @@ export function renderWorld(
     ctx.fillStyle = "#ffeaa7";
     ctx.font = "11px sans-serif";
     ctx.fillText(`落とし物 回路 ${d.circuitId}`, tx(d.pos.x) - 30, ty(d.pos.y) - 10);
+    ctx.restore();
   }
 
   // Wingmen. Name labels that would overlap are shifted up a line (10/17 神宮 A).

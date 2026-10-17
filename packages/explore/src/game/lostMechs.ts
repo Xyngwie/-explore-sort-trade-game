@@ -17,6 +17,7 @@
  *   its saved position in Explore (`pos`), not on the drop-zone ring, and is
  *   recovered the same way (it comes back destroyed, W7 A). See wrecks.ts.
  */
+import { scatterStrayPos } from "./strayScatter";
 import {
   type HubSnapshot,
   type LostMechReturnState,
@@ -39,6 +40,8 @@ export type StrandedMech = {
   row: LostMechReturnState;
   /** 項目5-1b: a wreck (shot down, circuits inside) rather than a left-behind mech. */
   wreck?: boolean;
+  /** Seen by the squad this sortie (absent in old checkpoints = shown). */
+  found?: boolean;
 };
 
 /** Place of this sortie on the Invade front; null when not via Invade (or no saved front seed). */
@@ -116,12 +119,15 @@ export function strandedMechsFor(
 export function attachLostMechContext(world: World, hub: HubSnapshot | null): World {
   const location = sortieLocationFor(world.invadeSector, hub);
   world.sortieLocation = location;
+  // 2026-10-17: strays are scattered over the field and hidden until found.
+  // A wreck with a saved position still stays where it was destroyed.
+  const taken: Vec2[] = [];
   world.strandedMechs = strandedMechsFor(hub, location, world.deployedInstanceIds, world.leader.pos).map((m) =>
-    m.wreck && m.row.pos ? { ...m, pos: placeWreckInWorld(world, m.pos) } : m,
+    m.wreck && m.row.pos ? { ...m, pos: placeWreckInWorld(world, m.pos), found: false } : { ...m, pos: scatterStrayPos(world, taken), found: false },
   );
   world.recoveredLostMechIds = [];
   world.recoveredWreckUnitIds = [];
-  world.strandedDrops = strandedDropsFor(hub, location, world.leader.pos);
+  world.strandedDrops = strandedDropsFor(hub, location, world.leader.pos).map((d) => ({ ...d, pos: scatterStrayPos(world, taken), found: false }));
   world.recoveredDropIds = [];
   world.initialOwnedCircuitIds = hub ? hub.circuits.map((c) => c.circuitId) : [];
   return world;

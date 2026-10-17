@@ -3025,11 +3025,12 @@ import {
 
   const world = (q: string) => attachLostMechContext(legacyWorld(bootstrapFromSearch(q)), load());
   /** Sortie; `leftOut` wingmen are pulled out of the circle just before lift-off; `leaderAt` is where X is pressed. */
-  const run = (q: string, leftOut: boolean, leaderAt?: { x: number; y: number }) => {
+  const run = (q: string, leftOut: boolean, leaderAt?: { x: number; y: number } | "stray") => {
     const w = world(q);
     startSortie(w);
     for (const e of w.enemies) { e.alive = false; e.hp = 0; }
-    if (leaderAt) w.leader.pos = { ...leaderAt };
+    if (leaderAt === "stray") w.leader.pos = { ...w.strandedMechs![0]!.pos }; // 10/17: strays are scattered; go to it
+    else if (leaderAt) w.leader.pos = { ...leaderAt };
     for (const u of w.wingmen) u.pos = { ...w.leader.pos };
     assert.equal(executeExploreCommand(w, { id: "extract" }).status, "done");
     for (let t = 0; t < w.balance.boardingLiftOffDelaySec + 2 && w.phase === "sortie"; t += 0.1) {
@@ -3081,7 +3082,10 @@ import {
   const w2 = world(search2);
   assert.deepEqual(w2.strandedMechs?.map((m) => m.instanceId), ["m2"], "reappears on the same cell");
   const sm = w2.strandedMechs![0]!;
-  assert.ok(Math.hypot(sm.pos.x - w2.leader.pos.x, sm.pos.y - w2.leader.pos.y) <= STRANDED_RING_RADIUS + 0.001, "waits near the drop zone");
+  // 10/17: scattered on the field (90 from the edges), hidden until found.
+  assert.ok(sm.pos.x >= 90 && sm.pos.x <= w2.balance.worldW - 90 && sm.pos.y >= 90 && sm.pos.y <= w2.balance.worldH - 90, "scattered inside the 90 edge margin");
+  assert.equal(sm.found, false, "hidden until found");
+  void STRANDED_RING_RADIUS;
   const second = run(search2, false, { x: 900, y: 300 });
   assert.deepEqual(second.w.recoveredLostMechIds, []);
   saved = load();
@@ -3097,7 +3101,7 @@ import {
   // recovery needs the captain aboard
   {
     const wn = world(invadeSquadSearch(invadeLink, saved)!);
-    const boarding = { center: { ...wn.leader.pos }, radius: 110 } as never;
+    const boarding = { center: { ...wn.strandedMechs![0]!.pos }, radius: 110 } as never; // 10/17: circle at the scattered stray
     assert.deepEqual(recoverStrandedAtLiftOff(wn, boarding, false), []);
     assert.deepEqual(recoverStrandedAtLiftOff(wn, boarding, true), ["m2"]);
   }
@@ -3105,7 +3109,7 @@ import {
   // (3) same cell, X at the drop zone → m2 inside the circle at lift-off → recovered
   const search3 = invadeSquadSearch(invadeLink, saved)!;
   assert.deepEqual(shared.parseTradeToExploreSearch(search3)?.deployedInstanceIds, ["m1"]);
-  const third = run(search3, false);
+  const third = run(search3, false, "stray");
   assert.deepEqual(third.w.recoveredLostMechIds, ["m2"]);
   assert.deepEqual(third.payload.recoveredLostMechInstanceIds, ["m2"]);
   saved = load();
@@ -3232,6 +3236,7 @@ import {
   assert.deepEqual(w.initialOwnedCircuitIds, ["c_already_owned"]);
 
   // (3) Lift-off: inside boarding circle recovers, but captain must be aboard
+  for (const d of w.strandedDrops!) d.pos = { ...w.leader.pos }; // 10/17: scattered drops brought into the circle
   const boardingInside = { center: { ...w.leader.pos }, radius: 110, requestedAt: 0, cargoArrived: true };
   // Captain outside circle -> nothing recovered
   assert.deepEqual(recoverStrandedDropsAtLiftOff(w, boardingInside, false), []);

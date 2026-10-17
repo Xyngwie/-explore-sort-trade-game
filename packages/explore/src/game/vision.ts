@@ -56,7 +56,7 @@ export type SquadIntel = {
   ghosts: Record<string, Ghost>;
 };
 
-export type GhostKind = "container" | "enemyWreck" | "allyWreck" | "supply";
+export type GhostKind = "container" | "enemyWreck" | "allyWreck" | "supply" | "stray" | "drop";
 export type Ghost = { kind: GhostKind; id: string; pos: Vec2; t: number };
 
 /** Fog returns to grey over this long once nobody watches a place. */
@@ -102,6 +102,9 @@ function presentStatics(world: World): Ghost[] {
   for (const u of world.wingmen) if (!u.alive && u.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(u.id)) out.push({ kind: "allyWreck", id: u.id, pos: u.pos, t: 0 });
   if (!world.leader.alive && world.leader.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(world.leader.id)) out.push({ kind: "allyWreck", id: world.leader.id, pos: world.leader.pos, t: 0 });
   for (const d of world.enemySupplies ?? []) out.push({ kind: "supply", id: d.id, pos: d.pos, t: 0 });
+  const recLost = new Set(world.recoveredLostMechIds ?? []), recDrop = new Set(world.recoveredDropIds ?? []);
+  for (const m of world.strandedMechs ?? []) if (m.found !== false && !recLost.has(m.instanceId)) out.push({ kind: "stray", id: m.instanceId, pos: m.pos, t: 0 });
+  for (const d of world.strandedDrops ?? []) if (d.found !== false && !recDrop.has(d.dropId)) out.push({ kind: "drop", id: d.dropId, pos: d.pos, t: 0 });
   return out;
 }
 const gkey = (g: { kind: GhostKind; id: string }) => `${g.kind}:${g.id}`;

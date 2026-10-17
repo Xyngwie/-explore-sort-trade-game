@@ -97,6 +97,25 @@ const at = (o: { x: number; y: number }, deg: number, d: number) => ({ x: o.x + 
   w2.elapsed = 60; assert.ok(ghostTrust(w2, g) < 1 && ghostTrust(w2, g) > 0, "older = lower priority");
   w2.elapsed = GHOST_TRUST_SEC; assert.equal(ghostTrust(w2, g), 0, "~120 s = not trusted");
 }
+// Left-behind mechs and circuit drops leave faint images; they survive the checkpoint; old bodies still load.
+{
+  const w = mk(); const L = w.leader; for (const u of w.wingmen) u.alive = false; for (const e of w.enemies) e.alive = false;
+  L.heading = 0; w.elapsed = 0;
+  w.strandedMechs = [{ instanceId: "owned_7f3a", name: "x", pos: { x: L.pos.x + 90, y: L.pos.y }, row: {} as never, wreck: true, found: false }];
+  w.strandedDrops = [{ dropId: "dz", circuitId: "cz", pos: { x: L.pos.x + 60, y: L.pos.y + 10 }, drop: {} as never, found: false }];
+  tickWorld(w, 0.05, idle);
+  assert.ok(ghostOf(w, "stray", "owned_7f3a") && ghostOf(w, "drop", "dz"), "seen → images recorded");
+  L.heading = Math.PI; L.moveHeading = Math.PI; L.aimWant = null; updateSquadMemory(w);
+  assert.ok(ghostOf(w, "stray", "owned_7f3a"), "unseen → image stays");
+  const r = worldFromCheckpointBody(JSON.parse(JSON.stringify(snapshotSortieWorld(w))))!;
+  assert.ok(ghostOf(r, "stray", "owned_7f3a") && ghostOf(r, "drop", "dz"), "images survive the checkpoint");
+  w.recoveredDropIds = ["dz"]; L.heading = 0; updateSquadMemory(w);
+  assert.equal(ghostOf(w, "drop", "dz"), null, "gone and seen → image removed");
+  const old = JSON.parse(JSON.stringify(snapshotSortieWorld(w))) as { squadIntel?: unknown; strandedMechs: Record<string, unknown>[] };
+  delete old.squadIntel; delete old.strandedMechs[0]!.found;
+  const ro = worldFromCheckpointBody(old)!; tickWorld(ro, 0.05, idle);
+  assert.deepEqual(ro.strandedMechs![0]!.pos, w.strandedMechs[0]!.pos, "old checkpoint keeps the stray where it was");
+}
 // Checkpoint: fog and images survive resume; an old body without them loads.
 {
   const w = mk(); tickWorld(w, 0.05, idle);
