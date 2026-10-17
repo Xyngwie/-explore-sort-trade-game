@@ -268,6 +268,17 @@
         }
       ],
       "note": "神宮 explicitly confirmed the shotgun option with ±2° random. The other values were proposed by Grok Bot and not objected to; reconfirm them in the PR's question list to 神宮."
+    },
+    {
+      "id": "Q15",
+      "choice": "A",
+      "decided_on": "2026-10-17 (JST)",
+      "confirmed_by_owner": "explicit",
+      "ja": "積載中の生きた僚機（運ぶ機体の位置に乗り、自分の武器で砲台として撃ち続ける。circuitPlay.ts の pickupSpots / placeCarried）と、それを運ぶ機体との間では誤射しない。乗っている僚機の弾は運ぶ機体に当たらず、運ぶ機体の弾も乗っている僚機に当たらない。外から重なった 2 機に当たる弾は、乗っている僚機ではなく運ぶ機体に当たる。",
+      "en": "Living wingmen loaded onto a carrier (they ride at the carrier's position and keep firing their own weapon as a turret; see circuitPlay.ts pickupSpots / placeCarried): no friendly fire between a passenger and its carrier — passenger shots never hit its carrier and carrier shots never hit its passenger. Shots from outside that would hit the stacked pair hit the carrier, not the passenger.",
+      "refs": [
+        "packages/explore/src/game/circuitPlay.ts pickupSpots, placeCarried"
+      ]
     }
   ],
   "future_ideas": [
@@ -330,6 +341,7 @@
     "Friendly fire can destroy; battle report 「○○ の誤射で △△ 大破」 (Q13).",
     "Per-battle friendly-fire count is recorded (Q11b); persistence beyond settlement is not decided.",
     "Per-weapon random spread with the Q14 starting values; shotgun pellets random within ±2°; special rounds stack on any weapon (Q14).",
+    "A passenger (living wingman carried as a turret) and its carrier never hit each other with their shots; outside shots that reach the stacked pair hit the carrier, not the passenger (Q15).",
     "Selftests cover each item above, including a deterministic RNG for spread tests.",
     "Checkpoint compatibility: an old mid-sortie save (bullets without new fields, no friendly-fire count) loads and plays; HUB save unchanged unless 神宮 decides otherwise.",
     "Docs updated: docs/EXPLORE_FACING_AIM_V0.md §3 (命中) and §4 (誤射), docs/STATUS.md.",
@@ -432,7 +444,8 @@
     },
     {
       "topic": "carried_units",
-      "text": "Carried wingmen stay in world.wingmen and are positioned on their carrier (placeCarried). With friendly fire they may become hittable; decide with 神宮 if unclear."
+      "text": "Carried wingmen stay in world.wingmen and ride on their carrier (placeCarried). Resolved by Q15: no friendly fire between passenger and carrier; outside shots hit the carrier.",
+      "status": "resolved_by_Q15"
     }
   ]
 }
