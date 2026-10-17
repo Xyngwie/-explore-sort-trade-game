@@ -1,5 +1,6 @@
 import { showCombatFeedback } from "./combatFeedback";
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
+import { canSee } from "./vision";
 import { noteMoveHeading } from "./facing";
 import { effectRate, cargoSlotBonus, rankEnemyMultiplier, type HubSnapshot } from "@estg/shared";
 import { makeEnemyIdentity, type EnemyCircuitData } from "./enemyIdentity";
@@ -147,9 +148,10 @@ export function moveEnemy(
 }
 export function nearestEnemyTarget(world: World, e: Unit): Unit | null {
   let best: Unit | null = null,
-    d = 220;
+    d = Infinity;
   for (const u of [world.leader, ...world.wingmen, ...world.enemies]) {
     if (u === e || !u.alive) continue;
+    if (!canSee(world, e, u.pos)) continue; // PR2: own cones only, enemies do not share
     const dd = dist(e.pos, u.pos);
     if (dd < d) {
       d = dd;

@@ -1,4 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
+import { lastSeenFade, squadIntel, squadSees, viewRange, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
@@ -247,7 +248,7 @@ export function renderWorld(
     ctx.fillStyle='#c3c8cf'; ctx.font='11px sans-serif'; ctx.fillText('残骸',tx(e.pos.x),ty(e.pos.y)-12);
   }
   for (const d of world.enemySupplies ?? []) {
-    if (![world.leader,...world.wingmen].some(u=>u.alive && Math.hypot(u.pos.x-d.pos.x,u.pos.y-d.pos.y)<world.balance.visionRange)) continue;
+    if (!squadSees(world, d.pos)) continue;
     ctx.fillStyle='#75d99b';ctx.fillRect(tx(d.pos.x)-4,ty(d.pos.y)-4,8,8);
   }
   // Bullets
@@ -378,11 +379,25 @@ export function renderWorld(
     ctx.fillText(n > 1 ? `積載中 残骸×${n}` : "積載中 残骸", cx + u.radius * sx * 0.8, cy + 4);
   }
 
-  // Vision ring (leader)
-  ctx.strokeStyle = "#ffffff18";
-  ctx.beginPath();
-  ctx.arc(tx(world.leader.pos.x), ty(world.leader.pos.y), vision * sx, 0, Math.PI * 2);
-  ctx.stroke();
+  // PR2 vision cones (A): every living ally, very faint. Front 60° to 2×, periphery 270° to 1×.
+  for (const u of [world.leader, ...world.wingmen]) {
+    if (!u.alive) continue;
+    const R = viewRange(world, u);
+    const cx = tx(u.pos.x), cy = ty(u.pos.y);
+    ctx.fillStyle = "#ffffff08"; ctx.strokeStyle = "#ffffff18";
+    for (const [half, r] of [[PERIPHERY_HALF_RAD, R], [FRONT_HALF_RAD, R * FRONT_RANGE_MUL]] as const) {
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r * sx, u.heading - half, u.heading + half);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  }
+  // PR2 last seen (A): red outline circle fading out over 5 s.
+  for (const m of Object.values(squadIntel(world).lastSeen)) {
+    const a = lastSeenFade(world, m.t);
+    if (a <= 0) continue;
+    ctx.strokeStyle = `rgba(255,107,107,${(0.85 * a).toFixed(3)})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(tx(m.pos.x), ty(m.pos.y), world.balance.unitRadius * sx, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
+  }
   ctx.save();
   const feedbackPx = 12 * cssW / (ctx.canvas.clientWidth || cssW);
   ctx.font = `bold ${feedbackPx}px sans-serif`;
@@ -464,5 +479,6 @@ function drawOverheadLine(ctx: CanvasRenderingContext2D, cssW: number, text: str
 /** Enemy PR1: an enemy the squad can see (same rule as drawing it). */
 export function isEnemySeen(world: World, e: Unit): boolean {
   const vision = world.balance.visionRange;
-  return [world.leader, ...world.wingmen].some((u) => u.alive && Math.hypot(u.pos.x - e.pos.x, u.pos.y - e.pos.y) <= vision * visionMul(world, u.id));
+  void vision;
+  return squadSees(world, e.pos); // PR2: cones + line of sight, shared by the squad
 }
