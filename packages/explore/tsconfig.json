@@ -17,6 +17,7 @@
   "exclude": [
     "src/selftest.ts",
     "src/facing.selftest.ts",
+    "src/labelLayout.selftest.ts",
     "src/circuitPlay.selftest.ts",
     "src/releaseProgress.selftest.ts",
     "src/ammoRefill.selftest.ts",
