@@ -82,6 +82,7 @@ const at = (o: { x: number; y: number }, deg: number, d: number) => ({ x: o.x + 
   w.elapsed = FOG_RETURN_SEC; assert.equal(fogGrey(w, watched), 1, "grey again after 60 s");
   // Container: faint image while unseen, kept when taken unseen, removed once the spot is seen.
   const w2 = mk(); const L2 = w2.leader; for (const u of w2.wingmen) u.alive = false; for (const e of w2.enemies) e.alive = false;
+  w2.enemies[0]!.alive = true; w2.enemies[0]!.pos = { x: 30, y: 30 }; // stays alive (never a wreck) for the check below
   L2.heading = 0; w2.elapsed = 0;
   const c = w2.containers[0]!; c.discovered = true; c.taken = false; c.pos = { x: L2.pos.x + 100, y: L2.pos.y };
   updateSquadMemory(w2); assert.ok(ghostOf(w2, "container", c.id), "seen → image recorded");
