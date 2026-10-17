@@ -1,4 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
+import { layoutLabels } from "./labelLayout";
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
@@ -296,20 +297,33 @@ export function renderWorld(
     ctx.fillText(`落とし物 回路 ${d.circuitId}`, tx(d.pos.x) - 30, ty(d.pos.y) - 10);
   }
 
-  // Wingmen
+  // Wingmen. Name labels that would overlap are shifted up a line (10/17 神宮 A).
+  ctx.font = "11px sans-serif";
+  const wingLabelText = (w: Unit) => {
+    const quirkTag = w.quirk ? `·${quirkShort(w.quirk)}` : "";
+    const coverTag = w.inCover ? "·カバー" : "";
+    const stanceTag = isWingmanMobileFor(world, w.id) ? wingStanceTagJa(w, STANCE_LABEL[w.stance]) : "自衛のみ";
+    return `${w.name}·${stanceTag}${quirkTag}${coverTag}`;
+  };
+  const liveWings = world.wingmen.filter((w) => w.alive);
+  const leaderBox = world.leader.alive
+    ? [{ x: tx(world.leader.pos.x) - 18, y: ty(world.leader.pos.y) - 22, w: ctx.measureText(world.leader.inCover ? "隊長·カバー" : "隊長").width, h: 12 }]
+    : [];
+  const wingYs = layoutLabels(
+    liveWings.map((u) => ({ x: tx(u.pos.x) - 28, y: ty(u.pos.y) - u.radius * sy - 8, w: ctx.measureText(wingLabelText(u)).width, h: 12 })),
+    leaderBox,
+  );
+  const wingLabelY = new Map(liveWings.map((w, i) => [w.id, wingYs[i]!]));
   for (const w of world.wingmen) {
     if (!w.alive) continue;
     if (w.inCover) drawCoverRing(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx);
     drawCraft(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx, "#7eb6ff", w.heading);
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
-    const quirkTag = w.quirk ? `·${quirkShort(w.quirk)}` : "";
-    const coverTag = w.inCover ? "·カバー" : "";
-    // C20-b: 「待機」 while holding (mobile wingmen; immobile keep 「自衛のみ」).
-    const stanceTag = isWingmanMobileFor(world, w.id) ? wingStanceTagJa(w, STANCE_LABEL[w.stance]) : "自衛のみ";
+    // C20-b: 「待機」 while holding (mobile wingmen; immobile keep 「自衛のみ」) — see wingLabelText.
     const labelX = tx(w.pos.x) - 28;
-    const labelY = ty(w.pos.y) - w.radius * sy - 8;
-    ctx.fillText(`${w.name}·${stanceTag}${quirkTag}${coverTag}`, labelX, labelY);
+    const labelY = wingLabelY.get(w.id) ?? ty(w.pos.y) - w.radius * sy - 8;
+    ctx.fillText(wingLabelText(w), labelX, labelY);
     // feat/explore-status-badges: red outlined state line over the name label.
     // The canvas backing is fixed and CSS-scaled, so the font is sized in
     // backing px to land at STATUS_BADGE_PX on screen at any width / map zoom.
