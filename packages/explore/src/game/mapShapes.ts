@@ -1,5 +1,8 @@
 // 2026-10-17 神宮: map colours and shapes. Shapes are fixed (never rotated); a short line shows facing.
-export const MECH_R = 14;
+import { BALANCE } from "./balance";
+
+/** Mech radius on the map = the sim's unit radius. */
+export const MECH_R = BALANCE.unitRadius;
 export const SHAPE_SIZE = { leader: 1.1, wingman: 1.0, enemy: 1.0, wreck: 0.75, supply: 0.35 } as const;
 export const COLORS = {
   leader: "#4f8fe8", // darker under-command blue
@@ -12,6 +15,8 @@ export const COLORS = {
   circuitDrop: "#e6e9ee", // whitish
 } as const;
 export const OWN_WRECK_OUTLINE_W = 2;
+/** Blue outline on the wreck circle's own edge: own wrecks from this sortie and left-behind ex-wingman wrecks alike. */
+export const OWN_WRECK_OUTLINE = { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W } as const;
 export type MechShape = "hexagon" | "triangle" | "invertedTriangle";
 
 /** Fixed (unrotated) polygon vertices around (0,0), radius r. Screen y grows downward. */

@@ -1,5 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
-import { COLORS, MECH_R, OWN_WRECK_OUTLINE_W, SHAPE_SIZE, drawDisc, drawMechShape } from "./mapShapes";
+import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, drawDisc, drawMechShape } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
 import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { layoutLabels } from "./labelLayout";
@@ -282,7 +282,7 @@ export function renderWorld(
       : u && !u.alive && !(world.recoveredWreckUnitIds ?? []).includes(u.id) && wreckCarrierId(world, u.id) == null;
     if (drawnAbove) continue;
     ctx.save(); ctx.globalAlpha = GHOST_ALPHA;
-    drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, g.kind === "allyWreck" ? { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W } : undefined);
+    drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, g.kind === "allyWreck" ? OWN_WRECK_OUTLINE : undefined);
     ctx.restore();
   }
   // Faint images of enemy supplies taken while unseen stay until the spot is seen again.
@@ -317,11 +317,9 @@ export function renderWorld(
     ctx.save(); ctx.globalAlpha = sv.alpha;
     m = { ...m, pos: sv.pos };
     if (m.wreck) {
-      // Left-behind ex-wingman wreck: grey circle, keeps its blue outline (width 2), 「置き去り：<name>」.
-      drawDisc(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck);
-      ctx.strokeStyle = "#7eb6ff"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(tx(m.pos.x), ty(m.pos.y), 13 * sx, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
-      ctx.fillStyle = "#7eb6ff";
+      // Left-behind ex-wingman wreck: grey circle with the blue outline on its edge (width 2), same as own wrecks.
+      drawDisc(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, OWN_WRECK_OUTLINE);
+      ctx.fillStyle = COLORS.wingman;
     } else {
       // Left-behind mech that can still move: grey inverted triangle (no facing), blue label.
       drawMechShape(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wreck, "invertedTriangle", null);
@@ -339,7 +337,7 @@ export function renderWorld(
     if (wreckCarrierId(world, u.id) != null) continue; // drawn on its carrier (項目4-1)
     const v = seenOrGhost("allyWreck", u.id, u.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W });
+    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, OWN_WRECK_OUTLINE);
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
     ctx.fillText(wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(v.pos.x) - 30, ty(v.pos.y) - u.radius * sy - 8);

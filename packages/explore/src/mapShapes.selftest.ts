@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { createHubSave, serializeHubSave, INITIAL_HUB } from "@estg/shared";
-import { COLORS, MECH_R, SHAPE_SIZE, shapePoints } from "./game/mapShapes";
+import { readFileSync } from "node:fs";
+import { BALANCE } from "./game/balance";
+import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, drawDisc, shapePoints } from "./game/mapShapes";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import { tickWorld } from "./game/sim";
 import { snapshotSortieWorld, worldFromCheckpointBody } from "./game/checkpoint";
 
 // 10/17 神宮: colours, sizes, fixed shapes.
 assert.equal(COLORS.leader, "#4f8fe8"); assert.equal(COLORS.wingman, "#7eb6ff"); assert.equal(COLORS.wreck, "#8a9099");
-assert.equal(MECH_R, 14);
+assert.equal(MECH_R, BALANCE.unitRadius, "map mech radius follows the sim unit radius");
 assert.deepEqual(SHAPE_SIZE, { leader: 1.1, wingman: 1.0, enemy: 1.0, wreck: 0.75, supply: 0.35 });
 assert.ok(SHAPE_SIZE.supply < SHAPE_SIZE.wreck, "supply circles smaller than wreck circles");
 assert.equal(shapePoints("hexagon", 10).length, 6);
@@ -26,3 +28,18 @@ console.log("map shapes: colours, sizes, fixed shapes, compat PASS");
 assert.equal(COLORS.ammoDrop, "#f85149");
 assert.equal(COLORS.powerDrop, "#d4a72c");
 assert.equal(COLORS.circuitDrop, "#e6e9ee");
+
+// Wreck outline sits on the circle's own edge (one arc, stroked), width 2 — no separate outer ring.
+{
+  const arcs: number[] = []; let strokes = 0; let lw = 0;
+  const ctx = { save() {}, restore() {}, beginPath() {}, fill() {}, arc(_x: number, _y: number, r: number) { arcs.push(r); },
+    stroke() { strokes++; lw = (ctx as any).lineWidth; } } as any;
+  const r = MECH_R * SHAPE_SIZE.wreck;
+  drawDisc(ctx, 0, 0, r, COLORS.wreck, OWN_WRECK_OUTLINE);
+  assert.deepEqual(arcs, [r]); assert.equal(strokes, 1); assert.equal(lw, 2);
+  assert.equal(OWN_WRECK_OUTLINE.color, COLORS.wingman);
+  // Left-behind ex-wingman wrecks and own wrecks share it; the old radius-13 ring is gone.
+  const src = readFileSync(new URL("./game/render.ts", import.meta.url), "utf8");
+  assert.ok(!/arc\([^)]*\b13 \* sx/.test(src), "no separate radius-13 ring");
+  assert.ok((src.match(/COLORS\.wreck, OWN_WRECK_OUTLINE\)/g) ?? []).length >= 2, "stray and own wrecks use the edge outline");
+}
