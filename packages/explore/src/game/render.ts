@@ -1,5 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
-import { lastSeenFade, squadIntel, squadSees, viewRange, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
+import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
@@ -194,11 +194,33 @@ export function renderWorld(
     ctx.fillText(campLabel, cx - 44, cy - 28);
   }
 
+  // PR2 fog: never seen = grey; watched now = black ground; unwatched fades back to grey over 60 s.
+  {
+    const cell = world.balance.fogCell, cols = fogCols(world), rows = fogRows(world);
+    const c0 = Math.max(0, Math.floor(cam.x / cell)), c1 = Math.min(cols - 1, Math.floor((cam.x + cam.w) / cell));
+    const r0 = Math.max(0, Math.floor(cam.y / cell)), r1 = Math.min(rows - 1, Math.floor((cam.y + cam.h) / cell));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const g = fogGrey(world, r * cols + c);
+      if (g <= 0.01) continue;
+      ctx.fillStyle = `rgba(74,80,88,${(0.88 * g).toFixed(3)})`;
+      ctx.fillRect(Math.floor(tx(c * cell)), Math.floor(ty(r * cell)), Math.ceil(cell * sx) + 1, Math.ceil(cell * sy) + 1);
+    }
+  }
+  // Seen now → the real thing; otherwise its faint image (original colour, 35%) from squad knowledge.
+  const seenOrGhost = (kind: GhostKind, id: string, pos: { x: number; y: number }): { pos: { x: number; y: number }; alpha: number } | null => {
+    if (squadSees(world, pos)) return { pos, alpha: 1 };
+    const g = ghostOf(world, kind, id);
+    return g ? { pos: g.pos, alpha: GHOST_ALPHA } : null;
+  };
+
   // Containers: only discovered (death-drop / purge get pulsing glow)
   for (const c of world.containers) {
-    if (!c.discovered || c.taken) continue;
-    const px = tx(c.pos.x);
-    const py = ty(c.pos.y);
+    if (!c.discovered) continue;
+    const view = seenOrGhost("container", c.id, c.pos);
+    if (!view || (view.alpha === 1 && c.taken)) continue;
+    ctx.save(); ctx.globalAlpha = view.alpha;
+    const px = tx(view.pos.x);
+    const py = ty(view.pos.y);
     if (c.glowT > 0) {
       const pulse = 0.55 + 0.45 * Math.sin(world.elapsed * 8);
       const r = 14 + pulse * 6;
@@ -222,6 +244,7 @@ export function renderWorld(
       ctx.font = "10px sans-serif";
       ctx.fillText("DROP", px - 14, py - 12);
     }
+    ctx.restore();
   }
 
   const vision = world.balance.visionRange;
@@ -243,13 +266,36 @@ export function renderWorld(
   }
 
   for (const e of world.enemies) {
-    if (e.alive || e.enemyState?.recovered || wreckCarrierId(world,e.id) || !isEnemySeen(world,e)) continue;
-    drawCraft(ctx,tx(e.pos.x),ty(e.pos.y),e.radius*sx,'#8a9099',e.heading);
-    ctx.fillStyle='#c3c8cf'; ctx.font='11px sans-serif'; ctx.fillText('残骸',tx(e.pos.x),ty(e.pos.y)-12);
+    if (e.alive || e.enemyState?.recovered || wreckCarrierId(world,e.id)) continue;
+    const v = seenOrGhost("enemyWreck", e.id, e.pos); if (!v) continue;
+    ctx.save(); ctx.globalAlpha = v.alpha;
+    drawCraft(ctx,tx(v.pos.x),ty(v.pos.y),e.radius*sx,'#8a9099',e.heading);
+    ctx.fillStyle='#c3c8cf'; ctx.font='11px sans-serif'; ctx.fillText('残骸',tx(v.pos.x),ty(v.pos.y)-12);
+    ctx.restore();
+  }
+  // Faint images of wrecks recovered or carried off while unseen stay until the spot is seen again.
+  for (const g of Object.values(squadIntel(world).ghosts)) {
+    if ((g.kind !== "enemyWreck" && g.kind !== "allyWreck") || squadSees(world, g.pos)) continue;
+    const u = g.kind === "enemyWreck" ? world.enemies.find((x) => x.id === g.id) : [world.leader, ...world.wingmen].find((x) => x.id === g.id);
+    const drawnAbove = g.kind === "enemyWreck"
+      ? u && !u.alive && !u.enemyState?.recovered && !wreckCarrierId(world, u.id)
+      : u && !u.alive && !(world.recoveredWreckUnitIds ?? []).includes(u.id) && wreckCarrierId(world, u.id) == null;
+    if (drawnAbove) continue;
+    ctx.save(); ctx.globalAlpha = GHOST_ALPHA;
+    drawCraft(ctx, tx(g.pos.x), ty(g.pos.y), world.balance.unitRadius * sx, "#8a9099", Math.PI / 2);
+    ctx.restore();
+  }
+  // Faint images of enemy supplies taken while unseen stay until the spot is seen again.
+  const liveSupplyIds = new Set((world.enemySupplies ?? []).map((d) => d.id));
+  for (const g of Object.values(squadIntel(world).ghosts)) {
+    if (g.kind !== "supply" || liveSupplyIds.has(g.id) || squadSees(world, g.pos)) continue;
+    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; ctx.fillStyle='#75d99b'; ctx.fillRect(tx(g.pos.x)-4,ty(g.pos.y)-4,8,8); ctx.restore();
   }
   for (const d of world.enemySupplies ?? []) {
-    if (!squadSees(world, d.pos)) continue;
-    ctx.fillStyle='#75d99b';ctx.fillRect(tx(d.pos.x)-4,ty(d.pos.y)-4,8,8);
+    const v = seenOrGhost("supply", d.id, d.pos); if (!v) continue;
+    ctx.save(); ctx.globalAlpha = v.alpha;
+    ctx.fillStyle='#75d99b';ctx.fillRect(tx(v.pos.x)-4,ty(v.pos.y)-4,8,8);
+    ctx.restore();
   }
   // Bullets
   ctx.fillStyle = "#e8eaed";
@@ -275,12 +321,15 @@ export function renderWorld(
     if (u.alive || !u.instanceId) continue;
     if ((world.recoveredWreckUnitIds ?? []).includes(u.id)) continue;
     if (wreckCarrierId(world, u.id) != null) continue; // drawn on its carrier (項目4-1)
-    drawCraft(ctx, tx(u.pos.x), ty(u.pos.y), u.radius * sx, "#8a9099", u.heading);
+    const v = seenOrGhost("allyWreck", u.id, u.pos); if (!v) continue;
+    ctx.save(); ctx.globalAlpha = v.alpha;
+    drawCraft(ctx, tx(v.pos.x), ty(v.pos.y), u.radius * sx, "#8a9099", u.heading);
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
-    ctx.fillText(wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(u.pos.x) - 30, ty(u.pos.y) - u.radius * sy - 8);
+    ctx.fillText(wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(v.pos.x) - 30, ty(v.pos.y) - u.radius * sy - 8);
     // 21:29 神宮 1 = B: a wrecked wingman shows its circuits (type + value) over the label.
-    if (u.kind !== "leader") drawOverheadLine(ctx, cssW, wreckCircuitLine(world, u), tx(u.pos.x) - 30, ty(u.pos.y) - u.radius * sy - 8);
+    if (u.kind !== "leader") drawOverheadLine(ctx, cssW, wreckCircuitLine(world, u), tx(v.pos.x) - 30, ty(v.pos.y) - u.radius * sy - 8);
+    ctx.restore();
   }
 
   // Dropped circuits waiting on this front cell (circuitDrops.ts): recovered at

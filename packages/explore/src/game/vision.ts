@@ -50,17 +50,81 @@ export type SquadIntel = {
   visible: string[];
   /** Last seen position of lost enemies; dropped after LAST_SEEN_SEC. */
   lastSeen: Record<string, { pos: Vec2; t: number }>;
+  /** Per fog cell: elapsed time it was last watched (-1 = never seen). */
+  fogT: number[];
+  /** Faint images of static objects (containers, wrecks, enemy supplies), keyed by kind:id. */
+  ghosts: Record<string, Ghost>;
 };
 
+export type GhostKind = "container" | "enemyWreck" | "allyWreck" | "supply";
+export type Ghost = { kind: GhostKind; id: string; pos: Vec2; t: number };
+
+/** Fog returns to grey over this long once nobody watches a place. */
+export const FOG_RETURN_SEC = 60;
+/** Faint image opacity. */
+export const GHOST_ALPHA = 0.35;
+/** Info older than this is not trusted by the AI. */
+export const GHOST_TRUST_SEC = 120;
+
 export function squadIntel(world: World): SquadIntel {
-  if (!world.squadIntel) world.squadIntel = { visible: [], lastSeen: {} };
-  world.squadIntel.visible ??= [];
-  world.squadIntel.lastSeen ??= {};
-  return world.squadIntel;
+  if (!world.squadIntel) world.squadIntel = { visible: [], lastSeen: {}, fogT: [], ghosts: {} };
+  const s = world.squadIntel;
+  s.visible ??= [];
+  s.lastSeen ??= {};
+  s.ghosts ??= {};
+  const n = fogCols(world) * fogRows(world);
+  if (!Array.isArray(s.fogT) || s.fogT.length !== n) s.fogT = Array.from({ length: n }, (_, i) => (Array.isArray(s.fogT) && typeof s.fogT[i] === "number" ? s.fogT[i]! : -1));
+  return s;
 }
 
 export function squadSees(world: World, pos: Vec2): boolean {
   return [world.leader, ...world.wingmen].some((u) => u?.alive && canSee(world, u, pos));
+}
+
+export function fogCols(world: World): number { return Math.ceil(world.balance.worldW / world.balance.fogCell); }
+export function fogRows(world: World): number { return Math.ceil(world.balance.worldH / world.balance.fogCell); }
+export function fogCellCenter(world: World, i: number): Vec2 {
+  const cols = fogCols(world), c = world.balance.fogCell;
+  return { x: (i % cols) * c + c / 2, y: Math.floor(i / cols) * c + c / 2 };
+}
+/** 0 = watched now (black ground) … 1 = full grey fog. */
+export function fogGrey(world: World, i: number): number {
+  const t = squadIntel(world).fogT[i] ?? -1;
+  if (t < 0) return 1;
+  return Math.max(0, Math.min(1, (world.elapsed - t) / FOG_RETURN_SEC));
+}
+
+/** Static objects that exist on the field right now, keyed like ghosts. */
+function presentStatics(world: World): Ghost[] {
+  const out: Ghost[] = [];
+  for (const c of world.containers) if (c.discovered && !c.taken) out.push({ kind: "container", id: c.id, pos: c.pos, t: 0 });
+  for (const e of world.enemies) if (!e.alive && !e.enemyState?.recovered) out.push({ kind: "enemyWreck", id: e.id, pos: e.pos, t: 0 });
+  for (const u of world.wingmen) if (!u.alive && u.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(u.id)) out.push({ kind: "allyWreck", id: u.id, pos: u.pos, t: 0 });
+  if (!world.leader.alive && world.leader.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(world.leader.id)) out.push({ kind: "allyWreck", id: world.leader.id, pos: world.leader.pos, t: 0 });
+  for (const d of world.enemySupplies ?? []) out.push({ kind: "supply", id: d.id, pos: d.pos, t: 0 });
+  return out;
+}
+const gkey = (g: { kind: GhostKind; id: string }) => `${g.kind}:${g.id}`;
+
+/** Fog and faint images: watched cells go black; seen statics refresh their image; a watched spot whose object is gone drops it. */
+export function updateSquadMemory(world: World): void {
+  const intel = squadIntel(world);
+  for (let i = 0; i < intel.fogT.length; i++) if (squadSees(world, fogCellCenter(world, i))) intel.fogT[i] = world.elapsed;
+  const present = new Map(presentStatics(world).map((g) => [gkey(g), g]));
+  for (const [k, g] of present) if (squadSees(world, g.pos)) intel.ghosts[k] = { kind: g.kind, id: g.id, pos: { ...g.pos }, t: world.elapsed };
+  for (const [k, g] of Object.entries(intel.ghosts)) {
+    const now = present.get(k);
+    if (squadSees(world, g.pos) && (!now || Math.hypot(now.pos.x - g.pos.x, now.pos.y - g.pos.y) > 1)) delete intel.ghosts[k];
+  }
+}
+
+export function ghostOf(world: World, kind: GhostKind, id: string): Ghost | null {
+  return squadIntel(world).ghosts[`${kind}:${id}`] ?? null;
+}
+
+/** AI trust in a faint image: 1 fresh … 0 at GHOST_TRUST_SEC and older (not trusted). */
+export function ghostTrust(world: World, g: Ghost): number {
+  return Math.max(0, 1 - (world.elapsed - g.t) / GHOST_TRUST_SEC);
 }
 
 /** Refresh the shared squad knowledge (call once per tick, after facing). */

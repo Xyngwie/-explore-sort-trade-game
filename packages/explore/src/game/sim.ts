@@ -1,5 +1,5 @@
 import { enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
-import { canSee, enemyVisibleToSquad, updateSquadIntel } from "./vision";
+import { canSee, enemyVisibleToSquad, updateSquadIntel, updateSquadMemory } from "./vision";
 import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
@@ -493,6 +493,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
   updateFacing(world, dt);
   updateSquadIntel(world);
+  updateSquadMemory(world);
   placeCarried(world);
   if (!world.leader.alive) noteLeaderDown(world);
   // A wipe during this tick rescues before a boarding circle can lift off (6A),

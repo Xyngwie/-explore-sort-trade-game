@@ -1,5 +1,5 @@
 import { BALANCE } from "./balance";
-import { canSee, enemyVisibleToSquad } from "./vision";
+import { canSee, enemyVisibleToSquad, ghostOf, ghostTrust, squadSees } from "./vision";
 import { dist, dist2, type Vec2 } from "./math";
 import {
   abortSalvage,
@@ -29,13 +29,22 @@ function nearestDiscoveredContainer(
   pos: Vec2,
   containers: Container[],
   excludeIds?: Set<string>,
+  world?: World,
 ): Container | null {
   let best: Container | null = null;
   let bestD = Infinity;
   for (const c of containers) {
-    if (c.taken || !c.discovered) continue;
+    if (!c.discovered) continue;
     if (excludeIds?.has(c.id)) continue;
-    const d = dist2(pos, c.pos);
+    // PR2: decide from squad knowledge. Seen now → the truth; otherwise its faint image
+    // (assumed still there; older = lower priority; ~120 s old = not trusted).
+    let trust = 1;
+    if (world && !squadSees(world, c.pos)) {
+      const g = ghostOf(world, "container", c.id);
+      trust = g ? ghostTrust(world, g) : 0;
+      if (trust <= 0) continue;
+    } else if (c.taken) continue;
+    const d = dist2(pos, c.pos) / (trust * trust);
     if (d < bestD) {
       bestD = d;
       best = c;
@@ -166,7 +175,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       const assigned = containerNearWaypoint(world, self.waypoint);
       const c =
         assigned ??
-        nearestDiscoveredContainer(self.pos, world.containers, claimed);
+        nearestDiscoveredContainer(self.pos, world.containers, claimed, world);
       if (c) {
         const near = dist(self.pos, c.pos) < b.interactRadius;
         return {
