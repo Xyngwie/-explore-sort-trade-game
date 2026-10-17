@@ -1,4 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
+import { strayShown, strayWreckLabel } from "./strayScatter";
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
@@ -263,10 +264,16 @@ export function renderWorld(
   for (const m of world.strandedMechs ?? []) {
     if (recoveredLost.has(m.instanceId)) continue;
     if (wreckCarrierId(world, `s:${m.instanceId}`) != null) continue; // drawn on its carrier (項目4-1)
+    if (!strayShown(m)) continue; // 10/17: hidden in fog until found
     drawCraft(ctx, tx(m.pos.x), ty(m.pos.y), 9 * sx, "#8a9099", Math.PI / 2);
-    ctx.fillStyle = "#c3c8cf";
+    if (m.wreck) {
+      // Our own wreck: ally-coloured outline and 「置き去り：<name>」.
+      ctx.strokeStyle = "#7eb6ff"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(tx(m.pos.x), ty(m.pos.y), 13 * sx, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
+      ctx.fillStyle = "#7eb6ff";
+    } else ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
-    ctx.fillText(m.wreck ? m.name : `${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+    ctx.fillText(m.wreck ? strayWreckLabel(m.instanceId) : `${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
   }
 
   // 項目5-1b W6: this sortie's wrecks stay where they were destroyed (gray, 「残骸 僚機A」).
@@ -287,6 +294,7 @@ export function renderWorld(
   const recoveredDrops = new Set(world.recoveredDropIds ?? []);
   for (const d of world.strandedDrops ?? []) {
     if (recoveredDrops.has(d.dropId)) continue;
+    if (!strayShown(d)) continue; // 10/17: hidden in fog until found
     ctx.fillStyle = "#e2b842";
     ctx.fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
     ctx.strokeStyle = "#ffeaa7";
