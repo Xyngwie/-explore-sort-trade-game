@@ -337,9 +337,10 @@ a.btn.deploy-cta:hover {
   border-color: rgba(248, 81, 73, 0.45);
   background: linear-gradient(90deg, rgba(120, 40, 30, 0.22), #0d1014 55%);
 }
+/* 10/17 神宮: neutral is grey (blue now means "under command" / armor). */
 .res-row.polarity-neutral {
-  border-color: rgba(88, 166, 255, 0.35);
-  background: linear-gradient(90deg, rgba(26, 75, 140, 0.2), #0d1014 55%);
+  border-color: rgba(139, 148, 158, 0.4);
+  background: linear-gradient(90deg, rgba(110, 118, 129, 0.18), #0d1014 55%);
 }
 .res-src {
   font-size: 0.62rem;
@@ -386,8 +387,10 @@ a.btn.deploy-cta:hover {
   color: #ff8b8b;
   background: #3a1818;
 }
-.res-chip.neutral {
-  border-color: rgba(88, 166, 255, 0.45);
-  color: #79b8ff;
-  background: #1a2a44;
+/* 10/17 神宮: neutral grey; a ±0 chip is grey too. */
+.res-chip.neutral,
+.res-chip.zero {
+  border-color: rgba(139, 148, 158, 0.5);
+  color: #c9d1d9;
+  background: #262b33;
 }

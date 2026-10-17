@@ -257,13 +257,24 @@ const SOURCE_LABEL_JA: Record<ResourceHistorySource, string> = {
   other: "他",
 };
 
-function formatChip(chip: ResourceDeltaChip): string {
+/** 2026-10-17 神宮: increase "+", decrease "−" (U+2212), zero "±0". */
+export function formatSignedAmount(n: number): string {
+  if (n > 0) return `+${n}`;
+  if (n < 0) return `\u2212${Math.abs(n)}`;
+  return "±0";
+}
+
+export function formatChip(chip: ResourceDeltaChip): string {
   if (chip.amount == null) {
-    return escapeHtml(chip.label);
+    return escapeHtml(chip.label); // label-only chips: colour only, no sign
   }
-  const sign = chip.amount > 0 ? "+" : "";
   const unit = chip.unit ?? "";
-  return `${escapeHtml(chip.label)} ${sign}${chip.amount}${escapeHtml(unit)}`;
+  return `${escapeHtml(chip.label)} ${formatSignedAmount(chip.amount)}${escapeHtml(unit)}`;
+}
+
+/** Chip colour class: the entry's polarity, except a zero amount is grey. */
+export function chipClass(polarity: ResourceHistoryPolarity, chip: ResourceDeltaChip): string {
+  return chip.amount === 0 ? "zero" : polarity;
 }
 
 /** Compact visual history of resource gain/spend (JA). */
@@ -279,7 +290,7 @@ export function buildResourceHistoryHtml(log: readonly string[]): string {
       const chips = e.chips
         .map(
           (c) =>
-            `<span class="res-chip ${e.polarity}">${formatChip(c)}</span>`,
+            `<span class="res-chip ${chipClass(e.polarity, c)}">${formatChip(c)}</span>`,
         )
         .join("");
       return `<li class="res-row polarity-${e.polarity}" data-source="${e.source}">
