@@ -1,5 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
-import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, drawDisc, drawMechShape } from "./mapShapes";
+import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
 import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { layoutLabels } from "./labelLayout";
@@ -237,9 +237,9 @@ export function renderWorld(
       ctx.arc(px, py, r * 0.85, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = c.glowT > 0 ? "#ff8a3d" : "#f0b429";
+    ctx.fillStyle = c.glowT > 0 ? "#ff8a3d" : COLORS.container;
     ctx.fillRect(px - 8, py - 8, 16, 16);
-    ctx.strokeStyle = c.glowT > 0 ? "#ffd0a0" : "#ffe08a";
+    ctx.strokeStyle = c.glowT > 0 ? "#ffd0a0" : COLORS.containerEdge;
     ctx.lineWidth = c.glowT > 0 ? 2 : 1;
     ctx.strokeRect(px - 8, py - 8, 16, 16);
     if (c.glowT > 0) {
@@ -375,7 +375,7 @@ export function renderWorld(
   };
   const liveWings = world.wingmen.filter((w) => w.alive);
   const leaderBox = world.leader.alive
-    ? [{ x: tx(world.leader.pos.x) - 18, y: ty(world.leader.pos.y) - 22, w: ctx.measureText(world.leader.inCover ? "隊長·カバー" : "隊長").width, h: 12 }]
+    ? [{ x: tx(world.leader.pos.x) - 18, y: ty(world.leader.pos.y) - leaderLabelLift(sx), w: ctx.measureText(world.leader.inCover ? "隊長·カバー" : "隊長").width, h: 12 }]
     : [];
   const wingYs = layoutLabels(
     liveWings.map((u) => ({ x: tx(u.pos.x) - 28, y: ty(u.pos.y) - u.radius * sy - 8, w: ctx.measureText(wingLabelText(u)).width, h: 12 })),
@@ -444,7 +444,7 @@ export function renderWorld(
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
     const leadLabel = world.leader.inCover ? "隊長·カバー" : "隊長";
-    ctx.fillText(leadLabel, tx(world.leader.pos.x) - 18, ty(world.leader.pos.y) - 22);
+    ctx.fillText(leadLabel, tx(world.leader.pos.x) - 18, ty(world.leader.pos.y) - leaderLabelLift(sx));
   }
 
   // 項目4-1 C7: a carried wreck is drawn small on top of its carrier, with 「積載中 残骸」.

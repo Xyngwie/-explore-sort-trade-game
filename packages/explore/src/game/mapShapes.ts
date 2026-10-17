@@ -10,13 +10,21 @@ export const COLORS = {
   enemy: "#ff6b6b", // hostile red
   wreck: "#8a9099", // grey
   ownWreckOutline: "#7eb6ff",
-  ammoDrop: "#f85149", // SORT red (style.css .warn)
-  powerDrop: "#d4a72c", // SORT yellow (four-resource.css armor border)
+  ammoDrop: "#f85149", // ammo = red (神宮 10/17 C; same value as SORT's warn red today)
+  powerDrop: "#d4a72c", // power = yellow (神宮 10/17 C). SORT still uses this yellow for armor; SORT will move to ammo red / power yellow / armor+defence blue in its own PR.
   circuitDrop: "#e6e9ee", // whitish
+  container: "#a39a8c", // warm grey (10/17): apart from the cool wreck grey and the whitish circuit square
+  containerEdge: "#d2cabd",
 } as const;
 export const OWN_WRECK_OUTLINE_W = 2;
 /** Blue outline on the wreck circle's own edge: own wrecks from this sortie and left-behind ex-wingman wrecks alike. */
 export const OWN_WRECK_OUTLINE = { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W } as const;
+/** Facing line length as a multiple of the shape radius (width 2). */
+export const FACING_LINE_RATIO = 1.6;
+/** 10/17: the leader name sits just above the tip of an upward facing line (never lower than the old 22px). */
+export function leaderLabelLift(scale: number): number {
+  return Math.max(22, MECH_R * SHAPE_SIZE.leader * FACING_LINE_RATIO * scale + 4);
+}
 export type MechShape = "hexagon" | "triangle" | "invertedTriangle";
 
 /** Fixed (unrotated) polygon vertices around (0,0), radius r. Screen y grows downward. */
@@ -40,7 +48,7 @@ export function drawMechShape(ctx: CanvasRenderingContext2D, x: number, y: numbe
   if (heading != null) {
     // Facing: a short line from the centre past the edge (provisional: 1.6 r, width 2).
     ctx.strokeStyle = color; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(heading) * r * 1.6, y + Math.sin(heading) * r * 1.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(heading) * r * FACING_LINE_RATIO, y + Math.sin(heading) * r * FACING_LINE_RATIO); ctx.stroke();
   }
   ctx.restore();
 }

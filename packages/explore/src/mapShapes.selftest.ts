@@ -43,3 +43,17 @@ assert.equal(COLORS.circuitDrop, "#e6e9ee");
   assert.ok(!/arc\([^)]*\b13 \* sx/.test(src), "no separate radius-13 ring");
   assert.ok((src.match(/COLORS\.wreck, OWN_WRECK_OUTLINE\)/g) ?? []).length >= 2, "stray and own wrecks use the edge outline");
 }
+
+// 10/17: containers warm grey (not wreck grey, not the whitish circuit square, not yellow); provisional looks kept.
+assert.equal(COLORS.container, "#a39a8c");
+assert.notEqual(COLORS.container, COLORS.wreck);
+assert.notEqual(COLORS.container, COLORS.circuitDrop);
+{
+  const src = readFileSync(new URL("./game/render.ts", import.meta.url), "utf8");
+  assert.ok(!src.includes('"#f0b429";'), "normal containers are no longer yellow");
+  assert.ok(src.includes("fillRect(px - 8, py - 8, 16, 16)"), "containers stay 16px squares");
+  assert.ok(src.includes('"#ff8a3d" : COLORS.container'), "DROP glow containers unchanged");
+  assert.ok(src.includes("fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8)"), "circuit square 8px");
+  assert.ok(src.includes('"#9ecbff"'), "leader name colour kept");
+  assert.equal((src.match(/leaderLabelLift\(sx\)/g) ?? []).length, 2, "leader label and its layout box use the same lift");
+}
