@@ -1,5 +1,5 @@
 import { isWingmanMobileFor } from "./commandUnlock";
-import { circuitIncomingMul, movementLocked } from "./circuitPlay";
+import { movementLocked } from "./circuitPlay";
 import { wreckCarrierId } from "./carry";
 import { segmentCircle } from "./geometry";
 import { getCoverObjects } from "./coverObjects";
@@ -10,10 +10,9 @@ export function spreadRadians(weapon: string|null, rng:()=>number=Math.random):n
   const degrees=SPREAD_DEG[weapon as keyof typeof SPREAD_DEG]??SPREAD_DEG.normal;
   return (rng()*2-1)*degrees*Math.PI/180;
 }
-/** Hit-disc width ratio: .70 base cover, down to .40 for cover circuits, matching old hit probability. */
+/** C2: cover never shrinks a body; protection is actual obstacle occlusion. */
 export function hitRadius(world:World, unit:Unit):number {
-  const full=unit.radius+world.balance.bulletHitPadding;
-  return full*(circuitIncomingMul(world,unit) ?? (unit.inCover ? world.balance.coverIncomingHitMul : 1));
+  return unit.radius+world.balance.bulletHitPadding;
 }
 export function shotCanHit(world:World, ownerId:string, unit:Unit):boolean {
   if(!unit.alive||unit.id===ownerId)return false;
@@ -41,7 +40,7 @@ export function friendlyFireRisk(world:World,from:Unit,target:Unit):boolean {
 }
 const avoidance=new WeakMap<World,Map<string,{pos:Vec2;until:number}>>();
 export function lineClearTarget(world:World,unit:Unit):Vec2|null {
-  if(movementLocked(world) || (unit.kind==="wingman" && !isWingmanMobileFor(world,unit.id)))return null;
+  if(world.circuitPlay?.order?.kind==="focus" || movementLocked(world) || (unit.kind==="wingman" && !isWingmanMobileFor(world,unit.id)))return null;
   const rec=avoidance.get(world)?.get(unit.id);
   return rec && rec.until>world.elapsed ? rec.pos : null;
 }

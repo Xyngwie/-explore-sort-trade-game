@@ -133,10 +133,10 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
   world.bullets.push(b);
 }
 
-function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean): void {
+function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean, commanded = false): void {
   if (!from.alive || !target.alive) return;
   if (!aimAt(from, target) && !meleeReady(world, from, target)) return; // guns need the 3° arc; melee the ±135° arc
-  if (!fromEnemy && !meleeReady(world, from, target) && friendlyFireRisk(world, from, target)) { clearFiringLine(world, from); return; }
+  if (!fromEnemy && !commanded && !meleeReady(world, from, target) && friendlyFireRisk(world, from, target)) { clearFiringLine(world, from); return; }
   if (fromEnemy && from.cooldown > 0) return;
   const previousEnemyAmmo = from.enemyState?.ammo ?? 0;
   if (fromEnemy) {
@@ -200,10 +200,10 @@ export function updateBullets(world: World, dt: number): void {
       let hitDmg=b.damage;
       if(t.kind!=="enemy"){
         hitDmg*=campDamageTakenMul(world,t);
-        world.combatHitsTaken+=1;
+        if(b.fromEnemy)world.combatHitsTaken+=1;
       }else hitDmg/=enemyArmorMultiplier(t);
       noteEmpHit(world,t,b);
-      noteDamageBreaksSuppress(world,t);
+      if(!b.fromEnemy)noteDamageBreaksSuppress(world,t);
       t.hp=Math.max(0,t.hp-hitDmg);
       if(t.kind==="wingman")t.hitWarnT=world.balance.wingHitWarnSec;
       if(friendly){
@@ -215,7 +215,7 @@ export function updateBullets(world: World, dt: number): void {
         t.alive=false;
         reportBattle(world,friendly ? `${shooter?.name??b.ownerId} の誤射で ${t.name} 大破` : `${b.fromEnemy?"敵":shooter?.name??"分隊"} が ${t.name} を撃破`,t.pos);
         if(t.kind==="enemy")handleEnemyDeaths(world);
-      }else if(!inCamera(world,t.pos))reportBattle(world,`${t.name} が被弾 (−${Math.round(hitDmg)})`,t.pos);
+      }else if(!inCamera(world,t.pos) || !inCamera(world,b.pos))reportBattle(world,`${t.name} が被弾 (−${Math.round(hitDmg)})`,t.pos);
       break;
     }
     if(b.ttl<=0)b.alive=false;
@@ -264,13 +264,13 @@ export function updateEnemies(world: World, dt: number): void {
     const nearest = nearestEnemyTarget(world, e);
     const emp = enemyEmpMul(world,e);
     if (st.activity > st.capacity*.1 && applyLure(world,e,dt)) {
+      e.pos = obstacleMove(world, {...e,pos:before}, e.pos);
+      updateCoverMovement(world,e,{x:0,y:0},dt);
       if (Math.hypot(e.vel.x,e.vel.y)>0) st.activity = Math.max(st.capacity*.1, st.activity - .5*dt);
     } else if (!enemyHeld(world,e)) {
       const speed = enemySpeed(world,e)*emp.speed;
       if (!lootEnemy(world,e,dt,speed)) moveEnemy(world,e,enemyDestination(world,e,nearest),speed,dt);
     } else e.vel = {x:0,y:0};
-    e.pos = obstacleMove(world, {...e,pos:before}, e.pos);
-    updateCoverMovement(world,e,{x:0,y:0},dt);
     // Stationary / full / low-power enemies can still return fire.
     if (nearest) {
       const cd=e.cooldown;
@@ -421,12 +421,15 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       return;
     }
   }
-  for(const u of [...friendlyUnits(world),...world.enemies]) if(!wreckCarrierId(world,u.id)) updateCoverMovement(world,u,{x:0,y:0},0);
+  for(const u of [...friendlyUnits(world),...world.enemies]) if(u.alive && !wreckCarrierId(world,u.id)) {
+    u.pos=obstacleMove(world,u,u.pos); // repair old embedded checkpoints before movement/power accounting
+    updateCoverMovement(world,u,{x:0,y:0},0);
+  }
   const beforeCircuit=new Map([...friendlyUnits(world),...world.enemies].map(u=>[u.id,{...u.pos}]));
   stepCircuitPlay(world, dt);
   for(const u of [...friendlyUnits(world),...world.enemies]){
     const before=beforeCircuit.get(u.id);
-    if(before && u.alive && !wreckCarrierId(world,u.id))u.pos=obstacleMove(world,{...u,pos:before},u.pos);
+    if(before && u.alive && !wreckCarrierId(world,u.id) && (before.x!==u.pos.x || before.y!==u.pos.y))u.pos=obstacleMove(world,{...u,pos:before},u.pos);
   }
   expireEmptyBatteries(world);
   const timedOut = isOperationTimedOut(world);
@@ -445,7 +448,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     else if (input.clickMove) fallback = { ...input.clickMove };
     const locked = movementLocked(world);
     const cruise = circuitLocomotion(world, leader, locked ? null : fallback, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed);
-    leader.moveTarget = !input.move.x && !input.move.y && !input.clickMove ? lineClearTarget(world,leader) ?? cruise.target : cruise.target;
+    leader.moveTarget = !input.move.x && !input.move.y && !input.clickMove && !input.fire && !input.interact ? lineClearTarget(world,leader) ?? cruise.target : cruise.target;
     if (!locked) updateCoverMovement(world, leader, input.move, dt);
     moveToward(leader, leader.moveTarget, cruise.speed, dt, world);
   }
@@ -454,12 +457,12 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     const focusing = world.circuitPlay?.rules === true && world.circuitPlay.order?.kind === "focus";
     const focus = focusTarget(world, leader);
     if (focusing) {
-      if (focus) tryFire(world, leader, focus, false);
+      if (focus) tryFire(world, leader, focus, false, true);
     } else {
       let leadTarget: Unit | null = null; let best: number = world.balance.engageRange * rangeMul(world, leader.id);
       for (const e of world.enemies) { if (!e.alive || !enemyVisibleToSquad(world, e)) continue; const d = dist(leader.pos, e.pos); if (d <= best) { best = d; leadTarget = e; } }
       const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
-      if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false);
+      if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false, input.fire);
     }
     if (!timedOut && !wreckCarrierId(world, leader.id) && !movementLocked(world)) {
       const playEdge = world.circuitPlay;
@@ -490,7 +493,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     const focusing = world.circuitPlay?.rules === true && world.circuitPlay.order?.kind === "focus";
     const focus = focusTarget(world, w);
     if (focusing) {
-      if (focus) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, focus, false); }
+      if (focus) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, focus, false, true); }
     } else if (intent.fireAt) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, intent.fireAt, false); }
     if (!timedOut && !riding && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage || wingRecoverWantsSalvage(world, w), dt);
   }

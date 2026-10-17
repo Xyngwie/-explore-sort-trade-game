@@ -490,7 +490,7 @@ export function renderWorld(
     const x = tx(unit.pos.x), y = ty(unit.pos.y) - feedbackPx * (2 + (1.8 - event.ttl) + (event.kind === "friendly_fire" ? 3.2 : event.kind === "power" ? 1.4 : 0));
     ctx.globalAlpha = Math.min(1, event.ttl * 2);
     ctx.strokeStyle = "#102030";
-    ctx.fillStyle = event.kind === "friendly_fire" ? "#ffb3ad" : event.kind === "empty" ? COLORS.feedbackEmpty : event.kind === "ammo" ? COLORS.feedbackAmmo : COLORS.feedbackPower;
+    ctx.fillStyle = event.kind === "friendly_fire" ? COLORS.feedbackFriendlyFire : event.kind === "empty" ? COLORS.feedbackEmpty : event.kind === "ammo" ? COLORS.feedbackAmmo : COLORS.feedbackPower;
     ctx.strokeText(feedbackLabel(event), x, y);
     ctx.fillText(feedbackLabel(event), x, y);
   }

@@ -1,3 +1,4 @@
+import { nearCover } from "./coverMovement";
 import { loadSpeedRatio, roomFor, unitLoad } from "./carry";
 import { clamp, dist } from "./math";
 import type { Balance } from "./balance";
@@ -130,12 +131,13 @@ export function campDamageTakenMul(world: World, unit: Unit): number {
 }
 export function campDrPercent(world: World): number { return Math.round((1 - world.balance.campDamageTakenMul) * 100); }
 
-export function toggleUnitCover(world: World, unit: Unit): boolean | null { if (world.phase !== "sortie" || !unit.alive) return null; unit.inCover = !unit.inCover; return unit.inCover; }
+export function toggleUnitCover(world: World, unit: Unit): boolean | null { if (world.phase !== "sortie" || !unit.alive) return null; if(!unit.inCover && !nearCover(world,unit))return null; unit.inCover = !unit.inCover; return unit.inCover; }
 
 export function toggleSquadCover(world: World): "entered" | "exited" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";
   const enter = !world.leader.inCover; const squad = [world.leader, ...world.wingmen].filter((u) => u.alive);
-  for (const u of squad) u.inCover = enter;
+  if(enter && !nearCover(world,world.leader))return "denied";
+  for (const u of squad) u.inCover = enter && nearCover(world,u);
   if (enter) { pushLog(world, "小隊カバー開始：障害物の外縁で身を隠す（キャンプDRと併用可）。"); return "entered"; }
   pushLog(world, "小隊カバー解除。"); return "exited";
 }

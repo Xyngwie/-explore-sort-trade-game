@@ -193,14 +193,16 @@
       "en": "Remove the cover dice roll. While in cover the unit's hit body is smaller; the implementer picks the amount to approximate the current effect and reports it to 神宮.",
       "implementer_decides": [
         "cover hit-body shrink amount (report value and reasoning to 神宮)"
-      ]
+      ],
+      "superseded_by": "C2: physical occlusion only; no hitbox shrink."
     },
     {
       "id": "Q9",
       "choice": "A",
       "ja": "味方の AI は、誤射の危険が大きければ撃たずに横へ動いて射線を空ける。危険が小さければ撃つ（§4）。",
       "en": "Allied AI: if friendly-fire risk is high, hold fire and sidestep to clear the line; if risk is small, fire (EXPLORE_FACING_AIM_V0.md §4).",
-      "note": "The exact risk threshold is a fine spec: propose options to 神宮."
+      "note": "The exact risk threshold is a fine spec: propose options to 神宮.",
+      "clarified_by": "C3/C4: autonomous fire only; manual leader fire and focus orders bypass the risk gate."
     },
     {
       "id": "Q10",
@@ -336,7 +338,7 @@
     "Projectiles are stopped by obstacles/cover objects (Q5).",
     "A projectile stops at the first unit or obstacle it hits (Q6).",
     "A missed projectile keeps flying until its ttl (~384 at base speed) and can hit any unit along the way (Q7).",
-    "The cover dice roll (shotHitChance random miss) is removed; units in cover have a smaller hit body; the chosen value is reported to 神宮 (Q8).",
+    "The cover dice and hitbox shrink are removed; obstacle occlusion alone protects a full-sized unit (C2 supersedes Q8).",
     "Allied AI holds fire and sidesteps when friendly-fire risk is high, fires when small (Q9).",
     "Enemies do not avoid other enemies (Q10).",
     "Overhead text 「誤射」 appears on a unit hit by friendly fire (Q11).",
@@ -459,9 +461,35 @@
   ],
   "owner_addendum_2026_10_17": {
     "spread": "Explicitly confirmed normal ±2°, SMG ±5°, MMR ±0.5°, LMG ±4°; shotgun unchanged from Q14.",
-    "risk": "Hold fire and sidestep when the unscattered muzzle line intersects an ally before the intended enemy. Spread-only risk does not prohibit fire.",
+    "risk": "Unscattered direct-line friendly blocker suppresses autonomous shots only. C3 explicitly commanded leader fire and focus orders bypass this gate.",
     "learning": "Count friendly-fire hits privately per battle and retain after settlement for future learning. No count display or reward penalty.",
     "mmr": "Keep bullet speed; lifetime gives 1.3 × effective MMR range, including final speed of special ammo.",
-    "cover": "Override center snapping: no suction; cover at the obstacle boundary; units cannot enter or pass through obstacles, accounting for body radius. Keep reduced hit body."
-  }
+    "cover": "No suction; no obstacle penetration; C1/C2 later clarify manual near-obstacle V/button toggle and full-size body with physical occlusion only."
+  },
+  "audit_owner_decisions_2026_10_17": [
+    {
+      "id": "C1",
+      "decision": "Manual V/button cover toggle, only near obstacles; never automatically enter each frame."
+    },
+    {
+      "id": "C2",
+      "decision": "Remove hitbox shrink. Full-size body; only solid obstacle occlusion protects. No automatic cover-position change."
+    },
+    {
+      "id": "C3",
+      "decision": "Explicit leader fire and focus orders bypass friendly-fire avoidance; other firing gates remain."
+    },
+    {
+      "id": "C4",
+      "decision": "Keep autonomous leader sidestep when no player movement input."
+    },
+    {
+      "id": "C5",
+      "decision": "Camp mitigation applies to friendly fire, same as normal shots."
+    },
+    {
+      "id": "C6",
+      "decision": "Dodge any incoming projectile regardless of faction."
+    }
+  ]
 }

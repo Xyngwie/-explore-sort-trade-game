@@ -24,9 +24,11 @@ export function obstacleMove(world: World, unit: Unit, desired: Vec2): Vec2 {
   }
   return start;
 }
+/** Near enough to use the obstacle without entering its solid body. */
+export function nearCover(world:World,unit:Unit):boolean {
+  return getCoverObjects(world).some(c=>Math.hypot(unit.pos.x-c.pos.x,unit.pos.y-c.pos.y)<=c.radius+unit.radius+8);
+}
 export function updateCoverMovement(world: World, unit: Unit, _moveInput: Vec2, _dt: number): void {
-  if(!unit.alive)return;
-  unit.pos=obstacleMove(world,unit,unit.pos);
-  // No attraction, snapping, move-target mutation, or holding a moving unit still.
-  unit.inCover=getCoverObjects(world).some(c=>Math.hypot(unit.pos.x-c.pos.x,unit.pos.y-c.pos.y)<=c.radius+unit.radius+8);
+  // C1: maintain a manual choice, never auto-enter. Walking away ends cover.
+  if(unit.inCover && (!unit.alive || !nearCover(world,unit)))unit.inCover=false;
 }

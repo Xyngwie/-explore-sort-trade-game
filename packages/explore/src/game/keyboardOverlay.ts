@@ -1,6 +1,6 @@
 /**
  * Subtle corner keyboard-shortcut overlay for Explore sortie.
- * Lists only keys that remain player-facing after cover became object-based.
+ * Includes the manual cover toggle, available near solid obstacles.
  */
 import type { ExploreCommandId } from "./commandUnlock";
 
@@ -16,6 +16,7 @@ export const EXPLORE_SHORTCUTS: ReadonlyArray<{
 }> = [
   { keys: ["WASD"], label: "移動", commands: ["move"] },
   { keys: ["Space", "F"], label: "射撃", commands: ["fire"] },
+  { keys: ["V"], label: "カバー切替（障害物付近）" },
   { keys: ["E"], label: "回収（任意）", commands: ["collect"] },
   { keys: ["X"], label: "帰還要請", commands: ["extract"] },
   { keys: ["C"], label: "キャンプ", commands: ["camp_set"] },
@@ -25,36 +26,6 @@ export const EXPLORE_SHORTCUTS: ReadonlyArray<{
   { keys: ["1–4"], label: "僚機方針", commands: ["wing_escort", "wing_patrol", "wing_recover", "wing_raid"], commandKeys: ["1", "2", "3", "4"] },
   { keys: ["?"], label: "この表示" },
 ];
-
-/**
- * Cover is now entered only by physically reaching a cover object.
- * Keep the legacy V/button UI from invoking the old global toggle while the
- * legacy handler remains in main.ts. This guard can be removed once that
- * handler is deleted in the follow-up cleanup.
- */
-function installLegacyCoverUiGuard(): void {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
-
-  window.addEventListener(
-    "keydown",
-    (event) => {
-      if (event.key.toLowerCase() !== "v") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    },
-    true,
-  );
-
-  const hideLegacyButton = (): void => {
-    document.getElementById("btn-cover")?.remove();
-  };
-
-  hideLegacyButton();
-  const observer = new MutationObserver(hideLegacyButton);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-}
-
-installLegacyCoverUiGuard();
 
 function storage(): Pick<Storage, "getItem" | "setItem"> | null {
   try {

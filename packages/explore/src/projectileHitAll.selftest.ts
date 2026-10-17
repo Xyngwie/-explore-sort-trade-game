@@ -1,3 +1,5 @@
+import { toggleUnitCover, toggleSquadCover } from "./game/orders";
+import { FRIENDLY_FIRE_HISTORY_LIMIT, FRIENDLY_FIRE_HISTORY_MAX_CHARS, settleFriendlyFireOnce } from "./game/friendlyFireHistory";
 import assert from "node:assert/strict";
 import { createWorld, bootstrapFromSearch, startSortie } from "./game/world";
 import { updateBullets, tickWorld } from "./game/sim";
@@ -66,12 +68,14 @@ function bullet(w:World,owner:Unit=w.leader,fromEnemy=false){
  assert.equal(firstShotContact(w,carrier.id,carrier.pos,{x:300,y:300}),null);
  assert.equal(firstShotContact(w,'outside',{x:100,y:300},{x:300,y:300})?.unit?.id,carrier.id);
 }
-// Reduced body, not a random damage veto; shooter cover doesn't improve accuracy.
+// C2: cover doesn't shrink the body; physical geometry shields only the far side.
 {
  const w=fixture(),e=w.enemies[0]!;e.pos={x:200,y:300};
- const full=hitRadius(w,e);e.inCover=true;assert.equal(hitRadius(w,e),full*.7);
- bullet(w);w.bullets[0]!.pos.y=300+full*.85;updateBullets(w,.2);assert.equal(e.hp,1000);
- bullet(w);updateBullets(w,.2);assert.equal(e.hp,990);
+ const full=hitRadius(w,e);e.inCover=true;assert.equal(hitRadius(w,e),full);
+ bullet(w);w.bullets[0]!.pos.y=300+full*.85;updateBullets(w,.2);assert.equal(e.hp,990);
+ e.hp=1000;getCoverObjects(w).push({id:'cover',pos:{x:245,y:300},radius:30});
+ const b=bullet(w);b.pos={x:400,y:300};b.vel.x=-1000;updateBullets(w,.3);assert.equal(e.hp,1000,'hidden side blocked');
+ bullet(w);updateBullets(w,.2);assert.equal(e.hp,990,'exposed side still hit');
 }
 // Risk is centerline only, blockers behind the enemy do not suppress, off-line allies allow fire.
 {
@@ -86,8 +90,8 @@ function bullet(w:World,owner:Unit=w.leader,fromEnemy=false){
  u.pos={x:200,y:300};let p=obstacleMove(w,u,{x:500,y:300});
  assert.ok(p.x<=300-30-u.radius+.01);assert.ok(Math.hypot(p.x-300,p.y-300)>=30+u.radius);
  u.pos=p;p=obstacleMove(w,u,{x:100,y:300});assert.ok(p.x<200);
- u.pos={x:300,y:300};updateCoverMovement(w,u,{x:0,y:0},0);assert.ok(Math.hypot(u.pos.x-300,u.pos.y-300)>=30+u.radius);
- u.pos={x:300-30-u.radius-3,y:300};const before={...u.pos};updateCoverMovement(w,u,{x:0,y:0},0);assert.deepEqual(u.pos,before);assert.equal(u.inCover,true);
+ u.pos={x:300,y:300};u.pos=obstacleMove(w,u,u.pos);updateCoverMovement(w,u,{x:0,y:0},0);assert.ok(Math.hypot(u.pos.x-300,u.pos.y-300)>=30+u.radius);
+ u.pos={x:300-30-u.radius-3,y:300};const before={...u.pos};updateCoverMovement(w,u,{x:0,y:0},0);assert.deepEqual(u.pos,before);assert.equal(u.inCover,false,"nearby alone never enters cover");
 }
 // Spread bounds, zero-centered samples, each weapon with seeded deterministic random input.
 for(const key of Object.keys(SPREAD_DEG)){
@@ -152,3 +156,89 @@ console.log('projectileHitAll: actual avoidance and legacy flying bullet PASS');
  assert.equal(writes,0);
 }
 console.log('projectileHitAll: future and corrupt learning history protected PASS');
+
+// F1/C1: manual choice persists across real frames; no automatic entry near or away.
+{
+ const w=fixture(),u=w.leader;
+ backfillEnemyState(w);for(const e of w.enemies){e.enemyState!.ammo=0;e.enemyState!.activity=0;}
+ getCoverObjects(w).push({id:'manual',pos:{x:300,y:300},radius:30});u.pos={x:255,y:300};
+ for(let i=0;i<5;i++)tickWorld(w,.02,idle);assert.equal(u.inCover,false,'proximity alone cannot enter');
+ assert.equal(toggleUnitCover(w,u),true);
+ for(let i=0;i<5;i++)tickWorld(w,.02,idle);assert.equal(u.inCover,true,'manual ON persists near wall');
+ assert.equal(toggleUnitCover(w,u),false);
+ for(let i=0;i<5;i++)tickWorld(w,.02,idle);assert.equal(u.inCover,false,'manual OFF persists near wall');
+ u.pos={x:100,y:300};assert.equal(toggleUnitCover(w,u),null);assert.equal(toggleSquadCover(w),'denied');
+ for(let i=0;i<5;i++)tickWorld(w,.02,idle);assert.equal(u.inCover,false,'away remains OFF');
+ u.pos={x:255,y:300};assert.equal(toggleUnitCover(w,u),true);u.pos={x:100,y:300};tickWorld(w,.02,idle);assert.equal(u.inCover,false,'leaving the obstacle ends cover');
+}
+// C3: explicit fire and focus orders shoot through a risky allied line (with normal damage).
+for(const mode of ['manual','focus'] as const){
+ const w=fixture();attachCircuitPlay(w,null,false);backfillEnemyState(w);
+ const u=w.leader,blocker=w.wingmen[0]!,target=w.enemies[0]!;
+ u.instanceId='captain';u.cooldown=0;w.currentAmmo.captain=28;
+ blocker.pos={x:160,y:300};blocker.stance='patrol';blocker.waypoint={...blocker.pos};target.pos={x:240,y:300};
+ for(const e of w.enemies){e.enemyState!.ammo=0;e.enemyState!.activity=0;}
+ if(mode==='focus')w.circuitPlay!.order={kind:'focus',enemyId:target.id};
+ tickWorld(w,.01,{...idle,fire:mode==='manual'});
+ assert.equal(w.currentAmmo.captain,27,mode+' bypasses friendly-fire hold');
+ updateBullets(w,.3);assert.equal(w.friendlyFire!.count,1);
+ assert.equal(w.combatHitsTaken,0,'friendly hits are not enemy-hit observations');
+}
+// C5 and F4: camp mitigation applies equally to a friendly shot; enemy-hit count stays separate.
+{
+ const w=fixture(),friend=w.wingmen[0]!;friend.pos={x:200,y:300};w.camp={pos:{...friend.pos},stashedCount:1};
+ bullet(w);updateBullets(w,.2);assert.equal(friend.hp,1000-10*w.balance.campDamageTakenMul);assert.equal(w.combatHitsTaken,0);
+ const e=w.enemies[0]!;e.pos={x:100,y:300};bullet(w,e,true);updateBullets(w,.2);assert.equal(w.combatHitsTaken,1);
+}
+// F5: only allied damage on a suppressed enemy cancels the order, as before.
+{
+ const w=fixture();attachCircuitPlay(w,null,false);const e=w.enemies[0]!,other=w.enemies[1]!;e.pos={x:200,y:300};other.pos={x:100,y:300};w.leader.pos={x:500,y:500};
+ w.circuitPlay!.order={kind:'suppress',enemyId:e.id,left:8};bullet(w,other,true);updateBullets(w,.2);assert.equal(w.circuitPlay!.order?.kind,'suppress');
+ other.pos={x:100,y:600};w.leader.pos={x:100,y:300};bullet(w);updateBullets(w,.2);assert.equal(w.circuitPlay!.order,null);
+}
+// F9: a body inside the camera can be hit at an off-camera contact point.
+{
+ const w=fixture();w.enemies[0]!.pos={x:200,y:300};w.camera={...w.camera,x:200,y:200,w:200,h:200};bullet(w);updateBullets(w,.2);
+ assert.ok(w.logs.some(l=>l.text.includes('被弾')),'off-camera shot contact still reports');
+}
+// F7: bounded learning history; a successful result reads once; refused writes back off.
+{
+ const w=fixture();let raw=JSON.stringify({version:1,battles:Array.from({length:FRIENDLY_FIRE_HISTORY_LIMIT},(_,i)=>({sortieId:'old-'+i,count:0,byShooter:{}}))});let reads=0;
+ const store={getItem:()=>{reads++;return raw;},setItem:(_k:string,v:string)=>{raw=v}};
+ assert.equal(settleFriendlyFireOnce(w,'latest',store,0),true);assert.equal(settleFriendlyFireOnce(w,'latest',store,10),true);assert.equal(reads,1);
+ const saved=JSON.parse(raw);assert.equal(saved.battles.length,FRIENDLY_FIRE_HISTORY_LIMIT);assert.equal(saved.battles[0].sortieId,'old-1');assert.ok(raw.length<=FRIENDLY_FIRE_HISTORY_MAX_CHARS);
+ const refused=fixture();let attempts=0;const fail={getItem:()=>{attempts++;return null},setItem:()=>{throw Error('quota')}};
+ assert.equal(settleFriendlyFireOnce(refused,'retry',fail,0),false);assert.equal(settleFriendlyFireOnce(refused,'retry',fail,20),false);assert.equal(attempts,1);
+ assert.equal(settleFriendlyFireOnce(refused,'retry',fail,5000),false);assert.equal(attempts,2);
+}
+console.log('projectileHitAll: C1-C5 and F1-F9 audit regressions PASS');
+// C6: dodge works against allied friendly fire and enemy-on-enemy fire.
+for(const enemyTarget of [false,true]){
+ const w=fixture();attachCircuitPlay(w,null,false);
+ const target=enemyTarget?w.enemies[1]!:w.wingmen[0]!;target.pos={x:200,y:300};
+ if(enemyTarget){
+  target.enemyIdentity!.circuits=[{circuitId:'dodge',side:2,effectKey:'dodge',effect:100,trueBoard:false}];
+  w.enemies[0]!.pos={x:100,y:300};w.leader.pos={x:500,y:500};
+ }else w.circuitPlay!.loadout[target.id]=[{circuitId:'dodge',side:2,effectKey:'dodge',effect:100,r:.2,trueBoard:false,oneByOne:null,conductive:true,cargoSlots:0,perfectPt:0,false20:false,true20:false}];
+ bullet(w,enemyTarget?w.enemies[0]!:w.leader,enemyTarget);updateBullets(w,.2);
+ assert.equal(target.hp,1000);assert.notEqual(target.pos.y,300);assert.equal(w.friendlyFire?.count??0,0);
+}
+console.log('projectileHitAll: C6 faction-independent dodge PASS');
+// C3 also applies to the wingman's focus-order firing path, not just the captain.
+{
+ const w=fixture();attachCircuitPlay(w,null,false);backfillEnemyState(w);
+ w.leader.pos={x:500,y:700};const shooter=w.wingmen[0]!,blocker=w.wingmen[1]!,target=w.enemies[0]!;
+ shooter.pos={x:100,y:300};shooter.heading=0;shooter.instanceId='wing-shooter';shooter.cooldown=0;w.currentAmmo['wing-shooter']=28;
+ blocker.pos={x:160,y:300};target.pos={x:240,y:300};
+ for(const e of w.enemies){e.enemyState!.ammo=0;e.enemyState!.activity=0;}
+ w.circuitPlay!.order={kind:'focus',enemyId:target.id};tickWorld(w,.01,idle);
+ assert.equal(w.currentAmmo['wing-shooter'],27,'wingman focus bypasses the friendly-risk gate');
+}
+// F7's serialized-size bound also protects histories with unusually large old records.
+{
+ const w=fixture();let raw=JSON.stringify({version:1,battles:[{sortieId:'x'.repeat(FRIENDLY_FIRE_HISTORY_MAX_CHARS),count:0,byShooter:{}}]});
+ const storage={getItem:()=>raw,setItem:(_k:string,v:string)=>{raw=v}};
+ assert.equal(settleFriendlyFire(w,'new-small',storage),true);
+ assert.ok(raw.length<=FRIENDLY_FIRE_HISTORY_MAX_CHARS);assert.equal(JSON.parse(raw).battles.length,1);
+}
+console.log('projectileHitAll: wingman focus and serialized-history limit PASS');

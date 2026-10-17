@@ -1408,18 +1408,23 @@ function advancePinned(
   const shooter = world.leader;
   const target = world.enemies[0]!;
   target.alive = true;
-  // Q8: hit geometry replaces cover dice. Shooter cover never changes target geometry.
+  // C2 supersedes Q8 shrink: full geometry remains in and out of cover.
   const full = target.radius + world.balance.bulletHitPadding;
   assert.equal(hitRadius(world, target), full);
   target.inCover = true;
-  assert.ok(Math.abs(hitRadius(world, target) - full * .7) < 1e-9);
+  assert.ok(Math.abs(hitRadius(world, target) - full) < 1e-9);
   shooter.inCover = true;
-  assert.ok(Math.abs(hitRadius(world, target) - full * .7) < 1e-9);
+  assert.ok(Math.abs(hitRadius(world, target) - full) < 1e-9);
   target.inCover = false;
   assert.equal(hitRadius(world, target), full);
   shooter.inCover = false;
 
-  // Squad toggle syncs living friendlies; works after timeout
+  // C1: manual entry only near obstacles; put each fixture at its own exterior edge.
+  getCoverObjects(world).splice(0);
+  for (const u of [world.leader,...world.wingmen]) {
+    getCoverObjects(world).push({id:`cover-${u.id}`,pos:{x:u.pos.x,y:u.pos.y+u.radius+31},radius:30});
+  }
+  // Squad toggle syncs nearby living friendlies; works after timeout
   assert.equal(toggleSquadCover(world), "entered");
   assert.equal(world.leader.inCover, true);
   for (const w of world.wingmen) {
@@ -1547,8 +1552,8 @@ function advancePinned(
   assert.ok(keysFlat.includes("Space"), "lists Space");
   assert.ok(keysFlat.includes("X"), "lists extract X");
   assert.ok(keysFlat.includes("C"), "lists camp C");
-  // #120: cover became object-based; the global V toggle is no longer listed.
-  assert.ok(!keysFlat.includes("V"), "no legacy cover V");
+  // C1: the manual V toggle is restored, with proximity required.
+  assert.ok(keysFlat.includes("V"), "manual cover V is listed");
   assert.ok(!keysFlat.includes("Q"), "no unused Q");
   assert.ok(!keysFlat.includes("Z"), "no unused Z");
 
