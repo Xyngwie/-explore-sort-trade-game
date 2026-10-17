@@ -1,5 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
-import { strayShown, strayWreckLabel } from "./strayScatter";
+import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { extractionProgressPct } from "../extractProgress";
 import { FORCED_RESCUE_RING, forcedRescueRing } from "./rescue";
 import { wreckLabel } from "./wrecks";
@@ -273,7 +273,7 @@ export function renderWorld(
       ctx.fillStyle = "#7eb6ff";
     } else ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
-    ctx.fillText(m.wreck ? strayWreckLabel(m.instanceId) : `${m.name}（停止）`, tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+    ctx.fillText(m.wreck ? strayWreckLabel(m.instanceId) : strayStoppedLabel(m.instanceId), tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
   }
 
   // 項目5-1b W6: this sortie's wrecks stay where they were destroyed (gray, 「残骸 僚機A」).

@@ -2,6 +2,7 @@
 import type { Vec2 } from "./math";
 import type { World } from "./types";
 import { getCoverObjects } from "./coverObjects";
+import { pushLog } from "./orders";
 
 /** Keep this far from the map edges. */
 export const STRAY_EDGE_MARGIN = 90;
@@ -27,8 +28,14 @@ export function scatterStrayPos(world: World, taken: Vec2[], rng: () => number =
 
 /** Strays become visible once any living ally sees them (same circle as container discovery). */
 export function revealStrays(world: World, see: (pos: Vec2) => boolean): void {
-  for (const s of [...(world.strandedMechs ?? []), ...(world.strandedDrops ?? [])]) {
-    if (s.found === false && see(s.pos)) s.found = true;
+  for (const m of world.strandedMechs ?? []) {
+    if (m.found === false && see(m.pos)) {
+      m.found = true;
+      pushLog(world, `発見：置き去り ${strayShortId(m.instanceId)}`); // 10/17 神宮 5 = B
+    }
+  }
+  for (const d of world.strandedDrops ?? []) {
+    if (d.found === false && see(d.pos)) d.found = true;
   }
 }
 
@@ -37,8 +44,18 @@ export function strayShown(s: { found?: boolean }): boolean {
   return s.found !== false;
 }
 
-/** 「置き去り：<名前>」, long names cut to 10 characters. */
-export function strayWreckLabel(name: string): string {
-  const chars = [...name];
-  return `置き去り：${chars.length > 10 ? chars.slice(0, 10).join("") + "…" : name}`;
+/** Map labels show the last 4 characters of the mech id (shorter ids in full). 10/17 神宮 4. */
+export function strayShortId(id: string): string {
+  const chars = [...id];
+  return chars.length > 4 ? chars.slice(-4).join("") : id;
+}
+
+/** 「置き去り：<last 4>」 over our own wreck. */
+export function strayWreckLabel(id: string): string {
+  return `置き去り：${strayShortId(id)}`;
+}
+
+/** 「置き去り機 <last 4>（停止）」 over a stopped left-behind mech. */
+export function strayStoppedLabel(id: string): string {
+  return `置き去り機 ${strayShortId(id)}（停止）`;
 }
