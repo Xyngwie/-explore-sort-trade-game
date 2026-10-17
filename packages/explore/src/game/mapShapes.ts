@@ -10,21 +10,24 @@ export const COLORS = {
   enemy: "#ff6b6b", // hostile red
   wreck: "#8a9099", // grey
   ownWreckOutline: "#7eb6ff",
-  ammoDrop: "#f85149", // ammo = red (神宮 10/17 C; same value as SORT's warn red today)
-  powerDrop: "#d4a72c", // power = yellow (神宮 10/17 C). SORT still uses this yellow for armor; SORT will move to ammo red / power yellow / armor+defence blue in its own PR.
+  ammoDrop: "#f85149", // ammo = red, same as SORT's ammo border (神宮 10/17)
+  powerDrop: "#d4a72c", // power = yellow, same as SORT's power border (神宮 10/17; SORT armor is blue)
   circuitDrop: "#e6e9ee", // whitish
   container: "#a39a8c", // warm grey (10/17): apart from the cool wreck grey and the whitish circuit square
   containerEdge: "#d2cabd",
+  feedbackAmmo: "#ffb3ad", // 10/17 A: resupply overhead text, light red (ammo)
+  feedbackPower: "#ffe08a", // light yellow (power)
+  feedbackEmpty: "#c9d1d9", // grey (enemy out of ammo)
   dropGlow: "#c779ff", // 10/17 C: enemy-kill DROP container square, ring and glow (no faction / resource meaning)
 } as const;
 export const OWN_WRECK_OUTLINE_W = 2;
 /** Blue outline on the wreck circle's own edge: own wrecks from this sortie and left-behind ex-wingman wrecks alike. */
 export const OWN_WRECK_OUTLINE = { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W } as const;
-/** Facing line length as a multiple of the shape radius (width 2). */
 /** rgba() of the DROP purple at alpha `a` (ring and glow pulse). */
 export function dropGlowRgba(a: number): string {
   return `rgba(199, 121, 255, ${a})`;
 }
+/** Facing line length as a multiple of the shape radius (width 2). */
 export const FACING_LINE_RATIO = 1.6;
 /** 10/17: the leader name sits just above the tip of an upward facing line (never lower than the old 22px). */
 export function leaderLabelLift(scale: number): number {
