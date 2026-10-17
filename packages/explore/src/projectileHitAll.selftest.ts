@@ -142,3 +142,13 @@ console.log('projectileHitAll: collision, obstacles, carrier, spread, MMR, count
  assert.equal(restored.friendlyFire!.count,1);assert.equal(restored.wingmen[0]!.hp,990);
 }
 console.log('projectileHitAll: actual avoidance and legacy flying bullet PASS');
+
+// A newer history schema must not be overwritten by an older client.
+{
+ const w=fixture();const future=JSON.stringify({version:2,battles:[]});let writes=0;
+ assert.equal(settleFriendlyFire(w,'future',{getItem:()=>future,setItem:()=>{writes++;}}),false);
+ assert.equal(writes,0);
+ assert.equal(settleFriendlyFire(w,'corrupt',{getItem:()=>'{broken',setItem:()=>{writes++;}}),false);
+ assert.equal(writes,0);
+}
+console.log('projectileHitAll: future and corrupt learning history protected PASS');
