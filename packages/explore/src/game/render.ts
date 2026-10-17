@@ -1,4 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
+import { COLORS, MECH_R, OWN_WRECK_OUTLINE_W, SHAPE_SIZE, drawDisc, drawMechShape } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
 import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { layoutLabels } from "./labelLayout";
@@ -255,10 +256,7 @@ export function renderWorld(
   for (const e of world.enemies) {
     if (!e.alive) continue;
     if (!isEnemySeen(world, e)) continue;
-    ctx.fillStyle = "#ff6b6b";
-    ctx.beginPath();
-    ctx.arc(tx(e.pos.x), ty(e.pos.y), e.radius * sx, 0, Math.PI * 2);
-    ctx.fill();
+    drawMechShape(ctx, tx(e.pos.x), ty(e.pos.y), MECH_R * SHAPE_SIZE.enemy * sx, COLORS.enemy, "triangle", e.heading);
     // Enemy PR1 (F1 = B): 「所属不明」 only after a tap, for a few seconds.
     if (world.enemyTag?.enemyId === e.id) {
       ctx.fillStyle = "#ffb3b3";
@@ -271,7 +269,7 @@ export function renderWorld(
     if (e.alive || e.enemyState?.recovered || wreckCarrierId(world,e.id)) continue;
     const v = seenOrGhost("enemyWreck", e.id, e.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    drawCraft(ctx,tx(v.pos.x),ty(v.pos.y),e.radius*sx,'#8a9099',e.heading);
+    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck);
     ctx.fillStyle='#c3c8cf'; ctx.font='11px sans-serif'; ctx.fillText('残骸',tx(v.pos.x),ty(v.pos.y)-12);
     ctx.restore();
   }
@@ -284,19 +282,19 @@ export function renderWorld(
       : u && !u.alive && !(world.recoveredWreckUnitIds ?? []).includes(u.id) && wreckCarrierId(world, u.id) == null;
     if (drawnAbove) continue;
     ctx.save(); ctx.globalAlpha = GHOST_ALPHA;
-    drawCraft(ctx, tx(g.pos.x), ty(g.pos.y), world.balance.unitRadius * sx, "#8a9099", Math.PI / 2);
+    drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, g.kind === "allyWreck" ? { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W } : undefined);
     ctx.restore();
   }
   // Faint images of enemy supplies taken while unseen stay until the spot is seen again.
   const liveSupplyIds = new Set((world.enemySupplies ?? []).map((d) => d.id));
   for (const g of Object.values(squadIntel(world).ghosts)) {
     if (g.kind !== "supply" || liveSupplyIds.has(g.id) || squadSees(world, g.pos)) continue;
-    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; ctx.fillStyle='#75d99b'; ctx.fillRect(tx(g.pos.x)-4,ty(g.pos.y)-4,8,8); ctx.restore();
+    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx, '#75d99b'); ctx.restore();
   }
   for (const d of world.enemySupplies ?? []) {
     const v = seenOrGhost("supply", d.id, d.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    ctx.fillStyle='#75d99b';ctx.fillRect(tx(v.pos.x)-4,ty(v.pos.y)-4,8,8);
+    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, '#75d99b');
     ctx.restore();
   }
   // Bullets
@@ -318,13 +316,17 @@ export function renderWorld(
     if (!sv) continue;
     ctx.save(); ctx.globalAlpha = sv.alpha;
     m = { ...m, pos: sv.pos };
-    drawCraft(ctx, tx(m.pos.x), ty(m.pos.y), 9 * sx, "#8a9099", Math.PI / 2);
     if (m.wreck) {
-      // Our own wreck: ally-coloured outline and 「置き去り：<name>」.
+      // Left-behind ex-wingman wreck: grey circle, keeps its blue outline (width 2), 「置き去り：<name>」.
+      drawDisc(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck);
       ctx.strokeStyle = "#7eb6ff"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(tx(m.pos.x), ty(m.pos.y), 13 * sx, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
       ctx.fillStyle = "#7eb6ff";
-    } else ctx.fillStyle = "#c3c8cf";
+    } else {
+      // Left-behind mech that can still move: grey inverted triangle (no facing), blue label.
+      drawMechShape(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wreck, "invertedTriangle", null);
+      ctx.fillStyle = COLORS.wingman;
+    }
     ctx.font = "11px sans-serif";
     ctx.fillText(m.wreck ? strayWreckLabel(m.instanceId) : strayStoppedLabel(m.instanceId), tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
     ctx.restore();
@@ -337,7 +339,7 @@ export function renderWorld(
     if (wreckCarrierId(world, u.id) != null) continue; // drawn on its carrier (項目4-1)
     const v = seenOrGhost("allyWreck", u.id, u.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    drawCraft(ctx, tx(v.pos.x), ty(v.pos.y), u.radius * sx, "#8a9099", u.heading);
+    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W });
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
     ctx.fillText(wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(v.pos.x) - 30, ty(v.pos.y) - u.radius * sy - 8);
@@ -386,7 +388,7 @@ export function renderWorld(
   for (const w of world.wingmen) {
     if (!w.alive) continue;
     if (w.inCover) drawCoverRing(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx);
-    drawCraft(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx, "#7eb6ff", w.heading);
+    drawMechShape(ctx, tx(w.pos.x), ty(w.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wingman, "invertedTriangle", w.heading);
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
     // C20-b: 「待機」 while holding (mobile wingmen; immobile keep 「自衛のみ」) — see wingLabelText.
@@ -441,8 +443,8 @@ export function renderWorld(
   // Leader
   if (world.leader.alive) {
     if (world.leader.inCover) drawCoverRing(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), world.leader.radius * sx);
-    drawCraft(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), world.leader.radius * sx, "#5cdb95", world.leader.heading);
-    ctx.fillStyle = "#b6f5d0";
+    drawMechShape(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), MECH_R * SHAPE_SIZE.leader * sx, COLORS.leader, "hexagon", world.leader.heading);
+    ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
     const leadLabel = world.leader.inCover ? "隊長·カバー" : "隊長";
     ctx.fillText(leadLabel, tx(world.leader.pos.x) - 18, ty(world.leader.pos.y) - 22);
@@ -455,7 +457,7 @@ export function renderWorld(
     if (n <= 0) continue;
     const cx = tx(u.pos.x);
     const cy = ty(u.pos.y) - u.radius * sy * 0.9;
-    drawCraft(ctx, cx, cy, u.radius * sx * 0.55, "#8a9099", u.heading);
+    drawDisc(ctx, cx, cy, MECH_R * SHAPE_SIZE.wreck * 0.55 * sx, COLORS.wreck);
     ctx.fillStyle = "#e6d3a3";
     ctx.font = "11px sans-serif";
     ctx.fillText(n > 1 ? `積載中 残骸×${n}` : "積載中 残骸", cx + u.radius * sx * 0.8, cy + 4);
@@ -512,22 +514,6 @@ function drawCoverRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: n
   ctx.setLineDash([]);
 }
 
-function drawCraft(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, heading: number): void {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(heading);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(r, 0);
-  ctx.lineTo(-r * 0.7, r * 0.7);
-  ctx.lineTo(-r * 0.4, 0);
-  ctx.lineTo(-r * 0.7, -r * 0.7);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-
-
-}
 
 export function worldFromCanvas(canvas: HTMLCanvasElement, world: World, clientX: number, clientY: number): { x: number; y: number } {
   const rect = canvas.getBoundingClientRect();

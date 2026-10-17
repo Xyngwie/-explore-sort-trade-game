@@ -196,6 +196,10 @@
 
 ## 既知の問題
 
+- **To-do（2026-10-17）**
+  - (a) `c.discovered`・circuitPlay の `lastSeen`・霧（`fogOpen`）が `squadIntel` と二重に持たれている。毎フレームの霧の更新も 2 回走っている。
+  - (b) `carry.selftest` の「leaving cancels the pickup」がたまに落ちる（main でも再現）。
+  - (c) 襲撃の構えの僚機が、見えていない敵へ向かう（`brain.ts` の `nearestAliveEnemy`）。当面このまま。
 - ~~**Explore の「撤退」ボタンを押しても結果画面に切り替わらない（2026-10-03 プレビューで確認）**~~ → **解消（2026-10-03、撤退の修正 PR）**: 描画ループは「最後に描いた phase」と比べるようにし（`game/phaseWatch.ts`）、ボタンで変わった phase も帰還要請（X）と同じ経路で結果画面を描く。撤退できる条件・救助費用など撤退のルールは変えていない（項目5）。以下は経緯: `abortSortie` は `world.phase = "result"` にするが、描画ループ（`main.ts` `frame`）は「そのフレームの中で phase が変わったとき」だけ `renderDom` を呼ぶので、ボタン（フレームの外）で変わった phase は描画されず、画面は出撃中のまま止まる。#135 より前から同じ形（それまでも `needsDom = true` だけ）。帰還要請（X）で終われば結果画面は出る
 
 - ~~**trade から出撃した機体が射撃しない可能性（2026-10-03 に手元で確認・実機は未確認）**~~ → **解消（2026-10-03、#208・#209。プレビューで確認）**。以下は経緯: #203（2026-10-02 23:07 JST マージ・デプロイ済み）以降、Explore の射撃は機体ごとの `currentAmmo` だけを使い、`undefined` なら撃たない（`sim.ts` `tryFire`）。一方 trade には `OwnedMech.currentAmmo` を設定する処理がなく（旧来の `startingAmmo`／`ammoLoad` からの割り当て規則は #201 で意図的に未定義）、出撃 URL に `mechCurrentAmmo` が載らない。trade の URL 生成→explore の起動を手元でつなぐと `currentAmmo` は空で、射程内の敵がいても隊長機の弾は出ない（`currentAmmo` に 28 を入れると撃つ）。帰還 URL の `mechCurrentAmmo` を HubSave に書き戻す処理も trade にない。割り当て規則は神宮の判断が要る。詳細は `HUB_SAVE_CONTRACT.md` §12.5・§12.7（契約文書の PR）
