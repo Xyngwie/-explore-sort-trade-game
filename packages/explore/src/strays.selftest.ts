@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHubSave, serializeHubSave, INITIAL_HUB } from "@estg/shared";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import { tickWorld } from "./game/sim";
 import { getCoverObjects } from "./game/coverObjects";
@@ -47,5 +48,23 @@ assert.equal(strayStoppedLabel("m2"), "置き去り機 m2（停止）");
   v.strandedMechs = [{ instanceId: "owned_mech_7f3a", name: "x", pos: { x: v.leader.pos.x + 40, y: v.leader.pos.y - 40 }, row: {} as never, wreck: true, found: false }];
   tickWorld(v, 0.05, idle); tickWorld(v, 0.05, idle);
   assert.equal(v.logs.filter((l) => l.text === "発見：置き去り 7f3a").length, 1, "one discovery line");
+}
+// Circuit drop discovery: 「発見：回路」 once; found survives the checkpoint so it never repeats.
+{
+  const v = createWorld(bootstrapFromSearch("")); startSortie(v);
+  for (const e of v.enemies) e.alive = false;
+  v.strandedDrops = [{ dropId: "dz", circuitId: "cz", pos: { x: v.leader.pos.x + 40, y: v.leader.pos.y - 40 }, drop: {} as never, found: false }];
+  tickWorld(v, 0.05, idle); tickWorld(v, 0.05, idle);
+  assert.equal(v.logs.filter((l) => l.text === "発見：回路").length, 1, "one circuit discovery line");
+  const back = worldFromCheckpointBody(JSON.parse(JSON.stringify(snapshotSortieWorld(v))))!;
+  assert.equal(back.strandedDrops![0]!.found, true);
+  tickWorld(back, 0.05, idle);
+  assert.equal(back.logs.filter((l) => l.text === "発見：回路").length, 1, "no repeat after checkpoint resume");
+  // Old checkpoint (no found): shown, no notice.
+  const old = JSON.parse(JSON.stringify(snapshotSortieWorld(v))) as { strandedDrops: Record<string, unknown>[]; logs: unknown[] };
+  delete old.strandedDrops[0]!.found; old.logs = [];
+  const ro = worldFromCheckpointBody(old)!; tickWorld(ro, 0.05, idle);
+  assert.equal(ro.logs.filter((l) => l.text === "発見：回路").length, 0, "old checkpoint: no notice");
+  assert.ok(!/"found"/.test(serializeHubSave(createHubSave(INITIAL_HUB))), "HUB save unchanged");
 }
 console.log("strays: scatter, hidden until found, checkpoint compat, label PASS");

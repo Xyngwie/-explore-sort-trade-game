@@ -35,7 +35,10 @@ export function revealStrays(world: World, see: (pos: Vec2) => boolean): void {
     }
   }
   for (const d of world.strandedDrops ?? []) {
-    if (d.found === false && see(d.pos)) d.found = true;
+    if (d.found === false && see(d.pos)) {
+      d.found = true;
+      pushLog(world, "発見：回路"); // 10/17 神宮: once, like the mech notice
+    }
   }
 }
 
