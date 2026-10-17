@@ -1,0 +1,438 @@
+{
+  "schema_version": "1.0",
+  "meta": {
+    "feature_id": "projectile-hit-all",
+    "planned_branch": "feat/projectile-hit-all",
+    "planned_pr_title": "feat(explore): 弾は誰にでも当たる",
+    "status": "decided_not_implemented",
+    "decided_on": "2026-10-17 (JST, Asia/Tokyo)",
+    "product_owner": "神宮",
+    "repo": "Xyngwie/-explore-sort-trade-game",
+    "package": "packages/explore",
+    "base_commit": "29dc3f2ef50baa248c309b57fdb065cff214e2ab",
+    "estimated_size_lines": "300-500",
+    "plan_reference": "docs/EXPLORE_FACING_AIM_V0.md §8 row 3 (feat/projectile-hit-all)",
+    "operating_rules": [
+      "Product owner 神宮 decides every fine gameplay or visual spec. Agents decide only internal technical details (data layout, function names, algorithms).",
+      "If something is not covered here, ask 神宮 before implementing it: one question at a time, with options (A/B/C) and a recommendation with a short reason.",
+      "All UI text is Japanese.",
+      "Use the term 「帰還」. Never use 「抽出」.",
+      "CI (build-and-test) must be green before merge.",
+      "Merge with squash.",
+      "After merge, the 'Deploy Modules Preview' workflow run on main must succeed.",
+      "Add selftests (packages/explore/src/*.selftest.ts, registered in package.json 'selftest' and excluded in tsconfig.json like the existing ones).",
+      "Keep checkpoint (mid-sortie save) and HUB save compatibility: old saves must load; add a compatibility test.",
+      "Do not change existing test expectations just to make them pass; any changed assertion must be justified by a decision below.",
+      "Minus sign in displayed numbers is U+2212 (−), never ASCII hyphen-minus."
+    ]
+  },
+  "current_behavior": {
+    "summary_ja": "今は、味方の弾は敵にしか当たらず、敵の弾は味方と他の敵に当たる。障害物・残骸・コンテナ・置き去りの機体は素通り。カバーは命中後のサイコロで外れにする。弾はすべて狙いどおり飛ぶ。",
+    "facts": [
+      {
+        "id": "fire_gate",
+        "text": "A unit fires only when the target is inside the 3° fire arc (half 1.5°) and within range. Base range = BALANCE.weaponRange 160, multiplied by rangeMul (circuits); enemies use 160 × (1 + escort_range rate); MMR uses 160 × range × 3 × (1 + r).",
+        "refs": [
+          "packages/explore/src/game/sim.ts tryFire",
+          "packages/explore/src/game/facing.ts aimAt",
+          "packages/explore/src/game/circuitPlay.ts circuitTryWeapon (~L1110-1180)",
+          "packages/explore/src/game/balance.ts weaponRange"
+        ]
+      },
+      {
+        "id": "projectile_travel",
+        "text": "Projectile flies straight along the muzzle direction (unit heading + angle offset) at bulletSpeed 320 for bulletTtlSec 1.2 s ≈ 384 world units, then disappears. Speed is multiplied by speedMul (fast_round 1.5, homing 0.75) and abilityOf().bulletSpeed, so actual travel varies. Homing bends toward its target.",
+        "refs": [
+          "sim.ts spawnBullet",
+          "circuitPlay.ts spawnShot (~L1182-1215)",
+          "circuitPlay.ts bendHoming",
+          "balance.ts bulletSpeed, bulletTtlSec"
+        ]
+      },
+      {
+        "id": "first_hit_stops",
+        "text": "A projectile stops at the first unit it hits (hit radius = target.radius + bulletHitPadding 4).",
+        "refs": [
+          "sim.ts updateBullets"
+        ]
+      },
+      {
+        "id": "ally_shots",
+        "text": "Ally (leader/wingman) projectiles collide only with enemies. No friendly fire.",
+        "refs": [
+          "sim.ts updateBullets: targets = b.fromEnemy ? [...friendlyUnits, ...enemies] : world.enemies"
+        ]
+      },
+      {
+        "id": "enemy_shots",
+        "text": "Enemy projectiles collide with allies and with other enemies (not the shooter). Matches CIRCUIT_SQUAD_DESIGN_V0.md §11.4 (敵どうしもお互いに敵).",
+        "refs": [
+          "sim.ts updateBullets",
+          "docs/CIRCUIT_SQUAD_DESIGN_V0.md §11.4"
+        ]
+      },
+      {
+        "id": "pass_through",
+        "text": "Wrecks, containers, obstacles/cover objects (getCoverObjects) and left-behind mechs/dropped circuits (strandedMechs/strandedDrops) are not collision targets; projectiles pass through them. Only alive units in the target list are checked.",
+        "refs": [
+          "sim.ts updateBullets"
+        ]
+      },
+      {
+        "id": "cover_dice",
+        "text": "Cover is a post-hit dice roll: on contact, shotHitChance(shooter, target) is computed and the shot misses if Math.random() >= chance. Target in cover: ×coverIncomingHitMul 0.70 (or circuitIncomingMul: 1 − DR, DR = COVER_DR_BASE 0.3 + circuit DR, capped COVER_DR_CAP 0.6, in circuit-play rules). Shooter in cover: ×coverAccuracyMul 1.10 (clamped to 1). A miss logs 「<name> がカバーで回避」 when off-camera.",
+        "refs": [
+          "packages/explore/src/game/orders.ts shotHitChance",
+          "circuitPlay.ts circuitIncomingMul",
+          "balance.ts coverIncomingHitMul, coverAccuracyMul",
+          "packages/shared/src/circuit-actions.ts COVER_DR_BASE, COVER_DR_CAP"
+        ]
+      },
+      {
+        "id": "dodge",
+        "text": "Separate from cover: units with the dodge circuit may sidestep a projectile on contact (tryDodge), with a cooldown. Applies to enemies hit by ally shots and to allies hit by enemy shots.",
+        "refs": [
+          "circuitPlay.ts tryDodge (~L1239)"
+        ]
+      },
+      {
+        "id": "no_line_of_fire_avoidance",
+        "text": "Allied AI does not check for allies in the line of fire. No friendly-fire risk evaluation exists.",
+        "refs": [
+          "packages/explore/src/game/brain.ts decideWingman",
+          "sim.ts tickWorld leader auto-fire"
+        ]
+      },
+      {
+        "id": "accuracy",
+        "text": "All projectiles are 100% accurate along the muzzle line (no random spread). Shotgun fires 5 pellets in a fixed fan at −10°, −5°, 0°, +5°, +10°. SMG fires bursts (SMG_CYCLE) without spread; LMG and MMR have no spread.",
+        "refs": [
+          "circuitPlay.ts circuitTryWeapon shotgun angles [-10,-5,0,5,10]"
+        ]
+      },
+      {
+        "id": "damage",
+        "text": "bulletDamage 10 × attackMul for allies, enemyDamage 5 × enemyDamageMultiplier for enemies (circuit guns: × damageMul, shotgun/SMG pellets 1/4 × (1 + r)). Enemy hits on allies apply campDamageTakenMul and increment world.combatHitsTaken. Enemy targets divide damage by enemyArmorMultiplier.",
+        "refs": [
+          "sim.ts spawnBullet, updateBullets",
+          "circuitPlay.ts spawnShot"
+        ]
+      },
+      {
+        "id": "kill_report",
+        "text": "Kill report: 「戦報: <killer> が <target> を撃破」 where killer is 「敵」 for enemy shots or the ally's name. Non-lethal off-camera hit: 「<target> が被弾 (−n)」 (U+2212 already used).",
+        "refs": [
+          "sim.ts updateBullets reportBattle",
+          "orders.ts pushLog (kind 'battle' / 'tactical')"
+        ]
+      },
+      {
+        "id": "overhead_text",
+        "text": "Overhead combat text exists for resupply only: combatFeedback kinds 'empty' | 'ammo' | 'power', kept in a WeakMap (not saved in checkpoints), drawn in render.ts.",
+        "refs": [
+          "packages/explore/src/game/combatFeedback.ts",
+          "render.ts (~L485-497)"
+        ]
+      },
+      {
+        "id": "melee",
+        "text": "Melee (circuit) damages directly without a projectile; out of scope for this feature.",
+        "refs": [
+          "circuitPlay.ts circuitTryWeapon melee branch"
+        ]
+      }
+    ]
+  },
+  "decisions": [
+    {
+      "id": "Q1",
+      "choice": "A",
+      "ja": "誤射のダメージは通常どおり 100%。",
+      "en": "Friendly fire deals 100% of normal damage."
+    },
+    {
+      "id": "Q2",
+      "choice": "A",
+      "ja": "敵の弾は今までどおり他の敵にも当たる。",
+      "en": "Enemy shots keep hitting other enemies."
+    },
+    {
+      "id": "Q3",
+      "choice": "A",
+      "ja": "残骸は弾を素通りさせる（弾を止めるのは後の残骸盾 PR）。",
+      "en": "Wrecks let shots pass through (stopping shots belongs to the later wreck-shield PR)."
+    },
+    {
+      "id": "Q4",
+      "choice": "A",
+      "ja": "コンテナは弾を素通りさせる。",
+      "en": "Containers let shots pass through."
+    },
+    {
+      "id": "Q5",
+      "choice": "A",
+      "ja": "障害物は弾を止める（見えないものの向こうは撃てない）。",
+      "en": "Obstacles stop shots (you cannot shoot through what you cannot see)."
+    },
+    {
+      "id": "Q6",
+      "choice": "A",
+      "ja": "弾は最初に当たったもので止まる（貫通は将来の貫通弾だけ）。",
+      "en": "A shot stops at the first thing it hits (penetration only for the future penetrating round)."
+    },
+    {
+      "id": "Q7",
+      "choice": "A",
+      "ja": "外れた弾は約 384 まで飛び続け、途中の誰にでも当たる。",
+      "en": "Missed shots keep flying (~384) and hit anything along the way."
+    },
+    {
+      "id": "Q8",
+      "choice": "A",
+      "ja": "カバーのサイコロをやめる。カバー中は当たり判定の体を小さくする。どれだけ小さくするかは実装者が今の効果に近くなるよう決め、神宮に報告する。",
+      "en": "Remove the cover dice roll. While in cover the unit's hit body is smaller; the implementer picks the amount to approximate the current effect and reports it to 神宮.",
+      "implementer_decides": [
+        "cover hit-body shrink amount (report value and reasoning to 神宮)"
+      ]
+    },
+    {
+      "id": "Q9",
+      "choice": "A",
+      "ja": "味方の AI は、誤射の危険が大きければ撃たずに横へ動いて射線を空ける。危険が小さければ撃つ（§4）。",
+      "en": "Allied AI: if friendly-fire risk is high, hold fire and sidestep to clear the line; if risk is small, fire (EXPLORE_FACING_AIM_V0.md §4).",
+      "note": "The exact risk threshold is a fine spec: propose options to 神宮."
+    },
+    {
+      "id": "Q10",
+      "choice": "A",
+      "ja": "敵は他の敵を避けない。",
+      "en": "Enemies do not avoid other enemies in their line of fire."
+    },
+    {
+      "id": "Q11",
+      "choice": "A",
+      "ja": "当たった機体の頭上に「誤射」と出す。",
+      "en": "Show overhead text 「誤射」 on the unit that was hit."
+    },
+    {
+      "id": "Q12",
+      "choice": "A",
+      "ja": "戦術ログに誤射 1 回につき 1 行：「誤射：<撃った機体> → <当たった機体>（−n）」。マイナスは U+2212。",
+      "en": "Tactics log: one line per friendly-fire event 「誤射：<shooter> → <hit unit>（−n）」 using U+2212 minus.",
+      "format": "誤射：{shooter} → {target}（−{n}）"
+    },
+    {
+      "id": "Q13",
+      "choice": "A",
+      "ja": "誤射でも大破する。戦報は「○○ の誤射で △△ 大破」。",
+      "en": "Friendly fire can destroy a unit. Battle report 「○○ の誤射で △△ 大破」.",
+      "format": "{shooter} の誤射で {target} 大破"
+    },
+    {
+      "id": "Q11b",
+      "choice": "extra",
+      "ja": "戦闘ごとに誤射の回数を記録する（データ構造を用意）。戦後の分析・精算のあとも残すかは未決定（後で神宮に聞く）。",
+      "en": "Record the friendly-fire count per battle (add the data structure). Whether it persists after post-battle analysis/settlement is UNDECIDED; ask 神宮 later.",
+      "partially_undecided": true
+    },
+    {
+      "id": "Q14",
+      "choice": "extra",
+      "ja": "武器の種類ごとにランダムなばらつきを入れる（今はすべて 100% 狙いどおり）。初期値で、遊んでから調整する。特殊弾（高速・誘導・EMP）は武器の種類ではなく、どの武器にも重ねがけされる。",
+      "en": "Add per-weapon-type random spread (currently all shots are 100% accurate). Starting values, tuned after playtesting. Special rounds (fast/homing/EMP) are not weapon types and stack on any weapon.",
+      "values": [
+        {
+          "weapon": "normal (AR, default gun / no gun circuit)",
+          "spread_deg": "±2",
+          "confirmed_by_owner": "implicit"
+        },
+        {
+          "weapon": "smg",
+          "spread_deg": "±5",
+          "confirmed_by_owner": "implicit"
+        },
+        {
+          "weapon": "mmr",
+          "spread_deg": "±0.5",
+          "confirmed_by_owner": "implicit"
+        },
+        {
+          "weapon": "lmg",
+          "spread_deg": "±4",
+          "confirmed_by_owner": "implicit"
+        },
+        {
+          "weapon": "shotgun",
+          "spread_deg": "5 pellets, each random (not evenly spaced) within ±2°, replacing the fixed −10/−5/0/+5/+10 fan",
+          "confirmed_by_owner": "explicit"
+        }
+      ],
+      "note": "神宮 explicitly confirmed the shotgun option with ±2° random. The other values were proposed by Grok Bot and not objected to; reconfirm them in the PR's question list to 神宮."
+    }
+  ],
+  "future_ideas": [
+    {
+      "ja": "障害物を貫通する回路",
+      "en": "Circuit that lets shots penetrate obstacles"
+    },
+    {
+      "ja": "跳弾で当てる回路",
+      "en": "Circuit for ricochet hits"
+    },
+    {
+      "ja": "残骸盾（feat/wreck-shield-core / feat/wreck-shield-build）",
+      "en": "Wreck shield PRs"
+    },
+    {
+      "ja": "貫通弾（feat/piercing-round）",
+      "en": "Penetrating round PR"
+    }
+  ],
+  "future_ideas_note": "Requested by 神宮 for later. NOT part of this PR.",
+  "open_questions": [
+    {
+      "id": "OQ1",
+      "ja": "戦闘ごとの誤射回数を、戦後の分析・精算のあとも残すか。",
+      "en": "Should the per-battle friendly-fire count persist after post-battle analysis/settlement?",
+      "ask": "神宮"
+    },
+    {
+      "id": "OQ2",
+      "ja": "Q9 の「危険が大きい」の線引き（射線上の味方との距離・半径など）。",
+      "en": "Threshold for 'high risk' in Q9.",
+      "ask": "神宮"
+    },
+    {
+      "id": "OQ3",
+      "ja": "Q14 の通常・SMG・MMR・LMG の初期値の再確認。",
+      "en": "Reconfirm Q14 starting spread values for normal/SMG/MMR/LMG.",
+      "ask": "神宮"
+    },
+    {
+      "id": "OQ_any",
+      "ja": "ここに書かれていない細部を見つけたら、実装前に神宮に聞く（選択肢とおすすめ付きで 1 問ずつ）。",
+      "en": "Any uncovered detail must be asked to 神宮 before implementing (one question at a time, options + recommendation).",
+      "ask": "神宮"
+    }
+  ],
+  "acceptance_criteria": [
+    "Ally projectiles hit allies (leader and wingmen, not the shooter) with 100% normal damage (Q1).",
+    "Enemy projectiles still hit allies and other enemies (Q2).",
+    "Projectiles pass through wrecks, containers, and left-behind mechs/dropped circuits (Q3, Q4).",
+    "Projectiles are stopped by obstacles/cover objects (Q5).",
+    "A projectile stops at the first unit or obstacle it hits (Q6).",
+    "A missed projectile keeps flying until its ttl (~384 at base speed) and can hit any unit along the way (Q7).",
+    "The cover dice roll (shotHitChance random miss) is removed; units in cover have a smaller hit body; the chosen value is reported to 神宮 (Q8).",
+    "Allied AI holds fire and sidesteps when friendly-fire risk is high, fires when small (Q9).",
+    "Enemies do not avoid other enemies (Q10).",
+    "Overhead text 「誤射」 appears on a unit hit by friendly fire (Q11).",
+    "Tactics log line 「誤射：<撃った機体> → <当たった機体>（−n）」 once per friendly-fire event, U+2212 minus (Q12).",
+    "Friendly fire can destroy; battle report 「○○ の誤射で △△ 大破」 (Q13).",
+    "Per-battle friendly-fire count is recorded (Q11b); persistence beyond settlement is not decided.",
+    "Per-weapon random spread with the Q14 starting values; shotgun pellets random within ±2°; special rounds stack on any weapon (Q14).",
+    "Selftests cover each item above, including a deterministic RNG for spread tests.",
+    "Checkpoint compatibility: an old mid-sortie save (bullets without new fields, no friendly-fire count) loads and plays; HUB save unchanged unless 神宮 decides otherwise.",
+    "Docs updated: docs/EXPLORE_FACING_AIM_V0.md §3 (命中) and §4 (誤射), docs/STATUS.md.",
+    "CI green, squash merge, Deploy Modules Preview succeeds."
+  ],
+  "files_to_touch": [
+    {
+      "path": "packages/explore/src/game/sim.ts",
+      "why": "updateBullets collision targets (allies for ally shots), obstacle collision, remove cover dice, friendly-fire log/report/count; tryFire/spawnBullet spread for the default gun; leader auto-fire line-of-fire check."
+    },
+    {
+      "path": "packages/explore/src/game/circuitPlay.ts",
+      "why": "circuitTryWeapon/spawnShot (~L1110-1215): per-weapon spread, shotgun random pellets; tryDodge interplay; circuitIncomingMul (cover DR) currently feeds the dice."
+    },
+    {
+      "path": "packages/explore/src/game/orders.ts",
+      "why": "shotHitChance (cover dice) to remove/replace; pushLog for tactics/battle lines; cover toggle message mentions hit %."
+    },
+    {
+      "path": "packages/explore/src/game/brain.ts",
+      "why": "decideWingman: friendly-fire risk check, hold fire and sidestep (Q9)."
+    },
+    {
+      "path": "packages/explore/src/game/coverObjects.ts",
+      "why": "getCoverObjects for projectile-vs-obstacle collision."
+    },
+    {
+      "path": "packages/explore/src/game/vision.ts",
+      "why": "sightBlocked segment-vs-obstacle helper can be reused for projectile/obstacle tests."
+    },
+    {
+      "path": "packages/explore/src/game/combatFeedback.ts",
+      "why": "Add a 「誤射」 overhead text kind (Q11)."
+    },
+    {
+      "path": "packages/explore/src/game/render.ts",
+      "why": "Draw the 「誤射」 overhead text (~L485-497)."
+    },
+    {
+      "path": "packages/explore/src/game/statusBadges.ts",
+      "why": "Check only: wingman status line drawn over the name; make sure 「誤射」 text does not collide. Probably no change."
+    },
+    {
+      "path": "packages/explore/src/game/types.ts",
+      "why": "World/Bullet fields for friendly-fire count (optional for old checkpoints)."
+    },
+    {
+      "path": "packages/explore/src/game/balance.ts",
+      "why": "Spread values and cover hit-body factor as named constants."
+    },
+    {
+      "path": "packages/explore/src/game/checkpoint.ts",
+      "why": "Backfill new fields for old checkpoints if needed."
+    },
+    {
+      "path": "packages/explore/src/*.selftest.ts",
+      "why": "New selftest file + package.json/tsconfig registration."
+    },
+    {
+      "path": "docs/EXPLORE_FACING_AIM_V0.md",
+      "why": "§3 命中, §4 誤射 updates."
+    },
+    {
+      "path": "docs/STATUS.md",
+      "why": "Progress entry."
+    }
+  ],
+  "verification_notes": [
+    {
+      "topic": "travel_distance",
+      "text": "Confirmed 320 × 1.2 s = 384 at base speed. Actual distance varies with speedMul (fast_round 1.5 → ~576, homing 0.75 → ~288) and abilityOf().bulletSpeed."
+    },
+    {
+      "topic": "mmr_range_vs_travel",
+      "text": "MMR fire range is 160 × range × 3 × (1 + r) ≥ 480, longer than the ~384 a base-speed projectile travels. MMR shots at long range can vanish before reaching the target today. Not addressed by the decisions; ask 神宮 if it matters."
+    },
+    {
+      "topic": "enemy_range",
+      "text": "Enemy range is 160 × (1 + escort_range rate), not a flat 160."
+    },
+    {
+      "topic": "cover_dice_also_shooter",
+      "text": "The cover dice also includes the shooter-in-cover factor coverAccuracyMul 1.10 (clamped to 1, so it has no effect today) and the circuit DR path (circuitIncomingMul). Q8 replaces all of it with a smaller hit body."
+    },
+    {
+      "topic": "dodge_not_listed",
+      "text": "A separate dodge circuit mechanic (tryDodge) exists on contact. Not covered by the decisions; keep it unless 神宮 says otherwise."
+    },
+    {
+      "topic": "doc_stale_statement",
+      "text": "docs/EXPLORE_FACING_AIM_V0.md §3 says 「敵の弾は味方にしか当たらない今のコードは直す」, but the current code already lets enemy shots hit other enemies. Only ally shots lack friendly fire. Fix the doc sentence in this PR."
+    },
+    {
+      "topic": "doc_section_refs",
+      "text": "MECH_WORLD_BUILDING_DESIGN.md has §1-§7 only. §4 there is 機体の向き・視界・射撃 (friendly fire as risk-based judgment), and §3 is cargo/containers. §11.4 is in docs/CIRCUIT_SQUAD_DESIGN_V0.md (enemy spec, enemies are hostile to each other). The detailed 命中/誤射 rules are in docs/EXPLORE_FACING_AIM_V0.md §3/§4."
+    },
+    {
+      "topic": "overhead_text_not_saved",
+      "text": "combatFeedback is a WeakMap, not saved in checkpoints. A 「誤射」 overhead text would also be lost on resume, which is fine for transient text."
+    },
+    {
+      "topic": "carried_units",
+      "text": "Carried wingmen stay in world.wingmen and are positioned on their carrier (placeCarried). With friendly fire they may become hittable; decide with 神宮 if unclear."
+    }
+  ]
+}
