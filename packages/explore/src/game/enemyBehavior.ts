@@ -25,7 +25,38 @@ export type EnemyState = {
   deathHandled: boolean;
   recovered: boolean;
 };
-export type SupplyDrop = { id: string; pos: Vec2; ammo: number; power: number };
+export type SupplyDrop = { id: string; pos: Vec2; ammo: number; power: number; /** 10/17: split drops carry one resource each (absent = old combined drop). */ kind?: "ammo" | "power" };
+
+/** Half the gap between a split ammo drop and its power drop (world units). */
+export const SUPPLY_SPLIT_HALF_GAP = 6;
+
+/**
+ * 10/17 神宮: one ammo drop and one power drop side by side at `pos`; a resource of 0 makes no drop.
+ * Pickup stays the same: both sit well inside one interact radius.
+ */
+export function splitSupplyDrops(id: string, pos: Vec2, ammo: number, power: number): SupplyDrop[] {
+  const out: SupplyDrop[] = [];
+  const both = ammo > 0.00001 && power > 0.00001;
+  if (ammo > 0.00001) out.push({ id: `${id}-ammo`, pos: { x: pos.x - (both ? SUPPLY_SPLIT_HALF_GAP : 0), y: pos.y }, ammo, power: 0, kind: "ammo" });
+  if (power > 0.00001) out.push({ id: `${id}-power`, pos: { x: pos.x + (both ? SUPPLY_SPLIT_HALF_GAP : 0), y: pos.y }, ammo: 0, power, kind: "power" });
+  return out;
+}
+
+/** Old checkpoints hold combined drops: split them in place (and carry their faint images over). */
+export function backfillSplitSupplies(world: World): void {
+  if (!world.enemySupplies?.some((d) => !d.kind)) return;
+  const ghosts = world.squadIntel?.ghosts;
+  world.enemySupplies = world.enemySupplies.flatMap((d) => {
+    if (d.kind) return [d];
+    const parts = splitSupplyDrops(d.id, d.pos, d.ammo, d.power);
+    const g = ghosts?.[`supply:${d.id}`];
+    if (ghosts && g) {
+      delete ghosts[`supply:${d.id}`];
+      for (const p of parts) ghosts[`supply:${p.id}`] = { ...g, id: p.id, pos: { ...p.pos } };
+    }
+    return parts;
+  });
+}
 export type RecallSpawn = { at: number; angle: number; spawned: boolean };
 export type EnemyMode = "rush" | "range" | "ambush" | "scavenge";
 
@@ -291,12 +322,7 @@ export function handleEnemyDeaths(world: World): void {
     const s = e.enemyState;
     if (e.alive || e.hp > 0 || !s || s.deathHandled) continue;
     s.deathHandled = true;
-    world.enemySupplies.push({
-      id: `supply-${e.id}`,
-      pos: { ...e.pos },
-      ammo: s.ammo,
-      power: s.activity,
-    });
+    world.enemySupplies.push(...splitSupplyDrops(`supply-${e.id}`, e.pos, s.ammo, s.activity));
     s.ammo = 0;
     s.activity = 0;
     for (let i = 0; i < s.cargo; i++)

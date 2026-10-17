@@ -21,3 +21,8 @@ assert.ok(!/hexagon|invertedTriangle|#4f8fe8/.test(body), "shapes are not saved"
 assert.ok(worldFromCheckpointBody(JSON.parse(body)), "checkpoint still loads");
 assert.ok(!/hexagon|#4f8fe8/.test(serializeHubSave(createHubSave(INITIAL_HUB))), "HUB save unchanged");
 console.log("map shapes: colours, sizes, fixed shapes, compat PASS");
+
+// 10/17 神宮: split supply drops use SORT's current red / yellow; circuit drop is whitish.
+assert.equal(COLORS.ammoDrop, "#f85149");
+assert.equal(COLORS.powerDrop, "#d4a72c");
+assert.equal(COLORS.circuitDrop, "#e6e9ee");

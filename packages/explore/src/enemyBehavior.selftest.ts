@@ -24,6 +24,9 @@ import {
   collectSupplies,
   scheduleRecall,
   spawnRecall,
+  backfillSplitSupplies,
+  SUPPLY_SPLIT_HALF_GAP,
+  splitSupplyDrops,
 } from "./game/enemyBehavior";
 import { updateEnemies, tickWorld, requestExtract } from "./game/sim";
 import {
@@ -159,10 +162,14 @@ for (const [n, count, side] of [
   w.containers = [];
   handleEnemyDeaths(w);
   handleEnemyDeaths(w);
-  assert.equal(w.enemySupplies!.length, 1);
+  // 10/17 神宮: split into an ammo drop and a power drop side by side (was one combined drop).
+  assert.equal(w.enemySupplies!.length, 2);
   assert.equal(w.containers.length, 2);
-  assert.equal(w.enemySupplies![0]!.power, 61);
-  assert.equal(w.enemySupplies![0]!.ammo, 17);
+  const [am, pw] = w.enemySupplies!;
+  assert.equal(am!.kind, "ammo"); assert.equal(am!.ammo, 17); assert.equal(am!.power, 0);
+  assert.equal(pw!.kind, "power"); assert.equal(pw!.power, 61); assert.equal(pw!.ammo, 0);
+  assert.equal(am!.pos.y, e.pos.y); assert.equal(pw!.pos.y, e.pos.y);
+  assert.ok(am!.pos.x < e.pos.x && pw!.pos.x > e.pos.x, "side by side around the wreck");
   w.leader.pos = { ...e.pos };
   w.leader.instanceId = "player";
   w.currentAmmo.player = 27;
@@ -170,8 +177,52 @@ for (const [n, count, side] of [
   collectSupplies(w);
   assert.equal(w.currentAmmo.player, 28);
   assert.equal(w.mechBattery.player.activity, 300);
-  assert.equal(w.enemySupplies![0]!.ammo, 16);
-  assert.equal(w.enemySupplies![0]!.power, 60);
+  // Same pickup result as the combined drop: one unit standing there takes both.
+  assert.equal(w.enemySupplies!.find((d) => d.kind === "ammo")!.ammo, 16);
+  assert.equal(w.enemySupplies!.find((d) => d.kind === "power")!.power, 60);
+}
+{
+  // A resource of 0 makes no drop.
+  const { w, e } = recoverer();
+  e.enemyState!.ammo = 0;
+  e.enemyState!.activity = 40;
+  e.alive = false; e.hp = 0;
+  handleEnemyDeaths(w);
+  assert.equal(w.enemySupplies!.length, 1);
+  assert.equal(w.enemySupplies![0]!.kind, "power");
+  assert.equal(w.enemySupplies![0]!.pos.x, e.pos.x, "a lone drop sits at the wreck");
+  assert.ok(!w.enemySupplies!.some((d) => d.id.endsWith("-ammo")));
+}
+{
+  // Old checkpoint: combined drop → two side-by-side drops; 0 side skipped; faint image follows.
+  const w = { enemySupplies: [
+    { id: "supply-a", pos: { x: 100, y: 50 }, ammo: 5, power: 9 },
+    { id: "supply-b", pos: { x: 200, y: 50 }, ammo: 3, power: 0 },
+  ], squadIntel: { ghosts: { "supply:supply-a": { kind: "supply", id: "supply-a", pos: { x: 100, y: 50 }, t: 12 } } } } as any;
+  backfillSplitSupplies(w);
+  assert.deepEqual(w.enemySupplies.map((d: any) => [d.id, d.kind, d.pos.x, d.ammo, d.power]), [
+    ["supply-a-ammo", "ammo", 100 - SUPPLY_SPLIT_HALF_GAP, 5, 0],
+    ["supply-a-power", "power", 100 + SUPPLY_SPLIT_HALF_GAP, 0, 9],
+    ["supply-b-ammo", "ammo", 200, 3, 0],
+  ]);
+  assert.equal(w.squadIntel.ghosts["supply:supply-a"], undefined);
+  assert.equal(w.squadIntel.ghosts["supply:supply-a-ammo"].t, 12);
+  assert.equal(w.squadIntel.ghosts["supply:supply-a-power"].pos.x, 100 + SUPPLY_SPLIT_HALF_GAP);
+  backfillSplitSupplies(w); // idempotent
+  assert.equal(w.enemySupplies.length, 3);
+}
+{
+  // Enemies: ambush still heads for the power drop, and standing on it takes the ammo drop next to it too.
+  const { w, e } = recoverer();
+  w.enemySupplies = splitSupplyDrops("supply-x", { x: e.pos.x + 50, y: e.pos.y }, 5, 30);
+  const pd = w.enemySupplies.find((d) => d.kind === "power")!;
+  e.pos = { ...pd.pos };
+  e.enemyState!.ammo = 0;
+  e.enemyState!.activity = 0;
+  collectSupplies(w);
+  assert.equal(e.enemyState!.ammo, 5);
+  assert.equal(e.enemyState!.activity, 30);
+  assert.equal(w.enemySupplies.length, 0, "both emptied drops are removed");
 }
 {
   const { w, e } = recoverer();

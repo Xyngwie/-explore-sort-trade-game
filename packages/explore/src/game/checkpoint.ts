@@ -1,4 +1,4 @@
-import { backfillEnemyState } from "./enemyBehavior";
+import { backfillEnemyState, backfillSplitSupplies } from "./enemyBehavior";
 import { backfillEnemyIdentities } from "./enemyIdentity";
 /**
  * Sortie / result snapshots for the one shared checkpoint key.
@@ -38,6 +38,7 @@ export function worldFromCheckpointBody(body: unknown): World | null {
   // Enemy PR1: an old checkpoint has enemies without identity data.
   backfillEnemyIdentities(world);
   backfillEnemyState(world);
+  backfillSplitSupplies(world); // 10/17: combined supply drops → ammo + power side by side
   // #270: JSON turns the circuit fog Uint8Array into a plain object; rebuild it.
   const play = world.circuitPlay as { fogOpen?: unknown } | undefined;
   if (play && play.fogOpen != null && !(play.fogOpen instanceof Uint8Array)) {

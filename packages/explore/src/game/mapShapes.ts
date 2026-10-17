@@ -7,6 +7,9 @@ export const COLORS = {
   enemy: "#ff6b6b", // hostile red
   wreck: "#8a9099", // grey
   ownWreckOutline: "#7eb6ff",
+  ammoDrop: "#f85149", // SORT red (style.css .warn)
+  powerDrop: "#d4a72c", // SORT yellow (four-resource.css armor border)
+  circuitDrop: "#e6e9ee", // whitish
 } as const;
 export const OWN_WRECK_OUTLINE_W = 2;
 export type MechShape = "hexagon" | "triangle" | "invertedTriangle";

@@ -289,12 +289,12 @@ export function renderWorld(
   const liveSupplyIds = new Set((world.enemySupplies ?? []).map((d) => d.id));
   for (const g of Object.values(squadIntel(world).ghosts)) {
     if (g.kind !== "supply" || liveSupplyIds.has(g.id) || squadSees(world, g.pos)) continue;
-    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx, '#75d99b'); ctx.restore();
+    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx, g.id.endsWith('-power') ? COLORS.powerDrop : COLORS.ammoDrop); ctx.restore();
   }
   for (const d of world.enemySupplies ?? []) {
     const v = seenOrGhost("supply", d.id, d.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, '#75d99b');
+    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, d.kind === 'power' ? COLORS.powerDrop : COLORS.ammoDrop);
     ctx.restore();
   }
   // Bullets
@@ -358,11 +358,10 @@ export function renderWorld(
     if (!dv) continue;
     ctx.save(); ctx.globalAlpha = dv.alpha;
     d = { ...d, pos: dv.pos };
-    ctx.fillStyle = "#e2b842";
+    // 10/17 神宮 6: whitish square (same 8px size as before; no outline).
+    ctx.fillStyle = COLORS.circuitDrop;
     ctx.fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
-    ctx.strokeStyle = "#ffeaa7";
-    ctx.strokeRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
-    ctx.fillStyle = "#ffeaa7";
+    ctx.fillStyle = COLORS.circuitDrop;
     ctx.font = "11px sans-serif";
     ctx.fillText(`落とし物 回路 ${d.circuitId}`, tx(d.pos.x) - 30, ty(d.pos.y) - 10);
     ctx.restore();
