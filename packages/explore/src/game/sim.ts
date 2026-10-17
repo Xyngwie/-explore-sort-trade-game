@@ -1,4 +1,5 @@
 import { enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
+import { canSee, enemyVisibleToSquad, squadSees, updateSquadIntel, updateSquadMemory } from "./vision";
 import { revealStrays } from "./strayScatter";
 import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
@@ -89,14 +90,12 @@ function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, 
 }
 
 function revealVision(world: World): void {
-  revealStrays(world, (pos) => friendlyUnits(world).some((u) => u.alive && dist2(u.pos, pos) <= (world.balance.visionRange * visionMul(world, u.id)) ** 2));
+  revealStrays(world, (pos) => squadSees(world, pos)); // PR2: same cones as everything else
   for (const u of friendlyUnits(world)) {
     if (!u.alive) continue;
-    const r = world.balance.visionRange * visionMul(world, u.id);
-    const r2 = r * r;
     for (const c of world.containers) {
       if (c.discovered || c.taken) continue;
-      if (dist2(u.pos, c.pos) <= r2) {
+      if (canSee(world, u, c.pos)) {
         c.discovered = true;
         pushLog(world, `発見：コンテナ ${c.id} を確認。`);
       }
@@ -410,6 +409,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   tickCombatFeedback(world, dt);
   beginMovementPowerTick(world);
   world.elapsed += dt; world.timeLeft = Math.max(0, world.timeLeft - dt);
+  updateSquadIntel(world); // PR2: what the squad sees before anyone decides
   if (world.timeLeft <= 0 && !world.operationTimedOut) {
     world.operationTimedOut = true;
     leaderAbortSalvageOnTimeout(world);
@@ -449,7 +449,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       if (focus) tryFire(world, leader, focus, false);
     } else {
       let leadTarget: Unit | null = null; let best: number = world.balance.engageRange * rangeMul(world, leader.id);
-      for (const e of world.enemies) { if (!e.alive) continue; const d = dist(leader.pos, e.pos); if (d <= best) { best = d; leadTarget = e; } }
+      for (const e of world.enemies) { if (!e.alive || !enemyVisibleToSquad(world, e)) continue; const d = dist(leader.pos, e.pos); if (d <= best) { best = d; leadTarget = e; } }
       const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
       if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false);
     }
@@ -494,6 +494,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
   updateFacing(world, dt);
+  updateSquadIntel(world);
+  updateSquadMemory(world);
   placeCarried(world);
   if (!world.leader.alive) noteLeaderDown(world);
   // A wipe during this tick rescues before a boarding circle can lift off (6A),

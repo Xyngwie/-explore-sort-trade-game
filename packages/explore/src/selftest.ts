@@ -2118,6 +2118,7 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const foe = w.enemies[0]!;
   foe.alive = true;
   foe.pos = { x: wa.pos.x + w.balance.weaponRange * 1.3, y: wa.pos.y };
+  wa.heading = 0; // PR2 vision: facing the foe (it must be seen to be shot)
   wa.holdOrder = true;
   let intent = decideWingman(w, wa, 0.05);
   assert.equal(intent.moveTarget, null, "hold: no movement");

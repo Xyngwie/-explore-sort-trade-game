@@ -6,6 +6,7 @@
  *   false-1×1 wingman ×2 (Q3a/Q3c), and the #269 rework of the basic
  *   collect / second return press. In `all_unlocked` these stay off.
  */
+import { canSee } from "./vision";
 import {
   AIR_SUPPORT_COOLDOWN_SEC,
   exploreUnitId,
@@ -670,11 +671,10 @@ function updateFog(world: World): void {
   const open = ensureFog(world);
   const { cols, rows } = fogSize(world);
   for (const u of living(world)) {
-    const see = world.balance.visionRange * modsFor(world, u.id).vision;
     for (let i = 0; i < cols * rows; i++) {
       if (open[i]) continue;
       const c = cellCenter(world, i);
-      if (dist(u.pos, c) <= see) open[i] = 1;
+      if (canSee(world, u, c)) open[i] = 1; // PR2: fog opens along the cones
     }
   }
 }
@@ -685,8 +685,7 @@ function rememberEnemies(world: World): void {
   for (const e of world.enemies) {
     if (!e.alive) continue;
     for (const u of living(world)) {
-      const see = world.balance.visionRange * modsFor(world, u.id).vision;
-      if (dist(u.pos, e.pos) <= see) {
+      if (canSee(world, u, e.pos)) {
         p.lastSeen[e.id] = { ...e.pos };
         break;
       }
@@ -695,8 +694,7 @@ function rememberEnemies(world: World): void {
 }
 
 function seenEnemy(world: World, unit: Unit): boolean {
-  const see = world.balance.visionRange * modsFor(world, unit.id).vision;
-  return world.enemies.some((e) => e.alive && dist(unit.pos, e.pos) <= see);
+  return world.enemies.some((e) => e.alive && canSee(world, unit, e.pos));
 }
 
 function nearestFog(world: World, from: Vec2, pred: (c: Vec2) => boolean): Vec2 | null {

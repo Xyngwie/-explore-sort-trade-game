@@ -1,4 +1,5 @@
 import { BALANCE } from "./balance";
+import { canSee, enemyVisibleToSquad, ghostOf, ghostTrust, squadSees } from "./vision";
 import { dist, dist2, type Vec2 } from "./math";
 import {
   abortSalvage,
@@ -10,11 +11,11 @@ import { rangeMul, visionMul, wingRecoverWantsSalvage } from "./circuitPlay";
 import { canTakeContainer, wreckCarrierId } from "./carry";
 import type { Container, Unit, WingmanIntent, World } from "./types";
 
-function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number): Unit | null {
+function nearestAliveEnemy(pos: Vec2, enemies: Unit[], maxRange?: number, ok?: (e: Unit) => boolean): Unit | null {
   let best: Unit | null = null;
   let bestD = maxRange != null ? maxRange * maxRange : Infinity;
   for (const e of enemies) {
-    if (!e.alive) continue;
+    if (!e.alive || (ok && !ok(e))) continue;
     const d = dist2(pos, e.pos);
     if (d < bestD) {
       bestD = d;
@@ -28,13 +29,22 @@ function nearestDiscoveredContainer(
   pos: Vec2,
   containers: Container[],
   excludeIds?: Set<string>,
+  world?: World,
 ): Container | null {
   let best: Container | null = null;
   let bestD = Infinity;
   for (const c of containers) {
-    if (c.taken || !c.discovered) continue;
+    if (!c.discovered) continue;
     if (excludeIds?.has(c.id)) continue;
-    const d = dist2(pos, c.pos);
+    // PR2: decide from squad knowledge. Seen now → the truth; otherwise its faint image
+    // (assumed still there; older = lower priority; ~120 s old = not trusted).
+    let trust = 1;
+    if (world && !squadSees(world, c.pos)) {
+      const g = ghostOf(world, "container", c.id);
+      trust = g ? ghostTrust(world, g) : 0;
+      if (trust <= 0) continue;
+    } else if (c.taken) continue;
+    const d = dist2(pos, c.pos) / (trust * trust);
     if (d < bestD) {
       bestD = d;
       best = c;
@@ -81,6 +91,7 @@ export function nextPatrolOrbitTarget(
 
 export function decideWingman(world: World, self: Unit, dt: number): WingmanIntent {
   const b = world.balance;
+  const shared = (e: Unit) => enemyVisibleToSquad(world, e) || canSee(world, self, e.pos);
   const weaponRange = b.weaponRange * rangeMul(world, self.id);
   const visionRange = b.visionRange * visionMul(world, self.id);
   const leader = world.leader;
@@ -91,7 +102,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
     if (self.salvageId && !wingRecoverWantsSalvage(world, self)) abortSalvage(self);
     return {
       moveTarget: null,
-      fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange),
+      fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange, shared),
       trySalvage: false,
     };
   }
@@ -102,12 +113,15 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
     if (self.salvageId) abortSalvage(self);
     return {
       moveTarget: null,
-      fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange),
+      fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange, shared),
       trySalvage: false,
     };
   }
 
-  const enemy = nearestAliveEnemy(self.pos, world.enemies, visionRange * b.visionHuntMul);
+  // PR2: chase only what this mech sees itself; shoot (turn + fire) at anything the squad sees in range.
+  const ownSeen = nearestAliveEnemy(self.pos, world.enemies, visionRange * b.visionHuntMul * 2, (e) => canSee(world, self, e.pos));
+  const enemy = ownSeen ?? nearestAliveEnemy(self.pos, world.enemies, weaponRange, shared);
+  const canChase = enemy != null && enemy === ownSeen;
   const enemyDist = enemy ? dist(self.pos, enemy.pos) : Infinity;
 
   switch (self.stance) {
@@ -134,7 +148,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       const orbit = nextPatrolOrbitTarget(self, center, dt);
       const react =
         enemy && enemyDist < b.engageRange
-          ? { moveTarget: enemy.pos, fireAt: enemy as Unit | null }
+          ? { moveTarget: canChase ? enemy.pos : orbit, fireAt: enemy as Unit | null }
           : { moveTarget: orbit, fireAt: null };
       // Soft leash: if reacting but far from center, prefer orbit.
       if (
@@ -161,7 +175,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
       const assigned = containerNearWaypoint(world, self.waypoint);
       const c =
         assigned ??
-        nearestDiscoveredContainer(self.pos, world.containers, claimed);
+        nearestDiscoveredContainer(self.pos, world.containers, claimed, world);
       if (c) {
         const near = dist(self.pos, c.pos) < b.interactRadius;
         return {
@@ -247,7 +261,7 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
         self.waypoint = null;
       }
       const hunt =
-        nearestAliveEnemy(self.pos, world.enemies, visionRange * b.visionRaidHuntMul) ??
+        nearestAliveEnemy(self.pos, world.enemies, visionRange * b.visionRaidHuntMul, shared) ??
         nearestAliveEnemy(self.pos, world.enemies);
       if (hunt) return raidStandOff(hunt);
       // No enemies: loiter near leader without consuming a click target.
