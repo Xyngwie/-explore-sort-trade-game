@@ -1,3 +1,4 @@
+import { COVER_DR_BASE } from "@estg/shared";
 import { firstShotContact, friendlyFireRisk, clearFiringLine, lineClearTarget, spreadRadians } from "./projectiles";
 import { recordFriendlyFire } from "./friendlyFireHistory";
 import { showCombatFeedback, enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
@@ -29,6 +30,7 @@ import {
   applyLure,
   attackMul,
   bendHoming,
+  circuitIncomingMul,
   circuitMoveTarget,
   circuitSpeed,
   circuitTryWeapon, meleeReady,
@@ -202,6 +204,8 @@ export function updateBullets(world: World, dt: number): void {
         hitDmg*=campDamageTakenMul(world,t);
         if(b.fromEnemy)world.combatHitsTaken+=1;
       }else hitDmg/=enemyArmorMultiplier(t);
+      // D1/D2: mitigation is post-hit damage reduction, never a smaller body or hit veto.
+      hitDmg *= circuitIncomingMul(world,t) ?? (t.inCover ? 1-COVER_DR_BASE : 1);
       noteEmpHit(world,t,b);
       if(!b.fromEnemy)noteDamageBreaksSuppress(world,t);
       t.hp=Math.max(0,t.hp-hitDmg);
@@ -449,7 +453,6 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     const locked = movementLocked(world);
     const cruise = circuitLocomotion(world, leader, locked ? null : fallback, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed);
     leader.moveTarget = !input.move.x && !input.move.y && !input.clickMove && !input.fire && !input.interact ? lineClearTarget(world,leader) ?? cruise.target : cruise.target;
-    if (!locked) updateCoverMovement(world, leader, input.move, dt);
     moveToward(leader, leader.moveTarget, cruise.speed, dt, world);
   }
   placeCarried(world);

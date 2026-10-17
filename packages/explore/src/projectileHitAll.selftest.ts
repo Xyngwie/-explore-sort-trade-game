@@ -72,10 +72,10 @@ function bullet(w:World,owner:Unit=w.leader,fromEnemy=false){
 {
  const w=fixture(),e=w.enemies[0]!;e.pos={x:200,y:300};
  const full=hitRadius(w,e);e.inCover=true;assert.equal(hitRadius(w,e),full);
- bullet(w);w.bullets[0]!.pos.y=300+full*.85;updateBullets(w,.2);assert.equal(e.hp,990);
+ bullet(w);w.bullets[0]!.pos.y=300+full*.85;updateBullets(w,.2);assert.equal(e.hp,993); // D2 reduces damage, not the hit body
  e.hp=1000;getCoverObjects(w).push({id:'cover',pos:{x:245,y:300},radius:30});
  const b=bullet(w);b.pos={x:400,y:300};b.vel.x=-1000;updateBullets(w,.3);assert.equal(e.hp,1000,'hidden side blocked');
- bullet(w);updateBullets(w,.2);assert.equal(e.hp,990,'exposed side still hit');
+ bullet(w);updateBullets(w,.2);assert.equal(e.hp,993,'exposed side still hit, then D2 mitigates');
 }
 // Risk is centerline only, blockers behind the enemy do not suppress, off-line allies allow fire.
 {
@@ -242,3 +242,35 @@ console.log('projectileHitAll: C6 faction-independent dodge PASS');
  assert.ok(raw.length<=FRIENDLY_FIRE_HISTORY_MAX_CHARS);assert.equal(JSON.parse(raw).battles.length,1);
 }
 console.log('projectileHitAll: wingman focus and serialized-history limit PASS');
+// Round 2 D1/D2: real bullet hits apply circuit / manual-cover damage reduction after contact.
+function mitigationHit(options:{armor?:number;fight?:number;hp?:number;moving?:boolean;cover?:boolean;camp?:boolean;legacy?:boolean}){
+ const w=fixture();attachCircuitPlay(w,null,false);
+ const target=w.wingmen[0]!;target.pos={x:200,y:300};target.maxHp=1000;target.hp=options.hp??1000;
+ const circuit=(key:string,r:number,trueBoard:boolean)=>({circuitId:key,side:2,effectKey:key,effect:100,r,trueBoard,oneByOne:null,conductive:true,cargoSlots:0,perfectPt:0,false20:false,true20:false});
+ w.circuitPlay!.loadout[target.id]=[];
+ if(options.armor)w.circuitPlay!.loadout[target.id]!.push(circuit('armor_tune',options.armor,true));
+ if(options.fight)w.circuitPlay!.loadout[target.id]!.push(circuit('cover_fight',options.fight,false));
+ target.vel={x:options.moving?20:0,y:0};
+ getCoverObjects(w).push({id:'mitigation-cover',pos:{x:245,y:300},radius:30});
+ if(options.cover)assert.equal(toggleUnitCover(w,target),true);
+ if(options.camp)w.camp={pos:{...target.pos},stashedCount:1};
+ if(options.legacy)w.circuitPlay!.rules=false;
+ const radius=hitRadius(w,target),before=target.hp;
+ bullet(w);updateBullets(w,.2);
+ assert.equal(hitRadius(w,target),radius,'no mitigation shrinks the physical hit body');
+ assert.equal(w.friendlyFire?.count,1,'the shot really hits; it is not a probability veto');
+ return before-target.hp;
+}
+function close(actual:number,expected:number){assert.ok(Math.abs(actual-expected)<1e-8,`${actual} != ${expected}`);}
+close(mitigationHit({}),10);
+close(mitigationHit({armor:.2}),8);
+close(mitigationHit({fight:.2,hp:500,moving:true}),5);
+close(mitigationHit({fight:.2,hp:500,moving:false}),10);
+close(mitigationHit({fight:.2,hp:501,moving:true}),10);
+close(mitigationHit({cover:true}),7);
+close(mitigationHit({cover:true,legacy:true}),7);
+close(mitigationHit({armor:.2,cover:true}),5);
+close(mitigationHit({armor:.2,fight:.2,hp:500,moving:true,cover:true}),4);
+close(mitigationHit({armor:.2,fight:.2,hp:500,moving:true,cover:true,camp:true}),2.88);
+close(mitigationHit({cover:true,camp:true}),5.04);
+console.log('projectileHitAll: D1/D2 real-hit mitigation, half-HP/movement gates, additive cap and camp stack PASS');

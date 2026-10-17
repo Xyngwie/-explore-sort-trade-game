@@ -338,7 +338,7 @@
     "Projectiles are stopped by obstacles/cover objects (Q5).",
     "A projectile stops at the first unit or obstacle it hits (Q6).",
     "A missed projectile keeps flying until its ttl (~384 at base speed) and can hit any unit along the way (Q7).",
-    "The cover dice and hitbox shrink are removed; obstacle occlusion alone protects a full-sized unit (C2 supersedes Q8).",
+    "The cover dice and hitbox shrink are removed; obstacle occlusion protects a full-sized unit, with D1/D2 post-hit cover/circuit damage mitigation (C2 supersedes Q8 shrink).",
     "Allied AI holds fire and sidesteps when friendly-fire risk is high, fires when small (Q9).",
     "Enemies do not avoid other enemies (Q10).",
     "Overhead text 「誤射」 appears on a unit hit by friendly fire (Q11).",
@@ -490,6 +490,16 @@
     {
       "id": "C6",
       "decision": "Dodge any incoming projectile regardless of faction."
+    }
+  ],
+  "audit_owner_decisions_2026_10_17_round2": [
+    {
+      "id": "D1",
+      "decision": "Apply existing circuitIncomingMul as post-hit damage mitigation for armor_tune and cover_fight, without hitbox shrink. Preserve the existing cover_fight gates: HP <= 50% and movement speed > 8."
+    },
+    {
+      "id": "D2",
+      "decision": "Manual inCover ON adds COVER_DR_BASE damage mitigation in addition to physical obstacle occlusion. Existing additive circuit DR is capped at COVER_DR_CAP; camp mitigation multiplies separately."
     }
   ]
 }
