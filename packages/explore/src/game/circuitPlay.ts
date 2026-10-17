@@ -1494,15 +1494,12 @@ function tickWreckPickups(world: World, dt: number): void {
     }
     p.carry[unitId] = [...(p.carry[unitId] ?? []), ch.id];
     const target = friendlies(world).find(u => u.id === ch.id);
-    // Flatten the target's cargo onto its new carrier; overflow stays on the field.
+    // PR4: a living passenger drops ALL carried cargo at the pickup site;
+    // its carrier never inherits that cargo, even if it has spare capacity.
     if (target?.alive) {
-      const moved = Math.min(target.salvagedCount, Math.max(0, Math.floor(roomFor(world, unit))));
-      unit.salvagedCount += moved; target.salvagedCount -= moved;
-      dropContainerStack(world, target);
-      for (const id of [...(p.carry[target.id] ?? [])]) {
-        unloadMech(world, id);
-        if (roomFor(world, unit) >= LOAD_PER_WRECK) p.carry[unitId]!.push(id);
-      }
+      dropAllCargo(world, target);
+      target.moveHeading = null;
+      target.aimWant = null;
       target.moveTarget = null; target.salvageId = null; target.salvageT = 0;
       delete p.wingRecover?.[target.id]; delete p.wingMove[target.id]; delete p.wingHold?.[target.id];
     }
