@@ -67,3 +67,10 @@ assert.notEqual(COLORS.container, COLORS.circuitDrop);
 assert.equal(COLORS.dropGlow, "#c779ff");
 assert.equal(dropGlowRgba(0.5), "rgba(199, 121, 255, 0.5)");
 assert.equal(parseInt(COLORS.dropGlow.slice(1, 3), 16), 199); assert.equal(parseInt(COLORS.dropGlow.slice(3, 5), 16), 121); assert.equal(parseInt(COLORS.dropGlow.slice(5, 7), 16), 255);
+
+// The FACING_LINE_RATIO doc comment sits right above its constant (dropGlowRgba comes before it).
+{
+  const ms = readFileSync(new URL("./game/mapShapes.ts", import.meta.url), "utf8");
+  assert.ok(ms.includes("/** Facing line length as a multiple of the shape radius (width 2). */\nexport const FACING_LINE_RATIO"));
+  assert.ok(ms.indexOf("export function dropGlowRgba") < ms.indexOf("export const FACING_LINE_RATIO"));
+}
