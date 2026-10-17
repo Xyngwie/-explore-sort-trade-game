@@ -1,5 +1,5 @@
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
-import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
+import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
 import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { layoutLabels } from "./labelLayout";
@@ -227,19 +227,19 @@ export function renderWorld(
     if (c.glowT > 0) {
       const pulse = 0.55 + 0.45 * Math.sin(world.elapsed * 8);
       const r = 14 + pulse * 6;
-      ctx.strokeStyle = `rgba(255, 120, 80, ${0.35 + pulse * 0.45})`;
+      ctx.strokeStyle = dropGlowRgba(0.35 + pulse * 0.45);
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = `rgba(255, 160, 60, ${0.12 + pulse * 0.18})`;
+      ctx.fillStyle = dropGlowRgba(0.12 + pulse * 0.18);
       ctx.beginPath();
       ctx.arc(px, py, r * 0.85, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = c.glowT > 0 ? "#ff8a3d" : COLORS.container;
+    ctx.fillStyle = c.glowT > 0 ? COLORS.dropGlow : COLORS.container;
     ctx.fillRect(px - 8, py - 8, 16, 16);
-    ctx.strokeStyle = c.glowT > 0 ? "#ffd0a0" : COLORS.containerEdge;
+    ctx.strokeStyle = c.glowT > 0 ? COLORS.dropGlow : COLORS.containerEdge;
     ctx.lineWidth = c.glowT > 0 ? 2 : 1;
     ctx.strokeRect(px - 8, py - 8, 16, 16);
     if (c.glowT > 0) {

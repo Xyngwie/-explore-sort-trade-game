@@ -15,11 +15,16 @@ export const COLORS = {
   circuitDrop: "#e6e9ee", // whitish
   container: "#a39a8c", // warm grey (10/17): apart from the cool wreck grey and the whitish circuit square
   containerEdge: "#d2cabd",
+  dropGlow: "#c779ff", // 10/17 C: enemy-kill DROP container square, ring and glow (no faction / resource meaning)
 } as const;
 export const OWN_WRECK_OUTLINE_W = 2;
 /** Blue outline on the wreck circle's own edge: own wrecks from this sortie and left-behind ex-wingman wrecks alike. */
 export const OWN_WRECK_OUTLINE = { color: COLORS.ownWreckOutline, width: OWN_WRECK_OUTLINE_W } as const;
 /** Facing line length as a multiple of the shape radius (width 2). */
+/** rgba() of the DROP purple at alpha `a` (ring and glow pulse). */
+export function dropGlowRgba(a: number): string {
+  return `rgba(199, 121, 255, ${a})`;
+}
 export const FACING_LINE_RATIO = 1.6;
 /** 10/17: the leader name sits just above the tip of an upward facing line (never lower than the old 22px). */
 export function leaderLabelLift(scale: number): number {

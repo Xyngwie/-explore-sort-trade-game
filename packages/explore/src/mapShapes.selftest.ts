@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHubSave, serializeHubSave, INITIAL_HUB } from "@estg/shared";
 import { readFileSync } from "node:fs";
 import { BALANCE } from "./game/balance";
-import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, drawDisc, shapePoints } from "./game/mapShapes";
+import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, drawDisc, shapePoints } from "./game/mapShapes";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import { tickWorld } from "./game/sim";
 import { snapshotSortieWorld, worldFromCheckpointBody } from "./game/checkpoint";
@@ -52,8 +52,18 @@ assert.notEqual(COLORS.container, COLORS.circuitDrop);
   const src = readFileSync(new URL("./game/render.ts", import.meta.url), "utf8");
   assert.ok(!src.includes('"#f0b429";'), "normal containers are no longer yellow");
   assert.ok(src.includes("fillRect(px - 8, py - 8, 16, 16)"), "containers stay 16px squares");
-  assert.ok(src.includes('"#ff8a3d" : COLORS.container'), "DROP glow containers unchanged");
+  assert.ok(src.includes("c.glowT > 0 ? COLORS.dropGlow : COLORS.container"), "DROP square purple");
+  assert.ok(src.includes("c.glowT > 0 ? COLORS.dropGlow : COLORS.containerEdge"), "DROP square edge purple");
+  assert.ok(!/#ff8a3d|#ffd0a0|rgba\(255, 120, 80|rgba\(255, 160, 60/.test(src), "old orange / reddish DROP colours gone");
+  assert.ok(src.includes("dropGlowRgba(0.35 + pulse * 0.45)") && src.includes("dropGlowRgba(0.12 + pulse * 0.18)"), "ring and glow purple, same pulse");
+  assert.ok(src.includes("Math.sin(world.elapsed * 8)") && src.includes("const r = 14 + pulse * 6;"), "blink timing and size kept");
+  assert.ok(src.includes('fillText("DROP", px - 14, py - 12)') && src.includes('"#ffc98a"'), "DROP text kept");
   assert.ok(src.includes("fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8)"), "circuit square 8px");
   assert.ok(src.includes('"#9ecbff"'), "leader name colour kept");
   assert.equal((src.match(/leaderLabelLift\(sx\)/g) ?? []).length, 2, "leader label and its layout box use the same lift");
 }
+
+// 10/17 C: DROP purple.
+assert.equal(COLORS.dropGlow, "#c779ff");
+assert.equal(dropGlowRgba(0.5), "rgba(199, 121, 255, 0.5)");
+assert.equal(parseInt(COLORS.dropGlow.slice(1, 3), 16), 199); assert.equal(parseInt(COLORS.dropGlow.slice(3, 5), 16), 121); assert.equal(parseInt(COLORS.dropGlow.slice(5, 7), 16), 255);
