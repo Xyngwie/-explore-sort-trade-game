@@ -35,6 +35,7 @@ export function worldFromCheckpointBody(body: unknown): World | null {
   world.containers = world.containers ?? [];
   world.bullets = world.bullets ?? [];
   world.logs = world.logs ?? [];
+  world.friendlyFire ??= { count: 0, byShooter: {} };
   // Enemy PR1: an old checkpoint has enemies without identity data.
   backfillEnemyIdentities(world);
   backfillEnemyState(world);

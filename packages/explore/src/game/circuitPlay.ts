@@ -47,6 +47,8 @@ import {
   type HubCircuitRecord,
   type HubSnapshot,
 } from "@estg/shared";
+import { spreadRadians } from "./projectiles";
+import { obstacleMove } from "./coverMovement";
 import { COVER_RADIUS, getCoverObjects } from "./coverObjects";
 import { dist, norm, type Vec2 } from "./math";
 import { pushLog, spawnContainersAt } from "./orders";
@@ -1148,7 +1150,7 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
   }
   if (from.cooldown > 0) return true;
   if (gun === "shotgun") {
-    const angles = [-10, -5, 0, 5, 10];
+    const angles = [0, 0, 0, 0, 0]; // each pellet gets independent ±2° spread in spawnShot
     let left = ammo;
     let fired = 0;
     for (const deg of angles) {
@@ -1206,13 +1208,13 @@ function spawnShot(
       extra = { ...extra, empSlow: Math.min(EMP_SLOW_CAP, EMP_SLOW_BASE + gunR(world, from.id, round)) };
     }
   }
-  const base = from.heading + angleOff; // muzzle fixed forward (facing PR1)
+  const base = from.heading + angleOff + spreadRadians(weapon); // muzzle fixed forward (facing PR1)
   const speed = world.balance.bulletSpeed * speedMul * abilityOf(world, from.id).bulletSpeed;
   const b: Bullet = {
     alive: true,
     pos: { ...from.pos },
     vel: { x: Math.cos(base) * speed, y: Math.sin(base) * speed },
-    ttl: world.balance.bulletTtlSec,
+    ttl: weapon === "mmr" ? world.balance.weaponRange * modsFor(world, from.id).range * 3 * (1 + gunR(world, from.id, "mmr")) * 1.3 / speed : world.balance.bulletTtlSec,
     damage: (from.kind === "enemy" ? world.balance.enemyDamage : world.balance.bulletDamage) * damageMul,
     fromEnemy: from.kind === "enemy",
     ownerId: from.id,
@@ -1237,7 +1239,7 @@ export function bendHoming(world: World, b: Bullet, dt: number): void {
 }
 
 export function tryDodge(world: World, unit: Unit, b: Bullet): boolean {
-  if (!playOf(world)?.rules || (unit.kind !== "enemy" && !b.fromEnemy) || !unit.alive) return false;
+  if (!playOf(world)?.rules || !unit.alive) return false;
   const m = modsFor(world, unit.id);
   if (!(m.dodge > 0) && !selfKey(world, unit.id, "dodge")) return false;
   const hit = unit.radius + world.balance.bulletHitPadding;
@@ -1258,8 +1260,10 @@ export function tryDodge(world: World, unit: Unit, b: Bullet): boolean {
   const ld = dist(leftPos, b.pos);
   const rd = dist(rightPos, b.pos);
   const side = ld > rd ? ln : rd > ld ? rn : ln;
+  const beforeDodge = { ...unit.pos };
   unit.pos.x = Math.max(20, Math.min(world.balance.worldW - 20, unit.pos.x + side.x * step));
   unit.pos.y = Math.max(20, Math.min(world.balance.worldH - 20, unit.pos.y + side.y * step));
+  unit.pos = obstacleMove(world, { ...unit, pos: beforeDodge }, unit.pos);
   const cd = Math.max(DODGE_COOLDOWN_MIN_SEC, DODGE_COOLDOWN_SEC * (1 - m.dodge));
   p.dodgeReady[unit.id] = world.elapsed + cd;
   return true;

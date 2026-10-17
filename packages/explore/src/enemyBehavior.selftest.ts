@@ -1,3 +1,4 @@
+import { getCoverObjects } from "./game/coverObjects";
 import assert from "node:assert/strict";
 import {
   INITIAL_HUB,
@@ -43,6 +44,8 @@ import {
 const world = () => {
   const w = createWorld(bootstrapFromSearch(""));
   startSortie(w);
+  // Projectile/obstacle physics is tested separately; fixed AI/resource fixtures need unobstructed positions.
+  getCoverObjects(w).splice(0);
   return w;
 };
 function recoverer() {

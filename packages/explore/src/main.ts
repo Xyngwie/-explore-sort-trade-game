@@ -138,6 +138,8 @@ import {
   wreckResultHtml,
   recoveredCircuitResultHtml,
 } from "./game/outcome";
+import { settleFriendlyFire } from "./game/friendlyFireHistory";
+import { sortieIdForWorld } from "./game/outcome";
 import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
 import { resortiePlan, resortieSearch } from "./game/resortie";
 import { refillBeforeSortie } from "./game/preSortieAmmo";
@@ -349,7 +351,7 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     const r = toggleSquadCover(world);
     if (r === "entered") {
-      flashCampToast(`カバー開始 · 被弾命中率−${Math.round((1 - world.balance.coverIncomingHitMul) * 100)}%`);
+      flashCampToast("カバー開始 · 当たり判定縮小");
     } else if (r === "exited") {
       flashCampToast("カバー解除");
     }
@@ -770,6 +772,7 @@ let rescueConfirm = false;
 
 function ensureDirectSave(): DirectSaveResult | null {
   if (world.phase !== "result") return null;
+  try { settleFriendlyFire(world, sortieIdForWorld(world, returnKindFromWorld(world)), window.localStorage); } catch { /* storage denied: keep checkpoint counters */ }
   const done = directSaves.get(world);
   if (done) return done;
   const res = saveSortieResultToHub(world);
@@ -1010,7 +1013,7 @@ function renderDom(): void {
           ${gatedButtonHtml("btn-purge", "purge", "secondary", "パージ（小隊全機）：キャンプ付近は置場へ／それ以外は戦場投下（P）。", "パージ／キャンプへ降ろす")}
           ${gatedButtonHtml("btn-camp-pickup", "camp_pickup", "secondary", "キャンプ付近で置場から積込（G）。", "キャンプから積込")}
           ${gatedButtonHtml("btn-scatter", "scatter_search", "stance-raid", "隊長＋生存僚機を遊撃にし、機首基準で三方向に散開（1v1向け一掃）。", "散開捜索")}
-          <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。被弾命中率↓・命中↑。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
+          <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。当たり判定縮小。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
           ${returnOpen() ? sortieRetreatHtml(world.leader.alive, rescueConfirm, previewHeldCredits()) : ""}
         </div>
         <div id="wing-palette-row"></div>
@@ -1066,7 +1069,7 @@ function renderDom(): void {
   document.getElementById("btn-cover")?.addEventListener("click", () => {
     const r = toggleSquadCover(world);
     if (r === "entered") {
-      flashCampToast(`カバー開始 · 被弾命中率−${Math.round((1 - world.balance.coverIncomingHitMul) * 100)}%`);
+      flashCampToast("カバー開始 · 当たり判定縮小");
     } else if (r === "exited") {
       flashCampToast("カバー解除");
     }

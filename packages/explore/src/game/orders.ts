@@ -1,4 +1,3 @@
-import { circuitIncomingMul } from "./circuitPlay";
 import { loadSpeedRatio, roomFor, unitLoad } from "./carry";
 import { clamp, dist } from "./math";
 import type { Balance } from "./balance";
@@ -120,35 +119,7 @@ export function inCampAura(world: World, unit: Unit): boolean {
 }
 
 /** Apply cover entry/exit to the existing moveTarget path, so no separate sim loop is required. */
-function applyCoverToMoveTarget(unit: Unit, world: World): void {
-  if (!unit.alive || !unit.moveTarget) return;
-  const state = unit as Unit & { coverEscapeT?: number; coverId?: string | null };
-  state.coverEscapeT = Math.max(0, state.coverEscapeT ?? 0);
-  const covers = world.coverObjects ?? [];
-  let cover: { id: string; pos: { x: number; y: number }; radius: number } | null = null;
-  let best = Infinity;
-  for (const c of covers) {
-    const d = dist(unit.pos, c.pos);
-    if (d < best) { best = d; cover = c; }
-  }
-  if (!cover) { unit.inCover = false; state.coverId = null; return; }
-  const dx = cover.pos.x - unit.pos.x;
-  const dy = cover.pos.y - unit.pos.y;
-  const distance = Math.hypot(dx, dy);
-  const boundary = Math.max(0, cover.radius - unit.radius);
-  const moveX = unit.moveTarget.x - unit.pos.x;
-  const moveY = unit.moveTarget.y - unit.pos.y;
-  const moving = Math.hypot(moveX, moveY) > 0.01;
-  const outward = moving && moveX * dx + moveY * dy < 0;
-  if (unit.inCover && outward) { unit.inCover = false; state.coverId = null; state.coverEscapeT = 0.35; return; }
-  if (distance <= boundary) { unit.inCover = true; state.coverId = cover.id; return; }
-  if (state.coverEscapeT > 0 || !moving || outward || distance > cover.radius + 18) return;
-  const len = Math.max(distance, 0.001);
-  unit.moveTarget = { x: unit.moveTarget.x + (dx / len) * 55 * 0.016, y: unit.moveTarget.y + (dy / len) * 55 * 0.016 };
-}
-
 export function unitMoveSpeedMul(unit: Unit, world: World): number {
-  applyCoverToMoveTarget(unit, world);
   let mul = cargoSpeedMul(unit, world);
   if (unitLoad(world, unit) <= 0 && inCampAura(world, unit)) mul *= world.balance.campLightSpeedMul;
   return mul;
@@ -159,23 +130,13 @@ export function campDamageTakenMul(world: World, unit: Unit): number {
 }
 export function campDrPercent(world: World): number { return Math.round((1 - world.balance.campDamageTakenMul) * 100); }
 
-export function shotHitChance(shooter: Unit, target: Unit, world: World): number {
-  let chance = 1;
-  const incoming = circuitIncomingMul(world, target);
-  if (incoming != null) chance *= incoming;
-  else if (target.inCover) chance *= world.balance.coverIncomingHitMul;
-  if (shooter.inCover) chance *= world.balance.coverAccuracyMul;
-  return Math.min(1, Math.max(0, chance));
-}
-
 export function toggleUnitCover(world: World, unit: Unit): boolean | null { if (world.phase !== "sortie" || !unit.alive) return null; unit.inCover = !unit.inCover; return unit.inCover; }
 
 export function toggleSquadCover(world: World): "entered" | "exited" | "denied" {
   if (world.phase !== "sortie" || !world.leader.alive) return "denied";
   const enter = !world.leader.inCover; const squad = [world.leader, ...world.wingmen].filter((u) => u.alive);
   for (const u of squad) u.inCover = enter;
-  const hitPct = Math.round((1 - world.balance.coverIncomingHitMul) * 100); const accPct = Math.round((world.balance.coverAccuracyMul - 1) * 100);
-  if (enter) { pushLog(world, `小隊カバー開始：被弾命中率−${hitPct}% · 命中+${accPct}%（キャンプDRと併用可）。`); return "entered"; }
+  if (enter) { pushLog(world, "小隊カバー開始：障害物の外縁で身を隠す（キャンプDRと併用可）。"); return "entered"; }
   pushLog(world, "小隊カバー解除。"); return "exited";
 }
 
@@ -189,7 +150,7 @@ export function campDefenseHudModel(world: World): { active: boolean; title: str
   if (world.camp != null && world.camp.stashedCount > 0) stockLine = `置場 ${world.camp.stashedCount} · 防衛圏 被弾−${drPercent}%`;
   else if (world.camp) stockLine = "キャンプあり（空・防衛圏オフ）— 荷下ろし不可のため現状維持";
   else stockLine = "キャンプ未設置 — その場でカバーし戦闘決着を目指せ";
-  return { active, title: "キャンプ防衛モード", stockLine, coverHint: world.leader.inCover ? "小隊カバー中（V で解除）" : "V / カバーで被弾命中率↓", drVisible, drPercent };
+  return { active, title: "キャンプ防衛モード", stockLine, coverHint: world.leader.inCover ? "小隊カバー中（V で解除）" : "障害物の外縁でカバー", drVisible, drPercent };
 }
 
 function friendliesNear(world: World, pos: { x: number; y: number }, radius: number): Unit[] { return [world.leader, ...world.wingmen].filter((u) => u.alive && dist(u.pos, pos) <= radius); }

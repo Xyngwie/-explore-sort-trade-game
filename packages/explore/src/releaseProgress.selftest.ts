@@ -128,6 +128,8 @@ const trueCap = () => ({ ...makeRestoredTrueOneByOne("t-cap"), equippedTo: "cap"
   assert.equal(w.mechBattery.cap!.capacity, 300, "the home battery row is not rewritten (no compounding)");
   assert.equal(w.currentAmmo.cap, 28, "carried ammo is not destroyed");
   assert.equal(usableAmmo(w, w.leader), 14, "max ammo ×0.5 (the rest is held back)");
+  // Q9: this ability-scale test needs a clear line of fire, not a friendly blocker.
+  for (const wing of w.wingmen) wing.pos = { x: w.leader.pos.x, y: w.leader.pos.y + 200 };
   // fire interval ×2 and bullet speed ×0.5 on the default gun
   const foe = w.enemies[0]!;
   foe.alive = true; foe.hp = 999; foe.pos = { x: w.leader.pos.x + 60, y: w.leader.pos.y };

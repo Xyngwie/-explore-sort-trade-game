@@ -143,16 +143,21 @@ const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: fal
   enemy.alive = true;
   enemy.pos = { x: world.leader.pos.x + 40, y: world.leader.pos.y };
   const before = world.bullets.length;
-  assert.equal(circuitTryWeapon(world, world.leader, enemy), true);
+  // Q14: deterministic independent spread replaces the fixed fan.
+  const random = Math.random;
+  const samples = [0, .5, .999999];
+  Math.random = () => samples.shift() ?? .5;
+  try { assert.equal(circuitTryWeapon(world, world.leader, enemy), true); }
+  finally { Math.random = random; }
   const shots = world.bullets.slice(before);
   assert.equal(shots.length, 3, "pellets stop when ammo runs out");
   assert.equal(world.currentAmmo["leader-1"], 0);
   const dmg = world.balance.bulletDamage * (1 / 4) * (1 + 0.2);
-  const expect = [-10, -5, 0].map((deg) => (deg * Math.PI) / 180);
+  const expect = [-2, 0, 1.999996].map((deg) => (deg * Math.PI) / 180);
   shots.forEach((b, i) => {
     assert.ok(Math.abs(b.damage - dmg) < 1e-6, "pellet damage is 1/4×(1+r)");
     const ang = Math.atan2(b.vel.y, b.vel.x);
-    assert.ok(Math.abs(ang - expect[i]!) < 1e-6, "angles stay −10, −5, 0");
+    assert.ok(Math.abs(ang - expect[i]!) < 1e-6, "each pellet independently samples the ±2° cone");
   });
 }
 
