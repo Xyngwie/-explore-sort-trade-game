@@ -74,3 +74,13 @@ assert.equal(parseInt(COLORS.dropGlow.slice(1, 3), 16), 199); assert.equal(parse
   assert.ok(ms.includes("/** Facing line length as a multiple of the shape radius (width 2). */\nexport const FACING_LINE_RATIO"));
   assert.ok(ms.indexOf("export function dropGlowRgba") < ms.indexOf("export const FACING_LINE_RATIO"));
 }
+
+// 10/17 A: resupply overhead text colours.
+assert.equal(COLORS.feedbackAmmo, "#ffb3ad");
+assert.equal(COLORS.feedbackPower, "#ffe08a");
+assert.equal(COLORS.feedbackEmpty, "#c9d1d9");
+{
+  const src = readFileSync(new URL("./game/render.ts", import.meta.url), "utf8");
+  assert.ok(src.includes('event.kind === "empty" ? COLORS.feedbackEmpty : event.kind === "ammo" ? COLORS.feedbackAmmo : COLORS.feedbackPower'));
+  assert.ok(!/#8cf0b0|#8bd5ff|#ffd27a/.test(src), "old green / blue / yellow feedback colours gone");
+}

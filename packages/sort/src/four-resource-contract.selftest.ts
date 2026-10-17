@@ -90,6 +90,10 @@ import { createHubSave, serializeHubSave, INITIAL_HUB } from "@estg/shared";
   assert(style.includes(".hud-gauge.low .hud-gauge-fill {\n  background: linear-gradient(90deg, #d4a72c 0%, #f0883e 100%);"), "low gauge unchanged");
   assert(style.includes(".hud-gauge.tension .hud-gauge-fill {\n  background: linear-gradient(90deg, #f0883e 0%, #f85149 100%);"), "tension gauge red");
   assert(/\.warn \{ color: #f85149/.test(style), "warn text stays red");
+  // 10/17 B: combo-hot outline (and its glow) purple, not yellow.
+  assert(/outline-color:\s*#c779ff/.test(block(".cell.pending.combo-hot")), "combo-hot outline purple");
+  assert(/rgba\(199, 121, 255/.test(block(".cell.pending.combo-hot")) && !/#f0b429|rgba\(240, 181, 41/.test(block(".cell.pending.combo-hot")), "combo-hot glow purple, no yellow");
+  assert(/outline-width:\s*3px/.test(block(".cell.pending.combo-hot")) && /pulse-clear-hot 0\.35s/.test(block(".cell.pending.combo-hot")), "width and blink kept");
   // Same red / yellow as the explore map drops.
   const map = readFileSync(new URL("../../explore/src/game/mapShapes.ts", import.meta.url), "utf8");
   assert(map.includes(`ammoDrop: "${RED.border}"`) && map.includes(`powerDrop: "${YELLOW.border}"`), "map and SORT share red / yellow");

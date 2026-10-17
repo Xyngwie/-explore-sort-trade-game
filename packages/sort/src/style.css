@@ -704,9 +704,9 @@ button.cell {
   animation: pulse-clear-combo 0.4s ease-in-out infinite alternate;
 }
 .cell.pending.combo-hot {
-  outline-color: #f0b429;
+  outline-color: #c779ff; /* 10/17 B: purple (yellow is now power) */
   outline-width: 3px;
-  box-shadow: 0 0 16px rgba(240, 181, 41, 0.65);
+  box-shadow: 0 0 16px rgba(199, 121, 255, 0.65);
   animation: pulse-clear-hot 0.35s ease-in-out infinite alternate;
 }
 @keyframes pulse-clear-combo {

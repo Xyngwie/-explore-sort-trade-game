@@ -15,6 +15,9 @@ export const COLORS = {
   circuitDrop: "#e6e9ee", // whitish
   container: "#a39a8c", // warm grey (10/17): apart from the cool wreck grey and the whitish circuit square
   containerEdge: "#d2cabd",
+  feedbackAmmo: "#ffb3ad", // 10/17 A: resupply overhead text, light red (ammo)
+  feedbackPower: "#ffe08a", // light yellow (power)
+  feedbackEmpty: "#c9d1d9", // grey (enemy out of ammo)
   dropGlow: "#c779ff", // 10/17 C: enemy-kill DROP container square, ring and glow (no faction / resource meaning)
 } as const;
 export const OWN_WRECK_OUTLINE_W = 2;
