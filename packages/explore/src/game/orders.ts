@@ -51,14 +51,14 @@ export function recoverApproachWaypoint(world: World, focus: { x: number; y: num
   return { x: clamp(focus.x + Math.cos(angle) * radius, pad, world.balance.worldW - pad), y: clamp(focus.y + Math.sin(angle) * radius, pad, world.balance.worldH - pad) };
 }
 
-export function applyOrder(world: World, wing: Unit, stance: Stance, opts?: { waypoint?: { x: number; y: number } | null }): "applied" | "denied" {
+export function applyOrder(world: World, wing: Unit, stance: Stance, opts?: { waypoint?: { x: number; y: number } | null; individual?: boolean }): "applied" | "denied" {
   if (!wing.alive) return "denied";
-  // C20-b: any order (individual / 召還 / squad policy / the 帰還要請 auto-patrol) clears a hold.
+  // C20-b: a new individual / 召還 / squad policy order clears a hold.
   wing.holdOrder = false;
-  if (stance === "escort") { abortSalvage(wing); wing.stance = "escort"; wing.waypoint = null; pushLog(world, `${wing.name}：帯同。隊長に付く。`); return "applied"; }
-  if (stance === "raid") { abortSalvage(wing); wing.stance = "raid"; wing.waypoint = null; pushLog(world, `${wing.name}：遊撃。自律交戦を開始。`); return "applied"; }
+  if (stance === "escort") { abortSalvage(wing); wing.individualOrder = opts?.individual === true; wing.stance = "escort"; wing.waypoint = null; pushLog(world, `${wing.name}：帯同。隊長に付く。`); return "applied"; }
+  if (stance === "raid") { abortSalvage(wing); wing.individualOrder = opts?.individual === true; wing.stance = "raid"; wing.waypoint = null; pushLog(world, `${wing.name}：遊撃。自律交戦を開始。`); return "applied"; }
   if (stance === "patrol") {
-    abortSalvage(wing); wing.stance = "patrol";
+    abortSalvage(wing); wing.individualOrder = opts?.individual === true; wing.stance = "patrol";
     wing.waypoint = opts?.waypoint != null ? { ...opts.waypoint } : { ...world.leader.pos };
     wing.patrolAngle = Math.atan2(wing.pos.y - wing.waypoint.y, wing.pos.x - wing.waypoint.x);
     pushLog(world, `${wing.name}：哨戒。目標周辺を掃討。`); return "applied";
@@ -68,6 +68,7 @@ export function applyOrder(world: World, wing: Unit, stance: Stance, opts?: { wa
     if (discovered.length === 0) { pushLog(world, `${wing.name}：発見済みコンテナなし。`); return "denied"; }
     const claimed = recoverClaimedContainerIds(world, wing.id);
     const free = discovered.filter((c) => !claimed.has(c.id));
+    wing.individualOrder = opts?.individual === true;
     wing.stance = "recover";
     if (free.length > 0) {
       let target = free[0]!; let best = Infinity;
@@ -92,17 +93,17 @@ export function scatterSearch(world: World): "applied" | "denied" {
     const unit = living[i]!; const angle = base + (Math.PI * 2 * i) / n;
     const target = { x: clamp(origin.x + Math.cos(angle) * distOut, pad, world.balance.worldW - pad), y: clamp(origin.y + Math.sin(angle) * distOut, pad, world.balance.worldH - pad) };
     abortSalvage(unit); unit.stance = "raid"; unit.moveTarget = { ...target };
-    if (unit.kind === "wingman") unit.holdOrder = false; // C20-b: 散開捜索 clears a hold
+    if (unit.kind === "wingman") { unit.holdOrder = false; unit.individualOrder = false; } // C20-b: 散開捜索 clears a hold
     if (unit.kind === "leader") unit.waypoint = null; else unit.waypoint = { ...target };
   }
   pushLog(world, "散開捜索：隊長＋僚機を遊撃で各方角に展開。"); return "applied";
 }
 
-export function rallyWingman(world: World, wing: Unit): "applied" | "denied" { return applyOrder(world, wing, "escort"); }
+export function rallyWingman(world: World, wing: Unit, opts?: { individual?: boolean }): "applied" | "denied" { return applyOrder(world, wing, "escort", opts); }
 
 export function onSalvageCompleted(world: World, unit: Unit): void {
   unit.salvageId = null; unit.salvageT = 0; unit.salvagedCount += 1; world.salvaged += 1;
-  if (unit.kind === "wingman") { unit.stance = "escort"; unit.waypoint = null; pushLog(world, `${unit.name}：回収完了 → ${STANCE_LABEL.escort}へ自動切替。`); }
+  if (unit.kind === "wingman") { unit.individualOrder = false; unit.stance = "escort"; unit.waypoint = null; pushLog(world, `${unit.name}：回収完了 → ${STANCE_LABEL.escort}へ自動切替。`); }
   else pushLog(world, `${unit.name}：コンテナ回収完了。`);
 }
 

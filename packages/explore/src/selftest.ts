@@ -748,7 +748,7 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
 }
 
 
-// --- request extract anywhere; wingmen get patrol waypoint at circle center ---
+// --- request extract anywhere; preserve existing wingman stance/waypoint (D1) ---
 {
   const world = legacyWorld(bootstrapFromSearch(""));
   startSortie(world);
@@ -768,10 +768,8 @@ function advance(world: ReturnType<typeof createWorld>, seconds: number, step = 
   );
   for (const w of world.wingmen) {
     assert.equal(w.alive, true);
-    assert.equal(w.stance, "patrol");
-    assert.ok(w.waypoint);
-    assert.equal(w.waypoint!.x, 640);
-    assert.equal(w.waypoint!.y, 320);
+    assert.equal(w.stance, "raid", "recall must not replace the existing stance");
+    assert.equal(w.waypoint, null, "assembly is transient, not a new patrol order");
   }
   // Second request while active denied
   assert.equal(requestExtract(world), false);
@@ -2156,11 +2154,11 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   assert.equal(wingStanceTagJa({ holdOrder: true }, "帯同"), "待機");
   assert.equal(wingStanceTagJa({ holdOrder: false }, "帯同"), "帯同");
   assert.equal(wingStanceTagJa({}, "哨戒"), "哨戒");
-  // 帰還要請 (requestExtract) reassigns every alive wingman via applyOrder → clears holds
+  // D1: recall is transient movement, and must preserve explicit holds.
   wa.holdOrder = true; wb.holdOrder = true;
   if (requestExtract(w)) {
-    assert.equal(wa.holdOrder, false, "帰還要請 clears hold");
-    assert.equal(wb.holdOrder, false, "帰還要請 clears hold (immobile too)");
+    assert.equal(wa.holdOrder, true, "帰還要請 preserves an explicit hold (D1)");
+    assert.equal(wb.holdOrder, true, "帰還要請 preserves hold (immobile too)");
   } else {
     assert.fail("requestExtract should start in this fixture");
   }

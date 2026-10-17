@@ -1,3 +1,4 @@
+import { segmentCircle } from "./geometry";
 /**
  * Circuit actions during a sortie (Issue #269, 神宮 10/11–12 decisions).
  * - `rules`: circuit effects are live (attached in both unlock modes; a
@@ -1238,7 +1239,7 @@ export function bendHoming(world: World, b: Bullet, dt: number): void {
   b.vel = { x: Math.cos(next) * sp, y: Math.sin(next) * sp };
 }
 
-export function tryDodge(world: World, unit: Unit, b: Bullet): boolean {
+export function tryDodge(world: World, unit: Unit, b: Bullet, frameEnd?: Vec2): boolean {
   if (!playOf(world)?.rules || !unit.alive) return false;
   const m = modsFor(world, unit.id);
   if (!(m.dodge > 0) && !selfKey(world, unit.id, "dodge")) return false;
@@ -1255,15 +1256,19 @@ export function tryDodge(world: World, unit: Unit, b: Bullet): boolean {
   const ln = norm(left);
   const rn = norm(right);
   const step = world.balance.escortSide;
-  const leftPos = { x: unit.pos.x + ln.x * step, y: unit.pos.y + ln.y * step };
-  const rightPos = { x: unit.pos.x + rn.x * step, y: unit.pos.y + rn.y * step };
-  const ld = dist(leftPos, b.pos);
-  const rd = dist(rightPos, b.pos);
-  const side = ld > rd ? ln : rd > ld ? rn : ln;
-  const beforeDodge = { ...unit.pos };
-  unit.pos.x = Math.max(20, Math.min(world.balance.worldW - 20, unit.pos.x + side.x * step));
-  unit.pos.y = Math.max(20, Math.min(world.balance.worldH - 20, unit.pos.y + side.y * step));
-  unit.pos = obstacleMove(world, { ...unit, pos: beforeDodge }, unit.pos);
+  // Compare actual constrained positions, not hypothetical points inside obstacles.
+  // The remaining swept path is used rather than the contact point alone: a
+  // subpixel sideways shift at the leading edge must not count as an escape.
+  const future = frameEnd
+    ? {x:frameEnd.x+b.vel.x*Math.max(0,b.ttl),y:frameEnd.y+b.vel.y*Math.max(0,b.ttl)}
+    : {x:b.pos.x+b.vel.x*Math.max(0,b.ttl),y:b.pos.y+b.vel.y*Math.max(0,b.ttl)};
+  const candidates=[ln,rn].map(side=>obstacleMove(world,unit,{
+    x:Math.max(20,Math.min(world.balance.worldW-20,unit.pos.x+side.x*step)),
+    y:Math.max(20,Math.min(world.balance.worldH-20,unit.pos.y+side.y*step)),
+  })).filter(pos=>dist(pos,unit.pos)>1e-6 && segmentCircle(b.pos,future,pos,hit+1e-6)==null);
+  const destination=candidates.sort((a,c)=>dist(c,b.pos)-dist(a,b.pos))[0];
+  if(!destination)return false;
+  unit.pos=destination;
   const cd = Math.max(DODGE_COOLDOWN_MIN_SEC, DODGE_COOLDOWN_SEC * (1 - m.dodge));
   p.dodgeReady[unit.id] = world.elapsed + cd;
   return true;
@@ -1698,6 +1703,7 @@ export function issueWingmanRecover(world: World, unitIds: string[], pt: Vec2): 
   for (const id of ids) {
     const u = world.wingmen.find((w) => w.id === id)!;
     if (target.id === id) continue;
+    u.individualOrder = false;
     p.wingRecover[id] = { ...target, n0: u.salvagedCount };
     delete p.wingMove[id];
     delete p.wingHold[id];
@@ -1866,6 +1872,7 @@ export function handleMapTap(world: World, pt: Vec2, wingPickRadius: number): "c
   // 項目4-2 N2: carrying the captain's wreck, the wingman is the one a map tap moves.
   const rescuer = captainRescuer(world);
   if (p && rescuer) {
+    rescuer.individualOrder = false;
     p.wingMove[rescuer.id] = { x: pt.x, y: pt.y };
     p.wingHold ??= {};
     p.wingHold[rescuer.id] = { x: pt.x, y: pt.y, manual: true };
@@ -1885,6 +1892,7 @@ export function issueWingmanMove(world: World, unitIds: string[], pt: Vec2): str
   for (const id of unitIds) {
     const u = world.wingmen.find((w) => w.id === id);
     if (!u || !u.alive || p.wingTrueOne[id]) continue;
+    u.individualOrder = false;
     p.wingMove[id] = { x: pt.x, y: pt.y };
     delete p.wingRecover?.[id];
     delete p.wingHold?.[id];

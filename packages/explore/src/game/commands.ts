@@ -147,7 +147,7 @@ export function executeExploreCommand(
       const wing = world.wingmen.find((w) => w.id === req.wingId);
       if (!wing) return { status: "done", id, result: "denied" };
       const result =
-        req.rally === true ? rallyWingman(world, wing) : applyOrder(world, wing, stance);
+        req.rally === true ? rallyWingman(world, wing, { individual: true }) : applyOrder(world, wing, stance, { individual: true });
       return { status: "done", id, result };
     }
   }

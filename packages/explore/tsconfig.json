@@ -32,6 +32,9 @@
     "src/liveTransport.selftest.ts",
     "src/combatFeedback.selftest.ts",
     "src/projectileHitAll.selftest.ts",
-    "src/carriedAim.selftest.ts"
+    "src/carriedAim.selftest.ts",
+    "src/inputMovement.selftest.ts",
+    "src/obstacleDodge.selftest.ts",
+    "src/boardingReturn.selftest.ts"
   ]
 }

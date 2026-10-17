@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / explore-playtest-fixes-20261018 作業宣言
+- Who: Codex / 実行隊長。ユーザー提供計画に従い入力・帰還誘導の実装を分担し、衝突・回避と統合を担当
+- What: fix/explore-playtest-20261018。クリック移動の終了・手動優先、回避成否、帰還時の指示優先順位
+- Why: run-20261018-explore-001の3指摘を現行mainで再現し修正する
+- Scope: #304維持、既存衝突・移動能力・明示的個別指示を維持。盾・学習AI・帰還時間・置き去り規則は変更しない
+- Status: draft #305。3件の再現・修正を統合、新規回帰3ファイルと390px幅ブラウザーで入力取消・再開・帰還集合・個別hold維持を確認。基準main bdc45c3（#304）、公開デプロイ39075704092成功。詳細はEXPLORE_PLAYTEST_FIXES_20261018.md。全npm test・全5ビルドPASS。CI確認後、draftのまま風紀委員の再監査待ちにする。未マージ・未デプロイ。
+
 ## Codex / carried-aim 作業宣言（2026-10-17）
 - Who: Codex / ユーザー直接指示
 - What: feat/carried-aim。搭載機の独立照準・旋回と、積載完了時の荷物投下

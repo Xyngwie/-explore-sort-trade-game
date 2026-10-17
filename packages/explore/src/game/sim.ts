@@ -1,3 +1,4 @@
+import { boardingAssemblyTarget } from "./boardingMovement";
 import { COVER_DR_BASE } from "@estg/shared";
 import { firstShotContact, friendlyFireRisk, clearFiringLine, lineClearTarget, spreadRadians } from "./projectiles";
 import { recordFriendlyFire } from "./friendlyFireHistory";
@@ -192,7 +193,7 @@ export function updateBullets(world: World, dt: number): void {
       b.pos={x:start.x+(end.x-start.x)*contact.t,y:start.y+(end.y-start.y)*contact.t};
       const t=contact.unit;
       if(!t){b.alive=false;break;}
-      if(tryDodge(world,t,b)){
+      if(tryDodge(world,t,b,end)){
         const dx=end.x-start.x,dy=end.y-start.y,len=Math.hypot(dx,dy)||1;
         start={x:b.pos.x+dx/len*.001,y:b.pos.y+dy/len*.001};continue;
       }
@@ -344,8 +345,7 @@ export function requestExtract(world: World): boolean {
   world.boarding = { center, radius, requestedAt: world.elapsed, cargoArrived: false };
   scheduleRecall(world);
   world.extract = { pos: { ...center }, radius };
-  for (const w of world.wingmen) if (w.alive) applyOrder(world, w, "patrol", { waypoint: center });
-  pushLog(world, `帰還要請。搭乗円展開（半径 ${radius}）。僚機は円中心を哨戒。貨物 ${world.balance.boardingCargoDelaySec}s／離昇 ${world.balance.boardingLiftOffDelaySec}s。`);
+  pushLog(world, `帰還要請。搭乗円展開（半径 ${radius}）。個別指示のない僚機は円内へ集合。貨物 ${world.balance.boardingCargoDelaySec}s／離昇 ${world.balance.boardingLiftOffDelaySec}s。`);
   return true;
 }
 
@@ -439,6 +439,11 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   const timedOut = isOperationTimedOut(world);
   const waitingBoarding = timedOut && world.boarding != null;
   const leader = world.leader;
+  // clickMove is persistent input, not a one-frame event. A fresh manual
+  // direction cancels it even when the captain is riding another mech.
+  const manualMove = input.move.x !== 0 || input.move.y !== 0;
+  if (manualMove || (input.clickMove && dist(leader.pos, input.clickMove) < 4)) input.clickMove = null;
+  leader.playerMoveTarget = input.clickMove ? { ...input.clickMove } : null;
   // 項目5-2: a downed captain does not fail the sortie. A total wipe rescues at once.
   // While a timeout is waiting on a circle, that circle resolves the sortie (5-2b).
   if (!waitingBoarding && maybeAutoRescue(world)) return;
@@ -447,13 +452,22 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   leader.cooldown = Math.max(0, leader.cooldown - dt);
   if (leaderDown || timedOut || wreckCarrierId(world, leader.id)) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
   else {
-    let fallback: Vec2 | null = leader.moveTarget;
+    // moveTarget is this frame's resolved AI/manual target, never retained input.
+    let fallback: Vec2 | null = input.clickMove ? { ...input.clickMove } : null;
     if (input.move.x !== 0 || input.move.y !== 0) { const n = norm(input.move); const reach = Math.max(world.balance.wasdMoveLookahead, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed * dt); fallback = { x: leader.pos.x + n.x * reach, y: leader.pos.y + n.y * reach }; }
     else if (input.clickMove) fallback = { ...input.clickMove };
     const locked = movementLocked(world);
-    const cruise = circuitLocomotion(world, leader, locked ? null : fallback, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed);
+    const speed = world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed;
+    const cruise = manualMove || input.clickMove
+      ? { target: locked ? null : fallback, speed }
+      : circuitLocomotion(world, leader, locked ? null : fallback, speed);
     leader.moveTarget = !input.move.x && !input.move.y && !input.clickMove && !input.fire && !input.interact ? lineClearTarget(world,leader) ?? cruise.target : cruise.target;
     moveToward(leader, leader.moveTarget, cruise.speed, dt, world);
+    if (input.clickMove && dist(leader.pos, input.clickMove) < 4) {
+      input.clickMove = null;
+      leader.playerMoveTarget = null;
+      leader.moveTarget = null;
+    }
   }
   placeCarried(world);
   if (!leaderDown) {
@@ -483,22 +497,34 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     const riding = wreckCarrierId(world, w.id) != null;
     const intent = decideWingman(world, w, dt);
     const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.moveSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed /* 項目4-1: load 0 is 120 for wingmen too (2026-10-07 7:36 神宮) */);
-    w.moveTarget = timedOut || riding ? null : lineClearTarget(world,w) ?? cruise.target;
+    const assembly = boardingAssemblyTarget(world, w);
+    w.moveTarget = timedOut || riding ? null : assembly ?? lineClearTarget(world,w) ?? cruise.target;
     // A living captain riding a wingman controls that carrier with WASD too.
-    if (!timedOut && captainRescuer(world)?.id === w.id && (input.move.x || input.move.y)) {
+    const carrierManualMove = !timedOut && captainRescuer(world)?.id === w.id && !!(input.move.x || input.move.y);
+    if (carrierManualMove) {
+      const play = world.circuitPlay;
+      if (play) {
+        delete play.wingMove[w.id];
+        delete play.wingRecover?.[w.id];
+        w.individualOrder = false;
+      }
       const direction = norm(input.move);
       const reach = Math.max(world.balance.wasdMoveLookahead, cruise.speed * dt);
       w.moveTarget = { x: w.pos.x + direction.x * reach, y: w.pos.y + direction.y * reach };
     }
     if (timedOut) w.vel = { x: 0, y: 0 };
     else moveToward(w, w.moveTarget, cruise.speed, dt, world);
+    if (carrierManualMove && world.circuitPlay) {
+      world.circuitPlay.wingHold ??= {};
+      world.circuitPlay.wingHold[w.id] = { ...w.pos, manual: true };
+    }
     placeCarried(world);
     const focusing = world.circuitPlay?.rules === true && world.circuitPlay.order?.kind === "focus";
     const focus = focusTarget(world, w);
     if (focusing) {
       if (focus) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, focus, false, true); }
     } else if (intent.fireAt) { w.engageWarnT = Math.max(w.engageWarnT, world.balance.wingEngageWarnSec * 0.75); tryFire(world, w, intent.fireAt, false); }
-    if (!timedOut && !riding && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage || wingRecoverWantsSalvage(world, w), dt);
+    if (!timedOut && !riding && !assembly && !movementLocked(world)) updateSalvage(world, w, intent.trySalvage || wingRecoverWantsSalvage(world, w), dt);
   }
   placeCarried(world);
   spawnRecall(world);
