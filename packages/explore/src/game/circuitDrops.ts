@@ -24,6 +24,8 @@ export type StrandedCircuitDrop = {
   circuitId: string;
   pos: Vec2;
   drop: FieldCircuitDrop;
+  /** Seen by the squad this sortie (absent in old checkpoints = shown). */
+  found?: boolean;
 };
 
 /**

@@ -1,4 +1,5 @@
 import { enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
+import { revealStrays } from "./strayScatter";
 import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
@@ -88,6 +89,7 @@ function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, 
 }
 
 function revealVision(world: World): void {
+  revealStrays(world, (pos) => friendlyUnits(world).some((u) => u.alive && dist2(u.pos, pos) <= (world.balance.visionRange * visionMul(world, u.id)) ** 2));
   for (const u of friendlyUnits(world)) {
     if (!u.alive) continue;
     const r = world.balance.visionRange * visionMul(world, u.id);
