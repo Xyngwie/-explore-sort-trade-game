@@ -45,6 +45,8 @@ function load(w: ReturnType<typeof world>, picker=w.leader, target=w.wingmen[0]!
  backfillEnemyState(w);
  foe.enemyState!.ammo=0;foe.enemyState!.activity=0;
  w.leader.heading=0;passenger.heading=0; // facing PR1: both muzzles at the foe
+ // Q9: third, unmounted ally must not obstruct this carrier/passenger firing test.
+ w.wingmen[1]!.pos={x:400,y:600};
  const beforeA=w.currentAmmo.a!,beforeB=w.currentAmmo.b!;
  tickWorld(w,0.01,idle);
  assert.equal(w.currentAmmo.a,beforeA-1);assert.equal(w.currentAmmo.b,beforeB-1,'both weapons fire');

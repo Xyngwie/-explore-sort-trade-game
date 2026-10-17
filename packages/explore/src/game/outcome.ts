@@ -157,7 +157,7 @@ export function sortHandoffUrl(world: World): string {
   );
 }
 
-function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
+export function sortieIdForWorld(world: World, kind: SortieReturnKind): string {
   const source = JSON.stringify({
     ids: world.deployedInstanceIds,
     kind,

@@ -1,3 +1,4 @@
+import { obstacleMove, updateCoverMovement } from "./coverMovement";
 import { showCombatFeedback } from "./combatFeedback";
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
 import { canSee } from "./vision";
@@ -167,6 +168,8 @@ export function moveEnemy(
   const before = { ...e.pos };
   e.pos.x = clamp(e.pos.x + dx * step, 20, world.balance.worldW - 20);
   e.pos.y = clamp(e.pos.y + dy * step, 20, world.balance.worldH - 20);
+  e.pos = obstacleMove(world, { ...e, pos: before }, e.pos);
+  updateCoverMovement(world, e, {x:0,y:0}, dt);
   const travelled = dist(before, e.pos);
   if (travelled > 0) {
     s.activity = Math.max(

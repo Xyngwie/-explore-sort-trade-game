@@ -15,6 +15,7 @@ const layouts = new WeakMap<object, CoverObject[]>();
 export function getCoverObjects(world: World): CoverObject[] {
   const cached = layouts.get(world);
   if (cached) return cached;
+  if (Array.isArray(world.coverObjects)) { layouts.set(world, world.coverObjects); return world.coverObjects; }
   const covers: CoverObject[] = [];
   const margin = COVER_RADIUS + 20;
   let attempts = 0;

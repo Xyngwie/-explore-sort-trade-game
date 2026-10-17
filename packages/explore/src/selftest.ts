@@ -1,3 +1,4 @@
+import { hitRadius } from "./game/projectiles";
 /**
  * Explore behavior selftest — run via `npm run test -w @estg/explore`
  */
@@ -39,7 +40,6 @@ import {
   rallyWingman,
   scatterSearch,
   setCampOrDeposit,
-  shotHitChance,
   spawnContainersAt,
   toggleSquadCover,
   unloadAtCamp,
@@ -1408,24 +1408,23 @@ function advancePinned(
   const shooter = world.leader;
   const target = world.enemies[0]!;
   target.alive = true;
-  // Baseline uncovered → always-hit feel
-  assert.equal(shotHitChance(shooter, target, world), 1);
-  // Target cover only
+  // C2 supersedes Q8 shrink: full geometry remains in and out of cover.
+  const full = target.radius + world.balance.bulletHitPadding;
+  assert.equal(hitRadius(world, target), full);
   target.inCover = true;
-  assert.ok(
-    Math.abs(shotHitChance(shooter, target, world) - world.balance.coverIncomingHitMul) < 1e-9,
-  );
-  // Both cover: incoming × accuracy, clamped ≤ 1
+  assert.ok(Math.abs(hitRadius(world, target) - full) < 1e-9);
   shooter.inCover = true;
-  const both =
-    world.balance.coverIncomingHitMul * world.balance.coverAccuracyMul;
-  assert.ok(Math.abs(shotHitChance(shooter, target, world) - Math.min(1, both)) < 1e-9);
-  // Shooter cover vs uncovered target: still 1 (accuracy clamped)
+  assert.ok(Math.abs(hitRadius(world, target) - full) < 1e-9);
   target.inCover = false;
-  assert.equal(shotHitChance(shooter, target, world), 1);
+  assert.equal(hitRadius(world, target), full);
   shooter.inCover = false;
 
-  // Squad toggle syncs living friendlies; works after timeout
+  // C1: manual entry only near obstacles; put each fixture at its own exterior edge.
+  getCoverObjects(world).splice(0);
+  for (const u of [world.leader,...world.wingmen]) {
+    getCoverObjects(world).push({id:`cover-${u.id}`,pos:{x:u.pos.x,y:u.pos.y+u.radius+31},radius:30});
+  }
+  // Squad toggle syncs nearby living friendlies; works after timeout
   assert.equal(toggleSquadCover(world), "entered");
   assert.equal(world.leader.inCover, true);
   for (const w of world.wingmen) {
@@ -1553,8 +1552,8 @@ function advancePinned(
   assert.ok(keysFlat.includes("Space"), "lists Space");
   assert.ok(keysFlat.includes("X"), "lists extract X");
   assert.ok(keysFlat.includes("C"), "lists camp C");
-  // #120: cover became object-based; the global V toggle is no longer listed.
-  assert.ok(!keysFlat.includes("V"), "no legacy cover V");
+  // C1: the manual V toggle is restored, with proximity required.
+  assert.ok(keysFlat.includes("V"), "manual cover V is listed");
   assert.ok(!keysFlat.includes("Q"), "no unused Q");
   assert.ok(!keysFlat.includes("Z"), "no unused Z");
 
@@ -1938,6 +1937,8 @@ function unlockWorld(mode: CommandUnlockMode, equipped: string[] = [], table?: C
   const leaderInstanceId = w.deployedInstanceIds[0];
   assert.ok(leaderInstanceId, "release fixture must have a leader instanceId");
   w.currentAmmo[leaderInstanceId] = 28;
+  // Q9: keep this firing-unlock fixture free of a friendly blocker; avoidance has its own test.
+  for (const wing of w.wingmen) wing.pos = { x: w.leader.pos.x, y: w.leader.pos.y + 200 };
   const ammo0 = w.currentAmmo[leaderInstanceId];
   tickWorld(w, 0.02, { move: { x: 0, y: 0 }, clickMove: null, fire: true, interact: false });
   assert.ok(w.currentAmmo[leaderInstanceId]! < ammo0!, "fire works in release");

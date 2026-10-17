@@ -4,7 +4,7 @@
     "feature_id": "projectile-hit-all",
     "planned_branch": "feat/projectile-hit-all",
     "planned_pr_title": "feat(explore): 弾は誰にでも当たる",
-    "status": "decided_not_implemented",
+    "status": "implemented_in_draft_pr_303",
     "decided_on": "2026-10-17 (JST, Asia/Tokyo)",
     "product_owner": "神宮",
     "repo": "Xyngwie/-explore-sort-trade-game",
@@ -193,14 +193,16 @@
       "en": "Remove the cover dice roll. While in cover the unit's hit body is smaller; the implementer picks the amount to approximate the current effect and reports it to 神宮.",
       "implementer_decides": [
         "cover hit-body shrink amount (report value and reasoning to 神宮)"
-      ]
+      ],
+      "superseded_by": "C2: physical occlusion only; no hitbox shrink."
     },
     {
       "id": "Q9",
       "choice": "A",
       "ja": "味方の AI は、誤射の危険が大きければ撃たずに横へ動いて射線を空ける。危険が小さければ撃つ（§4）。",
       "en": "Allied AI: if friendly-fire risk is high, hold fire and sidestep to clear the line; if risk is small, fire (EXPLORE_FACING_AIM_V0.md §4).",
-      "note": "The exact risk threshold is a fine spec: propose options to 神宮."
+      "note": "The exact risk threshold is a fine spec: propose options to 神宮.",
+      "clarified_by": "C3/C4: autonomous fire only; manual leader fire and focus orders bypass the risk gate."
     },
     {
       "id": "Q10",
@@ -231,9 +233,9 @@
     {
       "id": "Q11b",
       "choice": "extra",
-      "ja": "戦闘ごとに誤射の回数を記録する（データ構造を用意）。戦後の分析・精算のあとも残すかは未決定（後で神宮に聞く）。",
-      "en": "Record the friendly-fire count per battle (add the data structure). Whether it persists after post-battle analysis/settlement is UNDECIDED; ask 神宮 later.",
-      "partially_undecided": true
+      "ja": "誤射回数を戦闘ごとに非表示で数え、精算後も将来のAI学習用にバックグラウンド保存する。回数の表示・報酬への影響はない。",
+      "en": "Privately count friendly-fire hits per battle and retain after settlement for future learning. No count display or reward penalty.",
+      "partially_undecided": false
     },
     {
       "id": "Q14",
@@ -244,22 +246,22 @@
         {
           "weapon": "normal (AR, default gun / no gun circuit)",
           "spread_deg": "±2",
-          "confirmed_by_owner": "implicit"
+          "confirmed_by_owner": "explicit"
         },
         {
           "weapon": "smg",
           "spread_deg": "±5",
-          "confirmed_by_owner": "implicit"
+          "confirmed_by_owner": "explicit"
         },
         {
           "weapon": "mmr",
           "spread_deg": "±0.5",
-          "confirmed_by_owner": "implicit"
+          "confirmed_by_owner": "explicit"
         },
         {
           "weapon": "lmg",
           "spread_deg": "±4",
-          "confirmed_by_owner": "implicit"
+          "confirmed_by_owner": "explicit"
         },
         {
           "weapon": "shotgun",
@@ -267,7 +269,7 @@
           "confirmed_by_owner": "explicit"
         }
       ],
-      "note": "神宮 explicitly confirmed the shotgun option with ±2° random. The other values were proposed by Grok Bot and not objected to; reconfirm them in the PR's question list to 神宮."
+      "note": "2026-10-17 owner explicitly confirmed the four starting spread values in this conversation; shotgun ±2° was already explicit."
     },
     {
       "id": "Q15",
@@ -305,19 +307,22 @@
       "id": "OQ1",
       "ja": "戦闘ごとの誤射回数を、戦後の分析・精算のあとも残すか。",
       "en": "Should the per-battle friendly-fire count persist after post-battle analysis/settlement?",
-      "ask": "神宮"
+      "ask": "神宮",
+      "status": "resolved_by_owner_addendum_2026_10_17"
     },
     {
       "id": "OQ2",
       "ja": "Q9 の「危険が大きい」の線引き（射線上の味方との距離・半径など）。",
       "en": "Threshold for 'high risk' in Q9.",
-      "ask": "神宮"
+      "ask": "神宮",
+      "status": "resolved_by_owner_addendum_2026_10_17"
     },
     {
       "id": "OQ3",
       "ja": "Q14 の通常・SMG・MMR・LMG の初期値の再確認。",
       "en": "Reconfirm Q14 starting spread values for normal/SMG/MMR/LMG.",
-      "ask": "神宮"
+      "ask": "神宮",
+      "status": "resolved_by_owner_addendum_2026_10_17"
     },
     {
       "id": "OQ_any",
@@ -333,13 +338,13 @@
     "Projectiles are stopped by obstacles/cover objects (Q5).",
     "A projectile stops at the first unit or obstacle it hits (Q6).",
     "A missed projectile keeps flying until its ttl (~384 at base speed) and can hit any unit along the way (Q7).",
-    "The cover dice roll (shotHitChance random miss) is removed; units in cover have a smaller hit body; the chosen value is reported to 神宮 (Q8).",
+    "The cover dice and hitbox shrink are removed; obstacle occlusion protects a full-sized unit, with D1/D2 post-hit cover/circuit damage mitigation (C2 supersedes Q8 shrink).",
     "Allied AI holds fire and sidesteps when friendly-fire risk is high, fires when small (Q9).",
     "Enemies do not avoid other enemies (Q10).",
     "Overhead text 「誤射」 appears on a unit hit by friendly fire (Q11).",
     "Tactics log line 「誤射：<撃った機体> → <当たった機体>（−n）」 once per friendly-fire event, U+2212 minus (Q12).",
     "Friendly fire can destroy; battle report 「○○ の誤射で △△ 大破」 (Q13).",
-    "Per-battle friendly-fire count is recorded (Q11b); persistence beyond settlement is not decided.",
+    "Per-battle friendly-fire count is recorded (Q11b); retain privately after settlement without count display or reward changes (owner addendum).",
     "Per-weapon random spread with the Q14 starting values; shotgun pellets random within ±2°; special rounds stack on any weapon (Q14).",
     "A passenger (living wingman carried as a turret) and its carrier never hit each other with their shots; outside shots that reach the stacked pair hit the carrier, not the passenger (Q15).",
     "Selftests cover each item above, including a deterministic RNG for spread tests.",
@@ -416,7 +421,8 @@
     },
     {
       "topic": "mmr_range_vs_travel",
-      "text": "MMR fire range is 160 × range × 3 × (1 + r) ≥ 480, longer than the ~384 a base-speed projectile travels. MMR shots at long range can vanish before reaching the target today. Not addressed by the decisions; ask 神宮 if it matters."
+      "text": "Resolved: MMR keeps its bullet speed and uses a lifetime reaching 1.3 times effective range, calculated from final special-round/ability speed.",
+      "status": "resolved_by_owner_addendum_2026_10_17"
     },
     {
       "topic": "enemy_range",
@@ -446,6 +452,54 @@
       "topic": "carried_units",
       "text": "Carried wingmen stay in world.wingmen and ride on their carrier (placeCarried). Resolved by Q15: no friendly fire between passenger and carrier; outside shots hit the carrier.",
       "status": "resolved_by_Q15"
+    },
+    {
+      "topic": "cover_center_overlap",
+      "status": "resolved_by_owner_addendum_2026_10_17",
+      "text": "User chose boundary cover and explicitly prohibited obstacle penetration. Remove attraction/snapping and enforce swept movement collision."
+    }
+  ],
+  "owner_addendum_2026_10_17": {
+    "spread": "Explicitly confirmed normal ±2°, SMG ±5°, MMR ±0.5°, LMG ±4°; shotgun unchanged from Q14.",
+    "risk": "Unscattered direct-line friendly blocker suppresses autonomous shots only. C3 explicitly commanded leader fire and focus orders bypass this gate.",
+    "learning": "Count friendly-fire hits privately per battle and retain after settlement for future learning. No count display or reward penalty.",
+    "mmr": "Keep bullet speed; lifetime gives 1.3 × effective MMR range, including final speed of special ammo.",
+    "cover": "No suction; no obstacle penetration; C1/C2 later clarify manual near-obstacle V/button toggle and full-size body with physical occlusion only."
+  },
+  "audit_owner_decisions_2026_10_17": [
+    {
+      "id": "C1",
+      "decision": "Manual V/button cover toggle, only near obstacles; never automatically enter each frame."
+    },
+    {
+      "id": "C2",
+      "decision": "Remove hitbox shrink. Full-size body; only solid obstacle occlusion protects. No automatic cover-position change."
+    },
+    {
+      "id": "C3",
+      "decision": "Explicit leader fire and focus orders bypass friendly-fire avoidance; other firing gates remain."
+    },
+    {
+      "id": "C4",
+      "decision": "Keep autonomous leader sidestep when no player movement input."
+    },
+    {
+      "id": "C5",
+      "decision": "Camp mitigation applies to friendly fire, same as normal shots."
+    },
+    {
+      "id": "C6",
+      "decision": "Dodge any incoming projectile regardless of faction."
+    }
+  ],
+  "audit_owner_decisions_2026_10_17_round2": [
+    {
+      "id": "D1",
+      "decision": "Apply existing circuitIncomingMul as post-hit damage mitigation for armor_tune and cover_fight, without hitbox shrink. Preserve the existing cover_fight gates: HP <= 50% and movement speed > 8."
+    },
+    {
+      "id": "D2",
+      "decision": "Manual inCover ON adds COVER_DR_BASE damage mitigation in addition to physical obstacle occlusion. Existing additive circuit DR is capped at COVER_DR_CAP; camp mitigation multiplies separately."
     }
   ]
 }

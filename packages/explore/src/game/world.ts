@@ -470,6 +470,7 @@ export function startSortie(world: World): void {
   world.camp = null;
   world.logs = [];
   world.combatHitsTaken = 0;
+  world.friendlyFire = { count: 0, byShooter: {} };
   world.leftBehind = [];
   world.recoveredLostMechIds = [];
   world.sortieNonce = Math.random().toString(36).slice(2, 10);

@@ -17,6 +17,7 @@ export const COLORS = {
   containerEdge: "#d2cabd",
   feedbackAmmo: "#ffb3ad", // 10/17 A: resupply overhead text, light red (ammo)
   feedbackPower: "#ffe08a", // light yellow (power)
+  feedbackFriendlyFire: "#ffb3ad",
   feedbackEmpty: "#c9d1d9", // grey (enemy out of ammo)
   dropGlow: "#c779ff", // 10/17 C: enemy-kill DROP container square, ring and glow (no faction / resource meaning)
 } as const;

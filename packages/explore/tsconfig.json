@@ -30,6 +30,7 @@
     "src/enemyIdentity.selftest.ts",
     "src/enemyBehavior.selftest.ts",
     "src/liveTransport.selftest.ts",
-    "src/combatFeedback.selftest.ts"
+    "src/combatFeedback.selftest.ts",
+    "src/projectileHitAll.selftest.ts"
   ]
 }
