@@ -35,6 +35,7 @@
     "src/carriedAim.selftest.ts",
     "src/inputMovement.selftest.ts",
     "src/obstacleDodge.selftest.ts",
-    "src/boardingReturn.selftest.ts"
+    "src/boardingReturn.selftest.ts",
+    "src/logFeed.selftest.ts"
   ]
 }

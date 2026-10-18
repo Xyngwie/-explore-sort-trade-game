@@ -1,9 +1,13 @@
+import { LogPanel, repairSummary, type LogRow } from "./ui/logPanel";
+import { subscribeLogFeed } from "./game/logFeed";
+import type { LogLine } from "./game/types";
 import { effectiveActivity } from "./game/power";
 import { ENEMY_UNKNOWN_JA, enemyAt, noteEnemyTap } from "./game/enemyIdentity";
 import { isEnemySeen } from "./game/render";
 import "./style.css";
 import { loadLineJa, unitLoad, wreckCarrierId } from "./game/carry";
 import {
+  HUB_SAVE_STORAGE_KEY,
   CTA_CHIP,
   squadEquipmentError,
   resolveSortieSelection,
@@ -155,10 +159,15 @@ function leaderLoadHud(world: World): string {
   return inCampAura(world, world.leader) && unitLoad(world, world.leader) <= 0 ? `${line}・軽装キャンプ圏` : line;
 }
 
+let cachedRepairRows: LogRow[] = [];
+
 /** HubSave as it is now (null without a save / storage). */
 function freshHub(): HubSnapshot | null {
   try {
     const loaded = loadHubSaveFromLocalStorage();
+    cachedRepairRows = (loaded?.hub.fieldObjectIdentities?.repairLogs ?? []).map((repair, index) => ({
+      key: `repair:${index}:${repair.at}`, kind: "repair", text: repairSummary(repair), repair,
+    }));
     return loaded?.hub ? normalizeHubSnapshot(loaded.hub) : null;
   } catch {
     return null;
@@ -296,6 +305,30 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") persistOnHide(true);
 });
 document.addEventListener("pagehide", () => persistOnHide(false));
+
+let logToastTimer: ReturnType<typeof setTimeout> | null = null;
+function flashLogToast(text: string): void {
+  let toast = document.getElementById("log-copy-toast");
+  if (!toast) {
+    toast = document.createElement("div"); toast.id = "log-copy-toast";
+    toast.className = "toast"; toast.setAttribute("role", "status"); document.body.append(toast);
+  }
+  if (logToastTimer) clearTimeout(logToastTimer);
+  toast.textContent = text; toast.hidden = false; toast.classList.add("show");
+  logToastTimer = setTimeout(() => { toast!.hidden = true; toast!.classList.remove("show"); }, 2800);
+}
+const logPanel = new LogPanel(flashLogToast);
+let deferredLogRender = false;
+let logWorld: World | null = null;
+let stopLogFeed: (() => void) | null = null;
+let pendingLogLines: LogLine[] = [];
+let paintedRepairRows: LogRow[] | null = null;
+const logKeys = new WeakMap<LogLine, string>();
+let nextLogKey = 1;
+
+window.addEventListener("storage", event => {
+  if (event.key === HUB_SAVE_STORAGE_KEY) freshHub();
+});
 
 window.addEventListener(
   "pointerdown",
@@ -747,23 +780,24 @@ function wingPanelHtml(): string {
   return `${squadOrderBarHtml()}${cards}`;
 }
 
-function logsHtml(): string {
-  // Enemy PR1 (F1 = B): the tapped enemy in the info panel — only 「所属不明」.
-  const tag = world.enemyTag ? `<li class="tactical enemy-tag">${escapeHtml(ENEMY_UNKNOWN_JA)}</li>` : "";
-  return tag + logsListHtml();
-}
-
-function logsListHtml(): string {
-  const lines = world.logs.slice(0, 18);
-  if (lines.length === 0) {
-    return `<li class="tactical">戦術／戦報はここに出ます。</li>`;
+function paintLogPanel(): void {
+  if (logWorld !== world) {
+    stopLogFeed?.(); logWorld = world; pendingLogLines = []; paintedRepairRows = null; logPanel.reset();
+    stopLogFeed = subscribeLogFeed(world, line => pendingLogLines.push(line));
   }
-  return lines
-    .map(
-      (l) =>
-        `<li class="${l.kind}">${escapeHtml(l.text)}</li>`,
-    )
-    .join("");
+  const arrivals = pendingLogLines; pendingLogLines = [];
+  const queued = new Set(arrivals);
+  const lines = [...world.logs].reverse().filter(line => !queued.has(line)).concat(arrivals);
+  const rows: LogRow[] = paintedRepairRows === cachedRepairRows ? [] : [...cachedRepairRows];
+  paintedRepairRows = cachedRepairRows;
+  for (const line of lines) {
+    let key = logKeys.get(line);
+    if (!key) { key = `combat:${nextLogKey++}`; logKeys.set(line, key); }
+    rows.push({ key, text: line.text, kind: line.kind });
+  }
+  logPanel.tag.hidden = !world.enemyTag;
+  logPanel.tag.textContent = world.enemyTag ? ENEMY_UNKNOWN_JA : "";
+  logPanel.update(rows);
 }
 
 /** Direct-save outcome per world (U9). Saved once, when the result screen first renders. */
@@ -793,6 +827,10 @@ function directSaveNoteText(res: DirectSaveResult | null): string {
 }
 
 function renderDom(): void {
+  // Rebuilding the root destroys native selection ranges. Keep it until the
+  // first clearing gesture has been consumed; simulation continues meanwhile.
+  if (logPanel.guard.selected()) { deferredLogRender = true; return; }
+  deferredLogRender = false;
   phaseWatch.markRendered(world.phase);
   renderedUnlockSignature = unlockSignature();
   renderedLeaderAlive = captainActive(world);
@@ -1026,13 +1064,12 @@ function renderDom(): void {
           <strong>僚機指揮（オフスクリーン可）</strong>
           <div id="wing-panel">${wingPanelHtml()}</div>
         </div>
-        <div class="card">
-          <strong>戦術／戦報</strong>
-          <ul class="log" id="log-list">${logsHtml()}</ul>
-        </div>
+        <div id="log-panel-mount"></div>
       </div>
     </div>`;
 
+  logPanel.mount(document.getElementById("log-panel-mount")!);
+  paintLogPanel();
   bindCanvas();
   bindWingPalette();
   bindDebugUnlockToggle();
@@ -1221,11 +1258,11 @@ function paintHudOnly(): void {
   }
   paintWingPalette();
 
-  const log = document.getElementById("log-list");
-  if (log) log.innerHTML = logsHtml();
+  paintLogPanel();
 }
 
 function frame(now: number): void {
+  if (deferredLogRender && !logPanel.guard.selected()) renderDom();
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const logLen = world.logs.length;
