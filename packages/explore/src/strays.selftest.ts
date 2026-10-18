@@ -16,7 +16,9 @@ for (let i = 0; i < 40; i++) {
   for (const c of getCoverObjects(w)) assert.ok(Math.hypot(p.x - c.pos.x, p.y - c.pos.y) >= c.radius, "not on an obstacle");
   for (const c of w.containers) assert.ok(Math.hypot(p.x - c.pos.x, p.y - c.pos.y) >= 40 - 1e-9, "clear of containers");
 }
-// 4: hidden until an ally sees it, then shown.
+// 4: hidden until an ally sees it, then shown. Use an unobstructed sightline;
+// random cover belongs to the placement checks above, not this visibility fixture.
+getCoverObjects(w).splice(0);
 for (const e of w.enemies) e.alive = false;
 const far = { x: w.leader.pos.x + 500, y: w.leader.pos.y };
 w.strandedDrops = [{ dropId: "d1", circuitId: "c1", pos: far, drop: {} as never, found: false }];

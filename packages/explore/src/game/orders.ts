@@ -1,3 +1,4 @@
+import { emitLogLine } from "./logFeed";
 import { nearCover } from "./coverMovement";
 import { loadSpeedRatio, roomFor, unitLoad } from "./carry";
 import { clamp, dist } from "./math";
@@ -6,7 +7,9 @@ import type { Container, Stance, Unit, World } from "./types";
 import { STANCE_LABEL } from "./types";
 
 export function pushLog(world: World, text: string, kind: "tactical" | "battle" = "tactical"): void {
-  world.logs.unshift({ t: world.elapsed, text, kind });
+  const line = { t: world.elapsed, text, kind };
+  world.logs.unshift(line);
+  emitLogLine(world, line);
   const max = kind === "battle" ? world.balance.maxBattleReports : world.balance.maxTacticalLog;
   if (world.logs.length > world.balance.maxTacticalLog + world.balance.maxBattleReports) {
     world.logs.length = world.balance.maxTacticalLog + world.balance.maxBattleReports;

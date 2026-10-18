@@ -166,7 +166,7 @@ button.active-stance { outline: 2px solid #fff; outline-offset: 1px; }
   list-style: none;
 }
 .log li { padding: 0.2rem 0; border-bottom: 1px solid #21262d; }
-.log .battle { color: #ff9b9b; }
+.log .battle, .log .repair { color: #ff9b9b; }
 .log .tactical { color: #9aa0a6; }
 .help {
   font-size: 0.75rem;
@@ -588,3 +588,12 @@ button.cover-active {
   border-color: #ffd166;
   box-shadow: 0 0 0 1px #ffd16688 inset;
 }
+
+/* Keep selectable rows and a stable scrollport; never browser-anchor new logs. */
+.log { overflow-anchor: none; overscroll-behavior: contain; user-select: text; -webkit-user-select: text; }
+.log .repair { cursor: pointer; user-select: text; -webkit-user-select: text; }
+.log .repair:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.log-unread { margin-top: .4rem; font-size: .75rem; }
+.log-unread[hidden] { display: none; }
+
+.log:empty::before { content: "戦術／戦報はここに出ます。"; color: #9aa0a6; }
