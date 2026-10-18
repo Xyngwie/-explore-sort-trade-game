@@ -1,3 +1,5 @@
+import { incomingDamage } from "./incomingDamage";
+import { absorbShieldHit, dropEquippedShield, dropUnavailableShields } from "./shields";
 import { segmentCircle } from "./geometry";
 /**
  * Circuit actions during a sortie (Issue #269, 神宮 10/11–12 decisions).
@@ -1125,7 +1127,10 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
   const fi = abilityOf(world, from.id).fireInterval / (combined && special === "fast_round" ? 1 + gunR(world, from.id, special) : 1);
   const reach = dist(from.pos, target.pos);
   if (ammo <= 0 && m.melee > 0 && reach <= from.radius + target.radius && inMeleeArc(from, target)) {
-    target.hp -= (from.kind === "enemy" ? world.balance.enemyDamage : world.balance.bulletDamage) * (1 + m.melee) * m.attack;
+    const raw = (from.kind === "enemy" ? world.balance.enemyDamage : world.balance.bulletDamage) * (1 + m.melee) * m.attack;
+    const damage = incomingDamage(world, target, raw);
+    const incomingAngle = Math.atan2(from.pos.y - target.pos.y, from.pos.x - target.pos.x);
+    if (!absorbShieldHit(world, target, incomingAngle, damage, "melee")) target.hp -= damage;
     noteDamageBreaksSuppress(world, target);
     if (target.hp <= 0) { target.hp = 0; target.alive = false; }
     from.cooldown = world.balance.fireCooldown;
@@ -1417,6 +1422,7 @@ function wreckById(world: World, id: string): WreckSpot | null {
 
 /** 項目4-1: carried wrecks ride on their carrier; a fallen carrier drops them where it fell (C6). */
 export function placeCarried(world: World): void {
+  dropUnavailableShields(world);
   const p = playOf(world);
   if (!p) return;
   for (const [unitId, ids] of Object.entries(p.carry ?? {})) {
@@ -1445,6 +1451,7 @@ function unitName(u: Unit): string {
 
 /** Drop everything a unit carries where it stands (containers and wrecks). */
 function dropAllCargo(world: World, unit: Unit): void {
+  dropEquippedShield(world, unit);
   dropContainerStack(world, unit);
   const p = playOf(world);
   if (p?.carry?.[unit.id]) { for (const id of [...p.carry[unit.id]!]) unloadMech(world, id); delete p.carry[unit.id]; }
@@ -1497,6 +1504,7 @@ function tickWreckPickups(world: World, dt: number): void {
       for (const id of [...held]) unloadMech(world, id);
       delete p.carry[unitId];
     }
+    if (roomFor(world, unit) < LOAD_PER_WRECK) dropEquippedShield(world, unit);
     p.carry[unitId] = [...(p.carry[unitId] ?? []), ch.id];
     const target = friendlies(world).find(u => u.id === ch.id);
     // PR4: a living passenger drops ALL carried cargo at the pickup site;

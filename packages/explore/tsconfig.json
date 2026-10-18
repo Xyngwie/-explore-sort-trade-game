@@ -36,6 +36,7 @@
     "src/inputMovement.selftest.ts",
     "src/obstacleDodge.selftest.ts",
     "src/boardingReturn.selftest.ts",
-    "src/logFeed.selftest.ts"
+    "src/logFeed.selftest.ts",
+    "src/shields.selftest.ts"
   ]
 }
