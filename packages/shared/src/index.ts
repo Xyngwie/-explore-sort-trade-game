@@ -31,3 +31,5 @@ export * from "./enemy-wreck-return";
 export * from "./invade-rank";
 
 export * from "./mech-power";
+
+export * from "./field-object-identities";
