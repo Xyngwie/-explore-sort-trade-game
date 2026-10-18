@@ -430,3 +430,9 @@ Invade→ExploreのURLに`invadeRank`を追加し、古いURLでは0段。敵の
 ### 生存機体の積載と活動量消費（draft #290）
 
 `battery.activity`は移動時間を保持するため小数を許可する（capacityは整数のまま）。fleet・lostMechs・World・途中保存・帰還のmechBattery・compact URL全体で小数を維持する。compact URLは最大6桁。HUB充電はパーツの在庫と対象バッテリーを一回の保存で更新し、拒否されたら成功として扱わない。新しいHubSaveトップレベルキーは追加しない。旧セーブの整数も読めるが、旧ビルドは小数を切り捨てる。生存機体の搭載IDは既存のWorld.circuitPlay.carryに入り、帰還時の機体・回路・弾薬はそれぞれのinstanceIdを維持する。積んだだけでfleetや回路を複製しない。仕様はLIVE_MECH_TRANSPORT_V0.md。
+
+### 残骸・盾の識別子基盤（#306後続）
+
+v3に任意の`fieldObjectIdentities`を加算。既存セーブの欠損はそのまま。既存機体/回路IDは変更しない。正の10進文字列のカウンター、安定レコードキー、残骸/盾ID、盾の出自ID・推定フラグ・生成順、UTC修復イベントを保存する。重複修復は盾優先・最古盾優先、出自IDは変更しない。修復と記録を読込時に一緒に永続化し、失敗は`fieldIdentityRepairSaveFailed`で区別する。将来版は読取専用を維持。
+
+API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_IDENTITY_FOUNDATION.md](FIELD_OBJECT_IDENTITY_FOUNDATION.md)を参照。

@@ -1,3 +1,4 @@
+import { normalizeFieldObjectIdentities, type FieldObjectIdentities } from "./field-object-identities";
 import { normalizeInvadeRank, type InvadeRankProgress } from "./invade-rank";
 import {
   AMMO_IDS,
@@ -228,6 +229,8 @@ export type InvadeFrontProgress = {
  * `circuits` holds Module 5 restore boards (additive; missing → []).
  */
 export type HubSnapshot = {
+  /** #306 identity foundation; absent in old saves. No shield gameplay yet. */
+  fieldObjectIdentities?: FieldObjectIdentities;
   credits: number;
   fleet: OwnedMech[];
   /** Typed materials / parts from sort Yield v2 (additive; missing → {}). */
@@ -936,6 +939,7 @@ function normalizePerfectMaxSize(raw: unknown, circuits: readonly HubCircuitReco
 export function normalizeHubSnapshot(
   raw: Partial<HubSnapshot> | Record<string, unknown> | null | undefined,
   fallback: HubSnapshot = INITIAL_HUB,
+  repairAt = new Date(),
 ): HubSnapshot {
   const fleetIn = Array.isArray((raw as HubSnapshot | undefined)?.fleet)
     ? (raw as HubSnapshot).fleet
@@ -1012,7 +1016,12 @@ export function normalizeHubSnapshot(
     fallback.frontProgress ?? null,
   );
 
+  const fieldObjectIdentities = normalizeFieldObjectIdentities(
+    rawRec && "fieldObjectIdentities" in rawRec ? rawRec.fieldObjectIdentities : rawRec == null ? fallback.fieldObjectIdentities : undefined,
+    repairAt,
+  );
   const snapshot: HubSnapshot = {
+    ...(fieldObjectIdentities ? { fieldObjectIdentities } : {}),
     credits: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.credits,
       fallback.credits,
@@ -1096,11 +1105,12 @@ export function migrateHubSaveToV3(raw: {
   v?: number;
   savedAt?: string;
   hub?: unknown;
-}): HubSaveV3 {
+}, repairAt = new Date()): HubSaveV3 {
   const savedAt =
     typeof raw.savedAt === "string" ? raw.savedAt : new Date(0).toISOString();
   const hub = normalizeHubSnapshot(
     (raw.hub ?? {}) as Partial<HubSnapshot>,
+    INITIAL_HUB, repairAt,
   );
   return { v: 3, savedAt, hub };
 }
@@ -1118,12 +1128,17 @@ function rawSaveVersion(raw: unknown): number | null {
 }
 
 /** Accepts v1 / v2 / v3 → normalized v3. Newer (v ≥ 4) or malformed → null. */
-export function parseHubSave(raw: unknown): HubSaveV3 | null {
+export function parseHubSave(raw: unknown, repairAt = new Date()): HubSaveV3 | null {
   const v = rawSaveVersion(raw);
   if (v !== 1 && v !== 2 && v !== 3) return null;
-  return migrateHubSaveToV3(
-    raw as { v: number; savedAt?: string; hub: unknown },
-  );
+  try {
+    return migrateHubSaveToV3(
+      raw as { v: number; savedAt?: string; hub: unknown },
+      repairAt,
+    );
+  } catch {
+    return null; // Preserve the public malformed → null parser contract.
+  }
 }
 
 export function serializeHubSave(save: HubSaveV3): string {
@@ -1161,6 +1176,8 @@ export type HubSaveLoadResult = {
   storedVersion?: number;
   /** Circuit entries dropped individually as unreadable / duplicate. */
   droppedCircuits: number;
+  /** Identity repair is returned in memory but could not be persisted. */
+  fieldIdentityRepairSaveFailed?: boolean;
 };
 
 type LoadStorage = Pick<Storage, "getItem"> & Partial<Pick<Storage, "setItem">>;
@@ -1216,15 +1233,17 @@ function loadFromKey(
   const v = rawSaveVersion(raw);
   if (v != null && v > HUB_SAVE_VERSION) {
     // Newer build's save: open best-effort (additive fields ignored), never write.
+    let bestEffort: HubSaveV3 | null = null;
+    try { bestEffort = migrateHubSaveToV3(raw as { savedAt?: string; hub: unknown }, at); } catch { /* Still read-only if future identity schema is unknown. */ }
     return {
       status: "newer_read_only",
-      save: migrateHubSaveToV3(raw as { savedAt?: string; hub: unknown }),
+      save: bestEffort,
       sourceKey: key,
       storedVersion: v,
       droppedCircuits: countDroppedCircuits((raw as { hub: unknown }).hub),
     };
   }
-  const save = parseHubSave(raw);
+  const save = parseHubSave(raw, at);
   if (!save) {
     return {
       status: "corrupt_backed_up",
@@ -1234,7 +1253,21 @@ function loadFromKey(
       droppedCircuits: 0,
     };
   }
+  // Persist one aggregated repair event together with repaired IDs. A failed
+  // write leaves original storage intact and reports retryable in-memory state.
+  const originalIdentities = (raw as { hub?: { fieldObjectIdentities?: FieldObjectIdentities } }).hub?.fieldObjectIdentities;
+  const repairedIdentities = save.hub.fieldObjectIdentities;
+  const addedRepairs = repairedIdentities && repairedIdentities.repairLogs.length > (originalIdentities?.repairLogs?.length ?? 0);
+  let fieldIdentityRepairSaveFailed = false;
+  if (addedRepairs && key !== HUB_SAVE_STORAGE_KEY) fieldIdentityRepairSaveFailed = true; // cleared after successful legacy migration below
+  if (addedRepairs && key === HUB_SAVE_STORAGE_KEY) {
+    try {
+      if (!store.setItem) throw new Error("Read-only storage");
+      store.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(save));
+    } catch { fieldIdentityRepairSaveFailed = true; }
+  }
   return {
+    ...(fieldIdentityRepairSaveFailed ? { fieldIdentityRepairSaveFailed: true } : {}),
     status: key === HUB_SAVE_STORAGE_KEY ? "ok" : "migrated",
     save,
     sourceKey: key,
@@ -1266,6 +1299,7 @@ export function loadHubSaveWithStatus(
       if (legacy.status === "migrated" && legacy.save && store.setItem) {
         try {
           store.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(legacy.save));
+          delete legacy.fieldIdentityRepairSaveFailed;
         } catch {
           // Quota / access failure: keep the in-memory migrated save.
         }
