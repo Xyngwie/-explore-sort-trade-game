@@ -1,3 +1,4 @@
+import { beginShieldExchange, dropAllOwnedShields, spareShields } from "./shieldOperations";
 import { PERIPHERY_HALF_RAD } from "./vision";
 import type { FieldObjectIdentities, FieldObjectReference, ShieldIdentity } from "@estg/shared";
 import type { Vec2 } from "./math";
@@ -13,6 +14,10 @@ export type ShieldState = {
   identities: FieldObjectIdentities;
   equipped: Record<string, FieldObjectReference>;
   ground: Record<string, Vec2>;
+  /** Acquisition order is the stored array order; reserved exchange items stay here and keep their weight. */
+  spares?: Record<string, FieldObjectReference[]>;
+  pickups?: Record<string, { key: string; until: number }>;
+  exchanges?: Record<string, { key: string; until: number }>;
 };
 export function equippedShield(world: World, unit: Unit): { key: string; shield: DurableShield } | null {
   const state = world.shieldState, ref = state?.equipped?.[unit.id];
@@ -22,7 +27,7 @@ export function equippedShield(world: World, unit: Unit): { key: string; shield:
       typeof item.maxHp !== "number" || !Number.isFinite(item.maxHp) || item.maxHp <= 0) return null;
   return { key: ref.key, shield: item as DurableShield };
 }
-export function shieldLoad(world: World, unit: Unit): number { return equippedShield(world, unit) ? SHIELD_WEIGHT : 0; }
+export function shieldLoad(world: World, unit: Unit): number { return ((equippedShield(world, unit) ? 1 : 0) + spareShields(world,unit).length) * SHIELD_WEIGHT; }
 export function shieldHudText(world: World, unit: Unit): string {
   const entry = equippedShield(world, unit);
   return entry ? `盾 ${Number(entry.shield.hp.toFixed(1))}/${Number(entry.shield.maxHp.toFixed(1))}` : "";
@@ -40,6 +45,7 @@ export function absorbShieldHit(world: World, unit: Unit, incomingAngle: number,
     const state = world.shieldState!;
     delete state.equipped[unit.id]; delete state.ground[entry.key];
     delete state.identities.shields[entry.key];
+    beginShieldExchange(world,unit);
   }
   return true;
 }
@@ -57,6 +63,6 @@ export function dropUnavailableShields(world: World): void {
   const units = [world.leader, ...world.wingmen, ...world.enemies];
   const riders = new Set(Object.values(world.circuitPlay?.carry ?? {}).flat());
   for (const unit of units) {
-    if (!unit.alive || riders.has(unit.id)) dropEquippedShield(world, unit);
+    if (!unit.alive || riders.has(unit.id)) dropAllOwnedShields(world, unit, true);
   }
 }
