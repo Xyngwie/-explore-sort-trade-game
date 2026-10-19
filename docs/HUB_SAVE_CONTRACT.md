@@ -436,3 +436,13 @@ Invade→ExploreのURLに`invadeRank`を追加し、古いURLでは0段。敵の
 v3に任意の`fieldObjectIdentities`を加算。既存セーブの欠損はそのまま。既存機体/回路IDは変更しない。正の10進文字列のカウンター、安定レコードキー、残骸/盾ID、盾の出自ID・推定フラグ・生成順、UTC修復イベントを保存する。重複修復は盾優先・最古盾優先、出自IDは変更しない。修復と記録を読込時に一緒に永続化し、失敗は`fieldIdentityRepairSaveFailed`で区別する。将来版は読取専用を維持。
 
 API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_IDENTITY_FOUNDATION.md](FIELD_OBJECT_IDENTITY_FOUNDATION.md)を参照。
+
+
+## 盾の剥離精算（#310、2026-10-19）
+
+- HubSnapshot.wreckStrippingHistoryは任意の観測配列。旧保存には存在しない。各行にtargetId、sourceInstanceId（敵はnull）、wreckId/shieldId/generationOrder（正の10進文字列）、at（UTC ISO）、circuits（circuitId/side/effect）、learningValue=nullを保持。数値学習値を推測しない。
+- ExploreToHubWearPayload.wreckStrippingは任意の `{observations,nextWreckId,nextShieldOrder}`。格納庫URLも同名JSONパラメーター。不正形式は採用せず、旧URLは従来どおり読む。
+- 既存sortieIdの精算に含め、履歴を保存し、fieldObjectIdentitiesのカウンターを後退させず更新。元機体はfleet/lostMechs/出撃選択から、失われた回路はcircuits/fieldDropsから削除。別経路で大破機を再付与しない。再適用はappliedSortieIdsでスキップ。
+- 盾の所持・拾得・出撃をまたぐ地面配置はこの契約に追加していない。checkpoint内の地面盾/剥離進捗と区別する。詳細[WRECK_STRIPPING_PLAN.md](WRECK_STRIPPING_PLAN.md)。
+
+- #310追加監査：敵のsourceInstanceId=nullでもtargetIdから `recovered-<敵Unit ID>` を解決し、今回の剥離観測・保存済み履歴の両方を敵受領前に照合する。旧a:接頭辞も同じ敵IDへ解決。受領済みコピー/装備回路の除去と、遅延帰還による再取得防止を含む。詳細[WRECK_STRIPPING_RETURN_AUDIT.md](WRECK_STRIPPING_RETURN_AUDIT.md)。

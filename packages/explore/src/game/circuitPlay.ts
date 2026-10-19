@@ -1,3 +1,4 @@
+import { activeStripping, interruptStripping, wreckWasStripped } from "./strippingRuntime";
 import { incomingDamage } from "./incomingDamage";
 import { absorbShieldHit, dropEquippedShield, dropUnavailableShields } from "./shields";
 import { segmentCircle } from "./geometry";
@@ -501,6 +502,7 @@ export function pincerPoints(captain: Vec2, enemy: Vec2, units: Unit[]): Record<
 }
 
 export function beginCircuitButton(world: World, id: string): void {
+  if (!id.startsWith("wing_")) interruptStripping(world,world.leader.id);
   const p = playOf(world);
   if (!p?.rules || world.phase !== "sortie") return;
   p.wingSelect = null; // P1: another designated action takes over the next map tap
@@ -630,7 +632,7 @@ export function noteCircuitExtract(world: World, captainIn: boolean): void {
   const circle = world.boarding;
   if (circle) {
     for (const w of p.airWrecks) {
-      if (dist(w.pos, circle.center) <= circle.radius) w.recovered = true;
+      if (!wreckWasStripped(world, world.enemies.some(e => e.id === w.id) ? w.id : `a:${w.id}`) && dist(w.pos, circle.center) <= circle.radius) w.recovered = true;
     }
   }
 }
@@ -644,7 +646,7 @@ export function applyCircuitHubSide(world: World, hub: HubSnapshot): HubSnapshot
     const { airSupportCooldownSec: _drop, ...rest } = next;
     next = rest;
   }
-  const n = p.airWrecks.filter((w) => w.recovered && ![...world.enemies,...(world.recoveredEnemyUnits ?? [])].some(e=>e.id===w.id)).length;
+  const n = p.airWrecks.filter((w) => !wreckWasStripped(world,w.id) && !wreckWasStripped(world,`a:${w.id}`) && w.recovered && ![...world.enemies,...(world.recoveredEnemyUnits ?? [])].some(e=>e.id===w.id)).length;
   for (let i = 0; i < n; i++) next = addDestroyedGen1(next);
   return next;
 }
@@ -1118,6 +1120,7 @@ export function meleeReady(world: World, from: Unit, target: Unit): boolean {
 }
 
 export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolean {
+  if (activeStripping(world, from.id)) return true;
   const m = modsFor(world, from.id);
   if (!playOf(world)?.rules || from.instanceId == null) return false;
   const ammo = usableAmmo(world, from);
@@ -1350,7 +1353,7 @@ type WreckSpot = { id: string; pos: Vec2; move: (at: Vec2) => void };
 function wreckSpots(world: World): WreckSpot[] {
   const out: WreckSpot[] = [];
   for (const u of [...friendlies(world), ...world.enemies]) {
-    if (u.alive || (u.kind === "enemy" && u.hp > 0) || (u.kind !== "enemy" && !u.instanceId) || u.enemyState?.recovered) continue;
+    if (wreckWasStripped(world,u.id) || u.alive || (u.kind === "enemy" && u.hp > 0) || (u.kind !== "enemy" && !u.instanceId) || u.enemyState?.recovered) continue;
     out.push({
       id: u.id,
       pos: u.pos,
@@ -1361,7 +1364,7 @@ function wreckSpots(world: World): WreckSpot[] {
     });
   }
   for (const m of world.strandedMechs ?? []) {
-    if (!m.wreck) continue;
+    if (!m.wreck || wreckWasStripped(world,`s:${m.instanceId}`)) continue;
     out.push({
       id: `s:${m.instanceId}`,
       pos: m.pos,
@@ -1372,7 +1375,7 @@ function wreckSpots(world: World): WreckSpot[] {
     });
   }
   for (const w of playOf(world)?.airWrecks ?? []) {
-    if (w.recovered || world.enemies.some(e=>e.id===w.id)) continue;
+    if (wreckWasStripped(world,`a:${w.id}`) || w.recovered || world.enemies.some(e=>e.id===w.id)) continue;
     out.push({
       id: `a:${w.id}`,
       pos: w.pos,
@@ -1470,6 +1473,7 @@ export function wreckChannelOf(world: World, unitId: string): { id: string; t: n
 export function startWreckPickup(world: World, unit: Unit, wreckId: string): "started" | "far" | "taken" | "none" {
   const p = playOf(world);
   if (!p || !unit.alive || wreckCarrierId(world, unit.id)) return "none";
+  if (Object.values(world.stripping?.jobs ?? {}).some(j => j.source.targetId === wreckId && j.reservation)) return "taken";
   const w = pickupById(world, wreckId);
   if (!w || w.id === unit.id) return "none";
   if (wreckCarrierId(world, wreckId) != null || (p.carry[wreckId] ?? []).includes(unit.id)) return "taken";

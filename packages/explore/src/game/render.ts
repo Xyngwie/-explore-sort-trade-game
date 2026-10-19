@@ -1,3 +1,5 @@
+import type { Vec2 } from "./math";
+import { wreckWasStripped } from "./strippingRuntime";
 import { equippedShield, SHIELD_HALF_ARC } from "./shields";
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
 import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
@@ -280,7 +282,7 @@ export function renderWorld(
   }
 
   for (const e of world.enemies) {
-    if (e.alive || e.enemyState?.recovered || wreckCarrierId(world,e.id)) continue;
+    if (wreckWasStripped(world,e.id) || e.alive || e.enemyState?.recovered || wreckCarrierId(world,e.id)) continue;
     const v = seenOrGhost("enemyWreck", e.id, e.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
     drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck);
@@ -289,6 +291,7 @@ export function renderWorld(
   }
   // Faint images of wrecks recovered or carried off while unseen stay until the spot is seen again.
   for (const g of Object.values(squadIntel(world).ghosts)) {
+    if (wreckWasStripped(world,g.id)) continue;
     if ((g.kind !== "enemyWreck" && g.kind !== "allyWreck") || squadSees(world, g.pos)) continue;
     const u = g.kind === "enemyWreck" ? world.enemies.find((x) => x.id === g.id) : [world.leader, ...world.wingmen].find((x) => x.id === g.id);
     const drawnAbove = g.kind === "enemyWreck"
@@ -311,6 +314,18 @@ export function renderWorld(
     drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, d.kind === 'power' ? COLORS.powerDrop : COLORS.ammoDrop);
     ctx.restore();
   }
+  // Ground shields have no collision or pickup action in this PR.
+  const groundGroups = new Map<string,{pos: Vec2; count:number}>();
+  for (const [key,pos] of Object.entries(world.shieldState?.ground ?? {})) {
+    if (!world.shieldState?.identities.shields[key] || !squadSees(world,pos)) continue;
+    const groupKey = `${pos.x}:${pos.y}`;
+    const group = groundGroups.get(groupKey);
+    if (group) group.count++; else groundGroups.set(groupKey,{pos,count:1});
+  }
+  for (const {pos,count} of groundGroups.values()) {
+    ctx.save(); ctx.fillStyle=COLORS.wreck; ctx.font="11px sans-serif";
+    ctx.fillText(`盾 ×${count}`,tx(pos.x),ty(pos.y)); ctx.restore();
+  }
   // Bullets
   ctx.fillStyle = "#e8eaed";
   for (const b of world.bullets) {
@@ -322,7 +337,7 @@ export function renderWorld(
   // lift-off when inside the boarding circle; hidden once recovered.
   const recoveredLost = new Set(world.recoveredLostMechIds ?? []);
   for (let m of world.strandedMechs ?? []) {
-    if (recoveredLost.has(m.instanceId)) continue;
+    if (wreckWasStripped(world,`s:${m.instanceId}`) || recoveredLost.has(m.instanceId)) continue;
     if (wreckCarrierId(world, `s:${m.instanceId}`) != null) continue; // drawn on its carrier (項目4-1)
     if (!strayShown(m)) continue; // 10/17: hidden in fog until found
     // PR2: seen now → real; else its faint image. An old checkpoint (no found flag, no image) shows it faint.
@@ -346,7 +361,7 @@ export function renderWorld(
 
   // 項目5-1b W6: this sortie's wrecks stay where they were destroyed (gray, 「残骸 僚機A」).
   for (const u of [world.leader, ...world.wingmen]) {
-    if (u.alive || !u.instanceId) continue;
+    if (wreckWasStripped(world,u.id) || u.alive || !u.instanceId) continue;
     if ((world.recoveredWreckUnitIds ?? []).includes(u.id)) continue;
     if (wreckCarrierId(world, u.id) != null) continue; // drawn on its carrier (項目4-1)
     const v = seenOrGhost("allyWreck", u.id, u.pos); if (!v) continue;

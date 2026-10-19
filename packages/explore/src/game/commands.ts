@@ -1,3 +1,4 @@
+import { interruptStripping } from "./strippingRuntime";
 /**
  * Execution-side gate for player-issued Explore commands.
  * Every discrete command (buttons AND keyboard) goes through
@@ -110,6 +111,7 @@ export function executeExploreCommand(
     }
     return denyLocked(world, id);
   }
+  if (!isWingOrderCommandId(id)) interruptStripping(world,world.leader.id);
   switch (req.id) {
     case "extract":
       return { status: "done", id, result: requestExtract(world) };
