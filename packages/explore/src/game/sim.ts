@@ -1,5 +1,6 @@
+import { absorbShieldHit } from "./shields";
+import { incomingDamage } from "./incomingDamage";
 import { boardingAssemblyTarget } from "./boardingMovement";
-import { COVER_DR_BASE } from "@estg/shared";
 import { firstShotContact, friendlyFireRisk, clearFiringLine, lineClearTarget, spreadRadians } from "./projectiles";
 import { recordFriendlyFire } from "./friendlyFireHistory";
 import { showCombatFeedback, enemyAmmoFeedback, tickCombatFeedback } from "./combatFeedback";
@@ -7,7 +8,7 @@ import { canSee, enemyVisibleToSquad, squadSees, updateSquadIntel, updateSquadMe
 import { revealStrays } from "./strayScatter";
 import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
-import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, enemyArmorMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
+import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
 import { decideWingman } from "./brain";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
@@ -16,7 +17,6 @@ import { maybeAutoRescue, noteLeaderDown, resolveForcedRescueTimeout } from "./r
 import { recoverSortieWrecksAtLiftOff, sortieWreckUnits } from "./wrecks";
 import {
   applyOrder,
-  campDamageTakenMul,
   isOperationTimedOut,
   onSalvageCompleted,
   pushLog,
@@ -31,7 +31,6 @@ import {
   applyLure,
   attackMul,
   bendHoming,
-  circuitIncomingMul,
   circuitMoveTarget,
   circuitSpeed,
   circuitTryWeapon, meleeReady,
@@ -200,16 +199,13 @@ export function updateBullets(world: World, dt: number): void {
       b.alive=false;
       const shooter=[...friendlyUnits(world),...world.enemies].find(u=>u.id===b.ownerId);
       const friendly=!b.fromEnemy && t.kind!=="enemy";
-      let hitDmg=b.damage;
-      if(t.kind!=="enemy"){
-        hitDmg*=campDamageTakenMul(world,t);
-        if(b.fromEnemy)world.combatHitsTaken+=1;
-      }else hitDmg/=enemyArmorMultiplier(t);
-      // D1/D2: mitigation is post-hit damage reduction, never a smaller body or hit veto.
-      hitDmg *= circuitIncomingMul(world,t) ?? (t.inCover ? 1-COVER_DR_BASE : 1);
+      const hitDmg = incomingDamage(world, t, b.damage);
+      const incomingAngle = Math.hypot(b.vel.x, b.vel.y) > 0 ? Math.atan2(-b.vel.y, -b.vel.x) : Number.NaN;
+      const shielded = absorbShieldHit(world, t, incomingAngle, hitDmg);
+      if(t.kind!=="enemy" && b.fromEnemy) world.combatHitsTaken+=1;
       noteEmpHit(world,t,b);
       if(!b.fromEnemy)noteDamageBreaksSuppress(world,t);
-      t.hp=Math.max(0,t.hp-hitDmg);
+      if (!shielded) t.hp=Math.max(0,t.hp-hitDmg);
       if(t.kind==="wingman")t.hitWarnT=world.balance.wingHitWarnSec;
       if(friendly){
         recordFriendlyFire(world,shooter?.instanceId??b.ownerId);

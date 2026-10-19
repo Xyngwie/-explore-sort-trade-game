@@ -1,3 +1,4 @@
+import { shieldLoad } from "./shields";
 /**
  * 項目4-1 積載と速度（2026-10-12 神宮・参謀の仕様）.
  *
@@ -25,7 +26,7 @@ export function carriedWreckIds(world: World, unitId: string): string[] {
 }
 
 export function unitLoad(world: World, unit: Unit): number {
-  return Math.max(0, unit.salvagedCount) * LOAD_PER_CONTAINER + carriedWreckIds(world, unit.id).length * LOAD_PER_WRECK;
+  return Math.max(0, unit.salvagedCount) * LOAD_PER_CONTAINER + carriedWreckIds(world, unit.id).length * LOAD_PER_WRECK + shieldLoad(world, unit);
 }
 
 export function unitLoadCap(world: World, unit: Unit): number {

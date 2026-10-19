@@ -1,3 +1,4 @@
+import { shieldHudText } from "./game/shields";
 import { LogPanel, repairSummary, type LogRow } from "./ui/logPanel";
 import { subscribeLogFeed } from "./game/logFeed";
 import type { LogLine } from "./game/types";
@@ -153,9 +154,9 @@ const root = document.querySelector<HTMLDivElement>("#app")!;
 function leaderLoadHud(world: World): string {
   // 項目4-2 N2: carrying the captain's wreck, the map tap drives that wingman.
   const rescuer = captainRescuer(world);
-  if (rescuer) return `${rescuer.name}を操作中（${world.leader.alive ? "隊長機" : "隊長機の残骸"}を積載）・${loadLineJa(world, rescuer)}`;
+  if (rescuer) return `${rescuer.name}を操作中（${world.leader.alive ? "隊長機" : "隊長機の残骸"}を積載）・${loadLineJa(world, rescuer)}${shieldHudText(world, rescuer) ? `・${shieldHudText(world, rescuer)}` : ""}`;
   const activity = effectiveActivity(world, world.leader);
-  const line = loadLineJa(world, world.leader) + (activity == null ? "" : `・活動量 ${Number(activity.toFixed(1))}`);
+  const line = loadLineJa(world, world.leader) + (shieldHudText(world, world.leader) ? `・${shieldHudText(world, world.leader)}` : "") + (activity == null ? "" : `・活動量 ${Number(activity.toFixed(1))}`);
   return inCampAura(world, world.leader) && unitLoad(world, world.leader) <= 0 ? `${line}・軽装キャンプ圏` : line;
 }
 
@@ -772,7 +773,7 @@ function wingPanelHtml(): string {
         <div class="wing-hp${hpPulse}" role="meter" aria-label="HP" aria-valuenow="${Math.max(0, Math.ceil(w.hp))}" aria-valuemin="0" aria-valuemax="${w.maxHp}">
           <div class="wing-hp-fill" style="width:${hpPct.toFixed(1)}%"></div>
         </div>
-        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · <span class="wing-load">${escapeHtml(loadLineJa(world, w))}</span>${wreckCarrierId(world, w.id) ? "・搭載中" : ""}${effectiveActivity(world, w) == null ? "" : `・活動量 ${Number(effectiveActivity(world, w)!.toFixed(1))}`}${quirk}${cover}</div>
+        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · <span class="wing-load">${escapeHtml(loadLineJa(world, w))}</span>${shieldHudText(world, w) ? `・${shieldHudText(world, w)}` : ""}${wreckCarrierId(world, w.id) ? "・搭載中" : ""}${effectiveActivity(world, w) == null ? "" : `・活動量 ${Number(effectiveActivity(world, w)!.toFixed(1))}`}${quirk}${cover}</div>
         ${orderRow}
       </div>`;
     })

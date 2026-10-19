@@ -1,3 +1,4 @@
+import { equippedShield, SHIELD_HALF_ARC } from "./shields";
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
 import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
@@ -26,6 +27,18 @@ export function renderWorld(
   const sy = cssH / cam.h;
   const tx = (x: number) => (x - cam.x) * sx;
   const ty = (y: number) => (y - cam.y) * sy;
+
+  const drawShield = (unit: Unit, color: string) => {
+    const entry = equippedShield(world, unit);
+    if (!entry) return;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, entry.shield.hp / entry.shield.maxHp);
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(tx(unit.pos.x), ty(unit.pos.y), (unit.radius + 4) * sx,
+      unit.heading - SHIELD_HALF_ARC, unit.heading + SHIELD_HALF_ARC);
+    ctx.stroke(); ctx.restore();
+  };
 
   ctx.clearRect(0, 0, cssW, cssH);
   ctx.fillStyle = "#0b0f14";
@@ -257,6 +270,7 @@ export function renderWorld(
     if (!e.alive) continue;
     if (!isEnemySeen(world, e)) continue;
     drawMechShape(ctx, tx(e.pos.x), ty(e.pos.y), MECH_R * SHAPE_SIZE.enemy * sx, COLORS.enemy, "triangle", e.heading);
+    drawShield(e, COLORS.enemy);
     // Enemy PR1 (F1 = B): 「所属不明」 only after a tap, for a few seconds.
     if (world.enemyTag?.enemyId === e.id) {
       ctx.fillStyle = "#ffb3b3";
@@ -386,6 +400,7 @@ export function renderWorld(
     if (!w.alive) continue;
     if (w.inCover) drawCoverRing(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx);
     drawMechShape(ctx, tx(w.pos.x), ty(w.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wingman, "invertedTriangle", w.heading);
+    drawShield(w, COLORS.wingman);
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
     // C20-b: 「待機」 while holding (mobile wingmen; immobile keep 「自衛のみ」) — see wingLabelText.
@@ -441,6 +456,7 @@ export function renderWorld(
   if (world.leader.alive) {
     if (world.leader.inCover) drawCoverRing(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), world.leader.radius * sx);
     drawMechShape(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), MECH_R * SHAPE_SIZE.leader * sx, COLORS.leader, "hexagon", world.leader.heading);
+    drawShield(world.leader, COLORS.leader);
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
     const leadLabel = world.leader.inCover ? "隊長·カバー" : "隊長";
