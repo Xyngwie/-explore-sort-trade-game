@@ -1,3 +1,4 @@
+import { activeStripping, interruptStripping, tickStripping, wreckWasStripped } from "./strippingRuntime";
 import { absorbShieldHit } from "./shields";
 import { incomingDamage } from "./incomingDamage";
 import { boardingAssemblyTarget } from "./boardingMovement";
@@ -136,7 +137,7 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
 }
 
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean, commanded = false): void {
-  if (!from.alive || !target.alive) return;
+  if (activeStripping(world,from.id) || !from.alive || !target.alive) return;
   if (!aimAt(from, target) && !meleeReady(world, from, target)) return; // guns need the 3° arc; melee the ±135° arc
   if (!fromEnemy && !commanded && !meleeReady(world, from, target) && friendlyFireRisk(world, from, target)) { clearFiringLine(world, from); return; }
   if (fromEnemy && from.cooldown > 0) return;
@@ -372,7 +373,7 @@ function resolveBoardingLiftOff(world: World): void {
     ...recoveredOldWrecks,
   ];
   if (wreckNames.length > 0) pushLog(world, `残骸を回収：${wreckNames.join("・")}（大破のまま格納庫へ）。`);
-  world.recoveredEnemyUnits = world.enemies.filter(e => !e.alive && e.hp <= 0 && dist(e.pos, boarding.center) <= boarding.radius && captainIn);
+  world.recoveredEnemyUnits = world.enemies.filter(e => !wreckWasStripped(world,e.id) && !e.alive && e.hp <= 0 && dist(e.pos, boarding.center) <= boarding.radius && captainIn);
   for (const e of world.recoveredEnemyUnits) if (e.enemyState) e.enemyState.recovered = true;
   const recoveredDrops = recoverStrandedDropsAtLiftOff(world, boarding, captainIn);
   if (recoveredDrops.length > 0) pushLog(world, `落とし物の回路を回収：${recoveredDrops.length}件。`);
@@ -403,11 +404,13 @@ function updateBoarding(world: World): void {
   if (elapsed >= world.balance.boardingLiftOffDelaySec) resolveBoardingLiftOff(world);
 }
 
-function leaderAbortSalvageOnTimeout(world: World): void { for (const u of friendlyUnits(world)) { u.salvageId = null; u.salvageT = 0; } }
+function leaderAbortSalvageOnTimeout(world: World): void { for (const u of friendlyUnits(world)) { interruptStripping(world,u.id); u.salvageId = null; u.salvageT = 0; } }
 
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
-  if (world.phase !== "sortie") return;
+  if (world.phase !== "sortie") { tickStripping(world,0); return; }
+  tickStripping(world,0); // release a dead/moved worker even if rescue returns early
+  if (input.move.x || input.move.y || input.clickMove || input.fire || input.interact) interruptStripping(world, world.leader.id);
   tickCombatFeedback(world, dt);
   beginMovementPowerTick(world);
   world.elapsed += dt; world.timeLeft = Math.max(0, world.timeLeft - dt);
@@ -446,7 +449,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   const leaderDown = !leader.alive;
   if (leaderDown) noteLeaderDown(world);
   leader.cooldown = Math.max(0, leader.cooldown - dt);
-  if (leaderDown || timedOut || wreckCarrierId(world, leader.id)) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
+  if (leaderDown || timedOut || activeStripping(world,leader.id) || wreckCarrierId(world, leader.id)) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
   else {
     // moveTarget is this frame's resolved AI/manual target, never retained input.
     let fallback: Vec2 | null = input.clickMove ? { ...input.clickMove } : null;
@@ -477,7 +480,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
       if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false, input.fire);
     }
-    if (!timedOut && !wreckCarrierId(world, leader.id) && !movementLocked(world)) {
+    if (!activeStripping(world,leader.id) && !timedOut && !wreckCarrierId(world, leader.id) && !movementLocked(world)) {
       const playEdge = world.circuitPlay;
       if (playEdge?.rules) {
         if (input.interact && !playEdge.collectDown) applyCollectPress(world);
@@ -529,6 +532,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
+  tickStripping(world, dt);
   updateFacing(world, dt);
   updateSquadIntel(world);
   updateSquadMemory(world);

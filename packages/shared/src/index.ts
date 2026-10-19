@@ -33,3 +33,5 @@ export * from "./invade-rank";
 export * from "./mech-power";
 
 export * from "./field-object-identities";
+
+export * from "./wreck-stripping";

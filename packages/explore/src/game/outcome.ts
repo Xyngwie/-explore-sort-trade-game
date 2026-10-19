@@ -1,3 +1,4 @@
+import { strippingReport } from "./strippingRuntime";
 import { enemyWreckReturns } from "./enemyRecovery";
 import {
   applyDurabilityBufferToWear,
@@ -277,6 +278,7 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
         : {}),
     },
   );
+  payload.wreckStripping = strippingReport(world);
   payload.enemyWrecks = enemyWreckReturns(world);
   return payload;
 }

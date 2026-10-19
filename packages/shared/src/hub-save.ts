@@ -1,3 +1,4 @@
+import { normalizeStrippingObservations, type WreckStrippingObservation } from "./wreck-stripping";
 import { normalizeFieldObjectIdentities, type FieldObjectIdentities } from "./field-object-identities";
 import { normalizeInvadeRank, type InvadeRankProgress } from "./invade-rank";
 import {
@@ -229,6 +230,7 @@ export type InvadeFrontProgress = {
  * `circuits` holds Module 5 restore boards (additive; missing → []).
  */
 export type HubSnapshot = {
+  wreckStrippingHistory?: WreckStrippingObservation[];
   /** #306 identity foundation; absent in old saves. No shield gameplay yet. */
   fieldObjectIdentities?: FieldObjectIdentities;
   credits: number;
@@ -1020,7 +1022,9 @@ export function normalizeHubSnapshot(
     rawRec && "fieldObjectIdentities" in rawRec ? rawRec.fieldObjectIdentities : rawRec == null ? fallback.fieldObjectIdentities : undefined,
     repairAt,
   );
+  const historyRaw = rawRec == null ? fallback.wreckStrippingHistory : rawRec.wreckStrippingHistory;
   const snapshot: HubSnapshot = {
+    ...(historyRaw != null ? { wreckStrippingHistory: normalizeStrippingObservations(historyRaw) } : {}),
     ...(fieldObjectIdentities ? { fieldObjectIdentities } : {}),
     credits: finiteNonNeg(
       (raw as HubSnapshot | undefined)?.credits,

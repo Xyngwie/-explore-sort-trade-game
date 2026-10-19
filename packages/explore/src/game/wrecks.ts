@@ -1,3 +1,4 @@
+import { wreckWasStripped } from "./strippingRuntime";
 /**
  * Wrecks on the field (項目5-1b, decided 2026-10-07 by 神宮; W1〜W10).
  *
@@ -34,7 +35,7 @@ export function sortieWreckUnits(world: World): Unit[] {
   const deployed = new Set(world.deployedInstanceIds);
   return [world.leader, ...world.wingmen].filter((u) => {
     const id = u.instanceId?.trim() ?? "";
-    return !u.alive && id.length > 0 && deployed.has(id);
+    return !wreckWasStripped(world,u.id) && !u.alive && id.length > 0 && deployed.has(id);
   });
 }
 

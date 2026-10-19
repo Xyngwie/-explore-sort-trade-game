@@ -1,3 +1,4 @@
+import { wreckWasStripped } from "./strippingRuntime";
 // EXPLORE_FACING_AIM_V0 PR2 vision-cones: front 60° sees 2× range, the 270° periphery
 // (front included) sees range, the rear 90° is blind. Obstacles block sight.
 import type { Vec2 } from "./math";
@@ -98,12 +99,12 @@ export function fogGrey(world: World, i: number): number {
 function presentStatics(world: World): Ghost[] {
   const out: Ghost[] = [];
   for (const c of world.containers) if (c.discovered && !c.taken) out.push({ kind: "container", id: c.id, pos: c.pos, t: 0 });
-  for (const e of world.enemies) if (!e.alive && !e.enemyState?.recovered) out.push({ kind: "enemyWreck", id: e.id, pos: e.pos, t: 0 });
-  for (const u of world.wingmen) if (!u.alive && u.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(u.id)) out.push({ kind: "allyWreck", id: u.id, pos: u.pos, t: 0 });
-  if (!world.leader.alive && world.leader.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(world.leader.id)) out.push({ kind: "allyWreck", id: world.leader.id, pos: world.leader.pos, t: 0 });
+  for (const e of world.enemies) if (!wreckWasStripped(world,e.id) && !e.alive && !e.enemyState?.recovered) out.push({ kind: "enemyWreck", id: e.id, pos: e.pos, t: 0 });
+  for (const u of world.wingmen) if (!wreckWasStripped(world,u.id) && !u.alive && u.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(u.id)) out.push({ kind: "allyWreck", id: u.id, pos: u.pos, t: 0 });
+  if (!wreckWasStripped(world,world.leader.id) && !world.leader.alive && world.leader.instanceId && !(world.recoveredWreckUnitIds ?? []).includes(world.leader.id)) out.push({ kind: "allyWreck", id: world.leader.id, pos: world.leader.pos, t: 0 });
   for (const d of world.enemySupplies ?? []) out.push({ kind: "supply", id: d.id, pos: d.pos, t: 0 });
   const recLost = new Set(world.recoveredLostMechIds ?? []), recDrop = new Set(world.recoveredDropIds ?? []);
-  for (const m of world.strandedMechs ?? []) if (m.found !== false && !recLost.has(m.instanceId)) out.push({ kind: "stray", id: m.instanceId, pos: m.pos, t: 0 });
+  for (const m of world.strandedMechs ?? []) if (!wreckWasStripped(world,`s:${m.instanceId}`) && m.found !== false && !recLost.has(m.instanceId)) out.push({ kind: "stray", id: m.instanceId, pos: m.pos, t: 0 });
   for (const d of world.strandedDrops ?? []) if (d.found !== false && !recDrop.has(d.dropId)) out.push({ kind: "drop", id: d.dropId, pos: d.pos, t: 0 });
   return out;
 }

@@ -1,3 +1,4 @@
+import { wreckWasStripped } from "./strippingRuntime";
 /**
  * Left-behind mechs and the front (CIRCUIT_DATA_MODEL_V0 §5.6, decided
  * 2026-10-03; recovery PR 2 — Explore).
@@ -137,7 +138,7 @@ export function attachLostMechContext(world: World, hub: HubSnapshot | null): Wo
 export function recoverStrandedAtLiftOff(world: World, boarding: BoardingState, captainIn: boolean): string[] {
   if (!captainIn) return [];
   const ids = (world.strandedMechs ?? [])
-    .filter((m) => dist(m.pos, boarding.center) <= boarding.radius)
+    .filter((m) => !wreckWasStripped(world,`s:${m.instanceId}`) && dist(m.pos, boarding.center) <= boarding.radius)
     .map((m) => m.instanceId);
   world.recoveredLostMechIds = [...new Set([...(world.recoveredLostMechIds ?? []), ...ids])];
   return ids;
@@ -146,5 +147,5 @@ export function recoverStrandedAtLiftOff(world: World, boarding: BoardingState, 
 /** Reappeared mechs not recovered this sortie (their lostMechs entries get updated). */
 export function strandedNotRecovered(world: World): StrandedMech[] {
   const recovered = new Set(world.recoveredLostMechIds ?? []);
-  return (world.strandedMechs ?? []).filter((m) => !recovered.has(m.instanceId));
+  return (world.strandedMechs ?? []).filter((m) => !wreckWasStripped(world,`s:${m.instanceId}`) && !recovered.has(m.instanceId));
 }

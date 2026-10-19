@@ -1,3 +1,4 @@
+import { applyWreckStrippingReport } from "./wreck-stripping";
 import { applyEnemyWrecks } from "./enemy-wreck-return";
 /**
  * U9 (CIRCUIT_DATA_MODEL_V0 §5.4・§9 U9): apply one Explore sortie return to
@@ -128,6 +129,7 @@ export function applyExploreReturnToHub(
     }
   }
   next = applyEnemyWrecks(next, wear.enemyWrecks ?? []);
+  if (wear.sortieId) next = applyWreckStrippingReport(next, wear.wreckStripping);
   const returned: HubSnapshot = {
     ...next,
     fleet: applyReturnedMechState(

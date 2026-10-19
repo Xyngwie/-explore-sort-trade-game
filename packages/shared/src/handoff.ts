@@ -1,3 +1,4 @@
+import { normalizeWreckStrippingReport, type WreckStrippingReport } from "./wreck-stripping";
 import { parseEnemyWrecks, type EnemyWreckReturn } from "./enemy-wreck-return";
 import {
   PIECES_PER_CONTAINER,
@@ -220,6 +221,7 @@ export function parseMechCircuitsCompact(
 
 /** explore → hub wear return (salvage still goes explore → sort). */
 export type ExploreToHubWearPayload = {
+  wreckStripping?: WreckStrippingReport;
   enemyWrecks?: EnemyWreckReturn[];
   returnKind: SortieReturnKind;
   mechWear: Array<{ instanceId: string; durabilityAfter: number }>;
@@ -837,6 +839,7 @@ export function buildExploreToHubWearUrl(
 ): string {
   const u = new URL(baseUrl);
   u.searchParams.set("returnKind", payload.returnKind);
+  if (payload.wreckStripping) u.searchParams.set("wreckStripping", JSON.stringify(payload.wreckStripping));
   if (payload.enemyWrecks?.length) u.searchParams.set("enemyWrecks", JSON.stringify(payload.enemyWrecks));
   u.searchParams.set("mechWear", encodeMechWearCompact(payload.mechWear));
   if (payload.mechCurrentAmmo && payload.mechCurrentAmmo.length > 0) {
@@ -888,6 +891,7 @@ export function parseExploreToHubWearSearch(
   const mechCurrentAmmo = parseMechCurrentAmmoCompact(p.get("mechCurrentAmmo"));
   const mechBattery = parseMechBatteryCompact(p.get("mechBattery"));
   return {
+    wreckStripping: parseWreckStripping(p.get("wreckStripping")),
     enemyWrecks: parseEnemyWrecks(p.get("enemyWrecks")),
     returnKind: kindRaw,
     mechWear: parseMechWearCompact(p.get("mechWear")),
@@ -914,6 +918,10 @@ export function parseExploreToHubWearSearch(
     ...parseSortiePlace(p.get("frontSeed"), p.get("dropCell")),
     ...parseRescueFee(p.get("rescueFee")),
   };
+}
+
+function parseWreckStripping(raw: string | null): WreckStrippingReport | undefined {
+  try { return raw ? normalizeWreckStrippingReport(JSON.parse(raw)) : undefined; } catch { return undefined; }
 }
 
 function parseRescueFee(raw: string | null): { rescueFeeCredits: number } | Record<string, never> {

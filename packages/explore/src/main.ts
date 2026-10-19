@@ -1,3 +1,4 @@
+import { activeStripping, interruptStripping, startStrippingAt } from "./game/strippingRuntime";
 import { shieldHudText } from "./game/shields";
 import { LogPanel, repairSummary, type LogRow } from "./ui/logPanel";
 import { subscribeLogFeed } from "./game/logFeed";
@@ -356,6 +357,7 @@ const input: PlayerInput = {
 let canvas: HTMLCanvasElement | null = null;
 let last = performance.now();
 let needsDom = true;
+let stripTargetPending = false;
 
 function flashCampToast(msg: string): void {
   const el = document.getElementById("camp-toast");
@@ -383,6 +385,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (k === "v" && world.phase === "sortie" && !e.repeat) {
     e.preventDefault();
+    interruptStripping(world,world.leader.id);
     const r = toggleSquadCover(world);
     if (r === "entered") {
       flashCampToast("カバー開始 · 障害物で身を隠す");
@@ -466,6 +469,7 @@ function extractReqHudHtml(): string {
 
 /** Shared post-command UI feedback (toast for unload, repaint). */
 function afterCommand(outcome: ExploreCommandOutcome): void {
+  stripTargetPending = false;
   if (
     outcome.status === "done" &&
     outcome.id === "camp_unload" &&
@@ -565,6 +569,13 @@ function bindCanvas(): void {
   canvas.addEventListener("pointerdown", (e) => {
     if (world.phase !== "sortie" || !canvas) return;
     const pt = worldFromCanvas(canvas, world, e.clientX, e.clientY);
+    if (stripTargetPending) {
+      const result = startStrippingAt(world, pt, freshHub(), world.balance.interactRadius);
+      if (result === "started") { stripTargetPending = false; input.clickMove = null; input.fire = false; input.interact = false; }
+      flashLogToast(result === "started" ? "残骸盾：剥離開始" : result === "far" ? "残骸が遠すぎます" : result === "busy" ? "この残骸は作業中です" : "近くの残骸をタップしてください");
+      needsDom = true;
+      return;
+    }
     // P1: ~24 screen px around a wingman selects it (scaled for phone widths).
     const rect = canvas.getBoundingClientRect();
     const perPx = rect.width > 0 ? world.camera.w / rect.width : 1;
@@ -828,6 +839,7 @@ function directSaveNoteText(res: DirectSaveResult | null): string {
 }
 
 function renderDom(): void {
+  if (world.phase !== "sortie") stripTargetPending = false;
   // Rebuilding the root destroys native selection ranges. Keep it until the
   // first clearing gesture has been consumed; simulation continues meanwhile.
   if (logPanel.guard.selected()) { deferredLogRender = true; return; }
@@ -1047,6 +1059,7 @@ function renderDom(): void {
         </div>
         <div class="row">
           ${returnOpen() ? `<button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !captainActive(world) ? "disabled" : ""} title="${captainActive(world) ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!captainActive(world) ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>` : ""}
+          <button type="button" id="btn-strip" class="secondary" ${!world.leader.alive || isOperationTimedOut(world) || wreckCarrierId(world,world.leader.id) ? "disabled" : ""}>残骸盾${stripTargetPending ? "：対象選択" : activeStripping(world,world.leader.id) ? "：剥離中" : ""}</button>
           ${circuitOrderHtml()}
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
@@ -1105,7 +1118,15 @@ function renderDom(): void {
   document.getElementById("btn-scatter")?.addEventListener("click", () => {
     afterCommand(executeExploreCommand(world, { id: "scatter_search" }));
   });
+  document.getElementById("btn-strip")?.addEventListener("click", () => {
+    interruptStripping(world,world.leader.id);
+    stripTargetPending = !stripTargetPending;
+    if (world.circuitPlay) { world.circuitPlay.pending = null; world.circuitPlay.wingSelect = null; }
+    if (stripTargetPending) flashLogToast("近くの残骸をタップしてください");
+    needsDom = true;
+  });
   document.getElementById("btn-cover")?.addEventListener("click", () => {
+    interruptStripping(world,world.leader.id);
     const r = toggleSquadCover(world);
     if (r === "entered") {
       flashCampToast("カバー開始 · 障害物で身を隠す");
@@ -1215,6 +1236,11 @@ function paintHudOnly(): void {
     if (next && wrap) {
       wrap.replaceChild(next, erq);
     }
+  }
+  const stripBtn = document.getElementById("btn-strip") as HTMLButtonElement | null;
+  if (stripBtn) {
+    stripBtn.disabled = !world.leader.alive || timedOut || !!wreckCarrierId(world,world.leader.id);
+    stripBtn.textContent = `残骸盾${stripTargetPending ? "：対象選択" : activeStripping(world,world.leader.id) ? "：剥離中" : ""}`;
   }
   const extractBtn = document.getElementById("btn-extract") as HTMLButtonElement | null;
   if (extractBtn) {
