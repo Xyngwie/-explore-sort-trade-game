@@ -646,7 +646,7 @@ export function applyCircuitHubSide(world: World, hub: HubSnapshot): HubSnapshot
     const { airSupportCooldownSec: _drop, ...rest } = next;
     next = rest;
   }
-  const n = p.airWrecks.filter((w) => w.recovered && ![...world.enemies,...(world.recoveredEnemyUnits ?? [])].some(e=>e.id===w.id)).length;
+  const n = p.airWrecks.filter((w) => !wreckWasStripped(world,w.id) && !wreckWasStripped(world,`a:${w.id}`) && w.recovered && ![...world.enemies,...(world.recoveredEnemyUnits ?? [])].some(e=>e.id===w.id)).length;
   for (let i = 0; i < n; i++) next = addDestroyedGen1(next);
   return next;
 }

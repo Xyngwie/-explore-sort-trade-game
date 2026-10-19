@@ -16,15 +16,19 @@ const base = process.env.EXPLORE_BASE_URL || 'http://127.0.0.1:5173';
   const {getCoverObjects}=await import('/src/game/coverObjects.ts');
   const {tickWorld}=await import('/src/game/sim.ts');
   const w=createWorld(bootstrapFromSearch(''));startSortie(w);attachCircuitPlay(w,null,false);getCoverObjects(w).splice(0);
-  w.containers=[];w.enemies=w.enemies.slice(0,1);backfillEnemyState(w);
+  w.containers=[];w.salvaged=1;w.leader.salvagedCount=1; // retain the normal result checkpoint (zero-container success intentionally marks done)
+  w.enemies=w.enemies.slice(0,2);backfillEnemyState(w);
   w.leader.pos={x:600,y:600};w.leader.heading=0;w.leader.instanceId='leader';w.deployedInstanceIds=['leader'];
+  w.leader.cooldown=.6;w.currentAmmo.leader=28;w.deployedDurability.leader=100;w.mechBattery.leader={capacity:300,activity:300};
   for(const wing of w.wingmen){wing.alive=false;wing.hp=0;wing.pos={x:1400,y:1400};}
-  const enemy=w.enemies[0];enemy.alive=false;enemy.hp=0;enemy.pos={x:620,y:600};enemy.enemyState.deathHandled=true;
+  const enemy=w.enemies[0];enemy.alive=true;enemy.hp=1;enemy.pos={x:620,y:600};enemy.enemyState.deathHandled=false;enemy.enemyState.ammo=0;enemy.enemyState.activity=0;
   enemy.enemyIdentity={modelId:'mech_gen1',durability:100,circuits:[{circuitId:'lost-enemy-c',side:2,effectKey:'smg',effect:4,trueBoard:false}]};
+  const control=w.enemies[1];control.alive=false;control.hp=0;control.pos={x:660,y:600};control.enemyState.deathHandled=true;
+  control.enemyIdentity={modelId:'mech_gen1',durability:100,circuits:[{circuitId:'control-enemy-c',side:2,effectKey:'smg',effect:4,trueBoard:false}]};
   tickWorld(w,.01,{move:{x:0,y:0},clickMove:null,fire:false,interact:false});
   const identities=shared.emptyFieldObjectIdentities();identities.nextWreckId='41';identities.nextShieldOrder='8';
   const hub={...shared.INITIAL_HUB,fleet:[shared.createOwnedMech('mech_gen1',{instanceId:'leader'})],fieldObjectIdentities:identities};
-  return {world:w,save:shared.createHubSave(hub),saveKey:shared.HUB_SAVE_STORAGE_KEY};
+  return {world:w,save:shared.createHubSave(hub),saveKey:shared.HUB_SAVE_STORAGE_KEY,targetId:enemy.id,controlId:control.id};
  },sharedUrl);await seed.close();
  await context.addInitScript(data=>{
   if(!sessionStorage.getItem('fixture')){
@@ -34,13 +38,18 @@ const base = process.env.EXPLORE_BASE_URL || 'http://127.0.0.1:5173';
   const native=CanvasRenderingContext2D.prototype.fillText;
   window.drawnWreck=null;window.drawnShield=false;
   CanvasRenderingContext2D.prototype.fillText=function(text,x,y,...rest){
-   if(text==='残骸' && x>=0 && x<this.canvas.width && y>=0 && y<this.canvas.height)window.drawnWreck={x,y:y+12};
+   if(text==='残骸' && x>=0 && x<this.canvas.width && y>=0 && y<this.canvas.height && (!window.drawnWreck || x<window.drawnWreck.x))window.drawnWreck={x,y:y+12};
    if(text==='盾 ×1')window.drawnShield=true;
    return native.call(this,text,x,y,...rest);
   };
  },data);
  const p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));await p.goto(base);await p.locator('#sortie-paused').waitFor();await p.mouse.click(5,5);
- await p.waitForFunction(()=>window.drawnWreck);
+ await p.keyboard.down('f');await p.waitForTimeout(1500);await p.keyboard.up('f');
+ await p.reload();await p.locator('#sortie-paused').waitFor();
+ const killed=await p.evaluate(()=>JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body);
+ assert.equal(killed.enemies[0].alive,false,'real shots killed the initially live enemy');
+ assert(killed.currentAmmo.leader<28,'real firing consumed leader ammo');
+ await p.mouse.click(5,5);await p.waitForFunction(()=>window.drawnWreck);
  await p.locator('#btn-strip').click();
  await p.locator('#map').scrollIntoViewIfNeeded();
  const point=await p.evaluate(()=>{const c=document.querySelector('#map'),r=c.getBoundingClientRect();return{x:r.left+drawnWreck.x*r.width/c.width,y:r.top+drawnWreck.y*r.height/c.height};});
@@ -59,7 +68,19 @@ const base = process.env.EXPLORE_BASE_URL || 'http://127.0.0.1:5173';
  assert.equal(shield.hp,50);assert.equal(shield.maxHp,50);assert.equal(shield.shieldId,'41');assert.equal(shield.generationOrder,'8');
  assert.equal(done.stripping.observations.length,1);assert.equal(done.stripping.observations[0].learningValue,null);
  assert.equal(done.enemies[0].enemyIdentity.circuits.length,0);assert.equal(Object.keys(done.shieldState.equipped).length,0);
+ await p.mouse.click(5,5);await p.locator('#btn-extract').click();
+ await p.waitForFunction(key=>JSON.parse(localStorage.getItem(key))?.hub?.wreckStrippingHistory?.length===1,data.saveKey,{timeout:25000});
+ const settled=await p.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub,data.saveKey);
+ assert(!settled.fleet.some(m=>m.instanceId===`recovered-${data.targetId}`),'stripped enemy not acquired at actual lift-off');
+ assert(!settled.circuits.some(c=>c.circuitId==='lost-enemy-c'));
+ assert(settled.fleet.some(m=>m.instanceId===`recovered-${data.controlId}`),'unstripped control enemy DOES return');
+ assert(settled.circuits.some(c=>c.circuitId==='control-enemy-c'));
+ await p.reload();await p.locator('h1').filter({hasText:'作戦結果'}).waitFor();
+ const reloaded=await p.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub,data.saveKey);
+ assert.deepEqual(reloaded.fleet.map(m=>m.instanceId).sort(),settled.fleet.map(m=>m.instanceId).sort());
+ assert.equal(reloaded.wreckStrippingHistory.length,1,'result reload does not duplicate settlement');
+ if(process.env.STRIPPING_RESULT_SCREENSHOT)await p.screenshot({path:process.env.STRIPPING_RESULT_SCREENSHOT,fullPage:true});
  assert.deepEqual(errors,[]);await context.close();
- console.log('Wreck stripping browser 390x844 PASS: real button/target, 8s generation, interrupted reload/resume, HP50/IDs/circuit log, ground label, no free equip');
+ console.log('Wreck stripping browser 390x844 PASS: live enemy shot down, button/target, 8s generation, interrupted reload/resume, HP50/IDs, actual 15s return, stripped enemy excluded, unstripped control acquired, result reload');
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

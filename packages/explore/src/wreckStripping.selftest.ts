@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { emptyFieldObjectIdentities } from '@estg/shared';
+import { emptyFieldObjectIdentities, INITIAL_HUB } from '@estg/shared';
 import { reserveStripping, advanceStripping, cancelUnitStripping, type StrippingState } from './game/wreckStripping';
 import { activeStripping, startStrippingAt, tickStripping, strippingReport, wreckWasStripped } from './game/strippingRuntime';
 import { createWorld, bootstrapFromSearch, startSortie } from './game/world';
-import { attachCircuitPlay, startWreckPickup } from './game/circuitPlay';
+import { attachCircuitPlay, startWreckPickup, applyCircuitHubSide } from './game/circuitPlay';
 import { recoverStrandedAtLiftOff, strandedNotRecovered } from './game/lostMechs';
 import { sortieWreckUnits } from './game/wrecks';
 import { getCoverObjects } from './game/coverObjects';
@@ -90,5 +90,15 @@ function fixture(){
  const w=fixture();w.enemies=[];w.circuitPlay!.airWrecks=[{id:'gone-enemy',pos:{x:620,y:600},recovered:false}];
  assert.equal(startStrippingAt(w,{x:620,y:600},null,10),'started');tickStripping(w,8);
  assert(wreckWasStripped(w,'a:gone-enemy'));assert.equal(startWreckPickup(w,w.leader,'a:gone-enemy'),'none');
+ w.circuitPlay!.airWrecks[0]!.recovered=true;
+ w.stripping!.jobs={}; // completed observation still proves consumption if the job table is absent/cleared
+ assert(wreckWasStripped(w,'a:gone-enemy'));
+ assert.equal(applyCircuitHubSide(w,INITIAL_HUB).fleet.length,INITIAL_HUB.fleet.length,'stale recovered flag must not grant an anonymous legacy hull');
+}
+{
+ const w=fixture(),e=w.enemies[0]!;startStrippingAt(w,e.pos,null,20);tickStripping(w,8);
+ w.circuitPlay!.airWrecks=[{id:e.id,pos:{...e.pos},recovered:true}];
+ w.enemies=[];w.stripping!.jobs={}; // result snapshots omit enemies; observation is still authoritative
+ assert.equal(applyCircuitHubSide(w,INITIAL_HUB).fleet.length,INITIAL_HUB.fleet.length,'normal enemy ID must also block the anonymous air-wreck path in a result snapshot');
 }
 console.log('Wreck stripping PASS: exclusivity, progress/resume, stationary/no fire, movement/death, one shield, consumed pickup, checkpoint');

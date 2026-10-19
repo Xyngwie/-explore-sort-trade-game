@@ -1,4 +1,4 @@
-import { applyWreckStrippingReport } from "./wreck-stripping";
+import { applyWreckStrippingReport, consumedStrippingMechIds, normalizeWreckStrippingReport } from "./wreck-stripping";
 import { applyEnemyWrecks } from "./enemy-wreck-return";
 /**
  * U9 (CIRCUIT_DATA_MODEL_V0 §5.4・§9 U9): apply one Explore sortie return to
@@ -128,7 +128,11 @@ export function applyExploreReturnToHub(
       }
     }
   }
-  next = applyEnemyWrecks(next, wear.enemyWrecks ?? []);
+  const stripped = consumedStrippingMechIds([
+    ...(next.wreckStrippingHistory ?? []),
+    ...(normalizeWreckStrippingReport(wear.wreckStripping)?.observations ?? []),
+  ]);
+  next = applyEnemyWrecks(next, (wear.enemyWrecks ?? []).filter(row => !stripped.has(row.instanceId)));
   if (wear.sortieId) next = applyWreckStrippingReport(next, wear.wreckStripping);
   const returned: HubSnapshot = {
     ...next,

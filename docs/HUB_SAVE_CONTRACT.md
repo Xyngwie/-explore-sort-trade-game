@@ -444,3 +444,5 @@ API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_
 - ExploreToHubWearPayload.wreckStrippingは任意の `{observations,nextWreckId,nextShieldOrder}`。格納庫URLも同名JSONパラメーター。不正形式は採用せず、旧URLは従来どおり読む。
 - 既存sortieIdの精算に含め、履歴を保存し、fieldObjectIdentitiesのカウンターを後退させず更新。元機体はfleet/lostMechs/出撃選択から、失われた回路はcircuits/fieldDropsから削除。別経路で大破機を再付与しない。再適用はappliedSortieIdsでスキップ。
 - 盾の所持・拾得・出撃をまたぐ地面配置はこの契約に追加していない。checkpoint内の地面盾/剥離進捗と区別する。詳細[WRECK_STRIPPING_PLAN.md](WRECK_STRIPPING_PLAN.md)。
+
+- #310追加監査：敵のsourceInstanceId=nullでもtargetIdから `recovered-<敵Unit ID>` を解決し、今回の剥離観測・保存済み履歴の両方を敵受領前に照合する。旧a:接頭辞も同じ敵IDへ解決。受領済みコピー/装備回路の除去と、遅延帰還による再取得防止を含む。詳細[WRECK_STRIPPING_RETURN_AUDIT.md](WRECK_STRIPPING_RETURN_AUDIT.md)。

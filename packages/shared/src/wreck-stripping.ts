@@ -26,27 +26,41 @@ export function normalizeWreckStrippingReport(raw: unknown): WreckStrippingRepor
   if (observations.length !== r.observations.length) return undefined;
   return { observations, nextWreckId: r.nextWreckId, nextShieldOrder: r.nextShieldOrder };
 }
+/** Enemy returns name the acquired hull recovered-<runtime unit id>.
+ * Legacy air-wreck targets prefix that same unit id with a:. Do not infer a
+ * friendly instance ID from targetId: those carry sourceInstanceId explicitly.
+ */
+export function consumedStrippingMechIds(rows: readonly WreckStrippingObservation[]): Set<string> {
+  return new Set(rows.flatMap(row => {
+    if (row.sourceInstanceId) return [row.sourceInstanceId];
+    const unitId = row.targetId.startsWith('a:') ? row.targetId.slice(2) : row.targetId;
+    return /^(enemy-|stray-)/.test(unitId) ? [`recovered-${unitId}`] : [];
+  }));
+}
 /** Applied inside the existing sortieId transaction. Stripping consumes the
  * mech and its circuits, whether it currently belongs to fleet or lostMechs.
  * Persist counters/history, not a new ownership or ground-shield lifetime rule.
  */
 export function applyWreckStrippingReport(hub: HubSnapshot, raw: WreckStrippingReport | undefined): HubSnapshot {
   const report = normalizeWreckStrippingReport(raw);
-  if (!report) return hub;
-  const mechs = new Set(report.observations.flatMap(r => r.sourceInstanceId ? [r.sourceInstanceId] : []));
-  const circuits = new Set(report.observations.flatMap(r => r.circuits.map(c => c.circuitId)));
+  if (!report && !(hub.wreckStrippingHistory?.length)) return hub;
+  const observations = [...(hub.wreckStrippingHistory ?? []), ...(report?.observations ?? [])];
+  const mechs = consumedStrippingMechIds(observations);
+  const circuits = new Set(observations.flatMap(r => r.circuits.map(c => c.circuitId)));
   for (const c of hub.circuits) if (c.equippedTo && mechs.has(c.equippedTo)) circuits.add(c.circuitId);
   for (const m of hub.lostMechs ?? []) if (mechs.has(m.instanceId)) for (const c of m.circuitIds) circuits.add(c);
   const identities: FieldObjectIdentities = structuredClone(hub.fieldObjectIdentities ?? emptyFieldObjectIdentities());
   const max = (a: string, b: string) => BigInt(a) > BigInt(b) ? a : b;
-  identities.nextWreckId = max(identities.nextWreckId, report.nextWreckId);
-  identities.nextShieldOrder = max(identities.nextShieldOrder, report.nextShieldOrder);
-  for (const r of report.observations) {
+  if (report) {
+    identities.nextWreckId = max(identities.nextWreckId, report.nextWreckId);
+    identities.nextShieldOrder = max(identities.nextShieldOrder, report.nextShieldOrder);
+  }
+  for (const r of observations) {
     identities.nextWreckId = max(identities.nextWreckId, String(BigInt(r.shieldId) + 1n));
     identities.nextShieldOrder = max(identities.nextShieldOrder, String(BigInt(r.generationOrder) + 1n));
   }
   const history = [...(hub.wreckStrippingHistory ?? [])];
-  for (const row of report.observations) if (!history.some(old => old.shieldId === row.shieldId)) history.push(structuredClone(row));
+  for (const row of report?.observations ?? []) if (!history.some(old => old.shieldId === row.shieldId)) history.push(structuredClone(row));
   return { ...hub, fieldObjectIdentities: identities, wreckStrippingHistory: history,
     fleet: hub.fleet.filter(m => !mechs.has(m.instanceId)),
     lostMechs: (hub.lostMechs ?? []).filter(m => !mechs.has(m.instanceId)),

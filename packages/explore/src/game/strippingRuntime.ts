@@ -9,7 +9,7 @@ export type StrippingRuntime = {
   observations: WreckStrippingObservation[];
 };
 type Target = { id: string; pos: Vec2; unit?: Unit; instanceId: string | null };
-export function wreckWasStripped(world: World, targetId: string): boolean { return world.stripping?.jobs[targetId]?.completed === true; }
+export function wreckWasStripped(world: World, targetId: string): boolean { return world.stripping?.jobs?.[targetId]?.completed === true || (world.stripping?.observations?.some(row => row.targetId === targetId) ?? false); }
 export function activeStripping(world: World, unitId: string): boolean {
   return Object.values(world.stripping?.jobs ?? {}).some(j => !j.completed && j.reservation?.unitId === unitId);
 }

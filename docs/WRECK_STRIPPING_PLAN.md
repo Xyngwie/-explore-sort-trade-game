@@ -56,3 +56,7 @@ PLAYWRIGHT_MODULE=/workspace/.cloud-tools/browser/node_modules/playwright-core \
 ```
 
 ブラウザーfixtureは隔離contextにのみ用意。製品にデバッグ付与口は追加しない。Draftのまま再監査を待ち、マージ・公開しない。
+
+## 帰還精算の追加監査
+
+剥離済み情報と敵回収情報の同時存在で旧headの空の大破機再取得を再現し、精算側の事前除外・履歴照合・旧航空支援経路を修正した。実射撃から帰還/結果再読込までのブラウザー検証と結果は[WRECK_STRIPPING_RETURN_AUDIT.md](WRECK_STRIPPING_RETURN_AUDIT.md)参照。
