@@ -1,3 +1,4 @@
+import { tickShieldOperations } from "./shieldOperations";
 import { activeStripping, interruptStripping, tickStripping, wreckWasStripped } from "./strippingRuntime";
 import { absorbShieldHit } from "./shields";
 import { incomingDamage } from "./incomingDamage";
@@ -532,6 +533,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
+  tickShieldOperations(world);
   tickStripping(world, dt);
   updateFacing(world, dt);
   updateSquadIntel(world);

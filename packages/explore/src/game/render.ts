@@ -1,3 +1,4 @@
+import { groundShieldGroups } from "../ui/shieldPanel";
 import type { Vec2 } from "./math";
 import { wreckWasStripped } from "./strippingRuntime";
 import { equippedShield, SHIELD_HALF_ARC } from "./shields";
@@ -314,17 +315,11 @@ export function renderWorld(
     drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, d.kind === 'power' ? COLORS.powerDrop : COLORS.ammoDrop);
     ctx.restore();
   }
-  // Ground shields have no collision or pickup action in this PR.
-  const groundGroups = new Map<string,{pos: Vec2; count:number}>();
-  for (const [key,pos] of Object.entries(world.shieldState?.ground ?? {})) {
-    if (!world.shieldState?.identities.shields[key] || !squadSees(world,pos)) continue;
-    const groupKey = `${pos.x}:${pos.y}`;
-    const group = groundGroups.get(groupKey);
-    if (group) group.count++; else groundGroups.set(groupKey,{pos,count:1});
-  }
-  for (const {pos,count} of groundGroups.values()) {
+  // Same visible groups drive map labels and the pickup candidate panel.
+  for (const {pos,keys,reserved} of groundShieldGroups(world)) {
     ctx.save(); ctx.fillStyle=COLORS.wreck; ctx.font="11px sans-serif";
-    ctx.fillText(`盾 ×${count}`,tx(pos.x),ty(pos.y)); ctx.restore();
+    if(reserved===keys.length)ctx.globalAlpha=.5;
+    ctx.fillText(`盾 ×${keys.length}${reserved?`（回収中${reserved}）`:""}`,tx(pos.x),ty(pos.y));ctx.restore();
   }
   // Bullets
   ctx.fillStyle = "#e8eaed";

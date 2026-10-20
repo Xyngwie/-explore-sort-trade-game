@@ -1,3 +1,4 @@
+import { cancelShieldPickup } from "./shieldOperations";
 import { classifyCircuit, emptyFieldObjectIdentities, type HubSnapshot, type WreckStrippingObservation, type WreckStrippingReport } from '@estg/shared';
 import { wreckCarrierId } from './carry';
 import { dist, type Vec2 } from './math';
@@ -50,6 +51,7 @@ export function startStrippingAt(world: World, point: Vec2, hub: HubSnapshot | n
   world.stripping ??= { jobs: {}, observations: [] };
   const r = reserveStripping(world.stripping, world.shieldState.identities, source, unit.id, unit.pos);
   if (r.status !== 'started') return r.status === 'busy' ? 'busy' : 'none';
+  cancelShieldPickup(world,unit.id);
   world.shieldState.identities = r.identities;
   unit.moveTarget = null; unit.playerMoveTarget = null; unit.salvageId = null; unit.salvageT = 0; unit.vel = { x: 0, y: 0 };
   return 'started';

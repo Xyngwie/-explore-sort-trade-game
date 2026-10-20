@@ -64,3 +64,7 @@ PLAYWRIGHT_MODULE=/workspace/.cloud-tools/browser/node_modules/playwright-core \
 ```
 
 CI最終結果はDraft #309本文へ記録。再監査前にマージ・公開しない。
+
+## 後続PRとの接続
+
+#310で残骸盾の剥離・生成、#311で同じ出撃内の拾得/装備・予備/交換を実装。上記の「後続」表記は#309提出時の境界であり、現在の接続範囲は[SHIELD_PICKUP_PLAN.md](SHIELD_PICKUP_PLAN.md)参照。出撃をまたぐ盾の永続化は引き続き別工程。

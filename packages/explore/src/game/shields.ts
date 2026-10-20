@@ -30,7 +30,9 @@ export function equippedShield(world: World, unit: Unit): { key: string; shield:
 export function shieldLoad(world: World, unit: Unit): number { return ((equippedShield(world, unit) ? 1 : 0) + spareShields(world,unit).length) * SHIELD_WEIGHT; }
 export function shieldHudText(world: World, unit: Unit): string {
   const entry = equippedShield(world, unit);
-  return entry ? `盾 ${Number(entry.shield.hp.toFixed(1))}/${Number(entry.shield.maxHp.toFixed(1))}` : "";
+  const spareCount = spareShields(world,unit).length;
+  const equipped = entry ? `盾 ${Number(entry.shield.hp.toFixed(1))}/${Number(entry.shield.maxHp.toFixed(1))}` : world.shieldState?.exchanges?.[unit.id] ? "盾交換中" : "";
+  return [equipped, spareCount ? `予備盾 ${spareCount}` : "", world.shieldState?.pickups?.[unit.id] ? "盾回収中" : ""].filter(Boolean).join("・");
 }
 /** incomingAngle points toward the oncoming attack, not the shooter's old position.
  * Damage is already reduced (owner Q1=A). The breaking hit never spills to armor.

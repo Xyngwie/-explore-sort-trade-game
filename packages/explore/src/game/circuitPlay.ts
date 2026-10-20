@@ -1,6 +1,7 @@
+import { cancelShieldPickup, dropAllOwnedShields, shieldItem } from "./shieldOperations";
 import { activeStripping, interruptStripping, wreckWasStripped } from "./strippingRuntime";
 import { incomingDamage } from "./incomingDamage";
-import { absorbShieldHit, dropEquippedShield, dropUnavailableShields } from "./shields";
+import { absorbShieldHit, dropUnavailableShields } from "./shields";
 import { segmentCircle } from "./geometry";
 /**
  * Circuit actions during a sortie (Issue #269, 神宮 10/11–12 decisions).
@@ -56,7 +57,7 @@ import { obstacleMove } from "./coverMovement";
 import { COVER_RADIUS, getCoverObjects } from "./coverObjects";
 import { dist, norm, type Vec2 } from "./math";
 import { pushLog, spawnContainersAt } from "./orders";
-import { LOAD_PER_WRECK, canTakeContainer, loadLineJa, loadSpeedRatio, roomFor, unitLoad, wreckCarrierId } from "./carry";
+import { LOAD_PER_WRECK, canTakeContainer, loadLineJa, loadSpeedRatio, roomFor, unitLoad, unitLoadCap, wreckCarrierId } from "./carry";
 import type { Bullet, Unit, World } from "./types";
 import { IDENTITY_ABILITY_SCALE, releaseAbilityScale, type AbilityScale } from "./releaseAbility";
 
@@ -1453,8 +1454,8 @@ function unitName(u: Unit): string {
 }
 
 /** Drop everything a unit carries where it stands (containers and wrecks). */
-function dropAllCargo(world: World, unit: Unit): void {
-  dropEquippedShield(world, unit);
+function dropAllCargo(world: World, unit: Unit, forced = false): void {
+  dropAllOwnedShields(world, unit, forced);
   dropContainerStack(world, unit);
   const p = playOf(world);
   if (p?.carry?.[unit.id]) { for (const id of [...p.carry[unit.id]!]) unloadMech(world, id); delete p.carry[unit.id]; }
@@ -1478,6 +1479,7 @@ export function startWreckPickup(world: World, unit: Unit, wreckId: string): "st
   if (!w || w.id === unit.id) return "none";
   if (wreckCarrierId(world, wreckId) != null || (p.carry[wreckId] ?? []).includes(unit.id)) return "taken";
   if (dist(unit.pos, w.pos) > world.balance.interactRadius) return "far";
+  cancelShieldPickup(world,unit.id);
   p.wreckChannel[unit.id] = { id: wreckId, t: 0 };
   unit.salvageId = null;
   unit.salvageT = 0;
@@ -1499,6 +1501,11 @@ function tickWreckPickups(world: World, dt: number): void {
     ch.t += dt;
     if (ch.t < COLLECT_SECONDS) continue;
     delete p.wreckChannel[unitId];
+    const reservedShield = world.shieldState?.exchanges?.[unitId]?.key;
+    if (reservedShield && shieldItem(world,reservedShield) && unitLoadCap(world,unit) < LOAD_PER_WRECK + 1) {
+      pushLog(world, `${unitName(unit)}：交換中の盾を保持するため、機体を回収できませんでした。`);
+      continue;
+    }
     // #269: holding containers, taking a wreck drops the containers in place. When a
     // wreck still does not fit (already carrying one), drop the whole inventory too.
     if (roomFor(world, unit) < LOAD_PER_WRECK) dropContainerStack(world, unit);
@@ -1508,13 +1515,17 @@ function tickWreckPickups(world: World, dt: number): void {
       for (const id of [...held]) unloadMech(world, id);
       delete p.carry[unitId];
     }
-    if (roomFor(world, unit) < LOAD_PER_WRECK) dropEquippedShield(world, unit);
+    if (roomFor(world, unit) < LOAD_PER_WRECK) dropAllOwnedShields(world, unit);
+    if (roomFor(world, unit) < LOAD_PER_WRECK) {
+      pushLog(world, `${unitName(unit)}：積載容量が足りず、機体を回収できませんでした。`);
+      continue;
+    }
     p.carry[unitId] = [...(p.carry[unitId] ?? []), ch.id];
     const target = friendlies(world).find(u => u.id === ch.id);
     // PR4: a living passenger drops ALL carried cargo at the pickup site;
     // its carrier never inherits that cargo, even if it has spare capacity.
     if (target?.alive) {
-      dropAllCargo(world, target);
+      dropAllCargo(world, target, true);
       target.moveHeading = null;
       target.aimWant = null;
       target.moveTarget = null; target.salvageId = null; target.salvageT = 0;
