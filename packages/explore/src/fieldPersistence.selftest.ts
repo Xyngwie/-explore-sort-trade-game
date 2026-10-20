@@ -75,8 +75,14 @@ assert.equal(fieldCellReport(legacy),undefined);
  const {checkpointSortieSearch,resortieSearch}=await import('./game/resortie');
  const restoredSearch=checkpointSortieSearch('?deployedInstanceIds=leader',w.invadeSector);
  const q=new URLSearchParams(restoredSearch);assert.equal(q.get('sectorX'),'1');assert.equal(q.get('sectorY'),'2');
- assert.equal(checkpointSortieSearch(search,w.invadeSector),search);
+ assert.equal(new URLSearchParams(checkpointSortieSearch('?sectorX=9&sectorY=9&density=1',w.invadeSector)).get('sectorX'),'1','resumed checkpoint owns its location even when incoming URL names a different sector');
  const {createOwnedMech}=await import('@estg/shared');
  const deploy=normalizeHubSnapshot({...hub,fleet:[createOwnedMech('mech_gen1',{instanceId:'leader'})]});
  const next=resortieSearch(restoredSearch,deploy,['leader'])!;assert.equal(new URLSearchParams(next.search).get('sectorY'),'2');
+}
+
+// Pending Q3: never broaden unstarted enemy-wreck persistence without an answer.
+{
+ const untouched=fresh();untouched.enemies=untouched.enemies.slice(0,1);untouched.enemies[0]!.alive=false;untouched.enemies[0]!.hp=0;
+ assert.deepEqual(fieldCellReport(untouched)!.wrecks,[]);
 }

@@ -449,7 +449,7 @@ API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_
 
 ### #312：マス単位の地面盾・残骸保存（加算的）
 
-`hub.fieldCells?: FieldCellState[]`を追加する。保存単位は`location: {frontSeed, cell:{sx,sy}}`。`ground`の盾参照キーと`wrecks[].wreckKey`は`hub.fieldObjectIdentities`の正規レコードを指す。盾のHP・ID・生成順をfieldCellsへ複製しない。残骸は座標・元機体instanceId（敵はnull）・剥離秒数（0以上8未満）・失われる回路情報を持つ。敵残骸は元の回路を含む敵素体を保存し、生きた敵の生成とは分離する。作業者の予約は保存対象外。
+`hub.fieldCells?: FieldCellState[]`を追加する。保存単位は`location: {frontSeed, cell:{sx,sy}}`。`ground`の盾参照キーと`wrecks[].wreckKey`は`hub.fieldObjectIdentities`の正規レコードを指す。盾のHP・ID・生成順をfieldCellsへ複製しない。剥離開始済みの残骸は座標・元機体instanceId（敵はnull）・剥離秒数（0以上8未満）・失われる回路情報を持つ。敵残骸は元の回路を含む敵素体を保存し、生きた敵の生成とは分離する。作業者の予約は保存対象外。
 
 帰還`fieldCell?: FieldCellReport`は対応するマスの全残存状態と必要なIDレコード・カウンターを運ぶ。直接保存と帰還URLの双方で同じsortieIdトランザクションへ適用し、空の報告は当該マスを空に置換する。帰還先マスとの不一致・旧盤面seedは適用しない。盤面再生成はfieldCellsと参照する地面物体を削除し、IDカウンター・修復履歴は保持する。未搭載の旧セーブはfieldCells欠損のまま。不正参照を持つセーブは黙って削除せず読込を拒否する。
 

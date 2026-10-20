@@ -59,11 +59,25 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
  const dp=await direct.newPage();await dp.goto(base+'/?deployedInstanceIds=leader');await dp.locator('#btn-start').click();await dp.reload();await dp.locator('#sortie-paused').waitFor();
  const directState=await dp.evaluate(key=>({world:JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body,hub:JSON.parse(localStorage.getItem(key)).hub}),fixture.saveKey);
  assert.deepEqual(directState.world.sortieLocation,{frontSeed:812,cell:{sx:0,sy:0}});assert.deepEqual(directState.hub.frontProgress,fixture.save.hub.frontProgress);await direct.close();
+ // Real Invade regeneration clears field objects but preserves global counters.
+ const invade=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+ await invade.addInitScript(d=>{localStorage.setItem(d.key,JSON.stringify(d.save));},{key:fixture.saveKey,save:{...fixture.save,hub:settled}});
+ const ip=await invade.newPage();await ip.goto(process.env.INVADE_BASE_URL||'http://127.0.0.1:5176');await ip.locator('#btn-regen').waitFor();
+ ip.once('dialog',dialog=>dialog.accept());await ip.locator('#btn-regen').click();
+ const regenerated=await ip.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub,fixture.saveKey);
+ assert.notEqual(regenerated.frontProgress.seed,812);assert.deepEqual(regenerated.fieldCells,[]);
+ assert.equal(regenerated.fieldObjectIdentities.nextWreckId,settled.fieldObjectIdentities.nextWreckId);assert.equal(regenerated.fieldObjectIdentities.nextShieldOrder,settled.fieldObjectIdentities.nextShieldOrder);
+ assert.equal(regenerated.fieldObjectIdentities.shields['persisted-shield'],undefined);await invade.close();
+ const newEntry=await browser.newContext();await newEntry.addInitScript(d=>{if(!sessionStorage.getItem('new')){const saved=structuredClone(d.save);saved.hub.frontProgress=null;localStorage.setItem(d.saveKey,JSON.stringify(saved));sessionStorage.setItem('new','1');}},fixture);
+ const np=await newEntry.newPage();await np.goto(base+'/?deployedInstanceIds=leader');await np.locator('#btn-start').waitFor();
+ const created=await np.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub.frontProgress,fixture.saveKey);assert.equal(typeof created.seed,'number');assert.deepEqual(created.opened,[]);assert.deepEqual(created.flagged,[]);
+ await np.locator('#btn-start').click();await np.reload();await np.locator('#sortie-paused').waitFor();const createdWorld=await np.evaluate(()=>JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body);
+ assert.deepEqual(createdWorld.sortieLocation,{frontSeed:created.seed,cell:{sx:0,sy:0}});await newEntry.close();
  const blocked=await browser.newContext();await blocked.addInitScript(d=>{
   const saved=structuredClone(d.save);saved.hub.frontProgress=null;localStorage.setItem(d.saveKey,JSON.stringify(saved));
   const native=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k===d.saveKey)throw Error('fixture write refused');return native.call(this,k,v);};
  },fixture);
  const bp=await blocked.newPage();await bp.goto(base+'/?deployedInstanceIds=leader');await bp.locator('#btn-start').waitFor();assert(await bp.locator('#btn-start').isDisabled());assert((await bp.locator('body').innerText()).includes('戦場情報を保存できませんでした'));await blocked.close();
- console.log('Field persistence browser 390x844 PASS: actual 15s return/save/result reload/redeploy, exact HP/IDs/circuits, remaining stripping time and 2s pickup, fresh live enemies, direct shared-board HQ/no scouting, refused seed save blocks deploy');
+ console.log('Field persistence browser 390x844 PASS: actual 15s return/save/result reload/redeploy, exact HP/IDs/circuits, remaining stripping time and 2s pickup, fresh live enemies, direct shared-board HQ/no scouting, new board creation, real Invade regeneration/high-water, refused seed save blocks deploy');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

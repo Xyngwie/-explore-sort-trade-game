@@ -14,7 +14,6 @@ import { squadEquipmentError,
   HANDOFF_QUERY_KEYS,
   applyExploreReturnToHub,
   buildInvadeToExploreUrl,
-  parseInvadeToExploreSearch,
   buildMechCircuitsForDeploy,
   buildTradeToExplorePayloadFromFleet,
   buildTradeToExploreUrl,
@@ -127,8 +126,9 @@ export function resortieSearch(
 /** The browser URL sheds Invade keys after boot. A result/sortie checkpoint
  * still owns its sector; restore those keys before building 再出撃 links. */
 export function checkpointSortieSearch(search: string, sector: World["invadeSector"]): string {
-  if (!sector || parseInvadeToExploreSearch(search)) return search;
+  if (!sector) return search;
   const params = new URLSearchParams(search);
+  for (const key of HANDOFF_QUERY_KEYS.invadeToExplore) params.delete(key);
   const saved = new URL(buildInvadeToExploreUrl(sector,"https://estg.invalid/explore/")).searchParams;
   for (const key of HANDOFF_QUERY_KEYS.invadeToExplore) {
     const value = saved.get(key);
