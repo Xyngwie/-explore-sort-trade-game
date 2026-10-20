@@ -1,0 +1,198 @@
+{
+  "type": "SPEC_QUESTION",
+  "version": "2.0",
+  "date": "2026-10-20",
+  "title": "#313予定：帰還・置き去り時の盾処理／仕様会議用・質問全文",
+  "request": {
+    "to": "風紀委員・神宮",
+    "purpose": "仕様会議の立場でS1〜S6の推奨回答と理由を検討してください。Q1〜Q3、置き去り機、共有盤面の既存仕様との整合を確認し、矛盾があれば指摘してください。",
+    "approval_rule": "推奨回答は決定案です。神宮の承認前に確定仕様と扱わず、実装担当も選択・実装しません。会議で確定した回答をSPEC_DECISIONとして返してください。",
+    "completeness": "S1〜S6の質問本文・全選択肢・判断に必要な背景を省略せず収録。S3はS1に依存します。"
+  },
+  "baseline": {
+    "repository": "Xyngwie/-explore-sort-trade-game",
+    "main_commit": "825b2e8e0f681ae4c781e3f06a379fb8857109bf",
+    "included_pr": 312,
+    "deploy_run": 39389174830,
+    "deploy_status": "SUCCESS"
+  },
+  "implementation_status": "#313は準備段階。Draft PRは未作成。盾のHUB持ち帰りは対象外。",
+  "confirmed_owner_decisions": [
+    {
+      "id": "Q1",
+      "choice": "A",
+      "decision_ja": "帰還する機体の装備盾・予備盾は外して戦場に残し、HUBへ持ち帰らない。"
+    },
+    {
+      "id": "Q2",
+      "choice": "A",
+      "decision_ja": "通常帰還では、離昇時の各機体位置に盾を残し、HP・IDを保持する。"
+    },
+    {
+      "id": "Q3",
+      "choice": "B",
+      "decision_ja": "通常帰還で置き去りになる生存機は盾を装備・所持したまま残り、次回もその機体が持つ。"
+    }
+  ],
+  "withdrawn_question": {
+    "id": "Q4",
+    "status": "WITHDRAWN",
+    "reason_ja": "通常撤退と呼んだものは旧abortSortieの即時終了処理。現在の画面にはボタンがなく、実際の帰還と混同した質問のため撤回。回答済み扱いにせず、#313で新しい終了操作を作らない。"
+  },
+  "existing_rules": [
+    "盾の破壊・機体破壊・活動量0・生存機搭載時の既存処理",
+    "#312の地面盾保存：同じ盤面・同じマス、盤面再生成で消去、IDカウンターは維持",
+    "#312の敵残骸保存：剥離を開始した残骸だけ保存",
+    "直接EXPLOREも同じ盤面のHQから出発",
+    "回収未完了の地面盾は所持盾ではない。既存の回収予約は次の出撃へ持ち越さない。",
+    "置き去り生存機は同じ盤面の同じマスで再登場する。盤面再生成では既存処理に従って新盤面へ移る。",
+    "手動救助撤退では生存僚機が置き去りとなり、積荷等を失う。隊長大破後の時間切れも同じ損失処理を使うが救助費用は異なる。盾が積荷の損失対象かはS1・S3で決める。",
+    "隊長生存の時間切れは、隊長位置を中心とする既存帰還半径内を回収し、外の僚機を置き去りにする。",
+    "盾は装備1枚、予備は積載容量の範囲。予備への交換は2秒で、交換中は無防備。選択された予備盾も重量を占める。",
+    "既存の機体喪失・回路・コンテナ・救助費用の規則は今回の盾処理で変更しない。"
+  ],
+  "questions": [
+    {
+      "id": "S1",
+      "topic": "manual_rescue_retreat",
+      "status": "UNDECIDED",
+      "question_ja": "隊長大破後に救助撤退したとき、置き去りになる生存僚機の盾はどうしますか？",
+      "why_decision_is_needed": "Q3=Bは通常帰還での置き去りについての回答です。救助撤退では積荷を失う既存仕様があり、盾がその対象か未確定です。隊長の破壊時に既に地面へ落ちた盾は、この質問の対象外です。",
+      "options": [
+        {
+          "choice": "A",
+          "description_ja": "生存僚機は装備盾・予備盾を所持したまま残り、次回も保持する。"
+        },
+        {
+          "choice": "B",
+          "description_ja": "生存僚機の位置に装備盾・予備盾を外して地面に残す。"
+        },
+        {
+          "choice": "C",
+          "description_ja": "生存僚機の所持盾は救助撤退で失われ、地面にも残らない。"
+        }
+      ],
+      "owner_choice": null,
+      "depends_on": []
+    },
+    {
+      "id": "S2",
+      "topic": "timeout_with_live_leader",
+      "status": "UNDECIDED",
+      "question_ja": "隊長が生存したまま時間切れで強制救助された場合、通常帰還と同じ盾処理にしますか？",
+      "why_decision_is_needed": "現行では隊長位置を中心にした帰還半径内の機体等を回収し、外の僚機を置き去りにします。15秒の通常帰還とは別の終了経路です。",
+      "options": [
+        {
+          "choice": "A",
+          "description_ja": "通常帰還と同じ。帰還する機体は現在位置に盾を外し、置き去り機は盾を所持し続ける。"
+        },
+        {
+          "choice": "B",
+          "description_ja": "この経路では円内外に関係なく、生存機の所持盾を各機体位置の地面へ置く。"
+        }
+      ],
+      "owner_choice": null,
+      "depends_on": []
+    },
+    {
+      "id": "S3",
+      "topic": "timeout_with_destroyed_leader",
+      "status": "UNDECIDED",
+      "question_ja": "隊長大破後、時間切れまで待った強制救助では、生存僚機の盾をS1と同じ扱いにしますか？",
+      "why_decision_is_needed": "現行では手動の救助撤退と同じ損失処理を使いますが、救助費用は異なります。盾の扱いも共通にしてよいかは未確定です。",
+      "options": [
+        {
+          "choice": "A",
+          "description_ja": "S1で決めた盾の扱いを適用する。"
+        },
+        {
+          "choice": "B",
+          "description_ja": "S1とは別の扱いにする。会議で具体的な規則を記入する。"
+        }
+      ],
+      "owner_choice": null,
+      "depends_on": [
+        "S1"
+      ]
+    },
+    {
+      "id": "S4",
+      "topic": "missed_boarding",
+      "status": "UNDECIDED",
+      "question_ja": "搭乗円の離昇判定時に隊長が円外で、帰還失敗になる場合の所持盾はどうしますか？",
+      "why_decision_is_needed": "現行コードは「隊長が搭乗円外のため離昇せず」として結果画面へ進む経路を持ちます。通常帰還成功や救助撤退の回答を自動的に流用できません。機体そのものの受領・置き去り判定は変えません。",
+      "options": [
+        {
+          "choice": "A",
+          "description_ja": "全生存機の装備盾・予備盾を各機体位置の地面へ置く。"
+        },
+        {
+          "choice": "B",
+          "description_ja": "既存の精算で置き去りになる機体は所持を維持し、それ以外の機体の盾は現在位置の地面へ置く。"
+        }
+      ],
+      "owner_choice": null,
+      "depends_on": []
+    },
+    {
+      "id": "S5",
+      "topic": "left_behind_exchange_progress",
+      "status": "UNDECIDED",
+      "question_ja": "置き去り機が予備盾への2秒交換の途中だった場合、次回にどう再開しますか？",
+      "why_decision_is_needed": "Q3=Bで装備・予備の保持は確定しましたが、交換の残り時間は未決定です。交換中は元の盾が壊れており、選択中の盾は予備として重量を占めています。出撃間の実時間を消費するとは決めていません。",
+      "options": [
+        {
+          "choice": "A",
+          "description_ja": "次回、その機体で同じ対象への交換を2秒からやり直す。"
+        },
+        {
+          "choice": "B",
+          "description_ja": "同じ交換対象と残り時間を凍結保存し、次回の出撃内で続ける。"
+        },
+        {
+          "choice": "C",
+          "description_ja": "交換予約を解除して予備として保持する。次回の自動再開はしない。"
+        }
+      ],
+      "owner_choice": null,
+      "depends_on": []
+    },
+    {
+      "id": "S6",
+      "topic": "board_regeneration_with_owned_shields",
+      "status": "UNDECIDED",
+      "question_ja": "盤面再生成で置き去り生存機が新盤面へ移るとき、その機体の装備盾・予備盾も保持しますか？",
+      "why_decision_is_needed": "現行では置き去り生存機を新盤面へ移します。Q111と#312で消えることが確定しているのは地面盾です。新たに保存する機体所持盾へ同じ消去規則を広げてよいかは未確定です。",
+      "options": [
+        {
+          "choice": "A",
+          "description_ja": "同じ機体に付いたまま、新盤面へ引き継ぐ。"
+        },
+        {
+          "choice": "B",
+          "description_ja": "機体は従来どおり移すが、所持盾は消す。"
+        }
+      ],
+      "owner_choice": null,
+      "depends_on": []
+    }
+  ],
+  "requested_reply": {
+    "first_step": "S1〜S6それぞれの推奨回答・理由・既存仕様との整合・未解消点を提示してください。",
+    "proposal_fields": [
+      "id",
+      "recommended_choice",
+      "reason_ja",
+      "consistency_with_confirmed_rules",
+      "remaining_questions"
+    ],
+    "final_step": "神宮と風紀委員の会議後、各id・確定choice・具体的な規則・神宮承認の有無を含むSPEC_DECISIONを返してください。選択肢以外の規則でも構いません。",
+    "constraints": [
+      "S1を含め全6件に回答する。",
+      "S3はS1の具体的な結論との整合を説明する。",
+      "S3=B等の別規則は内容を省略しない。",
+      "Q1〜Q3を改訂する場合は、元の決定との差を明記し、神宮の承認を得る。",
+      "未決定の回答を埋めて承認済み扱いにしない。"
+    ]
+  }
+}

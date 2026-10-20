@@ -454,3 +454,11 @@ API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_
 帰還`fieldCell?: FieldCellReport`は対応するマスの全残存状態と必要なIDレコード・カウンターを運ぶ。直接保存と帰還URLの双方で同じsortieIdトランザクションへ適用し、空の報告は当該マスを空に置換する。帰還先マスとの不一致・旧盤面seedは適用しない。盤面再生成はfieldCellsと参照する地面物体を削除し、IDカウンター・修復履歴は保持する。未搭載の旧セーブはfieldCells欠損のまま。不正参照を持つセーブは黙って削除せず読込を拒否する。
 
 直接EXPLOREも保存中の盤面のHQ（0,0）を使用する。盤面がなければ未踏査のseedを先に保存し、既存のopened/flagged/focusは変更しない。所持盾の帰還ルールはこの契約追加では決定しない。詳細は[FIELD_SHIELD_PERSISTENCE_PLAN.md](FIELD_SHIELD_PERSISTENCE_PLAN.md)。
+
+### #313：置き去り機の所持盾と交換凍結（加算的）
+
+任意`hub.lostMechShields: Record<instanceId, {equipped?, spares, exchange?}>`を追加。equipped/sparesは正規fieldObjectIdentitiesの安定盾参照。exchangeは`{key, remaining}`で、remainingは0〜2秒の出撃内の残り時間。元の期限や実時間では進めない。交換対象はspares内に留まり、重量を占め、完了まで防御なし・手動投棄不可。所持盾は生存のlostMechsに紐付き、HUB装備ではない。
+
+既存帰還fieldCell報告に任意ownedShieldsを追加し、当該マスの置き去り生存機の所持状態を同じsortieId精算内で置換する。実際にlostMechsに残る機体だけ保存し、回収された機体への参照を消す。報告からフィールド欠損の場合は旧形式として新しい所有情報を空消去しない。盾HP/ID/出自/生成順は正規レジストリで保持し、所持と地面への二重配置・重複所有・不正交換は読込拒否。
+
+帰還機は各機体位置に盾を落とし、HUBへ持ち帰らない。置き去り機は所持を継続。盤面再生成時は地面物体のみ削除し、機体の所持盾と交換残り秒数は維持する。機体が後に回収された場合も盾は現地へ残す。新旧セーブ、直接保存とURL帰還、結果再読込、再出撃に対応する。正本：[shield-return-313-decision.json](spec-questions/shield-return-313-decision.json)。

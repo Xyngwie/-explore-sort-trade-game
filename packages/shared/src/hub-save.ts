@@ -1,3 +1,4 @@
+import { ownedShieldKeys, normalizeLostMechShields, type LostMechShieldMap } from "./lost-mech-shields";
 import { clearFieldCells, normalizeFieldCells, type FieldCellState } from "./field-cell-state";
 import { normalizeStrippingObservations, type WreckStrippingObservation } from "./wreck-stripping";
 import { normalizeFieldObjectIdentities, type FieldObjectIdentities } from "./field-object-identities";
@@ -231,6 +232,7 @@ export type InvadeFrontProgress = {
  * `circuits` holds Module 5 restore boards (additive; missing → []).
  */
 export type HubSnapshot = {
+  lostMechShields?: LostMechShieldMap;
   /** #312 battlefield-local ground shields and incomplete wreck stripping. */
   fieldCells?: FieldCellState[];
   wreckStrippingHistory?: WreckStrippingObservation[];
@@ -1027,7 +1029,10 @@ export function normalizeHubSnapshot(
   );
   const historyRaw = rawRec == null ? fallback.wreckStrippingHistory : rawRec.wreckStrippingHistory;
   const fieldCells = normalizeFieldCells(rawRec == null ? fallback.fieldCells : rawRec.fieldCells, fieldObjectIdentities);
+  const lostMechShields=normalizeLostMechShields(rawRec == null ? fallback.lostMechShields : rawRec.lostMechShields,fieldObjectIdentities,lostMechs);
+  if(Object.values(lostMechShields??{}).some(s=>ownedShieldKeys(s).some(k=>fieldCells?.some(c=>Object.hasOwn(c.ground,k))))) throw Error("Shield is both ground and owned");
   const snapshot: HubSnapshot = {
+    ...(lostMechShields ? {lostMechShields} : {}),
     ...(fieldCells ? { fieldCells } : {}),
     ...(historyRaw != null ? { wreckStrippingHistory: normalizeStrippingObservations(historyRaw) } : {}),
     ...(fieldObjectIdentities ? { fieldObjectIdentities } : {}),

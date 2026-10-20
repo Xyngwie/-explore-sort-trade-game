@@ -1,3 +1,4 @@
+import { settleReturnedShields } from "./shieldReturn";
 import { tickShieldOperations } from "./shieldOperations";
 import { activeStripping, interruptStripping, tickStripping, wreckWasStripped } from "./strippingRuntime";
 import { absorbShieldHit } from "./shields";
@@ -379,7 +380,7 @@ function resolveBoardingLiftOff(world: World): void {
   const recoveredDrops = recoverStrandedDropsAtLiftOff(world, boarding, captainIn);
   if (recoveredDrops.length > 0) pushLog(world, `落とし物の回路を回収：${recoveredDrops.length}件。`);
   noteCircuitExtract(world, captainIn);
-  world.boarding = null; world.camp = null; world.phase = "result";
+  world.boarding = null; world.camp = null; settleReturnedShields(world); world.phase = "result";
   if (captainIn) {
     let circleCrates = 0;
     for (const c of world.containers) {

@@ -1,3 +1,4 @@
+import { normalizeLostMechShields, ownedShieldKeys, type LostMechShieldMap } from "./lost-mech-shields";
 /** Browser-local battlefield persistence. Scope is an Invade seed + cell.
  * Identity records remain canonical in HubSnapshot.fieldObjectIdentities. */
 import { isMechId, type MechId } from './catalog';
@@ -19,7 +20,7 @@ export type FieldCellState = {
   ground: Record<string, { x: number; y: number }>;
   wrecks: FieldWreck[];
 };
-export type FieldCellReport = FieldCellState & { identities: FieldObjectIdentities };
+export type FieldCellReport = FieldCellState & { identities: FieldObjectIdentities; ownedShields?: LostMechShieldMap };
 const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const positive = (v: unknown): v is number => finite(v) && v > 0;
@@ -73,7 +74,9 @@ export function normalizeFieldCellReport(raw: unknown): FieldCellReport | undefi
     const identities=normalizeFieldObjectIdentities(raw.identities);
     if (!identities) return undefined;
     const cells=normalizeFieldCells([raw],identities)!;
-    return {...cells[0]!,identities};
+    const ownedShields=normalizeLostMechShields(raw.ownedShields,identities);
+    if (Object.values(ownedShields ?? {}).some(s=>ownedShieldKeys(s).some(k=>Object.hasOwn(cells[0]!.ground,k)))) return undefined;
+    return {...cells[0]!,identities,...(ownedShields ? {ownedShields} : {})};
   } catch { return undefined; }
 }
 /** Only the reported cell is replaced; an empty snapshot explicitly clears it.
@@ -92,12 +95,19 @@ export function applyFieldCellReport(hub: HubSnapshot, raw: FieldCellReport | un
     : !hub.fleet.some(m=>m.instanceId===`recovered-${w.targetId}`) && !hub.wreckStrippingHistory?.some(r=>r.targetId===w.targetId));
   for (const key of Object.keys(report.ground)) identities.shields[key]=structuredClone(report.identities.shields[key]!);
   for (const w of report.wrecks) identities.wrecks[w.wreckKey]=structuredClone(report.identities.wrecks[w.wreckKey]!);
+  const lostMechShields=Object.assign(Object.create(null),structuredClone(hub.lostMechShields ?? {})) as LostMechShieldMap;
+  if(report.ownedShields!==undefined) for (const m of hub.lostMechs) if (m.frontSeed===report.location.frontSeed && m.cell?.sx===report.location.cell.sx && m.cell.sy===report.location.cell.sy) delete lostMechShields[m.instanceId];
+  for (const [id,state] of Object.entries(report.ownedShields ?? {})) {
+    if (!hub.lostMechs.some(m=>m.instanceId===id && m.kind!=='wreck')) continue;
+    lostMechShields[id]=structuredClone(state);
+    for (const key of ownedShieldKeys(state)) identities.shields[key]=structuredClone(report.identities.shields[key]!);
+  }
   const max=(a:string,b:string)=>BigInt(a)>BigInt(b)?a:b;
   identities.nextWreckId=max(identities.nextWreckId,report.identities.nextWreckId);
   identities.nextShieldOrder=max(identities.nextShieldOrder,report.identities.nextShieldOrder);
-  const {identities: _unused,...cell}=report;
+  const {identities: _unused,ownedShields: _owned,...cell}=report;
   const fieldCells=[...(hub.fieldCells ?? []).filter(c=>!sameFieldLocation(c.location,cell.location)),cell];
-  return {...hub,fieldObjectIdentities:identities,fieldCells};
+  return {...hub,fieldObjectIdentities:identities,fieldCells,lostMechShields};
 }
 
 /** Ground objects vanish on regeneration; global ID high-water marks survive. */
