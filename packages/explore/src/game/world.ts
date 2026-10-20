@@ -457,6 +457,7 @@ export function createWorld(boot: SortieBootstrap): World {
 
 export function startSortie(world: World): void {
   delete world.shieldReturnSettled;
+  delete world.barricades;
   delete world.fieldReturnReport;
   world.enemies = placeEnemies(world.leader.pos, world.densityThreat, world.invadeSector?.neighborCount ?? 0, world.invadeSector?.invadeRank ?? 0);
   world.enemySupplies = [];

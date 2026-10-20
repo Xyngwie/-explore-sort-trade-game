@@ -1,3 +1,4 @@
+import { validBarricadeCheckpoint } from "./barricades";
 import { settleReturnedShields } from "./shieldReturn";
 import { fieldCellReport } from "./fieldPersistence";
 import { backfillEnemyState, backfillSplitSupplies } from "./enemyBehavior";
@@ -59,6 +60,7 @@ export function worldFromCheckpointBody(body: unknown): World | null {
   // PR-B: fill the release-scale / wing-move state a pre-PR-B checkpoint lacks.
   backfillCircuitPlayState(world.circuitPlay as Partial<CircuitPlayState> | undefined);
   restorePreBoostBattery(world);
+  if(!validBarricadeCheckpoint(world))return null;
   if(world.phase==="result")settleReturnedShields(world);
   return world;
 }

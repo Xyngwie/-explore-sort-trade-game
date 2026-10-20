@@ -26,6 +26,8 @@ import { createOwnedMech, syncMechStatus } from "./mech-fleet";
 import { scaleYieldBag, type YieldBag } from "./sort-yield";
 import { reloadMechAmmo } from "./mech-ammo";
 
+export const P_SHIELD_CIRCUIT_DESCRIPTION_JA = "装備盾を設置する「屹立」を使用できる。残骸盾は開放しない。";
+
 export const SHIELD_CIRCUIT_DESCRIPTION_JA = "残骸盾の剥離を可能にする。生成盾の最大耐久は50＋剥離元機体の盾回路効力。";
 
 export const FALSE_BOARD_EFFECT_KEYS = [
@@ -74,6 +76,7 @@ export const TRUE_BOARD_EFFECT_KEYS = [
   "gun_tune",
   "armor_tune",
   "power_tune",
+  "p_shield",
 ] as const;
 
 export const CIRCUIT_EFFECT_KEYS = [
@@ -92,8 +95,9 @@ const ALL_KEYS = new Set<string>(CIRCUIT_EFFECT_KEYS);
 export const WEAPON_EFFECT_KEYS = ["smg", "shotgun", "mmr", "lmg"] as const;
 export const SPECIAL_AMMO_EFFECT_KEYS = ["fast_round", "homing_round", "emp_round"] as const;
 export const GUN_EFFECT_ORDER = [...WEAPON_EFFECT_KEYS, ...SPECIAL_AMMO_EFFECT_KEYS] as const;
-export function weaponCategory(key: string | null | undefined): "weapon" | "special_ammo" | "shield" | null {
+export function weaponCategory(key: string | null | undefined): "weapon" | "special_ammo" | "shield" | "p_shield" | null {
   if (key === "shield") return "shield";
+  if (key === "p_shield") return "p_shield";
   if (WEAPON_EFFECT_KEYS.some(k => k === key)) return "weapon";
   if (SPECIAL_AMMO_EFFECT_KEYS.some(k => k === key)) return "special_ammo";
   return null;

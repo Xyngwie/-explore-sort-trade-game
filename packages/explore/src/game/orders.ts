@@ -1,3 +1,4 @@
+import { interruptBarricade } from "./barricades";
 import { emitLogLine } from "./logFeed";
 import { nearCover } from "./coverMovement";
 import { loadSpeedRatio, roomFor, unitLoad } from "./carry";
@@ -56,6 +57,7 @@ export function recoverApproachWaypoint(world: World, focus: { x: number; y: num
 
 export function applyOrder(world: World, wing: Unit, stance: Stance, opts?: { waypoint?: { x: number; y: number } | null; individual?: boolean }): "applied" | "denied" {
   if (!wing.alive) return "denied";
+  interruptBarricade(world,wing.id);
   // C20-b: a new individual / 召還 / squad policy order clears a hold.
   wing.holdOrder = false;
   if (stance === "escort") { abortSalvage(wing); wing.individualOrder = opts?.individual === true; wing.stance = "escort"; wing.waypoint = null; pushLog(world, `${wing.name}：帯同。隊長に付く。`); return "applied"; }

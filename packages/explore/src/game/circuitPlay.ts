@@ -1,3 +1,4 @@
+import { canBuildBarricade, startBarricade, barricadeWorking, interruptBarricade } from "./barricades";
 import { cancelShieldPickup, dropAllOwnedShields, shieldItem } from "./shieldOperations";
 import { activeStripping, interruptStripping, wreckWasStripped } from "./strippingRuntime";
 import { incomingDamage } from "./incomingDamage";
@@ -503,7 +504,7 @@ export function pincerPoints(captain: Vec2, enemy: Vec2, units: Unit[]): Record<
 }
 
 export function beginCircuitButton(world: World, id: string): void {
-  if (!id.startsWith("wing_")) interruptStripping(world,world.leader.id);
+  if (!id.startsWith("wing_")) {interruptStripping(world,world.leader.id);for(const u of (id==="air_support"?[world.leader]:friendlies(world)))interruptBarricade(world,u.id);}
   const p = playOf(world);
   if (!p?.rules || world.phase !== "sortie") return;
   p.wingSelect = null; // P1: another designated action takes over the next map tap
@@ -1121,7 +1122,7 @@ export function meleeReady(world: World, from: Unit, target: Unit): boolean {
 }
 
 export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolean {
-  if (activeStripping(world, from.id)) return true;
+  if (barricadeWorking(world,from.id) || activeStripping(world, from.id)) return true;
   const m = modsFor(world, from.id);
   if (!playOf(world)?.rules || from.instanceId == null) return false;
   const ammo = usableAmmo(world, from);
@@ -1249,6 +1250,7 @@ export function bendHoming(world: World, b: Bullet, dt: number): void {
 }
 
 export function tryDodge(world: World, unit: Unit, b: Bullet, frameEnd?: Vec2): boolean {
+  if(barricadeWorking(world,unit.id))return false;
   if (!playOf(world)?.rules || !unit.alive) return false;
   const m = modsFor(world, unit.id);
   if (!(m.dodge > 0) && !selfKey(world, unit.id, "dodge")) return false;
@@ -1480,6 +1482,7 @@ export function startWreckPickup(world: World, unit: Unit, wreckId: string): "st
   if (wreckCarrierId(world, wreckId) != null || (p.carry[wreckId] ?? []).includes(unit.id)) return "taken";
   if (dist(unit.pos, w.pos) > world.balance.interactRadius) return "far";
   cancelShieldPickup(world,unit.id);
+  interruptBarricade(world,unit.id);
   p.wreckChannel[unit.id] = { id: wreckId, t: 0 };
   unit.salvageId = null;
   unit.salvageT = 0;
@@ -1659,11 +1662,13 @@ export type WingmanPaletteAction = { id: string; label: string; next?: WingmanPa
  */
 export function wingmanPaletteActions(world: World, unitIds: string[]): WingmanPaletteAction[] {
   const p = playOf(world);
-  if (!p?.rules || !p.release || world.phase !== "sortie") return [];
+  if (!p || world.phase !== "sortie") return [];
   const liveIds = unitIds.filter(id => world.wingmen.some(w => w.id === id && w.alive));
   if (!liveIds.length) return [];
   const ids = liveIds.filter(id => !p.wingTrueOne[id] && !wreckCarrierId(world, id));
   const out: WingmanPaletteAction[] = [];
+  if(liveIds.length===1){const unit=world.wingmen.find(w=>w.id===liveIds[0])!;if(canBuildBarricade(world,unit))out.push({id:"barricade",label:"屹立"});}
+  if(!p.rules || !p.release)return out;
   if (ids.length && p.captainTrueOne) out.push({ id: "move", label: "移動", next: [] });
   if (ids.some(id => hasRecover(world, id))) out.push({ id: "recover", label: "回収", next: [] });
   if (liveIds.length === 1) {
@@ -1841,6 +1846,8 @@ export function pressWingPalette(world: World, actionId: string): boolean {
   const p = playOf(world);
   const sel = p?.wingSelect;
   if (!p || !sel) return false;
+  if(actionId==="barricade" && sel.ids.length===1){const u=world.wingmen.find(w=>w.id===sel.ids[0]);return !!u && startBarricade(world,u);}
+  for(const id of sel.ids)interruptBarricade(world,id);
   // fix/explore-move-tap-panel: 「移動」 arms the map pick directly (3 taps: wingman → 移動 → map).
   // An old checkpoint can hold step "move" (the removed 「地点選択」 step): it reads as root,
   // and "point" still arms the pick so nothing saved is stuck.

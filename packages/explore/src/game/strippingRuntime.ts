@@ -1,3 +1,4 @@
+import { interruptBarricade } from "./barricades";
 import { cancelShieldPickup } from "./shieldOperations";
 import { classifyCircuit, emptyFieldObjectIdentities, type HubSnapshot, type WreckStrippingObservation, type WreckStrippingReport } from '@estg/shared';
 import { wreckCarrierId } from './carry';
@@ -40,6 +41,7 @@ export function canStripWreck(world:World,unit:Unit=world.leader):boolean {
 }
 export function startStrippingAt(world: World, point: Vec2, hub: HubSnapshot | null, hitRadius: number): 'started' | 'none' | 'far' | 'busy' | 'locked' {
   const unit = world.leader;
+  interruptBarricade(world,unit.id);
   if (!canStripWreck(world,unit)) return 'locked';
   if (world.phase !== 'sortie' || !unit.alive || world.operationTimedOut || wreckCarrierId(world, unit.id)) return 'none';
   const target = strippingTargets(world).filter(t => dist(t.pos, point) <= hitRadius).sort((a,b) => dist(a.pos,point) - dist(b.pos,point))[0];

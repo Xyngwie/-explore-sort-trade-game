@@ -1,0 +1,290 @@
+{
+  "sender": "lead",
+  "recipient": "inspector",
+  "type": "SPEC_QUESTION",
+  "payload": {
+    "title": "#315候補：P盾回路・屹立の実装前仕様会議",
+    "status": "HOLD",
+    "date": "2026-10-20",
+    "details": "神宮の「315準備」に基づく議題。各選択肢は未承認の提案で、★は実装担当の推奨であり仕様決定ではない。選択肢に含む数値・操作・中断規則も承認対象。幅/厚さなど値が不足する回答はSPEC_DECISIONで補完し、独断で実装しない。PR番号は予定で未作成。",
+    "baseline": {
+      "repository": "Xyngwie/-explore-sort-trade-game",
+      "main_commit": "622fc436e745bb7dfd5b14b9b3475641b7e595e5",
+      "included_pr": 314,
+      "deploy_run": 39414575710,
+      "deploy": "PASS"
+    },
+    "planned_pr": 315,
+    "pr": null,
+    "confirmed_rules": [
+      "P盾回路は「屹立」（盾を地面に突き立ててバリケードを作成する）を開放するという概念のみ確定。",
+      "P盾回路・屹立の細部は#314から後続へ留保された。",
+      "通常の盾回路は偽盤効果、同一機体1枚、作業機体自身が装備した場合だけ残骸盾を開始できる。",
+      "盾本体の回収・装備・使用は盾回路不要。装備1枚、予備は積載範囲、重量1。",
+      "通常の生成盾は50＋元機体の通常盾回路効力、小数と個体情報を保持する。",
+      "公開前の旧開発セーブ互換は必須ではないが、新仕様の途中保存/再開を保証する。"
+    ],
+    "in": [
+      "P盾回路と屹立を次の候補としてコード・契約と照合",
+      "未決定条件の会議用JSONと実装分割案の準備"
+    ],
+    "out": [
+      "ゲームコード変更",
+      "選択肢の未承認実装",
+      "PR作成・マージ・デプロイ",
+      "盾以外の新AI・統一マップ・サーバー"
+    ],
+    "unresolved": [
+      {
+        "id": "P1",
+        "topic": "effect_pool_and_acquisition",
+        "question_ja": "P盾回路は、真盤の新しい効果として既存の入手・解明経路へ追加しますか？",
+        "context_ja": "P盾という名称だけでは真盤区分や入手方法は確定しません。現行の盾は偽盤効果で、真盤には別の効果候補があります。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：真盤の新効果",
+            "description_ja": "真盤の既存入手・解明経路へ新しい効果を追加。既存の保存済み効果キーは変更しない。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "盾回路の強化段階",
+            "description_ja": "通常の盾回路を強化してP盾へ変える。強化条件・費用は別途決定が必要。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "専用入手枠",
+            "description_ja": "真偽の通常抽選へは追加しない。専用の入手条件を別途決定する。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P2",
+        "topic": "coequipment_and_stripping",
+        "question_ja": "通常の盾回路とP盾回路の装備関係・剥離権限はどうしますか？",
+        "context_ja": "#314は通常の盾回路1枚まで、作業機体自身の盾回路を剥離開始条件にしています。P盾を通常盾の上位互換とする決定はありません。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：別枠で各1枚・剥離は通常盾のみ",
+            "description_ja": "通常盾とP盾は併用可で各1枚まで。P盾だけでは残骸盾を開放しない。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "別枠で各1枚・P盾も剥離可",
+            "description_ja": "併用可で各1枚まで。通常盾またはP盾で残骸盾を開放する。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "同一枠で合計1枚",
+            "description_ja": "通常盾とP盾を同時装備不可にする。P盾単独の剥離可否は追加決定が必要。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P3",
+        "topic": "actor_and_command",
+        "question_ja": "屹立の指示対象は、まず隊長機自身だけでよいですか？",
+        "context_ja": "既存の残骸盾・地面盾回収UIは隊長操作です。真盤である場合も、部隊全員へ新コマンドを開放するとは未決定です。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：装備した隊長機自身",
+            "description_ja": "隊長がP盾を装備している場合に屹立を使用する。僚機・搭載機・敵AIは今回追加しない。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "装備した機体へ個別指示",
+            "description_ja": "P盾装備機なら隊長・僚機が実行可。僚機の指示操作も今回決める。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "部隊へ開放",
+            "description_ja": "部隊内のP盾で他機にも屹立を開放。開放範囲と複数枚の扱いを追加決定する。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P4",
+        "topic": "shield_selection_and_placement",
+        "question_ja": "屹立ではどの盾を、どこへ設置しますか？",
+        "context_ja": "装備盾・予備盾・地面盾は別の状態です。設置盾への転換と、設置位置/向きを確定する必要があります。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：装備盾を現在位置・機首方向へ",
+            "description_ja": "実行機体が装備中の盾を1枚使い、現在位置を基準に機首側へ設置する。具体的な離隔は形状決定後に確認する。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "所持盾から選択して設置点を指定",
+            "description_ja": "装備/予備の一覧から選び、近距離の設置点と向きを指定する。許容距離と操作は追加決定。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "地面盾を直接立てる",
+            "description_ja": "近くの地面盾を選び、その場所で設置する。向きと距離の条件は追加決定。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P5",
+        "topic": "work_time_and_interruptions",
+        "question_ja": "設置に必要な時間と、中断条件をどうしますか？",
+        "context_ja": "盾回収・装備は2秒、残骸剥離は8秒ですが、屹立の時間は未決定です。射撃や移動を許すかも既存処理から自動では決まりません。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：2秒静止・射撃停止",
+            "description_ja": "2秒作業。移動・別指示・破壊で中断し、完了前は所持状態を維持する。中断時の進捗は破棄する案。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "即時設置",
+            "description_ja": "所持から設置への転換を即時に行う。連続設置に制限が要るなら別途決める。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "別条件を会議で指定",
+            "description_ja": "時間・移動/射撃・中断時の盾と進捗の扱いを明示して決定する。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P6",
+        "topic": "barricade_geometry",
+        "question_ja": "バリケードの形状・大きさ・衝突範囲をどうしますか？",
+        "context_ja": "現行障害物は半径30の円形で、移動と弾を遮断します。地面盾はどちらも遮りません。設置物を既存障害物へ無条件に流用すると防御方向まで変わります。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：方向を持つ壁・弾と移動を遮断",
+            "description_ja": "盾らしい方向を持つ壁にする。幅・厚さ・機体との離隔の具体値は会議で指定する。味方/敵双方に衝突させる案。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "円形・弾と移動を遮断",
+            "description_ja": "既存障害物と同じ円形。半径は会議で指定する。味方/敵双方に衝突させる案。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "弾のみ遮断",
+            "description_ja": "機体は通過できる。形状・寸法・防御方向は会議で指定する。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P7",
+        "topic": "hp_damage_and_circuit_effect",
+        "question_ja": "設置後の耐久・防御と、P盾回路の効力をどう扱いますか？",
+        "context_ja": "通常装備盾は軽減後ダメージを受け、破壊時の超過は装甲へ通しません。設置盾には装備機体がいないため、そのまま軽減式を使うとは決められません。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：元盾のHPを継承・効力加算なし",
+            "description_ja": "HP/最大HPを保持し、接触した弾の生ダメージを設置盾から引く。破壊した弾もそこで止める。P盾効力は今回は耐久へ加算しない案。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "効力を設置盾へ適用",
+            "description_ja": "どの機体のどの効力を、どの式で適用するかと、撤去時のHP換算を追加決定する。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "防御方式を別途指定",
+            "description_ja": "防ぐ方向、弾/接近戦/EMP/航空支援、破壊時の扱いを含めて会議で指定する。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P8",
+        "topic": "dismantle_and_pickup",
+        "question_ja": "設置した盾は撤去・再回収できるようにしますか？",
+        "context_ja": "撤去後も同じ個体とするか、P盾回路を要求するか、作業時間や重量への復帰時点を決める必要があります。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：誰でも2秒で地面盾へ戻す",
+            "description_ja": "回路不要で撤去し、同じID/HPの地面盾へ戻す。所持への回収は既存の別の2秒作業。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "誰でも2秒で直接回収",
+            "description_ja": "回路不要で同じID/HPを所持へ戻す。積載満杯なら開始不可。装備/予備への振分けは既存規則。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "撤去不可",
+            "description_ja": "壊れるまで設置状態。設置した盾は通常の拾得対象にしない。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P9",
+        "topic": "persistence_and_reset",
+        "question_ja": "設置盾は出撃をまたいで、どのように残しますか？",
+        "context_ja": "#312/#313は同じ盤面・同じマスの地面盾/所持盾を保存します。屹立の向き・耐久・作業途中はまだ保存契約にありません。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：同じ盤面・同じマスへ保存",
+            "description_ja": "設置位置・向き・耐久・IDを維持し、再生成で消す。帰還時にも設置のまま残す。作業途中は未完了としてキャンセルする案。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "帰還時に地面盾へ戻す",
+            "description_ja": "設置状態は出撃中だけ。終了時に同じ位置・HP/IDの地面盾へ戻して既存のマス保存へ接続する。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "保存条件を別途指定",
+            "description_ja": "途中保存・帰還/救助/時間切れ・再生成・再読込の各状態を指定する。"
+          }
+        ],
+        "selected": null
+      },
+      {
+        "id": "P10",
+        "topic": "enemy_pool_and_ai",
+        "question_ja": "P盾回路を敵の回路候補へ追加しますか？",
+        "context_ja": "現行の通常敵は偽盤候補だけから回路を生成します。P盾が真盤なら、敵への追加は真盤生成と敵行動の別変更になります。",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：今回は追加しない",
+            "description_ja": "プレイヤー側の回路・指示・設置物に絞る。敵のP盾と設置AIは後続。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "候補だけ追加",
+            "description_ja": "真偽区分・生成率・最高効力時の行動を追加決定し、設置AIはまだ追加しない。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "敵の設置AIまで追加",
+            "description_ja": "生成条件と行動判断も会議で決めて別工程へ分割する。"
+          }
+        ],
+        "selected": null
+      }
+    ],
+    "scopeLockViolation": false,
+    "tests": {
+      "selfTest": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "build": "NOT_RUN",
+      "ci": "NOT_RUN",
+      "previewPlay": "NOT_RUN",
+      "deploy": "NOT_TRIGGERED"
+    },
+    "requested_response": "P1〜P10の選択と必要な具体値を省略せずSPEC_DECISIONで返してください。依存する回答の不整合は会議で解消してください。"
+  }
+}

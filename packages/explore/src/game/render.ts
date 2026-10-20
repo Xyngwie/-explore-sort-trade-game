@@ -1,3 +1,6 @@
+import { wallEntries } from "./barricades";
+import { worldVector } from "./barricadeGeometry";
+import { shieldItem } from "./shieldOperations";
 import { groundShieldGroups } from "../ui/shieldPanel";
 import type { Vec2 } from "./math";
 import { wreckWasStripped } from "./strippingRuntime";
@@ -320,6 +323,15 @@ export function renderWorld(
     ctx.save(); ctx.fillStyle=COLORS.wreck; ctx.font="11px sans-serif";
     if(reserved===keys.length)ctx.globalAlpha=.5;
     ctx.fillText(`盾 ×${keys.length}${reserved?`（回収中${reserved}）`:""}`,tx(pos.x),ty(pos.y));ctx.restore();
+  }
+  for(const [key,b] of wallEntries(world)){
+    if(!squadSees(world,b.pos))continue;
+    const item=shieldItem(world,key);if(!item)continue;
+    ctx.save();ctx.fillStyle=COLORS.wreck;ctx.beginPath();
+    for(const [i,v] of [{x:-4,y:-30},{x:4,y:-30},{x:4,y:30},{x:-4,y:30}].entries()){
+      const d=worldVector(b,v);if(i===0)ctx.moveTo(tx(b.pos.x+d.x),ty(b.pos.y+d.y));else ctx.lineTo(tx(b.pos.x+d.x),ty(b.pos.y+d.y));
+    }
+    ctx.closePath();ctx.fill();ctx.font="11px sans-serif";ctx.fillText(`設置盾 ${Number(item.hp.toFixed(1))}/${Number(item.maxHp.toFixed(1))}`,tx(b.pos.x),ty(b.pos.y)-12);ctx.restore();
   }
   // Bullets
   ctx.fillStyle = "#e8eaed";

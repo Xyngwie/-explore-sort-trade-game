@@ -1,3 +1,4 @@
+import { barricadeWorking, interruptBarricade, tickBarricades, damageBarricade } from "./barricades";
 import { settleReturnedShields } from "./shieldReturn";
 import { tickShieldOperations } from "./shieldOperations";
 import { activeStripping, interruptStripping, tickStripping, wreckWasStripped } from "./strippingRuntime";
@@ -139,7 +140,7 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
 }
 
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean, commanded = false): void {
-  if (activeStripping(world,from.id) || !from.alive || !target.alive) return;
+  if (barricadeWorking(world,from.id) || activeStripping(world,from.id) || !from.alive || !target.alive) return;
   if (!aimAt(from, target) && !meleeReady(world, from, target)) return; // guns need the 3° arc; melee the ±135° arc
   if (!fromEnemy && !commanded && !meleeReady(world, from, target) && friendlyFireRisk(world, from, target)) { clearFiringLine(world, from); return; }
   if (fromEnemy && from.cooldown > 0) return;
@@ -194,7 +195,7 @@ export function updateBullets(world: World, dt: number): void {
       if(!contact){b.pos=end;break;}
       b.pos={x:start.x+(end.x-start.x)*contact.t,y:start.y+(end.y-start.y)*contact.t};
       const t=contact.unit;
-      if(!t){b.alive=false;break;}
+      if(!t){if(contact.barricadeKey)damageBarricade(world,contact.barricadeKey,b.damage);b.alive=false;break;}
       if(tryDodge(world,t,b,end)){
         const dx=end.x-start.x,dy=end.y-start.y,len=Math.hypot(dx,dy)||1;
         start={x:b.pos.x+dx/len*.001,y:b.pos.y+dy/len*.001};continue;
@@ -411,6 +412,9 @@ function leaderAbortSalvageOnTimeout(world: World): void { for (const u of frien
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") { tickStripping(world,0); return; }
+  tickBarricades(world,0);
+  if(input.move.x || input.move.y || input.clickMove || input.interact)interruptBarricade(world,world.leader.id);
+  if(input.move.x || input.move.y){const carrier=captainRescuer(world);if(carrier)interruptBarricade(world,carrier.id);}
   tickStripping(world,0); // release a dead/moved worker even if rescue returns early
   if (input.move.x || input.move.y || input.clickMove || input.fire || input.interact) interruptStripping(world, world.leader.id);
   tickCombatFeedback(world, dt);
@@ -430,12 +434,14 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     u.pos=obstacleMove(world,u,u.pos); // repair old embedded checkpoints before movement/power accounting
     updateCoverMovement(world,u,{x:0,y:0},0);
   }
+  const workingPositions=new Map([world.leader,...world.wingmen].filter(u=>barricadeWorking(world,u.id)).map(u=>[u.id,{...u.pos}]));
   const beforeCircuit=new Map([...friendlyUnits(world),...world.enemies].map(u=>[u.id,{...u.pos}]));
   stepCircuitPlay(world, dt);
   for(const u of [...friendlyUnits(world),...world.enemies]){
     const before=beforeCircuit.get(u.id);
     if(before && u.alive && !wreckCarrierId(world,u.id) && (before.x!==u.pos.x || before.y!==u.pos.y))u.pos=obstacleMove(world,{...u,pos:before},u.pos);
   }
+  for(const u of [world.leader,...world.wingmen]){const at=workingPositions.get(u.id);if(at){u.pos=at;u.vel={x:0,y:0};}}
   expireEmptyBatteries(world);
   const timedOut = isOperationTimedOut(world);
   const waitingBoarding = timedOut && world.boarding != null;
@@ -451,7 +457,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   const leaderDown = !leader.alive;
   if (leaderDown) noteLeaderDown(world);
   leader.cooldown = Math.max(0, leader.cooldown - dt);
-  if (leaderDown || timedOut || activeStripping(world,leader.id) || wreckCarrierId(world, leader.id)) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
+  if (leaderDown || timedOut || activeStripping(world,leader.id) || barricadeWorking(world,leader.id) || wreckCarrierId(world, leader.id)) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
   else {
     // moveTarget is this frame's resolved AI/manual target, never retained input.
     let fallback: Vec2 | null = input.clickMove ? { ...input.clickMove } : null;
@@ -482,7 +488,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
       if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false, input.fire);
     }
-    if (!activeStripping(world,leader.id) && !timedOut && !wreckCarrierId(world, leader.id) && !movementLocked(world)) {
+    if (!barricadeWorking(world,leader.id) && !activeStripping(world,leader.id) && !timedOut && !wreckCarrierId(world, leader.id) && !movementLocked(world)) {
       const playEdge = world.circuitPlay;
       if (playEdge?.rules) {
         if (input.interact && !playEdge.collectDown) applyCollectPress(world);
@@ -496,6 +502,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);
     const riding = wreckCarrierId(world, w.id) != null;
+    if(barricadeWorking(world,w.id)){w.moveTarget=null;w.vel={x:0,y:0};continue;}
     const intent = decideWingman(world, w, dt);
     const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.moveSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed /* 項目4-1: load 0 is 120 for wingmen too (2026-10-07 7:36 神宮) */);
     const assembly = boardingAssemblyTarget(world, w);
@@ -536,6 +543,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   for (const w of world.wingmen) { if (w.hitWarnT > 0) w.hitWarnT = Math.max(0, w.hitWarnT - dt); if (w.engageWarnT > 0) w.engageWarnT = Math.max(0, w.engageWarnT - dt); if ((w.questionT ?? 0) > 0) w.questionT = Math.max(0, (w.questionT ?? 0) - dt); }
   tickShieldOperations(world);
   tickStripping(world, dt);
+  tickBarricades(world,dt);
   updateFacing(world, dt);
   updateSquadIntel(world);
   updateSquadMemory(world);

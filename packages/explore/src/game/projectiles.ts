@@ -1,3 +1,5 @@
+import { wallEntries } from "./barricades";
+import { wallContact } from "./barricadeGeometry";
 import { isWingmanMobileFor } from "./commandUnlock";
 import { movementLocked } from "./circuitPlay";
 import { wreckCarrierId } from "./carry";
@@ -20,9 +22,10 @@ export function shotCanHit(world:World, ownerId:string, unit:Unit):boolean {
   if(wreckCarrierId(world,unit.id))return false;
   return wreckCarrierId(world,ownerId)!==unit.id;
 }
-export function firstShotContact(world:World, ownerId:string, a:Vec2,b:Vec2):{t:number;unit?:Unit}|null {
-  let best:{t:number;unit?:Unit}|null=null;
+export function firstShotContact(world:World, ownerId:string, a:Vec2,b:Vec2):{t:number;unit?:Unit;barricadeKey?:string}|null {
+  let best:{t:number;unit?:Unit;barricadeKey?:string}|null=null;
   for(const c of getCoverObjects(world)){const t=segmentCircle(a,b,c.pos,c.radius);if(t!=null&&(!best||t<best.t))best={t};}
+  for(const [key,wall] of wallEntries(world)){const hit=wallContact(wall,a,b);if(hit&&(!best||hit.t<best.t))best={t:hit.t,barricadeKey:key};}
   for(const unit of [world.leader,...world.wingmen,...world.enemies]){
     if(!shotCanHit(world,ownerId,unit))continue;
     const t=segmentCircle(a,b,unit.pos,hitRadius(world,unit));
