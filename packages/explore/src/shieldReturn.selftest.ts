@@ -19,6 +19,7 @@ function fixture(){
  w.enemies=[];w.coverObjects=[];w.containers=[];w.leader.pos={x:600,y:600};w.leader.instanceId='cap';
  w.wingmen[0]!.instanceId='wa';w.wingmen[0]!.pos={x:620,y:600};w.wingmen[1]!.instanceId='wb';w.wingmen[1]!.pos={x:1200,y:1200};
  for(const u of w.wingmen){u.individualOrder=true;u.holdOrder=true;u.moveTarget=null;u.waypoint=null;}
+ w.deployedInstanceIds=['cap','wa','wb'];w.deployedDurability={cap:100,wa:100,wb:100};w.currentAmmo={cap:28,wa:28,wb:28};w.mechBattery=Object.fromEntries(['cap','wa','wb'].map(id=>[id,{capacity:300,activity:300}]));
  w.shieldState={identities:emptyFieldObjectIdentities(),equipped:{},spares:{},ground:{}};
  for(const u of [w.leader,...w.wingmen]){
   const key=u.instanceId!;let ids=registerWreckIdentity(w.shieldState.identities,'source-'+key);ids=shieldIdentityFromWreck(ids,'source-'+key,key,{hp:20,maxHp:50});
@@ -76,3 +77,15 @@ for(const timeout of [false,true]){
  const corrupt=structuredClone(loaded);corrupt.lostMechShields!.wb!.exchange!.remaining=3;assert.throws(()=>normalizeHubSnapshot(corrupt));
 }
 console.log('Shield return PASS: normal/rescue/alive-timeout/dead-timeout/missed, once, owned save+URL+IDs, frozen fixed exchange/reload/weight/drop lock, regeneration separation and legacy');
+
+// Exercise refused actual HUB I/O, then retry the reduced result checkpoint.
+{
+ const {saveSortieResultToHub}=await import('./game/hubDirectSave');
+ const {HUB_SAVE_STORAGE_KEY}=await import('@estg/shared');
+ const w=fixture();lift(w);let raw=serializeHubSave(createHubSave(hub)),refuse=true;
+ const storage={getItem:(key:string)=>key===HUB_SAVE_STORAGE_KEY?raw:null,setItem:(_key:string,value:string)=>{if(refuse)throw Error('fixture refused');raw=value;}};
+ const before=raw;assert.deepEqual(saveSortieResultToHub(w,storage),{status:'skipped',reason:'write_refused'});assert.equal(raw,before);
+ const retry=worldFromCheckpointBody(snapshotResultWorld(w))!;refuse=false;assert.equal(saveSortieResultToHub(retry,storage).status,'saved');
+ const stored=deserializeHubSave(raw)!.hub;assert.equal(stored.lostMechShields!.wb!.equipped!.key,'wb');assert(stored.fieldCells![0]!.ground.cap);
+ assert.equal(saveSortieResultToHub(retry,storage).status,'already_applied');
+}
