@@ -39,6 +39,7 @@
     "src/logFeed.selftest.ts",
     "src/shields.selftest.ts",
     "src/wreckStripping.selftest.ts",
-    "src/shieldPickup.selftest.ts"
+    "src/shieldPickup.selftest.ts",
+    "src/fieldPersistence.selftest.ts"
   ]
 }

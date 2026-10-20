@@ -1,3 +1,4 @@
+import { clearFieldCells, normalizeFieldCells, type FieldCellState } from "./field-cell-state";
 import { normalizeStrippingObservations, type WreckStrippingObservation } from "./wreck-stripping";
 import { normalizeFieldObjectIdentities, type FieldObjectIdentities } from "./field-object-identities";
 import { normalizeInvadeRank, type InvadeRankProgress } from "./invade-rank";
@@ -230,6 +231,8 @@ export type InvadeFrontProgress = {
  * `circuits` holds Module 5 restore boards (additive; missing → []).
  */
 export type HubSnapshot = {
+  /** #312 battlefield-local ground shields and incomplete wreck stripping. */
+  fieldCells?: FieldCellState[];
   wreckStrippingHistory?: WreckStrippingObservation[];
   /** #306 identity foundation; absent in old saves. No shield gameplay yet. */
   fieldObjectIdentities?: FieldObjectIdentities;
@@ -1023,7 +1026,9 @@ export function normalizeHubSnapshot(
     repairAt,
   );
   const historyRaw = rawRec == null ? fallback.wreckStrippingHistory : rawRec.wreckStrippingHistory;
+  const fieldCells = normalizeFieldCells(rawRec == null ? fallback.fieldCells : rawRec.fieldCells, fieldObjectIdentities);
   const snapshot: HubSnapshot = {
+    ...(fieldCells ? { fieldCells } : {}),
     ...(historyRaw != null ? { wreckStrippingHistory: normalizeStrippingObservations(historyRaw) } : {}),
     ...(fieldObjectIdentities ? { fieldObjectIdentities } : {}),
     credits: finiteNonNeg(
@@ -1530,11 +1535,11 @@ export function setFrontProgressInHub(
   at = new Date(),
 ): HubSnapshot {
   if (progress == null) {
-    return normalizeHubSnapshot({ ...hub, frontProgress: null });
+    return normalizeHubSnapshot({ ...clearFieldCells(hub), frontProgress: null });
   }
   const normalized = normalizeFrontProgress(progress);
   if (!normalized) {
-    return normalizeHubSnapshot({ ...hub, frontProgress: null });
+    return normalizeHubSnapshot({ ...clearFieldCells(hub), frontProgress: null });
   }
   const withTs: InvadeFrontProgress = {
     ...normalized,
@@ -1543,12 +1548,12 @@ export function setFrontProgressInHub(
         ? progress.updatedAt.trim().slice(0, 40)
         : at.toISOString(),
   };
-  return normalizeHubSnapshot({ ...hub, frontProgress: withTs });
+  return normalizeHubSnapshot({ ...(hub.frontProgress?.seed !== withTs.seed ? clearFieldCells(hub) : hub), frontProgress: withTs });
 }
 
 /** Clear invade front progress (e.g. after regenerate board). */
 export function clearFrontProgressInHub(hub: HubSnapshot): HubSnapshot {
-  return normalizeHubSnapshot({ ...hub, frontProgress: null });
+  return normalizeHubSnapshot({ ...clearFieldCells(hub), frontProgress: null });
 }
 
 /**

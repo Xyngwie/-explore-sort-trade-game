@@ -1,3 +1,4 @@
+import { restoreFieldAtSortieStart } from "./fieldPersistence";
 import { makeEnemyIdentity } from "./enemyIdentity";
 import {
   DEFAULT_EXPEDITION_LOADOUT,
@@ -511,6 +512,7 @@ export function startSortie(world: World): void {
     u.inCover = false;
   }
   faceAtSortieStart(world);
+  restoreFieldAtSortieStart(world);
 }
 
 /** Facing PR1 (神宮 10/17): the leader faces up the screen, wingmen face outward from the spawn; enemies face the nearest ally. */
