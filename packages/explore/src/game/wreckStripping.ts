@@ -2,12 +2,13 @@ import { registerWreckIdentity, shieldIdentityFromWreck, type FieldObjectIdentit
 import type { Vec2 } from "./math";
 
 export const STRIP_SECONDS = 8;
-export const STRIPPED_SHIELD_HP = 50; // owner Q3=A: shield circuits are a later PR
+export const STRIPPED_SHIELD_HP = 50; // base; #314 adds the source mech shield circuit effect
 export type StrippedCircuit = { circuitId: string; side: number; effect: number };
 export type StrippingSource = {
   targetId: string;
   instanceId: string | null;
   circuits: StrippedCircuit[];
+  shieldMaxHp?: number; // frozen at operation creation; absence uses the old base of 50
   learningValue: null; // owner Q4=A: unassessed, never invent a score
 };
 export type StrippingJob = {
@@ -71,8 +72,9 @@ export function advanceStripping(state: StrippingState, identities: FieldObjectI
     return { identities, completion: null };
   }
   const shieldKey = `strip-shield:${job.wreckKey}`;
+  const hp=job.source.shieldMaxHp ?? STRIPPED_SHIELD_HP;
   const converted = shieldIdentityFromWreck(identities, job.wreckKey, shieldKey,
-    { hp: STRIPPED_SHIELD_HP, maxHp: STRIPPED_SHIELD_HP });
+    { hp, maxHp: hp });
   job.seconds = seconds;
   job.completed = true;
   job.reservation = null;

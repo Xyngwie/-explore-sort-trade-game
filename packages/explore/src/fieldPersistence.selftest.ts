@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { INITIAL_HUB, normalizeHubSnapshot, applyExploreReturnToHub, emptyFieldObjectIdentities, registerWreckIdentity, shieldIdentityFromWreck, frontBoard } from '@estg/shared';
+import { classifyCircuit, buildVerifyPerfectLockedBoard, INITIAL_HUB, normalizeHubSnapshot, applyExploreReturnToHub, emptyFieldObjectIdentities, registerWreckIdentity, shieldIdentityFromWreck, frontBoard } from '@estg/shared';
 import { createWorld, bootstrapFromSearch, startSortie } from './game/world';
 import { attachLostMechContext } from './game/lostMechs';
 import { attachCircuitPlay } from './game/circuitPlay';
@@ -10,7 +10,7 @@ import { snapshotResultWorld, worldFromCheckpointBody } from './game/checkpoint'
 import { directFieldEntry, directFieldEntryFromStorage } from './game/directFieldEntry';
 const hub=normalizeHubSnapshot({...INITIAL_HUB,frontProgress:{seed:812,aoiHalf:12,opened:[],flagged:[],focus:{sx:7,sy:7}}});
 const search='?sectorX=1&sectorY=2&density=0.2';
-function fresh(h=hub,s=search){const w=createWorld(bootstrapFromSearch(s));attachLostMechContext(w,h);attachCircuitPlay(w,h,false);attachFieldPersistence(w,h);startSortie(w);return w;}
+function fresh(h=hub,s=search){const w=createWorld(bootstrapFromSearch(s));attachLostMechContext(w,h);attachCircuitPlay(w,h,false);w.circuitPlay!.loadout[w.leader.id]=[classifyCircuit({circuitId:'worker-shield',circuitBoard:buildVerifyPerfectLockedBoard('test'),restoreState:'bypass',origin:'crafted',equippedTo:null,effectKey:'shield',enemyEffect:4})];attachFieldPersistence(w,h);startSortie(w);return w;}
 const w=fresh();w.leader.pos={x:600,y:600};const e=w.enemies[0]!;e.pos={x:620,y:600};e.alive=false;e.hp=0;
 w.enemies=[e];
 assert.equal(startStrippingAt(w,e.pos,hub,20),'started');tickStripping(w,3.25);

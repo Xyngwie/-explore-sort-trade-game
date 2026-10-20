@@ -42,7 +42,7 @@ export function restoreFieldAtSortieStart(world: World): void {
     if (w.sourceInstanceId && !world.strandedMechs?.some(m=>m.instanceId===w.sourceInstanceId && m.wreck)) continue;
     if (w.enemy && !world.enemies.some(e=>e.id===id)) world.enemies.push(deadEnemy(w));
     if (w.legacyAir && world.circuitPlay) world.circuitPlay.airWrecks.push({id:id.slice(2),pos:{...w.pos},recovered:false});
-    world.stripping.jobs[id]={source:{targetId:id,instanceId:w.sourceInstanceId,circuits:structuredClone(w.circuits),learningValue:null},
+    world.stripping.jobs[id]={source:{targetId:id,instanceId:w.sourceInstanceId,circuits:structuredClone(w.circuits),learningValue:null,...(w.shieldMaxHp!==undefined?{shieldMaxHp:w.shieldMaxHp}:{})},
       wreckKey:w.wreckKey,seconds:w.seconds,reservation:null,completed:false};
   }
 }
@@ -65,7 +65,7 @@ export function fieldCellReport(world: World): FieldCellReport | undefined {
     const wreckKey=job?.wreckKey ?? `field-wreck:${id}`;
     if (!Object.hasOwn(identities.wrecks,wreckKey)) identities=registerWreckIdentity(identities,wreckKey);
     wrecks.push({targetId:instanceId ? `s:${instanceId}` : id,wreckKey,pos:{...point},sourceInstanceId:instanceId,
-      seconds:job?.seconds ?? 0,...(legacyAir ? {legacyAir:true as const} : {}),circuits:structuredClone(job?.source.circuits ?? unit?.enemyIdentity?.circuits.map(c=>({circuitId:c.circuitId,side:c.side,effect:c.effect})) ?? []),
+      seconds:job?.seconds ?? 0,...(job?.source.shieldMaxHp!==undefined?{shieldMaxHp:job.source.shieldMaxHp}:{}),...(legacyAir ? {legacyAir:true as const} : {}),circuits:structuredClone(job?.source.circuits ?? unit?.enemyIdentity?.circuits.map(c=>({circuitId:c.circuitId,side:c.side,effect:c.effect})) ?? []),
       ...(unit?.enemyIdentity && !instanceId ? {enemy:{name:unit.name,maxHp:unit.maxHp,radius:unit.radius,heading:unit.heading,identity:structuredClone(unit.enemyIdentity)}} : {})});
   };
   if (!cached) for (const u of [world.leader,...world.wingmen,...world.enemies]) {

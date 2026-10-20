@@ -84,6 +84,7 @@ export function enemyMode(e: Unit): EnemyMode {
     return "range";
   if (
     [
+      "shield",
       "point_defense_armor",
       "cover_fight",
       "cover_move",

@@ -26,6 +26,8 @@ import { createOwnedMech, syncMechStatus } from "./mech-fleet";
 import { scaleYieldBag, type YieldBag } from "./sort-yield";
 import { reloadMechAmmo } from "./mech-ammo";
 
+export const SHIELD_CIRCUIT_DESCRIPTION_JA = "残骸盾の剥離を可能にする。生成盾の最大耐久は50＋剥離元機体の盾回路効力。";
+
 export const FALSE_BOARD_EFFECT_KEYS = [
   "escort_range",
   "raid_attack",
@@ -47,8 +49,10 @@ export const FALSE_BOARD_EFFECT_KEYS = [
   "cover_move",
   // 項目4-2 C1 (2026-10-12 神宮): 「回収」 — the wingman's palette 「回収」→ tap a wreck / container.
   // Appended last: saved effectKeys are never redrawn (keyMatchesBoard), so only
-  // circuits that get a key from now on can roll it (19 keys from here).
+  // circuits that get a key from now on can roll it.
   "recover",
+  // #314: new false-board passive; saved keys are kept unchanged.
+  "shield",
 ] as const;
 
 export const TRUE_BOARD_EFFECT_KEYS = [
@@ -88,7 +92,8 @@ const ALL_KEYS = new Set<string>(CIRCUIT_EFFECT_KEYS);
 export const WEAPON_EFFECT_KEYS = ["smg", "shotgun", "mmr", "lmg"] as const;
 export const SPECIAL_AMMO_EFFECT_KEYS = ["fast_round", "homing_round", "emp_round"] as const;
 export const GUN_EFFECT_ORDER = [...WEAPON_EFFECT_KEYS, ...SPECIAL_AMMO_EFFECT_KEYS] as const;
-export function weaponCategory(key: string | null | undefined): "weapon" | "special_ammo" | null {
+export function weaponCategory(key: string | null | undefined): "weapon" | "special_ammo" | "shield" | null {
+  if (key === "shield") return "shield";
   if (WEAPON_EFFECT_KEYS.some(k => k === key)) return "weapon";
   if (SPECIAL_AMMO_EFFECT_KEYS.some(k => k === key)) return "special_ammo";
   return null;

@@ -4,6 +4,7 @@
  * equip/unequip for free. The actual slot rules live in shared/circuit-inventory.
  */
 import {
+  SHIELD_CIRCUIT_DESCRIPTION_JA,
   ensureCaptainFalseOneByOne,
   hubVisibleCircuits,
   loadHubSaveWithStatus,
@@ -91,7 +92,7 @@ function render(): void {
   card.id = CARD_ID;
   card.className = "card";
 
-  const budget = `<p>出撃部隊の回路：${squadCircuitUsage(hub, resolveSortieSelection(hub))}/${squadCircuitLimit(hub)}枚。武器種・特殊弾は各機体に各1枚まで。</p>`;
+  const budget = `<p>出撃部隊の回路：${squadCircuitUsage(hub, resolveSortieSelection(hub))}/${squadCircuitLimit(hub)}枚。武器種・特殊弾・盾回路は各機体に各1枚まで。</p>`;
   const equipped = circuits.filter((c) => c.equippedTo != null);
   const rows = fleet.length === 0
     ? `<p class="muted">装備先の機体がありません。</p>`
@@ -99,7 +100,7 @@ function render(): void {
         const mine = circuits.filter((c) => c.equippedTo === mech.instanceId);
         const names = mine.length === 0
           ? "なし"
-          : mine.map((c) => `${esc(c.circuitId)}（${stateLabel(c)}）`).join("、");
+          : mine.map((c) => `${esc(c.circuitId)}（${c.effectKey === "shield" ? "盾・" : ""}${stateLabel(c)}）`).join("、");
         return `<div class="fleet-row">
           <div class="row" style="justify-content:space-between;align-items:center">
             <strong>${esc(mech.catalogId)}</strong>
@@ -111,7 +112,7 @@ function render(): void {
 
   const circuitOptions = circuits.map((c) => {
     const owner = c.equippedTo ? `装備: ${c.equippedTo}` : "倉庫";
-    return `<option value="${esc(c.circuitId)}">${esc(c.circuitId)} — ${stateLabel(c)} — ${owner}</option>`;
+    return `<option value="${esc(c.circuitId)}">${esc(c.circuitId)} — ${c.effectKey === "shield" ? "盾・" : ""}${stateLabel(c)} — ${owner}</option>`;
   }).join("");
   const mechOptions = fleet.map((m) =>
     `<option value="${esc(m.instanceId)}">${esc(m.catalogId)} (${esc(m.instanceId)})</option>`,
@@ -121,6 +122,7 @@ function render(): void {
     <h2 style="font-size:1rem;margin:0 0 0.5rem">回路装備</h2>
     <p class="muted" style="margin:0 0 0.5rem;font-size:0.75rem">
       HUBでのみ付け替え可能。装備・取り外しは無料です。
+      ${circuits.some(c => c.effectKey === "shield") ? `<br>盾：${SHIELD_CIRCUIT_DESCRIPTION_JA}` : ""}
     </p>
     ${circuits.length === 0
       ? `<p class="muted">回路がありません。</p>`

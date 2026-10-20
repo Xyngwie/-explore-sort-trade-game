@@ -274,7 +274,7 @@ function circuitRows(s: HangarState): string {
               <div class="engraved" style="font-size:0.8rem">刻印 ${escapeHtml(editor)}</div>
             </td>
             <td>
-              <strong>${escapeHtml(effectJa)}</strong>
+              <strong>${c.effectKey === "shield" ? "盾 — " : ""}${escapeHtml(effectJa)}</strong>
               <div class="muted effect-breakdown">${escapeHtml(effectBreakdownJa)}</div>
               <div class="mono muted">売却 仮 ${price}c（${escapeHtml(priceBrk.detailJa)}）</div>
             </td>
@@ -336,7 +336,7 @@ function nextSortiePanel(s: HangarState): string {
   const ready = buildNextSortieReadiness(s);
   const digest = buildNextSortieReturnDigest(s);
   const equipmentError = squadEquipmentError(s.hub, ready.selectedIds);
-  const equipmentNote = equipmentError === "squad_full" ? "出撃部隊の回路上限を超えています。装備を外すか出撃機を変更してください。" : equipmentError === "category_full" ? "武器種・特殊弾は各機体に各1枚までです。装備を変更してください。" : "";
+  const equipmentNote = equipmentError === "squad_full" ? "出撃部隊の回路上限を超えています。装備を外すか出撃機を変更してください。" : equipmentError === "category_full" ? "武器種・特殊弾・盾回路は各機体に各1枚までです。装備を変更してください。" : "";
   const emptyActivity = s.hub.fleet.filter(m => ready.selectedIds.includes(m.instanceId) && m.battery.activity <= 0);
   const powerWarning = emptyActivity.length ? `出撃部隊に活動量0の機体が${emptyActivity.length}機あります。出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。` : "";
   const deployUrl = buildDeployUrl(s);

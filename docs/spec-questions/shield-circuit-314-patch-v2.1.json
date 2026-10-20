@@ -1,0 +1,40 @@
+{
+  "type": "SPEC_DECISION_PATCH",
+  "version": "2.1",
+  "date": "2026-10-20",
+  "target": {
+    "planned_pr": 314,
+    "question_id": "A1",
+    "patches": "SPEC_DECISION_PATCH v2.0"
+  },
+  "approval": {
+    "approved_by": "神宮",
+    "status": "APPROVED",
+    "reason": "盾関連機能は正式公開前であり、開発途中のセーブデータとの互換性を要求しない。"
+  },
+  "decision": {
+    "shield_circuit_required_for_stripping": true,
+    "shield_circuit_required_for_pickup_or_use": false,
+    "pre_release_save_backward_compatibility_required": false,
+    "legacy_stripping_progress_migration_required": false,
+    "legacy_stripping_progress_resumption_required": false,
+    "existing_generated_shield_migration_required": false
+  },
+  "supersedes": [
+    "旧剥離進捗の保護を理由とした実装保留",
+    "旧セーブとの後方互換性をPR #314の必須条件とする要求"
+  ],
+  "scope_notes": [
+    "K1〜K6の承認結果は変更しない。",
+    "K4=Aは旧進捗が利用可能な場合の最大耐久50という規則として維持するが、旧進捗の読込・再開自体は保証しない。",
+    "新仕様で作成した剥離進捗の途中保存・再開は正常に動作させる。",
+    "盾の帰還・置き去り・交換途中・盤面再生成の現行仕様は維持する。",
+    "P盾回路と「屹立」は後続実装とする。"
+  ],
+  "implementation": {
+    "compatibility_blocker_resolved": true,
+    "may_proceed": true,
+    "merge_authorized": false,
+    "deploy_authorized": false
+  }
+}

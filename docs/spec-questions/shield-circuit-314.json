@@ -1,0 +1,180 @@
+{
+  "sender": "lead",
+  "recipient": "inspector",
+  "type": "SPEC_QUESTION",
+  "payload": {
+    "title": "#314予定：盾回路の実装前仕様会議",
+    "status": "HOLD",
+    "date": "2026-10-20",
+    "details": "風紀委員・神宮の仕様会議でK1〜K6の推奨回答と理由、既存仕様との整合を検討し、神宮承認後のSPEC_DECISIONを返してください。実装担当は選択肢を確定仕様として扱わず、未決定部分を実装しません。全質問・選択肢・背景を省略せず記載しています。",
+    "baseline": {
+      "repository": "Xyngwie/-explore-sort-trade-game",
+      "main_commit": "5c24b7bbf2db7f48000958361114233398041d76",
+      "included_pr": 313
+    },
+    "pr": null,
+    "planned_pr": 314,
+    "confirmed_rules": [
+      "生成盾の最大耐久は50＋剥離元の機体に装備されていた盾回路の効力。剥離を作業する機体や、完成後に盾を装備する機体の回路で加算しない。",
+      "盾回路がなくても盾の剥離・回収・使用はできる。盾の自動初期装備はしない。",
+      "盾1枚の重量は1。旧文書の重量ペナルティ軽減効果や回路枚数による重ね持ち制限へ戻さない。",
+      "装備盾は1枚、予備盾は既存の積載容量の範囲。複数の盾を同時防御に使わない。",
+      "#313の帰還・置き去り・交換残り時間・盤面再生成の承認仕様は維持する。",
+      "既存の保存済み回路の効果種別は勝手に引き直さない。新しい効果キーは既存キーを変更せず追加する。",
+      "既に生成済みの盾は保存されているHP・最大HP・ID・出自・生成順を維持する。"
+    ],
+    "in": [
+      "盾回路の効果登録・入手候補・装備制限・説明表示",
+      "剥離で生成する盾の最大耐久への加算",
+      "旧セーブと旧剥離進捗との互換性"
+    ],
+    "out": [
+      "貫通弾",
+      "敵が盾を作る/拾う新しいAI",
+      "新しい盾操作やHUB持ち帰り",
+      "学習AI・統一マップ・サーバー"
+    ],
+    "unresolved": [
+      {
+        "id": "K1",
+        "topic": "effect_pool",
+        "question_ja": "盾回路は、偽盤・真盤のどちらの効果として出現させますか？",
+        "context_ja": "既存の回路は偽盤/真盤で効果候補が別です。購入・仕分け・解明と敵の生成も、この区分に影響されます。旧文書の「その場を守る」という分類だけでは区分を決められません。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "偽盤の新しいパッシブ効果として追加する。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "真盤の新しい効果として追加する。"
+          }
+        ],
+        "status": "UNDECIDED",
+        "owner_choice": null
+      },
+      {
+        "id": "K2",
+        "topic": "duplicates_and_aggregation",
+        "question_ja": "同じ機体に盾回路を複数装備できますか？ 許可する場合、剥離で加算する効力をどう集計しますか？",
+        "context_ja": "現行の明示的な装備制限は武器種・特殊弾の各1枚です。盾回路の複数装備と合算規則は未確定です。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "同じ機体への盾回路は1枚まで。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "複数装備でき、効力を合計する。"
+          },
+          {
+            "choice": "C",
+            "description_ja": "複数装備できるが、最も効力の高い1枚だけを使う。"
+          }
+        ],
+        "status": "UNDECIDED",
+        "owner_choice": null
+      },
+      {
+        "id": "K3",
+        "topic": "fractional_durability",
+        "question_ja": "盾回路の効力に小数がある場合、生成盾の最大耐久50＋効力の端数をどうしますか？",
+        "context_ja": "敵回路には小数の効力があります。例として効力12.75なら計算値は62.75です。内部値を丸めると受けられるダメージ量が変わります。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "小数をそのまま保持する。例：62.75。画面表示は既存の表示精度に従う。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "合計後に四捨五入して整数にする。例：63。"
+          },
+          {
+            "choice": "C",
+            "description_ja": "合計後に切り捨てて整数にする。例：62。"
+          }
+        ],
+        "status": "UNDECIDED",
+        "owner_choice": null
+      },
+      {
+        "id": "K4",
+        "topic": "old_incomplete_stripping",
+        "question_ja": "#314より前に剥離を開始して途中保存された残骸にも、新しい盾回路の耐久加算を適用しますか？",
+        "context_ja": "既存の剥離進捗には回路ID・サイズ・効力はありますが、効果種別を記録していません。元の残骸やHUBの回路から判定できる場合があります。作成済みの盾を後から強化する質問ではありません。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "旧進捗は従来の最大耐久50で完了する。#314以後に新しく開始した剥離だけ加算する。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "旧進捗も残骸の元回路から種別を確認して加算する。確認不能な場合の扱いは会議で明示する。"
+          }
+        ],
+        "status": "UNDECIDED",
+        "owner_choice": null
+      },
+      {
+        "id": "K5",
+        "topic": "display_name",
+        "question_ja": "回路一覧や効果説明に表示する、盾回路の名前をどうしますか？",
+        "context_ja": "操作ボタン「残骸盾」は既に存在します。回路なしでも使える操作と、生成する盾の耐久を上げる回路の名称を決める必要があります。内部の効果キー名は実装側の技術事項です。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "盾"
+          },
+          {
+            "choice": "B",
+            "description_ja": "盾強化"
+          },
+          {
+            "choice": "C",
+            "description_ja": "残骸盾"
+          }
+        ],
+        "status": "UNDECIDED",
+        "owner_choice": null
+      },
+      {
+        "id": "K6",
+        "topic": "enemy_generation_and_behavior",
+        "question_ja": "#314で新しい敵の回路候補にも盾回路を含めますか？ 含める場合、有効値が最も高い盾回路を敵が持ったときの行動はどうしますか？",
+        "context_ja": "現行の敵は偽盤の候補から生成され、最高効力の回路で行動を選びます。未登録キーを追加するだけだと既存の分岐へ流れ、意図しない行動になります。敵が盾を作る/拾うAIの追加は別工程です。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "敵の候補にも含める。盾回路が最高効力なら既存の「待ち伏せ」行動を使う。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "#314では敵の回路候補には含めず、敵への追加は後続へ分ける。"
+          },
+          {
+            "choice": "C",
+            "description_ja": "敵の候補に含めるが、行動は会議で別途指定する。"
+          }
+        ],
+        "status": "UNDECIDED",
+        "owner_choice": null
+      }
+    ],
+    "dependencies": [
+      "K6はK1の区分と整合させる。真盤だけの場合、現行の偽盤のみの敵生成へ自動的に混ぜない。",
+      "K3はK2で決めた集計後の値へ適用する。",
+      "K4=BまたはK6=Cの場合、別途指定とした部分も具体的な規則を回答する。"
+    ],
+    "scopeLockViolation": false,
+    "tests": {
+      "selfTest": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "build": "NOT_RUN",
+      "ci": "NOT_RUN",
+      "previewPlay": "NOT_RUN",
+      "deploy": "NOT_TRIGGERED"
+    },
+    "implementation_state": "仕様照合とJSON作成のみ。ゲームコード未変更、Draft PR未作成。",
+    "reply_request": "各id・推奨choice・理由・既存仕様との整合を提示し、会議での承認後に確定choice・具体的な規則・承認者を含むSPEC_DECISIONを返してください。Q1〜Q3/S1〜S6等の既存決定を改訂する場合は差分を明記してください。"
+  }
+}

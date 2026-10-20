@@ -81,7 +81,7 @@ assert.equal(circuitTrueBoardRate(rated, 0.4), pt > 0 ? 0.4 + add : 0.4);
 // 項目4-2 C1e compat: 「回収」 (recover) is the 19th false-board key. Saved keys are kept
 // as they are; only a circuit that gets its key from now on can roll recover.
 {
-  assert.equal(FALSE_BOARD_EFFECT_KEYS.length, 19);
+  assert.equal(FALSE_BOARD_EFFECT_KEYS.length, 20);
   assert.equal(FALSE_BOARD_EFFECT_KEYS[18], "recover");
   const OLD18 = FALSE_BOARD_EFFECT_KEYS.slice(0, 18);
   const recs = Array.from({ length: 120 }, (_, i) => ({

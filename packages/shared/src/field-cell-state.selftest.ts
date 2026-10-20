@@ -9,7 +9,7 @@ let identities=registerWreckIdentity(emptyFieldObjectIdentities(),'source');
 identities=shieldIdentityFromWreck(identities,'source','shield',{hp:23.5,maxHp:50});
 identities=registerWreckIdentity(identities,'enemy-w');
 const report:FieldCellReport={location,ground:{shield:{x:123.4,y:555.6}},wrecks:[{
- targetId:'enemy-field-test',wreckKey:'enemy-w',pos:{x:200,y:300},sourceInstanceId:null,seconds:3.25,
+ targetId:'enemy-field-test',wreckKey:'enemy-w',pos:{x:200,y:300},sourceInstanceId:null,seconds:3.25,shieldMaxHp:62.75,
  circuits:[{circuitId:'exact-c',side:3,effect:7}],enemy:{name:'敵',maxHp:100,radius:14,heading:2,identity:{modelId:'mech_gen1',durability:100,circuits:[{circuitId:'exact-c',side:3,effect:7,effectKey:'smg',trueBoard:false}]}},
 }],identities};
 const hub=normalizeHubSnapshot({...INITIAL_HUB,frontProgress:{seed:812,aoiHalf:12,opened:[],flagged:[],focus:null}});
@@ -22,6 +22,7 @@ const saved=deserializeHubSave(serializeHubSave(createHubSave(result.hub)))!;
 assert.deepEqual(saved.hub.fieldCells,result.hub.fieldCells);
 assert.equal(saved.hub.fieldObjectIdentities!.shields.shield!.hp,23.5);
 assert.equal(saved.hub.fieldCells![0]!.wrecks[0]!.seconds,3.25);
+assert.equal(saved.hub.fieldCells![0]!.wrecks[0]!.shieldMaxHp,62.75,'new stripping max HP survives URL and normalized save');
 assert.equal(applyExploreReturnToHub(saved.hub,payload).applied,false,'once even after serialized reload');
 assert.deepEqual(hub,original,'input untouched');
 const other={...report,location:{frontSeed:812,cell:{sx:4,sy:4}},ground:{},wrecks:[]};
