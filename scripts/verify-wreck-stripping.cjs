@@ -39,7 +39,7 @@ const base = process.env.EXPLORE_BASE_URL || 'http://127.0.0.1:5173';
   window.drawnWreck=null;window.drawnShield=false;
   CanvasRenderingContext2D.prototype.fillText=function(text,x,y,...rest){
    if(text==='残骸' && x>=0 && x<this.canvas.width && y>=0 && y<this.canvas.height && (!window.drawnWreck || x<window.drawnWreck.x))window.drawnWreck={x,y:y+12};
-   if(text==='盾 ×1')window.drawnShield=true;
+   if(text==='盾 ×1'){window.drawnShield=true;window.groundShieldPoint={x,y};}
    return native.call(this,text,x,y,...rest);
   };
  },data);
@@ -68,7 +68,12 @@ const base = process.env.EXPLORE_BASE_URL || 'http://127.0.0.1:5173';
  assert.equal(shield.hp,50);assert.equal(shield.maxHp,50);assert.equal(shield.shieldId,'41');assert.equal(shield.generationOrder,'8');
  assert.equal(done.stripping.observations.length,1);assert.equal(done.stripping.observations[0].learningValue,null);
  assert.equal(done.enemies[0].enemyIdentity.circuits.length,0);assert.equal(Object.keys(done.shieldState.equipped).length,0);
- await p.mouse.click(5,5);await p.locator('#btn-extract').click();
+ await p.mouse.click(5,5);
+ await p.waitForFunction(()=>window.groundShieldPoint);await p.locator('#map').scrollIntoViewIfNeeded();
+ const shieldPoint=await p.evaluate(()=>{const c=document.querySelector('#map'),r=c.getBoundingClientRect();return{x:r.left+groundShieldPoint.x*r.width/c.width,y:r.top+groundShieldPoint.y*r.height/c.height};});
+ await p.mouse.click(shieldPoint.x,shieldPoint.y);await p.locator('[data-shield-pick]').click();
+ await p.locator('[data-shield-drop]').waitFor();assert((await p.locator('#hud-speed').innerText()).includes('盾 50/50'),'stripped shield can be picked and equipped through normal UI');
+ await p.locator('#btn-extract').click();
  await p.waitForFunction(key=>JSON.parse(localStorage.getItem(key))?.hub?.wreckStrippingHistory?.length===1,data.saveKey,{timeout:25000});
  const settled=await p.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub,data.saveKey);
  assert(!settled.fleet.some(m=>m.instanceId===`recovered-${data.targetId}`),'stripped enemy not acquired at actual lift-off');
@@ -81,6 +86,6 @@ const base = process.env.EXPLORE_BASE_URL || 'http://127.0.0.1:5173';
  assert.equal(reloaded.wreckStrippingHistory.length,1,'result reload does not duplicate settlement');
  if(process.env.STRIPPING_RESULT_SCREENSHOT)await p.screenshot({path:process.env.STRIPPING_RESULT_SCREENSHOT,fullPage:true});
  assert.deepEqual(errors,[]);await context.close();
- console.log('Wreck stripping browser 390x844 PASS: live enemy shot down, button/target, 8s generation, interrupted reload/resume, HP50/IDs, actual 15s return, stripped enemy excluded, unstripped control acquired, result reload');
+ console.log('Wreck stripping browser 390x844 PASS: live enemy shot down, button/target, 8s generation, interrupted reload/resume, HP50/IDs, 2s pickup/equip UI, actual 15s return, stripped enemy excluded, unstripped control acquired, result reload');
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

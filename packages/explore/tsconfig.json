@@ -38,6 +38,7 @@
     "src/boardingReturn.selftest.ts",
     "src/logFeed.selftest.ts",
     "src/shields.selftest.ts",
-    "src/wreckStripping.selftest.ts"
+    "src/wreckStripping.selftest.ts",
+    "src/shieldPickup.selftest.ts"
   ]
 }

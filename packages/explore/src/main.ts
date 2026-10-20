@@ -1,3 +1,5 @@
+import { shieldPanelHtml, shieldGroupAt } from "./ui/shieldPanel";
+import { startShieldPickup, dropOwnedShield, takeShieldNotices } from "./game/shieldOperations";
 import { activeStripping, interruptStripping, startStrippingAt } from "./game/strippingRuntime";
 import { shieldHudText } from "./game/shields";
 import { LogPanel, repairSummary, type LogRow } from "./ui/logPanel";
@@ -358,6 +360,15 @@ let canvas: HTMLCanvasElement | null = null;
 let last = performance.now();
 let needsDom = true;
 let stripTargetPending = false;
+const shieldPanelPainted = new WeakMap<HTMLElement,string>();
+let selectedShieldPosition: {x:number;y:number}|null = null;
+function paintShieldPanel():void {
+  const panel=document.getElementById("shield-panel");if(!panel)return;
+  const html=shieldPanelHtml(world,selectedShieldPosition);
+  if(shieldPanelPainted.get(panel)!==html){panel.innerHTML=html;shieldPanelPainted.set(panel,html);}
+}
+function showShieldNotices():void {for(const message of takeShieldNotices(world))flashLogToast(message);}
+
 
 function flashCampToast(msg: string): void {
   const el = document.getElementById("camp-toast");
@@ -579,6 +590,9 @@ function bindCanvas(): void {
     // P1: ~24 screen px around a wingman selects it (scaled for phone widths).
     const rect = canvas.getBoundingClientRect();
     const perPx = rect.width > 0 ? world.camera.w / rect.width : 1;
+    const shieldGroup=shieldGroupAt(world,pt,Math.max(24,24*perPx));
+    if(shieldGroup && !world.circuitPlay?.pending){selectedShieldPosition={...shieldGroup.pos};paintShieldPanel();return;}
+    selectedShieldPosition=null;paintShieldPanel();
     // Enemy PR1 (F1 = B): a tap near a seen enemy shows 「所属不明」; the tap still does what it did before.
     const tapped = enemyAt(world, pt, Math.max(24, 24 * perPx), (en) => isEnemySeen(world, en));
     if (tapped) { noteEnemyTap(world, tapped.id); needsDom = true; }
@@ -839,7 +853,7 @@ function directSaveNoteText(res: DirectSaveResult | null): string {
 }
 
 function renderDom(): void {
-  if (world.phase !== "sortie") stripTargetPending = false;
+  if (world.phase !== "sortie") {stripTargetPending = false;selectedShieldPosition=null;}
   // Rebuilding the root destroys native selection ranges. Keep it until the
   // first clearing gesture has been consumed; simulation continues meanwhile.
   if (logPanel.guard.selected()) { deferredLogRender = true; return; }
@@ -1069,6 +1083,7 @@ function renderDom(): void {
           <button type="button" class="${world.leader.inCover ? "cover-active" : "secondary"}" id="btn-cover" title="小隊カバー切替（V）。障害物付近で身を隠す。キャンプDRと併用。">${world.leader.inCover ? "カバー解除" : "カバー"}</button>
           ${returnOpen() ? sortieRetreatHtml(world.leader.alive, rescueConfirm, previewHeldCredits()) : ""}
         </div>
+        <div id="shield-panel"></div>
         <div id="wing-palette-row"></div>
         ${squadOrderBarHtml()}
         <p class="help">${sortieHelpText()}</p>
@@ -1118,6 +1133,19 @@ function renderDom(): void {
   document.getElementById("btn-scatter")?.addEventListener("click", () => {
     afterCommand(executeExploreCommand(world, { id: "scatter_search" }));
   });
+  document.getElementById("shield-panel")?.addEventListener("click",e=>{
+    const target=(e.target as Element).closest<HTMLButtonElement>("[data-shield-pick],[data-shield-drop]");if(!target)return;
+    if(target.dataset.shieldPick){
+      stripTargetPending=false;
+      if(world.circuitPlay){world.circuitPlay.pending=null;world.circuitPlay.wingSelect=null;}
+      const result=startShieldPickup(world,world.leader,target.dataset.shieldPick);
+      if(result==='far')flashLogToast("盾が遠すぎます");
+      else if(result==='none')flashLogToast("この盾は回収できません");
+      showShieldNotices();
+    } else if(target.dataset.shieldDrop)dropOwnedShield(world,world.leader,target.dataset.shieldDrop);
+    paintShieldPanel();
+  });
+  paintShieldPanel();
   document.getElementById("btn-strip")?.addEventListener("click", () => {
     interruptStripping(world,world.leader.id);
     stripTargetPending = !stripTargetPending;
@@ -1181,6 +1209,8 @@ function bindWingControls(scope: ParentNode): void {
 }
 
 function paintHudOnly(): void {
+  showShieldNotices();
+  paintShieldPanel();
   const timedOut = isOperationTimedOut(world);
   const time = hudTimePresentation(world);
   const t = document.getElementById("hud-time");
