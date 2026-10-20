@@ -1,3 +1,4 @@
+import { applyFieldCellReport } from "./field-cell-state";
 import { applyWreckStrippingReport, consumedStrippingMechIds, normalizeWreckStrippingReport } from "./wreck-stripping";
 import { applyEnemyWrecks } from "./enemy-wreck-return";
 /**
@@ -133,7 +134,13 @@ export function applyExploreReturnToHub(
     ...(normalizeWreckStrippingReport(wear.wreckStripping)?.observations ?? []),
   ]);
   next = applyEnemyWrecks(next, (wear.enemyWrecks ?? []).filter(row => !stripped.has(row.instanceId)));
-  if (wear.sortieId) next = applyWreckStrippingReport(next, wear.wreckStripping);
+  if (wear.sortieId) {
+    next = applyWreckStrippingReport(next, wear.wreckStripping);
+    if (wear.fieldCell && wear.frontSeed === wear.fieldCell.location.frontSeed &&
+      wear.cell?.sx === wear.fieldCell.location.cell.sx && wear.cell?.sy === wear.fieldCell.location.cell.sy) {
+      next = applyFieldCellReport(next, wear.fieldCell);
+    }
+  }
   const returned: HubSnapshot = {
     ...next,
     fleet: applyReturnedMechState(

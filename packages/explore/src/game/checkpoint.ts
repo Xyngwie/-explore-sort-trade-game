@@ -1,3 +1,4 @@
+import { fieldCellReport } from "./fieldPersistence";
 import { backfillEnemyState, backfillSplitSupplies } from "./enemyBehavior";
 import { backfillEnemyIdentities } from "./enemyIdentity";
 /**
@@ -14,6 +15,7 @@ export function snapshotSortieWorld(world: World): unknown {
 
 export function snapshotResultWorld(world: World): unknown {
   const copy = JSON.parse(JSON.stringify(world)) as World;
+  copy.fieldReturnReport = fieldCellReport(world);
   copy.enemies = [];
   // Recovered enemy identities survive the result checkpoint for a refused-write retry.
   copy.recoveredEnemyUnits = world.recoveredEnemyUnits ?? [];

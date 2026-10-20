@@ -1,3 +1,5 @@
+import { directFieldEntryFromStorage } from "./game/directFieldEntry";
+import { attachFieldPersistence } from "./game/fieldPersistence";
 import { shieldPanelHtml, shieldGroupAt } from "./ui/shieldPanel";
 import { startShieldPickup, dropOwnedShield, takeShieldNotices } from "./game/shieldOperations";
 import { activeStripping, interruptStripping, startStrippingAt } from "./game/strippingRuntime";
@@ -149,7 +151,7 @@ import {
 import { settleFriendlyFireOnce } from "./game/friendlyFireHistory";
 import { sortieIdForWorld } from "./game/outcome";
 import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
-import { resortiePlan, resortieSearch } from "./game/resortie";
+import { checkpointSortieSearch, resortiePlan, resortieSearch } from "./game/resortie";
 import { refillBeforeSortie } from "./game/preSortieAmmo";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
@@ -184,23 +186,31 @@ function freshHub(): HubSnapshot | null {
  */
 function sortieEquipmentNote(): string {
   const hub = freshHub();
+  if (entrySaveRefused) return "戦場情報を保存できませんでした。保存を許可して再読込してください。";
   if (!hub) return "";
   const ids = world.deployedInstanceIds.length ? world.deployedInstanceIds : resolveSortieSelection(hub);
   const error = squadEquipmentError(hub, ids);
   return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
 }
-let bootSearch = invadeSquadSearch(window.location.search, freshHub()) ?? window.location.search;
+const entryCheckpoint = readSortieCheckpoint();
+let entrySaveRefused = false;
+let entrySearch = window.location.search;
+if (entryCheckpoint.status === "absent" || (entryCheckpoint.status === "ok" && entryCheckpoint.record.kind === "done")) {
+  try { entrySearch = directFieldEntryFromStorage(entrySearch) ?? entrySearch; }
+  catch { entrySaveRefused = true; }
+}
+let bootSearch = invadeSquadSearch(entrySearch, freshHub()) ?? entrySearch;
 /** M8: shortage line shown by the briefing 出撃 button (Explore-built squads only). */
 let preSortieAmmoNote = "";
 {
   // M3: an Invade sortie link (squad from HubSave) is a new sortie — top the
   // squad up from the stock first. Not on a 5-3 resume (checkpoint present).
   const hub0 = freshHub();
-  if (hub0 && bootSearch !== window.location.search && readSortieCheckpoint().status === "absent") {
+  if (hub0 && bootSearch !== entrySearch && readSortieCheckpoint().status === "absent") {
     const ids = parseTradeToExploreSearch(bootSearch)?.deployedInstanceIds ?? [];
     const filled = refillBeforeSortie(hub0, ids);
     preSortieAmmoNote = filled.line;
-    bootSearch = invadeSquadSearch(window.location.search, filled.hub) ?? bootSearch;
+    bootSearch = invadeSquadSearch(entrySearch, filled.hub) ?? bootSearch;
   }
 }
 const boot = bootstrapFromSearch(bootSearch);
@@ -219,6 +229,7 @@ function makeWorld(b: ReturnType<typeof bootstrapFromSearch>): World {
   const world = attachLostMechContext(createWorld(b), hub);
   // Circuit effects are live in both modes; release-only extras follow `mode` (Q1/Q3c).
   attachCircuitPlay(world, hub, mode === "release");
+  attachFieldPersistence(world, hub);
   return world;
 }
 if (boot.invadeSector != null) {
@@ -250,6 +261,7 @@ function bootExploreSession(): { world: World; paused: boolean; leaveForHub: boo
     discardSortieCheckpoint();
     return { world: makeWorld(boot), paused: false, leaveForHub: true };
   }
+  bootSearch = checkpointSortieSearch(bootSearch, restored.invadeSector);
   if (decision.action === "sortie") {
     restored.phase = "sortie";
     return { world: restored, paused: true, leaveForHub: false };

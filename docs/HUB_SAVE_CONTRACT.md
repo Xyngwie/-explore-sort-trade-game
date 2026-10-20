@@ -446,3 +446,11 @@ API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_
 - 盾の所持・拾得・出撃をまたぐ地面配置はこの契約に追加していない。checkpoint内の地面盾/剥離進捗と区別する。詳細[WRECK_STRIPPING_PLAN.md](WRECK_STRIPPING_PLAN.md)。
 
 - #310追加監査：敵のsourceInstanceId=nullでもtargetIdから `recovered-<敵Unit ID>` を解決し、今回の剥離観測・保存済み履歴の両方を敵受領前に照合する。旧a:接頭辞も同じ敵IDへ解決。受領済みコピー/装備回路の除去と、遅延帰還による再取得防止を含む。詳細[WRECK_STRIPPING_RETURN_AUDIT.md](WRECK_STRIPPING_RETURN_AUDIT.md)。
+
+### #312：マス単位の地面盾・残骸保存（加算的）
+
+`hub.fieldCells?: FieldCellState[]`を追加する。保存単位は`location: {frontSeed, cell:{sx,sy}}`。`ground`の盾参照キーと`wrecks[].wreckKey`は`hub.fieldObjectIdentities`の正規レコードを指す。盾のHP・ID・生成順をfieldCellsへ複製しない。剥離開始済みの残骸は座標・元機体instanceId（敵はnull）・剥離秒数（0以上8未満）・失われる回路情報を持つ。敵残骸は元の回路を含む敵素体を保存し、生きた敵の生成とは分離する。作業者の予約は保存対象外。
+
+帰還`fieldCell?: FieldCellReport`は対応するマスの全残存状態と必要なIDレコード・カウンターを運ぶ。直接保存と帰還URLの双方で同じsortieIdトランザクションへ適用し、空の報告は当該マスを空に置換する。帰還先マスとの不一致・旧盤面seedは適用しない。盤面再生成はfieldCellsと参照する地面物体を削除し、IDカウンター・修復履歴は保持する。未搭載の旧セーブはfieldCells欠損のまま。不正参照を持つセーブは黙って削除せず読込を拒否する。
+
+直接EXPLOREも保存中の盤面のHQ（0,0）を使用する。盤面がなければ未踏査のseedを先に保存し、既存のopened/flagged/focusは変更しない。所持盾の帰還ルールはこの契約追加では決定しない。詳細は[FIELD_SHIELD_PERSISTENCE_PLAN.md](FIELD_SHIELD_PERSISTENCE_PLAN.md)。

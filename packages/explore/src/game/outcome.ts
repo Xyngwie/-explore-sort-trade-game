@@ -1,3 +1,4 @@
+import { fieldCellReport } from "./fieldPersistence";
 import { strippingReport } from "./strippingRuntime";
 import { enemyWreckReturns } from "./enemyRecovery";
 import {
@@ -278,6 +279,7 @@ export function exploreReturnPayload(world: World): ExploreToHubWearPayload | nu
         : {}),
     },
   );
+  payload.fieldCell = fieldCellReport(world);
   payload.wreckStripping = strippingReport(world);
   payload.enemyWrecks = enemyWreckReturns(world);
   return payload;
