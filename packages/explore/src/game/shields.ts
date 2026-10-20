@@ -1,3 +1,4 @@
+import { shieldOwnerUnits } from "./shieldOwners";
 import { beginShieldExchange, dropAllOwnedShields, spareShields } from "./shieldOperations";
 import { PERIPHERY_HALF_RAD } from "./vision";
 import type { FieldObjectIdentities, FieldObjectReference, ShieldIdentity } from "@estg/shared";
@@ -62,7 +63,7 @@ export function dropEquippedShield(world: World, unit: Unit): boolean {
 /** Death/power exhaustion cannot leave an active shield on a corpse. */
 export function dropUnavailableShields(world: World): void {
   if (!world.shieldState) return;
-  const units = [world.leader, ...world.wingmen, ...world.enemies];
+  const units = shieldOwnerUnits(world);
   const riders = new Set(Object.values(world.circuitPlay?.carry ?? {}).flat());
   for (const unit of units) {
     if (!unit.alive || riders.has(unit.id)) dropAllOwnedShields(world, unit, true);

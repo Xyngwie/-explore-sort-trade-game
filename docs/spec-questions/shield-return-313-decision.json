@@ -1,0 +1,206 @@
+{
+  "type": "SPEC_DECISION",
+  "version": "2.0",
+  "date": "2026-10-20",
+  "target": {
+    "repository": "Xyngwie/-explore-sort-trade-game",
+    "planned_pr": 313,
+    "branch": "cursor/codex-shield-return",
+    "topic": "帰還・置き去り時の盾処理"
+  },
+  "approval": {
+    "status": "APPROVED",
+    "approved_by": "神宮",
+    "reviewed_by": "風紀委員",
+    "scope": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6"
+    ],
+    "all_decisions_final": true,
+    "additional_conditions": []
+  },
+  "confirmed_prior_decisions": {
+    "Q1": {
+      "choice": "A",
+      "rule": "帰還する機体の装備盾・予備盾は外して戦場に残し、HUBへ持ち帰らない。"
+    },
+    "Q2": {
+      "choice": "A",
+      "rule": "通常帰還では、離昇時の各機体位置に盾を残し、HP・個体IDを保持する。"
+    },
+    "Q3": {
+      "choice": "B",
+      "rule": "通常帰還で置き去りになる生存機は、盾を装備・所持したまま残り、次回もその機体が保持する。"
+    },
+    "revision": false
+  },
+  "decisions": [
+    {
+      "id": "S1",
+      "topic": "manual_rescue_retreat",
+      "choice": "A",
+      "approval": "APPROVED",
+      "rule_ja": "隊長大破後の手動救助撤退では、置き去りになる生存僚機は装備盾・予備盾を所持したまま残り、次回も同じ機体が保持する。",
+      "details": [
+        "生存僚機の装備盾・予備盾は救助撤退時の積荷損失対象から除外する。",
+        "盾は地面へ自動投棄しない。",
+        "盾の個体ID、現在HP、最大HP、生成順、装備・予備の区分を維持する。",
+        "既に大破した機体から地面へ落ちた盾には適用しない。",
+        "コンテナ・回路・機体喪失・救助費用の既存規則は変更しない。"
+      ],
+      "consistency": [
+        "Q3=B",
+        "PR312"
+      ]
+    },
+    {
+      "id": "S2",
+      "topic": "timeout_with_live_leader",
+      "choice": "A",
+      "approval": "APPROVED",
+      "rule_ja": "隊長生存中の時間切れ強制救助では、既存の帰還半径による機体の回収・置き去り判定を維持し、通常帰還と同じ盾処理を適用する。",
+      "details": [
+        "帰還対象となる機体は、装備盾・予備盾を精算時の各機体位置の地面へ残す。",
+        "置き去りになる生存機は装備盾・予備盾を保持する。",
+        "地面に残す盾は個体ID・HP・生成順を維持する。",
+        "盾を帰還半径の中心へまとめて移動しない。",
+        "帰還範囲、機体受領、救助費用の既存規則は変更しない。"
+      ],
+      "consistency": [
+        "Q1=A",
+        "Q2=A",
+        "Q3=B"
+      ]
+    },
+    {
+      "id": "S3",
+      "topic": "timeout_with_destroyed_leader",
+      "choice": "A",
+      "approval": "APPROVED",
+      "depends_on": [
+        "S1"
+      ],
+      "rule_ja": "隊長大破後、時間切れまで待った強制救助では、S1と同じ盾処理を適用する。",
+      "details": [
+        "置き去りになる生存僚機は、装備盾・予備盾を所持したまま次回へ引き継ぐ。",
+        "生存僚機の盾を地面へ自動投棄・消失させない。",
+        "大破した隊長の盾は既存の機体破壊時処理に従い、二重投棄しない。",
+        "手動救助撤退と時間切れ強制救助の既存の救助費用差は維持する。"
+      ],
+      "consistency": [
+        "S1=A",
+        "Q3=B"
+      ]
+    },
+    {
+      "id": "S4",
+      "topic": "missed_boarding",
+      "choice": "B",
+      "approval": "APPROVED",
+      "rule_ja": "搭乗円の離昇判定時に隊長が円外で帰還失敗となった場合、既存精算で置き去りになる生存機は所持盾を維持し、それ以外の機体の装備盾・予備盾は各機体の現在位置の地面へ残す。",
+      "details": [
+        "置き去り機の装備盾・予備盾は同じ機体に紐づけて次回へ保存する。",
+        "置き去りにならない機体の盾は各機体位置へ投棄する。",
+        "地面に残す盾のHP・個体ID・生成順を保持する。",
+        "帰還失敗を帰還成功として扱わない。",
+        "機体の受領・置き去り判定と既存の精算規則は変更しない。"
+      ],
+      "consistency": [
+        "Q1=A",
+        "Q2=A",
+        "Q3=B"
+      ]
+    },
+    {
+      "id": "S5",
+      "topic": "left_behind_exchange_progress",
+      "choice": "B",
+      "approval": "APPROVED",
+      "rule_ja": "置き去り生存機が予備盾への2秒交換途中だった場合、交換対象と残り時間を凍結保存し、次回その機体が再登場した際に同じ対象への交換を残り時間から再開する。",
+      "details": [
+        "保存する時間は交換期限の絶対時刻ではなく、残り秒数とする。",
+        "出撃していない間の実時間では交換を進行させない。",
+        "交換対象の予備盾は固定し、再開時に自動再選択しない。",
+        "交換が完了するまでは盾による防御を行わない。",
+        "予約中の予備盾は積載重量に含め、手動投棄を禁止する。",
+        "元の交換2秒を最初からやり直さない。",
+        "機体死亡・盾消失など既存の強制解除条件は維持する。"
+      ],
+      "example": {
+        "total_seconds": 2,
+        "elapsed_before_return": 1.25,
+        "saved_remaining_seconds": 0.75,
+        "remaining_on_next_sortie_seconds": 0.75
+      },
+      "consistency": [
+        "Q3=B",
+        "PR311",
+        "PR312"
+      ]
+    },
+    {
+      "id": "S6",
+      "topic": "board_regeneration_with_owned_shields",
+      "choice": "A",
+      "approval": "APPROVED",
+      "rule_ja": "盤面再生成により置き去り生存機が新盤面へ移る場合、その機体の装備盾・予備盾も所持状態を維持したまま新盤面へ引き継ぐ。",
+      "details": [
+        "機体に紐づく盾は、HP・個体ID・生成順・装備と予備の区分を保持する。",
+        "S5の交換途中状態がある場合、同じ交換対象と残り時間を維持する。",
+        "地面盾は従来どおり盤面再生成によって消去する。",
+        "地面盾の消去処理が機体所持盾の正規個体IDを削除しないよう区別する。",
+        "置き去り機の新盤面への移動規則とID採番カウンターの既存規則は変更しない。"
+      ],
+      "consistency": [
+        "S5=B",
+        "Q3=B",
+        "PR312"
+      ]
+    }
+  ],
+  "implementation_constraints": {
+    "hub_shield_return": false,
+    "new_exit_action": false,
+    "change_mech_recovery_rules": false,
+    "change_container_circuit_loss_rules": false,
+    "change_rescue_cost_rules": false,
+    "change_existing_shield_combat_rules": false,
+    "preserve_ground_shield_identity_and_hp": true,
+    "preserve_left_behind_owned_shields": true,
+    "preserve_exchange_remaining_time": true,
+    "preserve_existing_board_regeneration_rules": true,
+    "carry_pending_pickup_reservation_across_sorties": false
+  },
+  "withdrawn_questions": [
+    {
+      "id": "Q4",
+      "status": "WITHDRAWN",
+      "implementation_required": false,
+      "note": "旧abortSortieの即時終了処理を通常撤退と誤認した質問。新しい終了操作は作成しない。"
+    }
+  ],
+  "verification_requirements": [
+    "通常帰還時に帰還機の盾が現在位置へ落ち、置き去り機は盾を保持する。",
+    "S1: 手動救助撤退で生存僚機が盾を保持する。",
+    "S2: 隊長生存の時間切れで、回収対象機と置き去り機の盾処理が分かれる。",
+    "S3: 隊長大破後の時間切れがS1と同じ盾処理になり、救助費用の既存差を維持する。",
+    "S4: 隊長が搭乗円外で帰還失敗した場合も既存精算に従って盾を振り分ける。",
+    "S5: 交換途中の残り時間と固定対象が再出撃・再読込後も維持される。",
+    "S6: 盤面再生成で地面盾だけが消去され、置き去り機の所持盾は維持される。",
+    "死亡済み機体の盾を二重投棄しない。",
+    "盾の個体ID・HP・生成順が保存と復元で変化しない。",
+    "既存の置き去り機、lostMechs、帰還精算、旧保存データの回帰テストを実施する。",
+    "全workspaceテスト・型検査・全5本番ビルドを実施する。",
+    "可能な範囲でブラウザー実操作テストを実施する。物理実機テストは盾関連実装完了後の第三者エージェントによる一括検証へ回す。"
+  ],
+  "handoff": {
+    "recipient": "Codex実装エージェント",
+    "instruction": "上記の神宮承認済み仕様に従い、PR #313の実装を進めてください。既存確定仕様と衝突する新たな論点が判明した場合は独断で変更せず、SPEC_QUESTIONとして提出してください。実装後はDraft PRとテスト結果を提示し、風紀委員の再監査を待ってください。",
+    "merge_authorized": false,
+    "deploy_authorized": false
+  }
+}

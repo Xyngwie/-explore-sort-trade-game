@@ -1,3 +1,4 @@
+import { shieldOwnerUnits } from "./shieldOwners";
 import type { FieldObjectReference } from '@estg/shared';
 import { roomFor, wreckCarrierId } from './carry';
 import { dist } from './math';
@@ -67,7 +68,7 @@ export function beginShieldExchange(world:World,unit:Unit):void {
  */
 export function tickShieldOperations(world:World):void {
  const state=world.shieldState;if(!state)return;
- const units=[world.leader,...world.wingmen,...world.enemies];
+ const units=shieldOwnerUnits(world);
  for(const [unitId,job] of Object.entries(state.pickups??{})) {
   const unit=units.find(u=>u.id===unitId),at=state.ground[job.key];
   if(world.phase!=='sortie' || world.operationTimedOut || !unit?.alive || wreckCarrierId(world,unitId) || !at || !shieldItem(world,job.key) || shieldAlreadyOwned(world,job.key) || dist(unit.pos,at)>unit.radius*2){delete state.pickups![unitId];continue;}

@@ -1,0 +1,218 @@
+{
+  "sender": "lead",
+  "recipient": "inspector",
+  "type": "SPEC_QUESTION",
+  "payload": {
+    "title": "#313 帰還時の盾処理：仕様会議への決定依頼",
+    "status": "HOLD",
+    "details": "神宮の指示に従い、実装担当は未決定のゲーム仕様を補完しません。風紀委員・神宮の会議で各項目を決定し、SPEC_DECISIONとして返してください。選択肢は検討案であり、承認済み仕様ではありません。",
+    "source": "docs/SHIELD_RETURN_PLAN.md",
+    "planned_pr": 313,
+    "pr": null,
+    "author": "Codex / 実装担当",
+    "date": "2026-10-20",
+    "timezone": "Asia/Tokyo",
+    "baseline": {
+      "repository": "Xyngwie/-explore-sort-trade-game",
+      "main_commit": "825b2e8e0f681ae4c781e3f06a379fb8857109bf",
+      "included_pr": 312,
+      "deploy_run": 39389174830,
+      "deploy_status": "SUCCESS"
+    },
+    "in": [
+      "帰還・救助・時間切れ・帰還失敗での盾の処理",
+      "置き去り生存機の装備盾・予備盾の保存と再登場",
+      "交換途中の状態と盤面再生成時の所持盾の扱い"
+    ],
+    "out": [
+      "HUBへの盾の持ち帰り・保管",
+      "盾回路・貫通弾",
+      "新しい敵AI・僚機命令・学習AI",
+      "統一マップ全体の実装・サーバー",
+      "既存の機体喪失・回路・コンテナ・救助費用のルール変更",
+      "旧abortSortieの公開・新しい通常撤退ボタンの追加"
+    ],
+    "confirmed_owner_decisions": [
+      {
+        "id": "Q1",
+        "choice": "A",
+        "decision_ja": "帰還する機体の装備盾・予備盾は外して戦場に残し、HUBへ持ち帰らない。"
+      },
+      {
+        "id": "Q2",
+        "choice": "A",
+        "decision_ja": "通常帰還では、離昇時の各機体位置に盾を残し、HP・IDを保持する。"
+      },
+      {
+        "id": "Q3",
+        "choice": "B",
+        "decision_ja": "通常帰還で置き去りになる生存機は盾を装備・所持したまま残り、次回もその機体が持つ。"
+      }
+    ],
+    "withdrawn_questions": [
+      {
+        "id": "Q4",
+        "status": "WITHDRAWN",
+        "reason_ja": "通常撤退と呼んだものは旧abortSortieの即時終了処理。現在の画面にはボタンがなく、実際の帰還と混同した質問のため撤回。回答済み扱いにせず、#313で新しい終了操作を作らない。"
+      }
+    ],
+    "existing_behavior_to_preserve": [
+      "盾の破壊・機体破壊・活動量0・生存機搭載時の既存処理",
+      "#312の地面盾保存：同じ盤面・同じマス、盤面再生成で消去、IDカウンターは維持",
+      "#312の敵残骸保存：剥離を開始した残骸だけ保存",
+      "直接EXPLOREも同じ盤面のHQから出発",
+      "回収未完了の地面盾は所持盾ではない。既存の回収予約は次の出撃へ持ち越さない。"
+    ],
+    "unresolved": [
+      {
+        "id": "S1",
+        "topic": "manual_rescue_retreat",
+        "status": "UNDECIDED",
+        "question_ja": "隊長大破後に救助撤退したとき、置き去りになる生存僚機の盾はどうしますか？",
+        "why_decision_is_needed": "Q3=Bは通常帰還での置き去りについての回答です。救助撤退では積荷を失う既存仕様があり、盾がその対象か未確定です。隊長の破壊時に既に地面へ落ちた盾は、この質問の対象外です。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "生存僚機は装備盾・予備盾を所持したまま残り、次回も保持する。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "生存僚機の位置に装備盾・予備盾を外して地面に残す。"
+          },
+          {
+            "choice": "C",
+            "description_ja": "生存僚機の所持盾は救助撤退で失われ、地面にも残らない。"
+          }
+        ],
+        "owner_choice": null,
+        "depends_on": []
+      },
+      {
+        "id": "S2",
+        "topic": "timeout_with_live_leader",
+        "status": "UNDECIDED",
+        "question_ja": "隊長が生存したまま時間切れで強制救助された場合、通常帰還と同じ盾処理にしますか？",
+        "why_decision_is_needed": "現行では隊長位置を中心にした帰還半径内の機体等を回収し、外の僚機を置き去りにします。15秒の通常帰還とは別の終了経路です。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "通常帰還と同じ。帰還する機体は現在位置に盾を外し、置き去り機は盾を所持し続ける。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "この経路では円内外に関係なく、生存機の所持盾を各機体位置の地面へ置く。"
+          }
+        ],
+        "owner_choice": null,
+        "depends_on": []
+      },
+      {
+        "id": "S3",
+        "topic": "timeout_with_destroyed_leader",
+        "status": "UNDECIDED",
+        "question_ja": "隊長大破後、時間切れまで待った強制救助では、生存僚機の盾をS1と同じ扱いにしますか？",
+        "why_decision_is_needed": "現行では手動の救助撤退と同じ損失処理を使いますが、救助費用は異なります。盾の扱いも共通にしてよいかは未確定です。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "S1で決めた盾の扱いを適用する。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "S1とは別の扱いにする。会議で具体的な規則を記入する。"
+          }
+        ],
+        "owner_choice": null,
+        "depends_on": [
+          "S1"
+        ]
+      },
+      {
+        "id": "S4",
+        "topic": "missed_boarding",
+        "status": "UNDECIDED",
+        "question_ja": "搭乗円の離昇判定時に隊長が円外で、帰還失敗になる場合の所持盾はどうしますか？",
+        "why_decision_is_needed": "現行コードは「隊長が搭乗円外のため離昇せず」として結果画面へ進む経路を持ちます。通常帰還成功や救助撤退の回答を自動的に流用できません。機体そのものの受領・置き去り判定は変えません。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "全生存機の装備盾・予備盾を各機体位置の地面へ置く。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "既存の精算で置き去りになる機体は所持を維持し、それ以外の機体の盾は現在位置の地面へ置く。"
+          }
+        ],
+        "owner_choice": null,
+        "depends_on": []
+      },
+      {
+        "id": "S5",
+        "topic": "left_behind_exchange_progress",
+        "status": "UNDECIDED",
+        "question_ja": "置き去り機が予備盾への2秒交換の途中だった場合、次回にどう再開しますか？",
+        "why_decision_is_needed": "Q3=Bで装備・予備の保持は確定しましたが、交換の残り時間は未決定です。交換中は元の盾が壊れており、選択中の盾は予備として重量を占めています。出撃間の実時間を消費するとは決めていません。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "次回、その機体で同じ対象への交換を2秒からやり直す。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "同じ交換対象と残り時間を凍結保存し、次回の出撃内で続ける。"
+          },
+          {
+            "choice": "C",
+            "description_ja": "交換予約を解除して予備として保持する。次回の自動再開はしない。"
+          }
+        ],
+        "owner_choice": null,
+        "depends_on": []
+      },
+      {
+        "id": "S6",
+        "topic": "board_regeneration_with_owned_shields",
+        "status": "UNDECIDED",
+        "question_ja": "盤面再生成で置き去り生存機が新盤面へ移るとき、その機体の装備盾・予備盾も保持しますか？",
+        "why_decision_is_needed": "現行では置き去り生存機を新盤面へ移します。Q111と#312で消えることが確定しているのは地面盾です。新たに保存する機体所持盾へ同じ消去規則を広げてよいかは未確定です。",
+        "options": [
+          {
+            "choice": "A",
+            "description_ja": "同じ機体に付いたまま、新盤面へ引き継ぐ。"
+          },
+          {
+            "choice": "B",
+            "description_ja": "機体は従来どおり移すが、所持盾は消す。"
+          }
+        ],
+        "owner_choice": null,
+        "depends_on": []
+      }
+    ],
+    "scopeLockViolation": false,
+    "implementation_state": {
+      "game_code_changed": false,
+      "draft_pr_created": false,
+      "preparation_branch": "cursor/codex-shield-return",
+      "blocked_on": "仕様会議でS1〜S6の決定を受領すること"
+    },
+    "decision_reply_request": {
+      "type": "SPEC_DECISION",
+      "required_per_item": [
+        "id",
+        "choice",
+        "具体的な規則。B等が別途指定の場合はその全文。"
+      ],
+      "instruction_ja": "必要なら選択肢以外の決定も可。Q1〜Q3を変更する場合は改訂であることを明記してください。実装範囲を変えない項目は既存仕様を維持と明記してください。"
+    },
+    "tests": {
+      "selfTest": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "build": "NOT_RUN",
+      "ci": "NOT_RUN",
+      "previewPlay": "NOT_RUN",
+      "deploy": "NOT_TRIGGERED"
+    },
+    "validation_note": "今回は仕様会議用JSONと準備文書のみ。ゲーム実装・実装監査は未開始。JSON構文・項目ID・未選択状態を検証する。"
+  }
+}

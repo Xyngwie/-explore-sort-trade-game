@@ -1,3 +1,4 @@
+import { settleReturnedShields } from "./shieldReturn";
 /**
  * 項目5-2 (2026-10-07 神宮, 設計メモ §7.1): the captain's wreck does not end
  * the sortie. Wingmen keep fighting until the player confirms a rescue abort,
@@ -79,7 +80,7 @@ function applyRescueLosses(world: World, fee: number): void {
   world.failReason = null;
   world.rescueAbort = true;
   world.rescueFeeCredits = fee;
-  world.phase = "result";
+  settleReturnedShields(world); world.phase = "result";
 }
 
 /**
@@ -145,7 +146,7 @@ export function resolveForcedRescueTimeout(world: World): void {
   world.extracted = false;
   world.failReason = null;
   world.rescueAbort = false;
-  world.phase = "result";
+  settleReturnedShields(world); world.phase = "result";
 }
 
 /** Alive-captain timeout: abort wear, but the in-radius containers stay on the sort handoff. */

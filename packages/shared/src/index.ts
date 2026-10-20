@@ -42,3 +42,5 @@ export * as frontBoard from "./front-board";
 
 export * from "./front-board";
 export * from "./front-sweep";
+
+export * from "./lost-mech-shields";
