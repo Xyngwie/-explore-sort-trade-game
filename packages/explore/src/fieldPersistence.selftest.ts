@@ -81,7 +81,7 @@ assert.equal(fieldCellReport(legacy),undefined);
  const next=resortieSearch(restoredSearch,deploy,['leader'])!;assert.equal(new URLSearchParams(next.search).get('sectorY'),'2');
 }
 
-// Pending Q3: never broaden unstarted enemy-wreck persistence without an answer.
+// Owner Q3=A: unstarted enemy wrecks keep the existing per-sortie generation rule.
 {
  const untouched=fresh();untouched.enemies=untouched.enemies.slice(0,1);untouched.enemies[0]!.alive=false;untouched.enemies[0]!.hp=0;
  assert.deepEqual(fieldCellReport(untouched)!.wrecks,[]);

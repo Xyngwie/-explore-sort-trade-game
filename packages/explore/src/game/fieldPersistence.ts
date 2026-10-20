@@ -52,7 +52,7 @@ export function fieldCellReport(world: World): FieldCellReport | undefined {
     if (wreckWasStripped(world,id) || recovered.has(id) || (instanceId && lostRecovered.has(instanceId))) return;
     const job=world.stripping?.jobs[id];
     // Friendly wreck existence and circuits are already persisted by lostMechs.
-    if (!job) return; // Unstarted enemy-wreck persistence requires the separate Q3 decision.
+    if (!job) return; // Owner Q3=A: only started wreck-stripping operations persist.
     if (!instanceId && !unit?.enemyIdentity && !legacyAir) return;
     const wreckKey=job?.wreckKey ?? `field-wreck:${id}`;
     if (!Object.hasOwn(identities.wrecks,wreckKey)) identities=registerWreckIdentity(identities,wreckKey);
