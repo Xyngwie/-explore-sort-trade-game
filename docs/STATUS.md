@@ -7,7 +7,7 @@
 - What: cursor/codex-shield-return。帰還機の現地投棄と置き去り機の所持盾/交換残り時間保存
 - Why: 神宮承認・風紀委員レビューのSPEC_DECISION v2.0。Q1=A/Q2=A/Q3=B、S1〜S6=A/A/A/B/B/A
 - Scope: 終了経路・所有保存/復元・交換凍結・盤面再生成・旧セーブ/帰還精算の検証。HUB持ち帰り・新操作・盾回路・敵AI・サーバーは追加しない
-- Status: main 825b2e8（#312）、公開デプロイ39389174830成功。承認JSONをdocs/spec-questions/shield-return-313-decision.jsonへ保存し、未決定事項は解消。実装・検証中。通常帰還/救助/両時間切れ/帰還失敗と交換再開のselftest・390px実操作をPASS。最終全テスト/ビルド/盤面再生成回帰/CIを確認してDraftで提出する。詳細SHIELD_RETURN_PLAN.md。未マージ・未デプロイ、再監査前に進めない
+- Status: main 825b2e8（#312）、公開デプロイ39389174830成功。承認JSONをdocs/spec-questions/shield-return-313-decision.jsonへ保存し、未決定事項は解消。Draft #313を提出。全workspaceテスト（型検査含む）・全5本番ビルドPASS。通常帰還/救助/両時間切れ/帰還失敗、交換残り凍結/再開、実Invade盤面再生成の390px操作をPASS。#312の帰還/再出撃/剥離/旧セーブ/保存拒否のブラウザー回帰もPASS。最新CIはPR本文へ記録。物理実機は承認方針どおり第三者による一括検証へ回す。詳細SHIELD_RETURN_PLAN.md。未マージ・未デプロイ、再監査前に進めない
 
 ## Codex / 出撃をまたぐ盾・剥離進捗保存 作業宣言（2026-10-20）
 - Who: Codex / 実装担当
