@@ -13,6 +13,8 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
   const {attachFieldPersistence}=await import('/src/game/fieldPersistence.ts'),{startStrippingAt,tickStripping}=await import('/src/game/strippingRuntime.ts');
   const {cancelUnitStripping}=await import('/src/game/wreckStripping.ts'),{backfillEnemyState}=await import('/src/game/enemyBehavior.ts');
   const hub=s.normalizeHubSnapshot({...s.INITIAL_HUB,fleet:[s.createOwnedMech('mech_gen1',{instanceId:'leader'})],sortieSelection:['leader'],frontProgress:{seed:812,aoiHalf:12,opened:[{sx:3,sy:3}],flagged:[{sx:4,sy:4}],focus:{sx:7,sy:7}}});
+  const circuit={circuitId:'worker-shield',circuitBoard:s.buildVerifyPerfectLockedBoard('t'),restoreState:'bypass',origin:'crafted',equippedTo:'leader',effectKey:'shield'};
+  hub.circuits=[circuit];
   const p=s.buildTradeToExplorePayloadFromFleet(hub.fleet,0,['leader']);const q=new URL(s.buildTradeToExploreUrl(p,'https://example.test/')).searchParams;
   q.set('sectorX','1');q.set('sectorY','2');q.set('density','0.2');const search='?'+q;
   const w=createWorld(bootstrapFromSearch(search));attachLostMechContext(w,hub);attachCircuitPlay(w,hub,false);attachFieldPersistence(w,hub);startSortie(w);

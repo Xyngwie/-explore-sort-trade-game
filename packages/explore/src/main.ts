@@ -2,7 +2,7 @@ import { directFieldEntryFromStorage } from "./game/directFieldEntry";
 import { attachFieldPersistence } from "./game/fieldPersistence";
 import { shieldPanelHtml, shieldGroupAt } from "./ui/shieldPanel";
 import { startShieldPickup, dropOwnedShield, takeShieldNotices } from "./game/shieldOperations";
-import { activeStripping, interruptStripping, startStrippingAt } from "./game/strippingRuntime";
+import { activeStripping, interruptStripping, startStrippingAt, canStripWreck } from "./game/strippingRuntime";
 import { shieldHudText } from "./game/shields";
 import { LogPanel, repairSummary, type LogRow } from "./ui/logPanel";
 import { subscribeLogFeed } from "./game/logFeed";
@@ -190,7 +190,7 @@ function sortieEquipmentNote(): string {
   if (!hub) return "";
   const ids = world.deployedInstanceIds.length ? world.deployedInstanceIds : resolveSortieSelection(hub);
   const error = squadEquipmentError(hub, ids);
-  return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
+  return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾・盾回路は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
 }
 const entryCheckpoint = readSortieCheckpoint();
 let entrySaveRefused = false;
@@ -1085,7 +1085,7 @@ function renderDom(): void {
         </div>
         <div class="row">
           ${returnOpen() ? `<button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !captainActive(world) ? "disabled" : ""} title="${captainActive(world) ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!captainActive(world) ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>` : ""}
-          <button type="button" id="btn-strip" class="secondary" ${!world.leader.alive || isOperationTimedOut(world) || wreckCarrierId(world,world.leader.id) ? "disabled" : ""}>残骸盾${stripTargetPending ? "：対象選択" : activeStripping(world,world.leader.id) ? "：剥離中" : ""}</button>
+          ${canStripWreck(world) ? `<button type="button" id="btn-strip" class="secondary" ${!world.leader.alive || isOperationTimedOut(world) || wreckCarrierId(world,world.leader.id) ? "disabled" : ""}>残骸盾${stripTargetPending ? "：対象選択" : activeStripping(world,world.leader.id) ? "：剥離中" : ""}</button>` : ""}
           ${circuitOrderHtml()}
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
@@ -1159,6 +1159,7 @@ function renderDom(): void {
   });
   paintShieldPanel();
   document.getElementById("btn-strip")?.addEventListener("click", () => {
+    if(!canStripWreck(world))return;
     interruptStripping(world,world.leader.id);
     stripTargetPending = !stripTargetPending;
     if (world.circuitPlay) { world.circuitPlay.pending = null; world.circuitPlay.wingSelect = null; }
@@ -1281,7 +1282,7 @@ function paintHudOnly(): void {
   }
   const stripBtn = document.getElementById("btn-strip") as HTMLButtonElement | null;
   if (stripBtn) {
-    stripBtn.disabled = !world.leader.alive || timedOut || !!wreckCarrierId(world,world.leader.id);
+    stripBtn.disabled = !canStripWreck(world) || !world.leader.alive || timedOut || !!wreckCarrierId(world,world.leader.id);
     stripBtn.textContent = `残骸盾${stripTargetPending ? "：対象選択" : activeStripping(world,world.leader.id) ? "：剥離中" : ""}`;
   }
   const extractBtn = document.getElementById("btn-extract") as HTMLButtonElement | null;

@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / 盾回路 作業宣言（2026-10-20）
+- Who: Codex / 実装担当
+- What: cursor/codex-shield-circuit。#314の偽盤効果「盾」、装備制限、剥離権限、元機体効力と進捗保存
+- Why: 神宮承認K1〜K6=A、A1 patch v2.0、互換性要件を解除したpatch v2.1を記載順に適用
+- Scope: 新仕様の盾回路・剥離・保存・敵候補/待ち伏せ。P盾回路/屹立・新しい敵盾AI・旧開発セーブ移行・マージ/デプロイは行わない
+- Status: #313は5c24b7bでマージ済み、Deploy Modules Preview 39399565386 PASS。#314実装完了、Draft提出・再監査待ち。旧進捗互換の保留はv2.1で解消。全workspaceテスト（型検査含む）・全5本番ビルドPASS。390pxの実射撃→端数盾剥離/途中再読込→拾得→15秒帰還、無回路拾得/コマンド制限、HUB重複拒否、#312マス保存/再出撃/盤面再生成、#313全帰還経路/置き去り/交換凍結再開PASS。詳細SHIELD_CIRCUIT_PLAN.md、最新CIはPR本文参照。未マージ・未デプロイ。公開版操作と物理実機はNOT_RUN
+
 ## Codex / 帰還時の盾処理 作業宣言（2026-10-20）
 - Who: Codex / 実装担当
 - What: cursor/codex-shield-return。帰還機の現地投棄と置き去り機の所持盾/交換残り時間保存

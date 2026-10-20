@@ -10,7 +10,7 @@ export type FieldEnemyIdentity = { modelId: MechId; durability: number; circuits
 }[] };
 export type FieldWreck = {
   targetId: string; wreckKey: string; pos: { x: number; y: number };
-  sourceInstanceId: string | null; seconds: number;
+  sourceInstanceId: string | null; seconds: number; shieldMaxHp?: number;
   circuits: { circuitId: string; side: number; effect: number }[];
   legacyAir?: true;
   enemy?: { name: string; maxHp: number; radius: number; heading: number; identity: FieldEnemyIdentity };
@@ -57,6 +57,7 @@ export function normalizeFieldCells(raw: unknown, identities: FieldObjectIdentit
     const targets=new Set<string>(), wreckKeys=new Set<string>();
     for (const w of row.wrecks) {
       if (!obj(w) || !text(w.targetId) || !text(w.wreckKey) || !pos(w.pos) || !finite(w.seconds) || w.seconds < 0 || w.seconds >= 8 ||
+        (w.shieldMaxHp !== undefined && (!finite(w.shieldMaxHp) || w.shieldMaxHp < 50)) ||
         !Array.isArray(w.circuits) || !w.circuits.every(circuit) || !identities?.wrecks[w.wreckKey] ||
         !(w.sourceInstanceId === null || text(w.sourceInstanceId)) ||
         (w.sourceInstanceId === null ? !(enemy(w.enemy) && w.legacyAir === undefined || w.legacyAir === true && w.enemy === undefined && w.targetId.startsWith("a:")) : w.enemy !== undefined || w.legacyAir !== undefined) || targets.has(w.targetId) || wreckKeys.has(w.wreckKey) ||

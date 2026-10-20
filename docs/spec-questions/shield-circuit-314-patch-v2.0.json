@@ -1,0 +1,30 @@
+{
+  "type": "SPEC_DECISION_PATCH",
+  "version": "2.0",
+  "date": "2026-10-20",
+  "target": {
+    "planned_pr": 314,
+    "question_id": "A1"
+  },
+  "record_kind": "approved_decision_extract",
+  "source": "神宮がこの会話へ提示したSPEC_DECISION_PATCH v2.0（必要な決定の抜粋。全文の転載ではない）",
+  "approval": {
+    "approved_by": "神宮",
+    "reviewed_by": "風紀委員",
+    "status": "APPROVED",
+    "choice": "A"
+  },
+  "decision": {
+    "rule_ja": "「残骸盾」コマンドは、作業する機体に盾回路が装備されている場合だけ使用できる。盾回路を装備していない機体は、残骸から盾を剥離できない。",
+    "shield_circuit_required_for_stripping": true,
+    "shield_circuit_required_for_pickup_or_use": false,
+    "source_shield_max_hp": "50＋剥離元機体の盾回路効力（小数保持）",
+    "existing_generated_shields": "HP・最大HP・ID・出自・生成順は変更しない",
+    "K1_to_K6": "すべてAのまま",
+    "legacy_stripping_progress": "保護と再開条件を検討する要求は後続v2.1で解除"
+  },
+  "implementation_scope": {
+    "merge_authorized": false,
+    "deploy_authorized": false
+  }
+}

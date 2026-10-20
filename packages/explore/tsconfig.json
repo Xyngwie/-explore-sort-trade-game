@@ -41,6 +41,7 @@
     "src/wreckStripping.selftest.ts",
     "src/shieldPickup.selftest.ts",
     "src/fieldPersistence.selftest.ts",
-    "src/shieldReturn.selftest.ts"
+    "src/shieldReturn.selftest.ts",
+    "src/shieldCircuit.selftest.ts"
   ]
 }

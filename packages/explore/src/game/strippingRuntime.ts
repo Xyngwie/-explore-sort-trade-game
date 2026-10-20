@@ -3,7 +3,7 @@ import { classifyCircuit, emptyFieldObjectIdentities, type HubSnapshot, type Wre
 import { wreckCarrierId } from './carry';
 import { dist, type Vec2 } from './math';
 import { pushLog } from './orders';
-import { advanceStripping, cancelUnitStripping, reserveStripping, type StrippingSource } from './wreckStripping';
+import { advanceStripping, cancelUnitStripping, reserveStripping, STRIPPED_SHIELD_HP, type StrippingSource } from './wreckStripping';
 import type { Unit, World } from './types';
 export type StrippingRuntime = {
   jobs: import('./wreckStripping').StrippingState['jobs'];
@@ -35,8 +35,12 @@ export function strippingTargets(world: World): Target[] {
   return result;
 }
 /** Explicit leader action only in this PR. No movement toward a distant target. */
-export function startStrippingAt(world: World, point: Vec2, hub: HubSnapshot | null, hitRadius: number): 'started' | 'none' | 'far' | 'busy' {
+export function canStripWreck(world:World,unit:Unit=world.leader):boolean {
+  return (world.circuitPlay?.loadout[unit.id] ?? []).some(c=>c.effectKey==='shield');
+}
+export function startStrippingAt(world: World, point: Vec2, hub: HubSnapshot | null, hitRadius: number): 'started' | 'none' | 'far' | 'busy' | 'locked' {
   const unit = world.leader;
+  if (!canStripWreck(world,unit)) return 'locked';
   if (world.phase !== 'sortie' || !unit.alive || world.operationTimedOut || wreckCarrierId(world, unit.id)) return 'none';
   const target = strippingTargets(world).filter(t => dist(t.pos, point) <= hitRadius).sort((a,b) => dist(a.pos,point) - dist(b.pos,point))[0];
   if (!target) return 'none';
@@ -46,7 +50,8 @@ export function startStrippingAt(world: World, point: Vec2, hub: HubSnapshot | n
   const circuits = target.unit?.enemyIdentity?.circuits ?? world.circuitPlay?.loadout[target.id] ??
     (hub?.circuits ?? []).filter(c => (world.strandedMechs?.find(m => `s:${m.instanceId}` === target.id)?.row.circuitIds ?? []).includes(c.circuitId)).map(classifyCircuit);
   const source: StrippingSource = { targetId: target.id, instanceId: target.instanceId,
-    circuits: circuits.map(c => ({ circuitId: c.circuitId, side: c.side, effect: c.effect })), learningValue: null };
+    circuits: circuits.map(c => ({ circuitId: c.circuitId, side: c.side, effect: c.effect })), learningValue: null,
+    shieldMaxHp: STRIPPED_SHIELD_HP + Math.max(0,circuits.find(c=>c.effectKey==='shield')?.effect ?? 0) };
   world.shieldState ??= { identities: structuredClone(hub?.fieldObjectIdentities ?? emptyFieldObjectIdentities()), equipped: {}, ground: {} };
   world.stripping ??= { jobs: {}, observations: [] };
   const r = reserveStripping(world.stripping, world.shieldState.identities, source, unit.id, unit.pos);

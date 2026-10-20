@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { emptyFieldObjectIdentities, INITIAL_HUB } from '@estg/shared';
+import { classifyCircuit, buildVerifyPerfectLockedBoard, emptyFieldObjectIdentities, INITIAL_HUB } from '@estg/shared';
 import { reserveStripping, advanceStripping, cancelUnitStripping, type StrippingState } from './game/wreckStripping';
 import { activeStripping, startStrippingAt, tickStripping, strippingReport, wreckWasStripped } from './game/strippingRuntime';
 import { createWorld, bootstrapFromSearch, startSortie } from './game/world';
@@ -37,6 +37,7 @@ const source = { targetId:'corpse', instanceId:'old-mech', circuits:[{circuitId:
 }
 function fixture(){
  const w=createWorld(bootstrapFromSearch(''));startSortie(w);attachCircuitPlay(w,null,false);getCoverObjects(w).splice(0);w.containers=[];
+ w.circuitPlay!.loadout[w.leader.id]=[classifyCircuit({circuitId:'worker-shield',circuitBoard:buildVerifyPerfectLockedBoard('test'),restoreState:'bypass',origin:'crafted',equippedTo:null,effectKey:'shield',enemyEffect:4})];
  w.leader.pos={x:600,y:600};w.leader.moveTarget=null;w.leader.playerMoveTarget=null;
  for(const e of w.enemies){e.alive=false;e.hp=0;}
  const e=w.enemies[0]!;e.pos={x:620,y:600};e.enemyIdentity={modelId:'mech_gen1',durability:100,circuits:[{circuitId:'enemy-c',side:2,effectKey:'smg',effect:4,trueBoard:false}]};

@@ -1,0 +1,45 @@
+{
+  "type": "SPEC_DECISION_INTEGRATION",
+  "planned_pr": 314,
+  "date": "2026-10-20",
+  "sources_in_order": [
+    "shield-circuit-314-decision.json",
+    "shield-circuit-314-patch-v2.0.json",
+    "shield-circuit-314-patch-v2.1.json"
+  ],
+  "precedence": "later_overrides_earlier",
+  "K1_to_K6": {
+    "K1": "A",
+    "K2": "A",
+    "K3": "A",
+    "K4": "A",
+    "K5": "A",
+    "K6": "A"
+  },
+  "decision": {
+    "effect_key": "shield",
+    "name_ja": "盾",
+    "board_kind": "false",
+    "max_equipped_circuits_per_mech": 1,
+    "command_ja": "残骸盾",
+    "worker_requires_shield_circuit": true,
+    "pickup_use_require_shield_circuit": false,
+    "generated_max_hp": "50 + source_wreck_mech_shield_circuit_effect",
+    "keep_fraction": true,
+    "worker_effect_added": false,
+    "existing_shield_recalculation": false,
+    "new_progress_save_resume_required": true,
+    "pre_release_save_backward_compatibility_required": false,
+    "legacy_progress_migration_or_resumption_required": false,
+    "legacy_progress_if_available_max_hp": 50,
+    "enemy_highest_shield_behavior": "ambush",
+    "new_enemy_shield_ai": false
+  },
+  "deferred": [
+    "P盾回路",
+    "屹立"
+  ],
+  "unresolved": [],
+  "merge_authorized": false,
+  "deploy_authorized": false
+}

@@ -1,0 +1,236 @@
+{
+  "type": "SPEC_DECISION",
+  "version": "2.0",
+  "date": "2026-10-20",
+  "title": "PR #314 盾回路仕様会議・神宮承認結果",
+  "sender": "inspector",
+  "recipient": "lead",
+  "target": {
+    "repository": "Xyngwie/-explore-sort-trade-game",
+    "planned_pr": 314,
+    "baseline_main_commit": "5c24b7bbf2db7f48000958361114233398041d76",
+    "included_pr": 313
+  },
+  "approval": {
+    "approved_by": "神宮",
+    "reviewed_by": "風紀委員",
+    "status": "PARTIALLY_BLOCKED_BY_SPEC_CONFLICT",
+    "approved_question_ids": [
+      "K1",
+      "K2",
+      "K3",
+      "K4",
+      "K5",
+      "K6"
+    ],
+    "approved_choices": {
+      "K1": "A",
+      "K2": "A",
+      "K3": "A",
+      "K4": "A",
+      "K5": "A",
+      "K6": "A"
+    },
+    "owner_note": "盾回路が「残骸盾」コマンドを開放し、効力値に従って盾の最大耐久値を高める。P盾回路は「屹立」（盾を地面に突き立ててバリケードを作成する）コマンドを開放。",
+    "prior_decisions_revised": false,
+    "implementation_policy": "K1〜K6の確定部分は実装可能。ただし既存仕様との矛盾があるコマンド開放条件と、新規のP盾回路については独断実装しない。"
+  },
+  "decisions": [
+    {
+      "id": "K1",
+      "topic": "effect_pool",
+      "choice": "A",
+      "status": "APPROVED",
+      "rule_ja": "盾回路を偽盤の新しいパッシブ効果として追加する。",
+      "implementation_rules": [
+        "既存の偽盤回路効果候補に盾回路を追加する。",
+        "既存の効果キーや保存済み回路の効果種別を変更しない。",
+        "盾回路用の新しい内部効果キーを使用する。",
+        "真盤の効果として扱わない。",
+        "購入・仕分け・解明は既存の偽盤仕様との整合を維持する。"
+      ]
+    },
+    {
+      "id": "K2",
+      "topic": "duplicates_and_aggregation",
+      "choice": "A",
+      "status": "APPROVED",
+      "rule_ja": "盾回路は同一機体に1枚まで装備できる。",
+      "implementation_rules": [
+        "同じ機体への盾回路の2枚目の装備を拒否する。",
+        "盾回路の効力を複数枚合算しない。",
+        "この制限を盾本体の所持枚数制限に転用しない。",
+        "装備盾は1枚、予備盾は既存積載容量の範囲という仕様を維持する。",
+        "盾本体の重量1を維持する。"
+      ]
+    },
+    {
+      "id": "K3",
+      "topic": "fractional_durability",
+      "choice": "A",
+      "status": "APPROVED",
+      "rule_ja": "剥離で生成する盾の最大耐久は50＋剥離元機体の盾回路効力とし、小数を丸めず保持する。",
+      "formula": {
+        "base_max_hp": 50,
+        "bonus_source": "剥離元の機体に装備されていた盾回路",
+        "max_hp": "50 + shield_circuit_effect",
+        "initial_hp": "max_hp",
+        "rounding": "NONE",
+        "example": {
+          "shield_circuit_effect": 12.75,
+          "max_hp": 62.75,
+          "initial_hp": 62.75
+        }
+      },
+      "implementation_rules": [
+        "剥離作業者の盾回路は計算に使用しない。",
+        "完成した盾の装備者の盾回路も計算に使用しない。",
+        "盾回路がない場合の基本最大耐久は50とする。",
+        "画面表示は既存のHP表示精度に従う。",
+        "生成済み盾のHP・最大HPを後から再計算しない。"
+      ]
+    },
+    {
+      "id": "K4",
+      "topic": "old_incomplete_stripping",
+      "choice": "A",
+      "status": "APPROVED",
+      "rule_ja": "#314より前に開始された剥離途中進捗は、従来どおり最大耐久50の盾として完了する。",
+      "implementation_rules": [
+        "旧進捗には新しい盾回路ボーナスを遡及適用しない。",
+        "#314以後に新しく開始した剥離だけ新しい耐久計算を使用する。",
+        "剥離進捗の残り時間、回路情報、残骸位置、個体識別情報は維持する。",
+        "旧進捗を再開したという理由だけで新規剥離として扱わない。",
+        "既に生成済みの盾はHP・最大HP・ID・出自・生成順を変更しない。",
+        "新旧の作業を区別できる保存情報または互換判定を設ける。"
+      ]
+    },
+    {
+      "id": "K5",
+      "topic": "display_name",
+      "choice": "A",
+      "status": "APPROVED",
+      "rule_ja": "盾回路の表示名は「盾」とする。",
+      "display": {
+        "circuit_name": "盾",
+        "existing_command_name": "残骸盾",
+        "p_shield_command_name": "屹立"
+      },
+      "implementation_rules": [
+        "風紀委員の旧推奨「盾強化」は採用しない。",
+        "回路名「盾」と操作名「残骸盾」を区別する。",
+        "効果説明では、剥離元機体の盾回路効力が生成盾の最大耐久へ加算されることを示す。",
+        "既存の残骸盾コマンドを無断で改名しない。"
+      ]
+    },
+    {
+      "id": "K6",
+      "topic": "enemy_generation_and_behavior",
+      "choice": "A",
+      "status": "APPROVED",
+      "rule_ja": "敵の偽盤回路候補にも盾回路を含め、盾回路が最高効力の場合は既存の「待ち伏せ」行動を使用する。",
+      "implementation_rules": [
+        "敵の回路生成候補に盾回路を追加する。",
+        "盾回路が行動選択上の最高効力であれば既存の待ち伏せ行動へ対応付ける。",
+        "新しい敵AIを実装しない。",
+        "敵が盾を自動生成・回収・装備する新しい行動を追加しない。",
+        "撃破された敵の元の盾回路情報を剥離時の耐久計算へ引き継ぐ。",
+        "敵の回路を撃破後に再抽選しない。"
+      ]
+    }
+  ],
+  "owner_additional_instructions": [
+    {
+      "id": "A1",
+      "topic": "shield_circuit_command_unlock",
+      "owner_statement": "盾回路が「残骸盾」コマンドを開放し、効力値に従って盾の最大耐久値を高める。",
+      "approval": "OWNER_STATED",
+      "implementation_status": "HOLD_PENDING_CLARIFICATION",
+      "confirmed_nonconflicting_part": "盾回路の効力値に従って生成盾の最大耐久値を高める。",
+      "conflicting_existing_rule": "盾回路がなくても盾の剥離・回収・使用はできる。",
+      "required_clarification": "盾回路がない機体でも残骸盾コマンドを実行できるのか、それとも今回の追加指示でコマンドの使用条件を変更するのかを神宮に確認する。",
+      "do_not_assume": [
+        "既存の剥離権限を自動的に廃止しない。",
+        "新しい指示を黙って旧仕様の改訂として処理しない。",
+        "コマンド表示条件だけの変更だと独断で解釈しない。"
+      ]
+    },
+    {
+      "id": "A2",
+      "topic": "p_shield_circuit",
+      "owner_statement": "P盾回路は「屹立」（盾を地面に突き立ててバリケードを作成する）コマンドを開放する。",
+      "approval": "OWNER_STATED",
+      "implementation_status": "SPEC_RECORDED_IMPLEMENTATION_DEFERRED",
+      "confirmed_concept": {
+        "circuit": "P盾回路",
+        "command": "屹立",
+        "purpose": "盾を地面に突き立ててバリケードを作成する"
+      },
+      "unresolved_details": [
+        "P盾回路の効果区分と入手経路",
+        "盾回路との装備関係・重複制限",
+        "屹立で使用できる盾の条件",
+        "盾を設置した後の所持・重量・回収の扱い",
+        "バリケードの耐久・防御方向・当たり判定",
+        "設置・撤去に必要な時間",
+        "出撃間保存と盤面再生成時の扱い"
+      ],
+      "instruction": "P盾回路と屹立の概念を記録する。未決定の挙動はSPEC_QUESTIONを提出し、承認なく実装しない。"
+    }
+  ],
+  "preserved_existing_rules": [
+    "盾の自動初期装備は行わない。",
+    "盾本体の重量は1。",
+    "装備盾は1枚、予備盾は既存積載容量の範囲とする。",
+    "複数の盾を同時に防御へ使用しない。",
+    "#313の帰還・置き去り・交換進捗・盤面再生成仕様を変更しない。",
+    "#312の地面盾・剥離途中残骸の出撃間保存を維持する。",
+    "旧セーブに保存された回路効果を再抽選しない。",
+    "旧回路の効果キーを変更しない。",
+    "生成済み盾の個体情報とHPを変更しない。",
+    "盾回路なしの剥離許可についてはA1の矛盾解消まで従来規則を維持する。"
+  ],
+  "scope": {
+    "in": [
+      "盾回路の偽盤効果登録",
+      "盾回路の入手候補・装備制限・表示",
+      "剥離元の盾回路による最大耐久加算",
+      "旧進捗・旧保存データとの互換性",
+      "敵回路候補への盾回路追加",
+      "盾回路が最高効力の場合の既存待ち伏せ行動への対応付け"
+    ],
+    "out": [
+      "貫通弾",
+      "敵による盾生成・拾得の新AI",
+      "新しい盾の回収操作",
+      "盾のHUB持ち帰り",
+      "P盾回路・屹立のゲーム実装",
+      "学習AI",
+      "統一マップ",
+      "サーバー"
+    ]
+  },
+  "verification_requirements": [
+    "偽盤の候補として盾回路が生成・購入・仕分け・解明できる。",
+    "真盤の効果として盾回路を誤登録しない。",
+    "盾回路を同一機体に2枚装備できない。",
+    "剥離元の盾回路効力12.75から最大HP62.75の盾を生成できる。",
+    "作業者・盾装備者の回路効力を混入しない。",
+    "旧剥離途中進捗は最大HP50で完了する。",
+    "既に生成済みの盾のHP・ID・生成順が変化しない。",
+    "敵の回路候補に盾回路が含まれる。",
+    "敵の盾回路が最高効力の場合に既存の待ち伏せ行動になる。",
+    "旧セーブで既存回路の効果種別が変化しない。",
+    "#312および#313の盾保存・帰還・置き去り・交換再開を回帰検証する。",
+    "全workspaceテスト・型検査・全5本番ビルドを実施する。",
+    "ブラウザー実操作の回帰テストを実施する。",
+    "物理実機テストは盾関連実装完了後に第三者エージェントへ委任する。"
+  ],
+  "handoff": {
+    "recipient": "Codex実装エージェント",
+    "instruction": "K1〜K6の承認済み仕様を実装する。A1のコマンド開放条件については既存仕様との矛盾を神宮に確認し、独断で変更しない。A2のP盾回路・屹立は今回実装せず、後続の仕様検討事項として記録する。実装後はDraft PRと検証結果を提示し、風紀委員の監査を待つ。",
+    "draft_pr_allowed_for_resolved_scope": true,
+    "merge_authorized": false,
+    "deploy_authorized": false
+  }
+}
