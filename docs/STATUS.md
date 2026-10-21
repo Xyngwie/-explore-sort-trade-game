@@ -2,19 +2,26 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / #316 盾関連統合確認（2026-10-21）
+- Who: Codex / 実装担当
+- What: cursor/codex-shield-integration-316。#307〜315の仕様/実装/テスト照合・操作統合検証・台帳更新
+- Why: 神宮承認SPEC_DECISION R1=A
+- Scope: 調査/検証/文書更新と現行mainで再現した不具合のみ修正。新機能・未承認仕様・マージ/デプロイは対象外
+- Status: #315は7efe66cでマージ済み、公開デプロイ39610010826 PASS。R316-01（P盾不適格なのに屹立ボタンが見える）をローカル/公開版で再現し、限定CSSと可視性テストを修正。全workspace型検査/テスト・全5ビルド、ローカル8本の統合操作と修正後2本PASS。公開5モジュール起動/基本操作/P盾保存再開PASSだが、公開版の表示不具合は未更新のためFAILと分離。人的手動/物理実機はNOT_RUN。台帳・第三者手順・証拠をSHIELD_INTEGRATION_316.md等に更新。Draft提出・再監査待ち、最終head/CIはPR本文参照。未マージ・未デプロイ
+
 ## Codex / P盾回路・屹立 作業宣言（2026-10-20）
 - Who: Codex / 実装担当
 - What: cursor/codex-p-shield。#315 P盾回路・屹立の実装
 - Why: 神宮の「314入りました。315準備お願いします」
 - Scope: 神宮承認P1〜P10とIMPLEMENTATION_ORDERに従い実装・検証・Draft提出。マージ・デプロイは行わない
-- Status: #314は622fc43でマージ済み、Deploy Modules Preview 39414575710 PASS。屹立は概念のみ確定、P1〜P10をdocs/spec-questions/p-shield-315.jsonへ全文提出。JSON構文/ID/未選択状態を検証PASS。ゲームテストはNOT_RUN（コード変更なし）。IMPLEMENTATION_ORDER v1.0受領、未決定事項は解消。P盾/隊長・僚機操作/矩形物理/撤去/途中再開/帰還保存を実装。全workspaceテスト（型検査含む）・全5ビルドPASS。390pxで両作業の途中再読込、隊長/個別僚機、別2秒拾得、15秒帰還/再出撃復元、全終了経路/交換/盤面再生成、#309〜314の剥離/精算/保存回帰PASS。Draft提出・再監査待ち。最新head/CIはPR本文、詳細P_SHIELD_PLAN.md。公開版手動/物理端末NOT_RUN、未マージ・未デプロイ
+- Status: #315は7efe66cでマージ済み、Deploy Modules Preview 39610010826 PASS。以下は提出当時の履歴（現在の未実装/未マージの意味ではない）：#314は622fc43でマージ済み、Deploy Modules Preview 39414575710 PASS。屹立は概念のみ確定、P1〜P10をdocs/spec-questions/p-shield-315.jsonへ全文提出。JSON構文/ID/未選択状態を検証PASS。ゲームテストはNOT_RUN（コード変更なし）。IMPLEMENTATION_ORDER v1.0受領、未決定事項は解消。P盾/隊長・僚機操作/矩形物理/撤去/途中再開/帰還保存を実装。全workspaceテスト（型検査含む）・全5ビルドPASS。390pxで両作業の途中再読込、隊長/個別僚機、別2秒拾得、15秒帰還/再出撃復元、全終了経路/交換/盤面再生成、#309〜314の剥離/精算/保存回帰PASS。Draft提出・再監査待ち。最新head/CIはPR本文、詳細P_SHIELD_PLAN.md。公開版手動/物理端末NOT_RUN、未マージ・未デプロイ
 
 ## Codex / 盾回路 作業宣言（2026-10-20）
 - Who: Codex / 実装担当
 - What: cursor/codex-shield-circuit。#314の偽盤効果「盾」、装備制限、剥離権限、元機体効力と進捗保存
 - Why: 神宮承認K1〜K6=A、A1 patch v2.0、互換性要件を解除したpatch v2.1を記載順に適用
 - Scope: 新仕様の盾回路・剥離・保存・敵候補/待ち伏せ。P盾回路/屹立・新しい敵盾AI・旧開発セーブ移行・マージ/デプロイは行わない
-- Status: #313は5c24b7bでマージ済み、Deploy Modules Preview 39399565386 PASS。#314実装完了、Draft提出・再監査待ち。旧進捗互換の保留はv2.1で解消。全workspaceテスト（型検査含む）・全5本番ビルドPASS。390pxの実射撃→端数盾剥離/途中再読込→拾得→15秒帰還、無回路拾得/コマンド制限、HUB重複拒否、#312マス保存/再出撃/盤面再生成、#313全帰還経路/置き去り/交換凍結再開PASS。詳細SHIELD_CIRCUIT_PLAN.md、最新CIはPR本文参照。未マージ・未デプロイ。公開版操作と物理実機はNOT_RUN
+- Status: #314は622fc43でマージ済み、Deploy Modules Preview 39414575710 PASS。以下は提出当時の履歴：#313は5c24b7bでマージ済み、Deploy Modules Preview 39399565386 PASS。#314実装完了、Draft提出・再監査待ち。旧進捗互換の保留はv2.1で解消。全workspaceテスト（型検査含む）・全5本番ビルドPASS。390pxの実射撃→端数盾剥離/途中再読込→拾得→15秒帰還、無回路拾得/コマンド制限、HUB重複拒否、#312マス保存/再出撃/盤面再生成、#313全帰還経路/置き去り/交換凍結再開PASS。詳細SHIELD_CIRCUIT_PLAN.md、最新CIはPR本文参照。未マージ・未デプロイ。公開版操作と物理実機はNOT_RUN
 
 ## Codex / 帰還時の盾処理 作業宣言（2026-10-20）
 - Who: Codex / 実装担当

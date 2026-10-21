@@ -1,0 +1,258 @@
+{
+  "date": "2026-10-21",
+  "baseline_main": "7efe66c460973023a16bcb8dddb8bdb4e55e211a",
+  "deploy": {
+    "run": 39610010826,
+    "status": "PASS",
+    "head_matches_baseline": true
+  },
+  "merged_prs": [
+    {
+      "merge_commit_sha": "7efe66c460973023a16bcb8dddb8bdb4e55e211a",
+      "merged_at": "2026-10-21T13:40:13Z",
+      "number": 315,
+      "title": "feat(explore): P盾回路・屹立と矩形バリケードの撤去・永続化"
+    },
+    {
+      "merge_commit_sha": "622fc436e745bb7dfd5b14b9b3475641b7e595e5",
+      "merged_at": "2026-10-20T11:23:11Z",
+      "number": 314,
+      "title": "feat(explore): 盾回路・残骸盾の装備条件と元機体効力による耐久加算"
+    },
+    {
+      "merge_commit_sha": "5c24b7bbf2db7f48000958361114233398041d76",
+      "merged_at": "2026-10-20T09:17:10Z",
+      "number": 313,
+      "title": "feat(explore): 帰還時の盾投棄と置き去り機の所持盾・交換状態保存"
+    },
+    {
+      "merge_commit_sha": "825b2e8e0f681ae4c781e3f06a379fb8857109bf",
+      "merged_at": "2026-10-20T07:50:15Z",
+      "number": 312,
+      "title": "feat(explore): 地面盾と残骸の剥離進捗を再出撃へ引き継ぐ"
+    },
+    {
+      "merge_commit_sha": "3a524fdcfec9e3f9b9243c427a3d5c26054dc388",
+      "merged_at": "2026-10-20T04:57:43Z",
+      "number": 311,
+      "title": "feat(explore): 盾の回収・装備と予備盾の自動交換"
+    },
+    {
+      "merge_commit_sha": "1ce0d498ce235df416c84c2e0267d9300719c68f",
+      "merged_at": "2026-10-19T13:05:42Z",
+      "number": 310,
+      "title": "feat(explore): 残骸の装甲剥離と地面盾生成"
+    },
+    {
+      "merge_commit_sha": "dfe0f33af0e121918948f23719565b10edd606e0",
+      "merged_at": "2026-10-19T10:44:41Z",
+      "number": 309,
+      "title": "feat(explore): 盾防御（弾120°・接近戦270°）と耐久・積載"
+    },
+    {
+      "merge_commit_sha": "7b1112af87820a00df6802d04eb8e1d4a1b8982b",
+      "merged_at": "2026-10-18T22:07:21Z",
+      "number": 308,
+      "title": "feat(explore): 修復ログと選択・未読スクロールUI"
+    },
+    {
+      "merge_commit_sha": "dc1438cf24bdc72aca289206f5409b5a833b03c1",
+      "merged_at": "2026-10-18T21:00:06Z",
+      "number": 307,
+      "title": "feat(shared): 残骸・盾の識別子と保存修復基盤"
+    }
+  ],
+  "local_browser": {
+    "viewport": [
+      390,
+      844
+    ],
+    "browser": "Chromium",
+    "method": "Playwright with isolated checkpoints",
+    "results": [
+      {
+        "suite": "log-ui",
+        "script": "verify-explore-log-ui.cjs",
+        "environment": {},
+        "status": "PASS",
+        "duration_sec": 8.2,
+        "output": "Log UI browser PASS: clipboard success/failure, native selection/gesture suppression, stable DOM, scroll/unread >999, row visibility, resize anchors/cancellation/follow\nProduction Explore browser PASS: saved repair/copy/toast, stable selection through HUD/log arrivals, first map gesture blocked, next gesture/old checkpoint work"
+      },
+      {
+        "suite": "shield-core",
+        "script": "verify-shield-core.cjs",
+        "environment": {},
+        "status": "PASS",
+        "duration_sec": 9.1,
+        "output": "Shield core browser 390x844 PASS: real front/rear/breaking/cover/EMP hits, marker/HUD/load, reload IDs/HP and legacy checkpoint"
+      },
+      {
+        "suite": "shield-pickup",
+        "script": "verify-shield-pickup.cjs",
+        "environment": {},
+        "status": "PASS",
+        "duration_sec": 22.5,
+        "output": "Shield pickup browser 390x844 PASS: direct ground tap/list order/stable DOM, 2s pickup and resume, reserve/load/full/no auto-disposal, manual drop, real enemy hit/break/2s locked exchange/reload"
+      },
+      {
+        "suite": "wreck-stripping",
+        "script": "verify-wreck-stripping.cjs",
+        "environment": {
+          "SHIELD_SOURCE_EFFECT": "12.75"
+        },
+        "status": "PASS",
+        "duration_sec": 30.9,
+        "output": "Wreck stripping browser 390x844 PASS: live enemy shot down, button/target, 8s generation, interrupted reload/resume, source HP/IDs, 2s pickup/equip UI, actual 15s return, stripped enemy excluded, unstripped control acquired, result reload"
+      },
+      {
+        "suite": "shield-circuit",
+        "script": "verify-shield-circuit.cjs",
+        "environment": {},
+        "status": "PASS",
+        "duration_sec": 6.8,
+        "output": "Shield circuit browser 390x844 PASS: no-circuit command hidden, real ground tap/list/2s pickup and checkpoint preserving exact HP/identity; HUB name/source explanation and duplicate equip refusal"
+      },
+      {
+        "suite": "field-persistence",
+        "script": "verify-field-persistence.cjs",
+        "environment": {},
+        "status": "PASS",
+        "duration_sec": 32.1,
+        "output": "Field persistence browser 390x844 PASS: actual 15s return/save/result reload/redeploy, exact HP/IDs/circuits, remaining stripping time and 2s pickup, fresh live enemies, direct shared-board HQ/no scouting, new board creation, real Invade regeneration/high-water, refused seed save blocks deploy"
+      },
+      {
+        "suite": "barricades",
+        "script": "verify-barricades.cjs",
+        "environment": {},
+        "status": "PASS",
+        "duration_sec": 28.0,
+        "output": "Barricades browser 390x844 PASS: leader/individual wingman own commands, 2s construction, checkpoint/offline pause, rectangle rendering, dismantle checkpoint/remaining time, separate 2s pickup, precise identity, real 15s return/save/redeploy wall restoration"
+      },
+      {
+        "suite": "all-exits-barricades",
+        "script": "verify-shield-return.cjs",
+        "environment": {
+          "VERIFY_BARRICADES": "1"
+        },
+        "status": "PASS",
+        "duration_sec": 24.0,
+        "output": "Shield return browser PASS: normal\nShield return browser PASS: exchange\nShield return browser PASS: rescue\nShield return browser PASS: alive-timeout\nShield return browser PASS: dead-timeout\nShield return browser PASS: missed"
+      }
+    ]
+  },
+  "fixed_browser": {
+    "shield_circuit": {
+      "status": "PASS",
+      "output": "Shield circuit browser 390x844 PASS: no-circuit command hidden, real ground tap/list/2s pickup and checkpoint preserving exact HP/identity; HUB name/source explanation and duplicate equip refusal"
+    },
+    "barricades": {
+      "status": "PASS",
+      "output": "Barricades browser 390x844 PASS: leader/individual wingman own commands, 2s construction, checkpoint/offline pause, rectangle rendering, dismantle checkpoint/remaining time, separate 2s pickup, precise identity, real 15s return/save/redeploy wall restoration"
+    }
+  },
+  "public_browser": {
+    "method": "Playwright (not human manual test)",
+    "boot_and_basic": [
+      {
+        "module": "hub",
+        "url": "https://xyngwie.github.io/-explore-sort-trade-game/",
+        "status": "PASS",
+        "http_status": 200,
+        "scope": "page_boot_only",
+        "scripts": [
+          "https://xyngwie.github.io/-explore-sort-trade-game/assets/index-BPutzgCL.js"
+        ]
+      },
+      {
+        "module": "explore",
+        "url": "https://xyngwie.github.io/-explore-sort-trade-game/explore/",
+        "status": "PASS",
+        "http_status": 200,
+        "scope": "page_boot_only",
+        "scripts": [
+          "https://xyngwie.github.io/-explore-sort-trade-game/explore/assets/index-B3pIiSBC.js"
+        ]
+      },
+      {
+        "module": "sort",
+        "url": "https://xyngwie.github.io/-explore-sort-trade-game/sort/",
+        "status": "PASS",
+        "http_status": 200,
+        "scope": "page_boot_only",
+        "scripts": [
+          "https://xyngwie.github.io/-explore-sort-trade-game/sort/assets/index-nBI-t0B-.js"
+        ]
+      },
+      {
+        "module": "invade",
+        "url": "https://xyngwie.github.io/-explore-sort-trade-game/invade/",
+        "status": "PASS",
+        "http_status": 200,
+        "scope": "page_boot_only",
+        "scripts": [
+          "https://xyngwie.github.io/-explore-sort-trade-game/invade/assets/index-DgZZBPyO.js"
+        ]
+      },
+      {
+        "module": "restore",
+        "url": "https://xyngwie.github.io/-explore-sort-trade-game/restore/",
+        "status": "PASS",
+        "http_status": 200,
+        "scope": "page_boot_only",
+        "scripts": [
+          "https://xyngwie.github.io/-explore-sort-trade-game/restore/assets/index-Cd07ZBEK.js"
+        ]
+      },
+      {
+        "scenario": "no-P barricade command visibility",
+        "status": "FAIL",
+        "expected": "hidden",
+        "observed": "visible despite hidden=true",
+        "known_issue": "R316-01"
+      },
+      {
+        "scenario": "fresh seed -> Explore sortie -> movement -> checkpoint",
+        "status": "PASS",
+        "no_initial_shield": true,
+        "no_unearned_strip_or_barricade_command": true
+      }
+    ],
+    "barricades": {
+      "status": "PASS",
+      "fixture_source": "local Vite; production assets run all subsequent actions",
+      "output": "Barricades browser 390x844 PASS: leader/individual wingman own commands, 2s construction, checkpoint/offline pause, rectangle rendering, dismantle checkpoint/remaining time, separate 2s pickup, precise identity, real 15s return/save/redeploy wall restoration",
+      "script_version": "baseline script plus FIXTURE_BASE_URL support, before new R316-01 visibility assertions"
+    },
+    "known_issue": {
+      "id": "R316-01",
+      "status": "FAIL",
+      "expected": "ineligible P shield command hidden",
+      "observed": "hidden=true but display:flex, approximately49.97x35.38px",
+      "local_fixed": "PASS: display:none, 0x0px",
+      "public_fix_deployed": false
+    }
+  },
+  "human_public_manual": "NOT_RUN",
+  "physical_smartphone": "NOT_RUN",
+  "random_long_play": "NOT_RUN",
+  "new_deploy": "NOT_TRIGGERED",
+  "unreproduced_bugs": [],
+  "excluded": [
+    "new combat features",
+    "Q175-177 server implementation",
+    "Q178 decision",
+    "unified map",
+    "learning AI"
+  ],
+  "local_tests": {
+    "all_workspace_tests_and_typecheck": "PASS",
+    "production_builds": {
+      "explore": "PASS",
+      "trade": "PASS",
+      "sort": "PASS",
+      "invade": "PASS",
+      "restore": "PASS"
+    }
+  },
+  "ci": "see final PR head and CI URL in PR body"
+}
