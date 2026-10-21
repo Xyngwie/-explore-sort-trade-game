@@ -597,3 +597,6 @@ button.cover-active {
 .log-unread[hidden] { display: none; }
 
 .log:empty::before { content: "戦術／戦報はここに出ます。"; color: #9aa0a6; }
+
+/* #316: authored button layout must not override the P-shield eligibility gate. */
+#btn-barricade[hidden] { display: none; }

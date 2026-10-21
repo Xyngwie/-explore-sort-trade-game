@@ -1,0 +1,28 @@
+{
+  "type": "SPEC_DECISION",
+  "sender": "inspector",
+  "recipient": "lead",
+  "target": "#316",
+  "source": "docs/spec-questions/next-316.json",
+  "status": "APPROVED",
+  "approved_by": "神宮",
+  "decisions": {"R1":"A"},
+  "scope": {
+    "title": "盾関連の統合確認・仕様台帳更新",
+    "baseline_main": "7efe66c460973023a16bcb8dddb8bdb4e55e211a",
+    "included_prs": "#307〜315",
+    "requirements": [
+      "確定仕様・実装コード・既存テストを照合する",
+      "実装済み・留保・未確認を区別して台帳を更新する",
+      "通常盾とP盾・屹立の操作を統合検証する",
+      "途中再読込・帰還・救助・時間切れ・置き去り・再出撃・盤面再生成を確認する",
+      "盾ID・HP・所有状態の重複や消失を確認する",
+      "ローカルブラウザー・公開版手動操作・物理実機の検証結果を分けて記録する",
+      "現行mainで再現した不具合のみ既存承認仕様の範囲で修正する",
+      "第三者向け検証手順と期待結果を整理する"
+    ],
+    "excluded": ["貫通弾などの新戦闘機能","Q175〜177のサーバー実装","Q178の未決定仕様","統一マップ","学習AI","未承認の仕様変更"]
+  },
+  "execution": {"investigation_and_validation":true,"documentation_update":true,"bugfix_if_reproduced":true,"new_feature_implementation":false,"create_pr_only_if_needed":true,"merge":false,"deploy":false},
+  "escalation": {"unreproduced_bug":"未確認として記録する","new_spec_required":"SPEC_QUESTIONを提出して判断を待つ","no_bug_found":"検証結果と台帳更新を成果として報告する。不要なゲームコード変更を行わない"}
+}

@@ -6,7 +6,7 @@ const base=process.env.EXPLORE_BASE_URL||'http://127.0.0.1:5173';
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  try{
- const seed=await browser.newPage();await seed.goto(base);
+ const seed=await browser.newPage();await seed.goto(process.env.FIXTURE_BASE_URL||base);
  const fixture=await seed.evaluate(async url=>{
   const s=await import(url),{createWorld,bootstrapFromSearch,startSortie}=await import('/src/game/world.ts');
   const {attachCircuitPlay}=await import('/src/game/circuitPlay.ts'),{attachLostMechContext}=await import('/src/game/lostMechs.ts'),{attachFieldPersistence}=await import('/src/game/fieldPersistence.ts');
@@ -30,6 +30,7 @@ const base=process.env.EXPLORE_BASE_URL||'http://127.0.0.1:5173';
  let saved=await p.evaluate(()=>JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body);assert(saved.barricades.jobs.leader.seconds>0&&saved.barricades.jobs.leader.seconds<2);assert(saved.shieldState.equipped.leader);
  const progress=saved.barricades.jobs.leader.seconds;await p.waitForTimeout(600);assert.equal((await p.evaluate(()=>JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body)).barricades.jobs.leader.seconds,progress,'offline/paused no progress');
  await p.mouse.click(5,5);await p.waitForFunction(()=>document.body.textContent.includes('屹立：盾を設置しました'));
+ assert(await p.locator('#btn-barricade').isHidden(),'P circuit without equipped shield must hide command after construction');
  await p.locator(`[data-wing-select="${fixture.wing}"]`).click();await p.locator('[data-wing-act="barricade"]').click();await p.waitForTimeout(2300);
  await p.reload();await p.locator('#sortie-paused').waitFor();saved=await p.evaluate(()=>JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body);
  assert.equal(Object.keys(saved.barricades.walls).length,2);assert.equal(saved.barricades.walls.leader.heading,0);assert.deepEqual(saved.shieldState.identities.shields,fixture.identity);assert.equal(saved.shieldState.equipped[fixture.wing],undefined);
@@ -38,7 +39,7 @@ const base=process.env.EXPLORE_BASE_URL||'http://127.0.0.1:5173';
  await p.locator('[data-barricade-dismantle="leader"]').click();await p.waitForTimeout(750);await p.reload();await p.locator('#sortie-paused').waitFor();saved=await p.evaluate(()=>JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body);assert(saved.barricades.jobs.leader.kind==='dismantle');assert(saved.barricades.jobs.leader.seconds>0&&saved.barricades.jobs.leader.seconds<2);
  await p.mouse.click(5,5);await p.waitForFunction(()=>document.body.textContent.includes('撤去：盾を地面に戻しました'));await p.waitForFunction(()=>window.groundPoint);
  await p.locator('#map').scrollIntoViewIfNeeded();point=await p.evaluate(()=>{const c=document.querySelector('#map'),r=c.getBoundingClientRect(),v=window.groundPoint;return{x:r.left+v.x*r.width/c.width,y:r.top+v.y*r.height/c.height};});await p.mouse.click(point.x,point.y);
- await p.locator('[data-shield-pick="leader"]').click();await p.locator('[data-shield-drop="leader"]').waitFor();assert((await p.locator('#hud-speed').innerText()).includes('盾 47.3/62.8'));
+ await p.locator('[data-shield-pick="leader"]').click();await p.locator('[data-shield-drop="leader"]').waitFor();assert((await p.locator('#hud-speed').innerText()).includes('盾 47.3/62.8'));assert(await p.locator('#btn-barricade').isVisible(),'own P circuit plus re-equipped shield reveals command');
  await p.screenshot({path:'/tmp/pr315-barricades-mobile.png',fullPage:true});
  await p.locator('#btn-extract').click();await p.locator('#btn-again').waitFor({timeout:26000});
  const hub=await p.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub,fixture.key);assert(hub.fieldCells[0].barricades.wing);assert(hub.fieldCells[0].ground.leader);assert.deepEqual(hub.fieldObjectIdentities.shields.wing,fixture.identity.wing);

@@ -23,10 +23,12 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
  },data);
  const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto('http://127.0.0.1:5173');await p.locator('#sortie-paused').waitFor();await p.mouse.click(5,5);
  assert.equal(await p.locator('#btn-strip').count(),0,'no circuit: no stripping command');
+ assert(await p.locator('#btn-barricade').isHidden(),'no P circuit: barricade command must be visually hidden, not only hidden=true');
  await p.waitForFunction(()=>window.shieldPoint);await p.locator('#map').scrollIntoViewIfNeeded();
  const pt=await p.evaluate(()=>{const c=document.querySelector('#map'),r=c.getBoundingClientRect(),v=window.shieldPoint;return{x:r.left+v.x*r.width/c.width,y:r.top+v.y*r.height/c.height};});
  await p.mouse.click(pt.x,pt.y);await p.locator('[data-shield-pick="ground"]').click();await p.locator('[data-shield-drop="ground"]').waitFor();
  assert((await p.locator('#hud-speed').innerText()).includes('盾 17.3/62.8'));
+ assert(await p.locator('#btn-barricade').isHidden(),'equipped shield alone must not reveal barricade command');
  await p.reload();await p.locator('#sortie-paused').waitFor();
  const saved=await p.evaluate(()=>JSON.parse(localStorage.getItem('estg.sortieCheckpoint')).body);assert.deepEqual(saved.shieldState.identities.shields.ground,data.item);assert.equal(saved.shieldState.equipped[saved.leader.id].key,'ground');
  await p.screenshot({path:'/tmp/pr314-no-circuit-pickup-mobile.png',fullPage:true});await ctx.close();
