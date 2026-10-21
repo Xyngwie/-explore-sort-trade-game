@@ -1,0 +1,76 @@
+{
+  "sender": "lead",
+  "recipient": "inspector",
+  "type": "SPEC_QUESTION",
+  "payload": {
+    "title": "#316の実装対象・盾関連実装後の優先順位",
+    "status": "HOLD",
+    "date": "2026-10-21",
+    "details": "神宮の「315入りました。316準備」に基づく調査。#315後の新機能順序を承認済みとする記録は確認できないため、次の対象を独断で決めない。★は未承認の推奨。実装対象をSPEC_DECISIONで指定してください。",
+    "baseline": {
+      "repository": "Xyngwie/-explore-sort-trade-game",
+      "main_commit": "7efe66c460973023a16bcb8dddb8bdb4e55e211a",
+      "included_pr": 315,
+      "deploy_run": 39610010826,
+      "deploy_status": "PASS",
+      "public_manual_play": "NOT_RUN"
+    },
+    "planned_pr": 316,
+    "pr": null,
+    "confirmed_rules": [
+      "#307〜315で盾のID/ログ・防御・剥離・回収/交換・マス保存・帰還/置き去り・通常盾回路・P盾/屹立が実装済み。",
+      "過去の設計記録の未実装表示だけで、実装済み機能を再実装しない。",
+      "物理実機は盾関連実装完了後の第三者一括検証へ回すという承認記録がある。検証済みとは扱わない。",
+      "貫通弾は#314などの範囲外として記録されているが、次に実装する承認や具体仕様は未確認。",
+      "Q175〜177のサーバー受理/切断中継続には将来の実行基盤が必要。ブラウザー内の排他/一時停止で達成した扱いにしない。",
+      "Q178のログ集約単位は未決定。",
+      "マージ/デプロイや新仕様の独断決定は行わない。"
+    ],
+    "in": [
+      "次の対象の優先順位決定",
+      "実装済み範囲と留保事項の照合",
+      "統合検証の準備"
+    ],
+    "out": [
+      "ゲームコード変更",
+      "サーバーや貫通弾の未承認実装",
+      "PR番号を消費する準備だけのPR作成",
+      "マージ/デプロイ"
+    ],
+    "unresolved": [
+      {
+        "id": "R1",
+        "topic": "next_scope",
+        "question_ja": "#316の対象はどれにしますか？",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：盾関連の統合確認・仕様台帳更新",
+            "description_ja": "#307〜315を通した検証資料と台帳を整備する。再現した不具合は既存承認仕様の範囲で修正する。物理実機の第三者検証へ渡す。新しいゲーム仕様は追加しない。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "貫通弾など次の戦闘機能",
+            "description_ja": "まず対象機能と仕様会議の議題を確定する。貫通対象・盾との関係・効力などは未決定のため、選択だけでコード実装を開始しない。"
+          },
+          {
+            "choice": "C",
+            "label_ja": "サーバー化の実現性調査",
+            "description_ja": "Q175〜177を実現する実行基盤とゼロ運用費の条件を調査する。サーバー新設・契約・公開はせず、Q178も別途判断する。"
+          }
+        ],
+        "selected": null
+      }
+    ],
+    "scopeLockViolation": false,
+    "tests": {
+      "selfTest": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "build": "NOT_RUN",
+      "ci": "NOT_RUN",
+      "previewPlay": "NOT_RUN",
+      "deploy": "NOT_TRIGGERED"
+    },
+    "requested_response": "R1の選択を返してください。Bなら対象機能、Cなら調査範囲も指定してください。Aの場合も、未再現の報告を不具合として確定せず、仕様変更が必要になれば別SPEC_QUESTIONへ差し戻します。"
+  }
+}
