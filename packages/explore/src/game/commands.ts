@@ -1,3 +1,4 @@
+import { interruptBarricade } from "./barricades";
 import { interruptStripping } from "./strippingRuntime";
 /**
  * Execution-side gate for player-issued Explore commands.
@@ -111,7 +112,10 @@ export function executeExploreCommand(
     }
     return denyLocked(world, id);
   }
-  if (!isWingOrderCommandId(id)) interruptStripping(world,world.leader.id);
+  if (!isWingOrderCommandId(id)) {
+    interruptStripping(world,world.leader.id);interruptBarricade(world,world.leader.id);
+    if(["camp_unload","camp_pickup","purge","scatter_search"].includes(id))for(const u of world.wingmen)interruptBarricade(world,u.id);
+  }
   switch (req.id) {
     case "extract":
       return { status: "done", id, result: requestExtract(world) };

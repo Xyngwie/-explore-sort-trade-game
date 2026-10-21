@@ -1,3 +1,4 @@
+import { cancelBarricadeJobs } from "./barricades";
 import type { LostMechShieldMap } from '@estg/shared';
 import { dropAllOwnedShields, spareShields } from './shieldOperations';
 import { dropUnavailableShields, equippedShield } from './shields';
@@ -8,6 +9,7 @@ import type { World } from './types';
 export function settleReturnedShields(world:World):void {
   if(world.shieldReturnSettled)return;
   world.shieldReturnSettled=true;
+  cancelBarricadeJobs(world);
   dropUnavailableShields(world);
   const left=new Set((world.leftBehind??[]).map(m=>m.id));
   const recovered=new Set(world.recoveredLostMechIds??[]);

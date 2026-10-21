@@ -19,6 +19,7 @@ export type FieldCellState = {
   location: FieldLocation;
   ground: Record<string, { x: number; y: number }>;
   wrecks: FieldWreck[];
+  barricades?: Record<string, {pos:{x:number;y:number};heading:number}>;
 };
 export type FieldCellReport = FieldCellState & { identities: FieldObjectIdentities; ownedShields?: LostMechShieldMap };
 const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -54,6 +55,12 @@ export function normalizeFieldCells(raw: unknown, identities: FieldObjectIdentit
         throw new Error('Invalid field shield reference');
       if (result.some(old => Object.hasOwn(old.ground,key))) throw new Error('Shield in multiple field cells');
     }
+    if(row.barricades!==undefined && !obj(row.barricades))throw Error('Invalid barricades');
+    for(const [key,b] of Object.entries((row.barricades??{}) as Record<string,unknown>)){
+      const shield=identities?.shields[key];
+      if(!obj(b)||!pos(b.pos)||!finite(b.heading)||!shield||!positive(shield.hp)||!positive(shield.maxHp)||shield.hp>shield.maxHp||Object.hasOwn(row.ground,key)||result.some(c=>Object.hasOwn(c.ground,key)||Object.hasOwn(c.barricades??{},key)))throw Error('Invalid barricade reference');
+    }
+    if(Object.keys(row.ground).some(k=>result.some(c=>Object.hasOwn(c.barricades??{},k))))throw Error('Duplicate shield location');
     const targets=new Set<string>(), wreckKeys=new Set<string>();
     for (const w of row.wrecks) {
       if (!obj(w) || !text(w.targetId) || !text(w.wreckKey) || !pos(w.pos) || !finite(w.seconds) || w.seconds < 0 || w.seconds >= 8 ||
@@ -65,7 +72,7 @@ export function normalizeFieldCells(raw: unknown, identities: FieldObjectIdentit
         throw new Error('Invalid field wreck');
       targets.add(w.targetId); wreckKeys.add(w.wreckKey);
     }
-    result.push(structuredClone({location:row.location,ground:row.ground,wrecks:row.wrecks}) as FieldCellState);
+    result.push(structuredClone({location:row.location,ground:row.ground,wrecks:row.wrecks,...(row.barricades!==undefined?{barricades:row.barricades}:{})}) as FieldCellState);
   }
   return result;
 }
@@ -76,7 +83,7 @@ export function normalizeFieldCellReport(raw: unknown): FieldCellReport | undefi
     if (!identities) return undefined;
     const cells=normalizeFieldCells([raw],identities)!;
     const ownedShields=normalizeLostMechShields(raw.ownedShields,identities);
-    if (Object.values(ownedShields ?? {}).some(s=>ownedShieldKeys(s).some(k=>Object.hasOwn(cells[0]!.ground,k)))) return undefined;
+    if (Object.values(ownedShields ?? {}).some(s=>ownedShieldKeys(s).some(k=>(Object.hasOwn(cells[0]!.ground,k)||Object.hasOwn(cells[0]!.barricades??{},k))))) return undefined;
     return {...cells[0]!,identities,...(ownedShields ? {ownedShields} : {})};
   } catch { return undefined; }
 }
@@ -88,13 +95,13 @@ export function applyFieldCellReport(hub: HubSnapshot, raw: FieldCellReport | un
   if (!report || hub.frontProgress?.seed !== report.location.frontSeed) return hub;
   const identities=structuredClone(hub.fieldObjectIdentities ?? emptyFieldObjectIdentities());
   const previous=hub.fieldCells?.find(c=>sameFieldLocation(c.location,report.location));
-  for (const key of Object.keys(previous?.ground ?? {})) delete identities.shields[key];
+  for (const key of [...Object.keys(previous?.ground ?? {}),...Object.keys(previous?.barricades??{})]) delete identities.shields[key];
   for (const w of previous?.wrecks ?? []) delete identities.wrecks[w.wreckKey];
   // A mixed/stale report must not restore a recovered or stripped hull.
   report.wrecks=report.wrecks.filter(w=>w.sourceInstanceId
     ? hub.lostMechs.some(m=>m.instanceId===w.sourceInstanceId && m.kind==='wreck')
     : !hub.fleet.some(m=>m.instanceId===`recovered-${w.targetId}`) && !hub.wreckStrippingHistory?.some(r=>r.targetId===w.targetId));
-  for (const key of Object.keys(report.ground)) identities.shields[key]=structuredClone(report.identities.shields[key]!);
+  for (const key of [...Object.keys(report.ground),...Object.keys(report.barricades??{})]) identities.shields[key]=structuredClone(report.identities.shields[key]!);
   for (const w of report.wrecks) identities.wrecks[w.wreckKey]=structuredClone(report.identities.wrecks[w.wreckKey]!);
   const lostMechShields=Object.assign(Object.create(null),structuredClone(hub.lostMechShields ?? {})) as LostMechShieldMap;
   if(report.ownedShields!==undefined) for (const m of hub.lostMechs) if (m.frontSeed===report.location.frontSeed && m.cell?.sx===report.location.cell.sx && m.cell.sy===report.location.cell.sy) delete lostMechShields[m.instanceId];
@@ -116,7 +123,7 @@ export function clearFieldCells(hub: HubSnapshot): HubSnapshot {
   if (!hub.fieldCells?.length) return {...hub,fieldCells:[]};
   const identities=structuredClone(hub.fieldObjectIdentities ?? emptyFieldObjectIdentities());
   for (const cell of hub.fieldCells) {
-    for (const key of Object.keys(cell.ground)) delete identities.shields[key];
+    for (const key of [...Object.keys(cell.ground),...Object.keys(cell.barricades??{})]) delete identities.shields[key];
     for (const w of cell.wrecks) delete identities.wrecks[w.wreckKey];
   }
   return {...hub,fieldCells:[],fieldObjectIdentities:identities};

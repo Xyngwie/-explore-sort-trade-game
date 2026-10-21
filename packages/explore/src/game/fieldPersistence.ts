@@ -37,6 +37,7 @@ export function restoreFieldAtSortieStart(world: World): void {
   if (!saved) return;
   world.shieldState={...world.shieldState,identities:structuredClone(saved.identities),ground:structuredClone(saved.ground),equipped:world.shieldState?.equipped??{}};
   world.stripping={jobs:{},observations:[]};
+  world.barricades={walls:structuredClone(saved.barricades??{}),jobs:{}};
   for (const w of saved.wrecks) {
     const id=w.sourceInstanceId ? `s:${w.sourceInstanceId}` : w.targetId;
     if (w.sourceInstanceId && !world.strandedMechs?.some(m=>m.instanceId===w.sourceInstanceId && m.wreck)) continue;
@@ -76,10 +77,11 @@ export function fieldCellReport(world: World): FieldCellReport | undefined {
   if (!cached) for (const a of world.circuitPlay?.airWrecks ?? []) if (!a.recovered && !world.enemies.some(e=>e.id===a.id)) add(`a:${a.id}`,a.pos,null,undefined,true);
   // Report only identity records referenced by this cell; counters are global.
   const ground=structuredClone(world.shieldState?.ground ?? cached?.ground ?? {});
+  const barricades=structuredClone(world.barricades?.walls ?? cached?.barricades ?? {});
   const ownedShields=leftBehindShieldState(world);
   identities.wrecks=Object.fromEntries(wrecks.map(w=>[w.wreckKey,identities.wrecks[w.wreckKey]!]));
-  const keys=[...Object.keys(ground),...Object.values(ownedShields).flatMap(s=>[...(s.equipped?[s.equipped.key]:[]),...s.spares.map(r=>r.key)])];
+  const keys=[...Object.keys(ground),...Object.keys(barricades),...Object.values(ownedShields).flatMap(s=>[...(s.equipped?[s.equipped.key]:[]),...s.spares.map(r=>r.key)])];
   identities.shields=Object.fromEntries(keys.map(key=>[key,identities.shields[key]!]));
   identities.repairLogs=[]; // repair history already lives in HubSave, never replay it as new
-  return {location:structuredClone(location),ground,wrecks,identities,ownedShields};
+  return {location:structuredClone(location),ground,barricades,wrecks,identities,ownedShields};
 }

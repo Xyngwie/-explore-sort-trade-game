@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / P盾回路・屹立 作業宣言（2026-10-20）
+- Who: Codex / 実装担当
+- What: cursor/codex-p-shield。#315 P盾回路・屹立の実装
+- Why: 神宮の「314入りました。315準備お願いします」
+- Scope: 神宮承認P1〜P10とIMPLEMENTATION_ORDERに従い実装・検証・Draft提出。マージ・デプロイは行わない
+- Status: #314は622fc43でマージ済み、Deploy Modules Preview 39414575710 PASS。屹立は概念のみ確定、P1〜P10をdocs/spec-questions/p-shield-315.jsonへ全文提出。JSON構文/ID/未選択状態を検証PASS。ゲームテストはNOT_RUN（コード変更なし）。IMPLEMENTATION_ORDER v1.0受領、未決定事項は解消。P盾/隊長・僚機操作/矩形物理/撤去/途中再開/帰還保存を実装。全workspaceテスト（型検査含む）・全5ビルドPASS。390pxで両作業の途中再読込、隊長/個別僚機、別2秒拾得、15秒帰還/再出撃復元、全終了経路/交換/盤面再生成、#309〜314の剥離/精算/保存回帰PASS。Draft提出・再監査待ち。最新head/CIはPR本文、詳細P_SHIELD_PLAN.md。公開版手動/物理端末NOT_RUN、未マージ・未デプロイ
+
 ## Codex / 盾回路 作業宣言（2026-10-20）
 - Who: Codex / 実装担当
 - What: cursor/codex-shield-circuit。#314の偽盤効果「盾」、装備制限、剥離権限、元機体効力と進捗保存

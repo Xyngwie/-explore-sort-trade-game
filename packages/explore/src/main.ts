@@ -1,3 +1,7 @@
+import { squadSees } from "./game/vision";
+import { canBuildBarricade, startBarricade, startDismantle, wallEntries, barricadeWorking, interruptBarricade } from "./game/barricades";
+import { wallCircleOverlap } from "./game/barricadeGeometry";
+import { barricadePanelHtml } from "./ui/barricadePanel";
 import { directFieldEntryFromStorage } from "./game/directFieldEntry";
 import { attachFieldPersistence } from "./game/fieldPersistence";
 import { shieldPanelHtml, shieldGroupAt } from "./ui/shieldPanel";
@@ -190,7 +194,7 @@ function sortieEquipmentNote(): string {
   if (!hub) return "";
   const ids = world.deployedInstanceIds.length ? world.deployedInstanceIds : resolveSortieSelection(hub);
   const error = squadEquipmentError(hub, ids);
-  return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾・盾回路は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
+  return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾・盾回路・P盾回路は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
 }
 const entryCheckpoint = readSortieCheckpoint();
 let entrySaveRefused = false;
@@ -371,12 +375,13 @@ const input: PlayerInput = {
 let canvas: HTMLCanvasElement | null = null;
 let last = performance.now();
 let needsDom = true;
+let selectedBarricadeKey:string|null=null;
 let stripTargetPending = false;
 const shieldPanelPainted = new WeakMap<HTMLElement,string>();
 let selectedShieldPosition: {x:number;y:number}|null = null;
 function paintShieldPanel():void {
   const panel=document.getElementById("shield-panel");if(!panel)return;
-  const html=shieldPanelHtml(world,selectedShieldPosition);
+  const html=shieldPanelHtml(world,selectedShieldPosition)+barricadePanelHtml(world,selectedBarricadeKey);
   if(shieldPanelPainted.get(panel)!==html){panel.innerHTML=html;shieldPanelPainted.set(panel,html);}
 }
 function showShieldNotices():void {for(const message of takeShieldNotices(world))flashLogToast(message);}
@@ -408,7 +413,8 @@ window.addEventListener("keydown", (e) => {
   }
   if (k === "v" && world.phase === "sortie" && !e.repeat) {
     e.preventDefault();
-    interruptStripping(world,world.leader.id);
+    interruptStripping(world,world.leader.id);interruptBarricade(world,world.leader.id);
+    for(const u of world.wingmen)interruptBarricade(world,u.id);
     const r = toggleSquadCover(world);
     if (r === "entered") {
       flashCampToast("カバー開始 · 障害物で身を隠す");
@@ -602,6 +608,9 @@ function bindCanvas(): void {
     // P1: ~24 screen px around a wingman selects it (scaled for phone widths).
     const rect = canvas.getBoundingClientRect();
     const perPx = rect.width > 0 ? world.camera.w / rect.width : 1;
+    const wall=wallEntries(world).find(([,b])=>squadSees(world,b.pos)&&wallCircleOverlap(b,pt,Math.max(24,24*perPx)));
+    selectedBarricadeKey=wall?.[0]??null;
+    if(wall && !world.circuitPlay?.pending){paintShieldPanel();return;}
     const shieldGroup=shieldGroupAt(world,pt,Math.max(24,24*perPx));
     if(shieldGroup && !world.circuitPlay?.pending){selectedShieldPosition={...shieldGroup.pos};paintShieldPanel();return;}
     selectedShieldPosition=null;paintShieldPanel();
@@ -1086,6 +1095,7 @@ function renderDom(): void {
         <div class="row">
           ${returnOpen() ? `<button type="button" id="btn-extract" ${boardingActive || isOperationTimedOut(world) || !captainActive(world) ? "disabled" : ""} title="${captainActive(world) ? "どこからでも帰還要請（X）。進行中はキャンセル不可。" : "隊長機大破のため、新しい帰還要請はできない。"}">${!captainActive(world) ? "大破・帰還要請不可" : boardingActive ? "帰還シーケンス中…" : "帰還要請（搭乗円）"}</button>` : ""}
           ${canStripWreck(world) ? `<button type="button" id="btn-strip" class="secondary" ${!world.leader.alive || isOperationTimedOut(world) || wreckCarrierId(world,world.leader.id) ? "disabled" : ""}>残骸盾${stripTargetPending ? "：対象選択" : activeStripping(world,world.leader.id) ? "：剥離中" : ""}</button>` : ""}
+          <button type="button" id="btn-barricade" class="secondary" ${canBuildBarricade(world,world.leader)?"":"hidden"}>屹立</button>
           ${circuitOrderHtml()}
           ${gatedButtonHtml("btn-camp", "camp_set", "secondary", "隊長位置に仮設キャンプを設置／空のキャンプを移設（C）。預けるのは荷下ろし。", "キャンプ設置")}
           ${gatedButtonHtml("btn-camp-unload", "camp_unload", "secondary", "隊長がキャンプ付近なら小隊全機の積載を置場へ荷下ろし（U）。", "小隊荷下ろし")}
@@ -1157,17 +1167,26 @@ function renderDom(): void {
     } else if(target.dataset.shieldDrop)dropOwnedShield(world,world.leader,target.dataset.shieldDrop);
     paintShieldPanel();
   });
+  document.getElementById("btn-barricade")?.addEventListener("click",()=>{
+    if(startBarricade(world,world.leader)){input.clickMove=null;input.fire=false;input.interact=false;stripTargetPending=false;needsDom=true;}
+    else flashLogToast("この位置には設置できません");
+  });
+  document.getElementById("shield-panel")?.addEventListener("click",e=>{
+    const button=(e.target as Element).closest<HTMLButtonElement>("[data-barricade-dismantle]");
+    if(button && startDismantle(world,button.dataset.barricadeDismantle!)){input.clickMove=null;input.fire=false;input.interact=false;needsDom=true;}
+  });
   paintShieldPanel();
   document.getElementById("btn-strip")?.addEventListener("click", () => {
     if(!canStripWreck(world))return;
-    interruptStripping(world,world.leader.id);
+    interruptStripping(world,world.leader.id);interruptBarricade(world,world.leader.id);
     stripTargetPending = !stripTargetPending;
     if (world.circuitPlay) { world.circuitPlay.pending = null; world.circuitPlay.wingSelect = null; }
     if (stripTargetPending) flashLogToast("近くの残骸をタップしてください");
     needsDom = true;
   });
   document.getElementById("btn-cover")?.addEventListener("click", () => {
-    interruptStripping(world,world.leader.id);
+    interruptStripping(world,world.leader.id);interruptBarricade(world,world.leader.id);
+    for(const u of world.wingmen)interruptBarricade(world,u.id);
     const r = toggleSquadCover(world);
     if (r === "entered") {
       flashCampToast("カバー開始 · 障害物で身を隠す");
@@ -1280,6 +1299,8 @@ function paintHudOnly(): void {
       wrap.replaceChild(next, erq);
     }
   }
+  const buildBtn=document.getElementById("btn-barricade") as HTMLButtonElement|null;
+  if(buildBtn){buildBtn.hidden=!canBuildBarricade(world,world.leader);buildBtn.disabled=barricadeWorking(world,world.leader.id);buildBtn.textContent=world.barricades?.jobs[world.leader.id]?.kind==="build"?"屹立：作業中":"屹立";}
   const stripBtn = document.getElementById("btn-strip") as HTMLButtonElement | null;
   if (stripBtn) {
     stripBtn.disabled = !canStripWreck(world) || !world.leader.alive || timedOut || !!wreckCarrierId(world,world.leader.id);

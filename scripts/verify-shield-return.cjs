@@ -7,7 +7,7 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  try{
  const seed=await browser.newPage();await seed.goto(base);
- const data=await seed.evaluate(async url=>{
+ const data=await seed.evaluate(async ({url,withBarricades})=>{
   const s=await import(url),{createWorld,bootstrapFromSearch,startSortie}=await import('/src/game/world.ts');
   const {attachLostMechContext}=await import('/src/game/lostMechs.ts'),{attachFieldPersistence}=await import('/src/game/fieldPersistence.ts');
   const {attachCircuitPlay}=await import('/src/game/circuitPlay.ts');
@@ -20,6 +20,7 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
    for(const u of w.wingmen){u.individualOrder=true;u.holdOrder=true;u.moveTarget=null;u.waypoint=null;}
    w.shieldState={identities:s.emptyFieldObjectIdentities(),ground:{},equipped:{},spares:{}};
    for(const u of [w.leader,...w.wingmen]){const key=u.instanceId;let ids=s.registerWreckIdentity(w.shieldState.identities,'source-'+key);ids=s.shieldIdentityFromWreck(ids,'source-'+key,key,{hp:37.25,maxHp:60});w.shieldState.identities=ids;w.shieldState.equipped[u.id]={kind:'shield',key};}
+   if(withBarricades){let ids=s.registerWreckIdentity(w.shieldState.identities,'wall-source');ids=s.shieldIdentityFromWreck(ids,'wall-source','deployed-wall',{hp:21.75,maxHp:62.75});w.shieldState.identities=ids;w.barricades={walls:{'deployed-wall':{pos:{x:950,y:750},heading:Math.PI/4}},jobs:{}};}
    if(kind==='exchange'){w.elapsed=14.75;w.boarding={center:{x:700,y:500},radius:110,requestedAt:0,cargoArrived:true};const id=w.wingmen[1].id;delete w.shieldState.equipped[id];w.shieldState.spares[id]=[{kind:'shield',key:'wb'}];w.shieldState.exchanges={[id]:{key:'wb',until:15.75}};}
    if(kind==='rescue'||kind==='dead-timeout'){w.leader.alive=false;w.leader.hp=0;}
    if(kind.includes('timeout'))w.timeLeft=.15;
@@ -27,7 +28,7 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
    return w;
   }
   return {save:s.createHubSave(hub),key:s.HUB_SAVE_STORAGE_KEY,search,worlds:Object.fromEntries(['normal','exchange','rescue','alive-timeout','dead-timeout','missed'].map(k=>[k,make(k)]))};
- },sharedUrl);await seed.close();
+ },{url:sharedUrl,withBarricades:process.env.VERIFY_BARRICADES==='1'});await seed.close();
  for(const kind of ['normal','exchange','rescue','alive-timeout','dead-timeout','missed']){
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   await context.addInitScript(d=>{if(!sessionStorage.getItem('seeded')){localStorage.setItem(d.key,JSON.stringify(d.save));localStorage.setItem('estg.sortieCheckpoint',JSON.stringify({v:1,kind:'sortie',body:d.world}));sessionStorage.setItem('seeded','1');}},{...data,world:data.worlds[kind]});
@@ -36,6 +37,7 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
   if(kind==='rescue'){await p.locator('#btn-rescue').click();await p.locator('#btn-rescue-yes').click();}
   await p.locator('#btn-again').waitFor({timeout:25000});
   const h=await p.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub,data.key);
+  if(process.env.VERIFY_BARRICADES==='1'){assert.deepEqual(h.fieldCells[0].barricades['deployed-wall'],{pos:{x:950,y:750},heading:Math.PI/4});assert.equal(h.fieldObjectIdentities.shields['deployed-wall'].hp,21.75);}
   assert(h.lostMechShields?.wb,'outside wing keeps shield');assert(!h.fieldCells[0].ground.wb);assert(h.fieldObjectIdentities.shields.wb.hp===37.25);
   if(kind==='rescue'||kind==='dead-timeout'){assert(h.lostMechShields.wa);assert(!h.fieldCells[0].ground.wa);assert.equal(h.credits,kind==='rescue'?500:250,'existing half/three-quarter fee unchanged');}
   else{assert(!h.lostMechShields.wa);assert.deepEqual(h.fieldCells[0].ground.wa,{x:720,y:500});}
@@ -55,6 +57,7 @@ const sharedUrl='/@fs'+require('node:path').resolve(__dirname,'../packages/share
    await regen.addInitScript(d=>{localStorage.setItem(d.key,JSON.stringify(d.save));},{key:data.key,save:{...data.save,hub:h}});
    const rp=await regen.newPage();await rp.goto(process.env.INVADE_BASE_URL||'http://127.0.0.1:5176');await rp.locator('#btn-regen').waitFor();rp.once('dialog',d=>d.accept());await rp.locator('#btn-regen').click();
    const after=await rp.evaluate(key=>JSON.parse(localStorage.getItem(key)).hub,data.key);
+   if(process.env.VERIFY_BARRICADES==='1')assert.equal(after.fieldObjectIdentities.shields['deployed-wall'],undefined);
    assert.deepEqual(after.fieldCells,[]);assert.equal(after.fieldObjectIdentities.shields.cap,undefined);assert.equal(after.fieldObjectIdentities.shields.wb.hp,37.25);assert.equal(after.lostMechShields.wb.exchange.remaining,remaining);
    assert.equal(after.lostMechs.find(m=>m.instanceId==='wb').frontSeed,after.frontProgress.seed);assert.equal(after.fieldObjectIdentities.nextWreckId,h.fieldObjectIdentities.nextWreckId);await regen.close();
    await p.screenshot({path:process.env.SHIELD_RETURN_SCREENSHOT||'/tmp/shield-return-mobile.png',fullPage:true});

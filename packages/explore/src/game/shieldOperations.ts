@@ -1,3 +1,4 @@
+import { interruptBarricade } from "./barricades";
 import { shieldOwnerUnits } from "./shieldOwners";
 import type { FieldObjectReference } from '@estg/shared';
 import { roomFor, wreckCarrierId } from './carry';
@@ -26,7 +27,7 @@ export function spareShields(world:World,unit:Unit):FieldObjectReference[] {
 }
 function shieldAlreadyOwned(world:World,key:string):boolean {
  const state=world.shieldState;
- return Object.values(state?.equipped??{}).some(ref=>ref.kind==='shield' && ref.key===key) ||
+ return !!world.barricades?.walls[key] || Object.values(state?.equipped??{}).some(ref=>ref.kind==='shield' && ref.key===key) ||
   Object.values(state?.spares??{}).some(refs=>refs.some(ref=>ref.kind==='shield' && ref.key===key));
 }
 export function shieldReservedBy(world:World,key:string):string|null {
@@ -49,6 +50,7 @@ export function startShieldPickup(world:World,unit:Unit,key:string):'started'|'b
  if(dist(unit.pos,at)>unit.radius*2)return 'far';
  if(roomFor(world,unit)<1){notify(world,SHIELD_FULL_MESSAGE,true);return 'full';}
  interruptStripping(world,unit.id);
+ interruptBarricade(world,unit.id);
  if(world.circuitPlay?.wreckChannel)delete world.circuitPlay.wreckChannel[unit.id];
  unit.salvageId=null;unit.salvageT=0;
  state.pickups??={};
@@ -95,6 +97,7 @@ export function tickShieldOperations(world:World):void {
  * and destruction use the existing all-cargo-drop contract instead.
  */
 export function dropOwnedShield(world:World,unit:Unit,key:string,forced=false):boolean {
+ interruptBarricade(world,unit.id);
  const state=world.shieldState;if(!state || !shieldItem(world,key) || (!forced && state.exchanges?.[unit.id]?.key===key))return false;
  const equipped=state.equipped[unit.id]?.key===key,spare=spareShields(world,unit).some(ref=>ref.key===key);
  if(!equipped && !spare)return false;

@@ -1030,7 +1030,7 @@ export function normalizeHubSnapshot(
   const historyRaw = rawRec == null ? fallback.wreckStrippingHistory : rawRec.wreckStrippingHistory;
   const fieldCells = normalizeFieldCells(rawRec == null ? fallback.fieldCells : rawRec.fieldCells, fieldObjectIdentities);
   const lostMechShields=normalizeLostMechShields(rawRec == null ? fallback.lostMechShields : rawRec.lostMechShields,fieldObjectIdentities,lostMechs);
-  if(Object.values(lostMechShields??{}).some(s=>ownedShieldKeys(s).some(k=>fieldCells?.some(c=>Object.hasOwn(c.ground,k))))) throw Error("Shield is both ground and owned");
+  if(Object.values(lostMechShields??{}).some(s=>ownedShieldKeys(s).some(k=>fieldCells?.some(c=>(Object.hasOwn(c.ground,k)||Object.hasOwn(c.barricades??{},k)))))) throw Error("Shield is both ground and owned");
   const snapshot: HubSnapshot = {
     ...(lostMechShields ? {lostMechShields} : {}),
     ...(fieldCells ? { fieldCells } : {}),
