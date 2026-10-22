@@ -1,0 +1,49 @@
+{
+  "sender": "lead",
+  "recipient": "inspector",
+  "type": "SPEC_QUESTION",
+  "payload": {
+    "title": "盾テスト用の完成済みデータの準備方法",
+    "status": "HOLD",
+    "date": "2026-10-22",
+    "details": "PR317第三者レポートを公開版で再検証。購入は確認承認で成功。Offline装備は初期回路を外すと成功するが効果0。verify_trueは未解盤用でありP盾ではない。既存検証ボタンを独断で変更しない。",
+    "source": "docs/SHIELD_PLAYTEST_PR317_REVIEW.md",
+    "in": [
+      "盾テストの前提データの準備方式の決定"
+    ],
+    "out": [
+      "未再現の購入不具合の修正",
+      "回路上限や回路効果の独断変更",
+      "マージ・デプロイ"
+    ],
+    "unresolved": [
+      {
+        "id": "T1",
+        "question_ja": "通常盾・P盾のテスト用データは、どの方法で用意しますか？",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：既存の隔離テストデータ・検証スクリプトを利用",
+            "description_ja": "既存のverify_trueと製品仕様を維持する。通常盾・P盾・必要な装備枠を含む既存の隔離検証データを用い、テスター向け投入手順を整備する。通常プレイの進行確認とは分けて記録する。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "公開画面に専用の盾テストセット機能を追加",
+            "description_ja": "既存の未解真盤ボタンと区別する。付与内容、装備枠、既存セーブの保護・復元、公開範囲の具体仕様は別途承認してから実装する。"
+          }
+        ],
+        "selected": null
+      }
+    ],
+    "scopeLockViolation": false,
+    "tests": {
+      "selfTest": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "build": "NOT_RUN",
+      "ci": "NOT_RUN",
+      "previewPlay": "PASS: 公開HUBの購入承認/取消・装備上限の3ケース",
+      "deploy": "NOT_TRIGGERED"
+    },
+    "pr": null
+  }
+}

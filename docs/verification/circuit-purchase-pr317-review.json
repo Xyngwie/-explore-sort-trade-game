@@ -1,0 +1,56 @@
+{
+  "url": "https://xyngwie.github.io/-explore-sort-trade-game/",
+  "viewport": [
+    390,
+    844
+  ],
+  "method": "Playwright, isolated contexts, no existing user saves",
+  "results": [
+    {
+      "scenario": "confirm cancelled",
+      "status": "PASS",
+      "dialogs": [
+        {
+          "type": "confirm",
+          "message": "回路を購入しますか？\n10000c\n2×2〜3×3 のランダムな中古回路"
+        }
+      ],
+      "beforeCredits": 5000000,
+      "afterCredits": 5000000,
+      "beforeCircuitCount": 2,
+      "afterCircuitCount": 2
+    },
+    {
+      "scenario": "confirm accepted",
+      "status": "PASS",
+      "dialogs": [
+        {
+          "type": "confirm",
+          "message": "回路を購入しますか？\n10000c\n2×2〜3×3 のランダムな中古回路"
+        }
+      ],
+      "beforeCredits": 5000000,
+      "afterCredits": 4990000,
+      "beforeCircuitCount": 2,
+      "afterCircuitCount": 3
+    },
+    {
+      "scenario": "Offline equipment after releasing squad capacity",
+      "status": "PASS",
+      "dialogs": [
+        "出撃部隊の回路上限を超えます。装備を外すか出撃する機体を変更してください。"
+      ],
+      "verify": {
+        "id": "verify_true",
+        "state": "offline",
+        "effectKey": null,
+        "equippedTo": "seed_op_gen1"
+      }
+    }
+  ],
+  "date": "2026-10-22",
+  "baseline_main": "f53788cb19b4b61d29663d66f50accfc9de4e05c",
+  "physical_device": "NOT_RUN",
+  "original_tester_dialog_handling": "UNKNOWN",
+  "runtime_changes": false
+}
