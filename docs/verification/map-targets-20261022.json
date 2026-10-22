@@ -1,0 +1,146 @@
+{
+  "type": "LOCAL_VERIFICATION",
+  "baseline": "d093141a54e0e788d173182df26d49ee5c0ac75c",
+  "feature": "SHIELD-ISSUE-02 dense target picker",
+  "publicReproduction": "公開版で設置盾のみが選択され地面盾候補0を再現。#320参照",
+  "checks": {
+    "workspaceTests": "PASS",
+    "typecheck": "PASS",
+    "fiveProductionBuilds": "PASS",
+    "newCandidateSelftests": "PASS",
+    "physicalDevice": "NOT_RUN",
+    "publicFixedVersion": "NOT_RUN",
+    "merge": "NOT_RUN",
+    "deploy": "NOT_RUN"
+  },
+  "browser": {
+    "existing318": {
+      "viewport": [
+        390,
+        844
+      ],
+      "method": "same-origin local production builds, real UI, DEBUG_FIXTURE",
+      "physicalDevice": "NOT_RUN",
+      "publicVersion": "NOT_RUN",
+      "results": [
+        {
+          "preset": "NO_SHIELD_NO_CIRCUIT",
+          "status": "PASS",
+          "reloadPreservesIdentity": true,
+          "normalSaveUnchanged": true
+        },
+        {
+          "preset": "NORMAL_SHIELD_AND_RESERVE",
+          "status": "PASS",
+          "reloadPreservesIdentity": true,
+          "normalSaveUnchanged": true
+        },
+        {
+          "preset": "STRIPPING_READY",
+          "status": "PASS",
+          "reloadPreservesIdentity": true,
+          "normalSaveUnchanged": true
+        },
+        {
+          "preset": "P_SHIELD_LEADER_READY",
+          "status": "PASS",
+          "reloadPreservesIdentity": true,
+          "normalSaveUnchanged": true
+        },
+        {
+          "preset": "P_SHIELD_WINGMAN_READY",
+          "status": "PASS",
+          "reloadPreservesIdentity": true,
+          "normalSaveUnchanged": true
+        },
+        {
+          "preset": "BARRICADE_PERSISTENCE_READY",
+          "status": "PASS",
+          "reloadPreservesIdentity": true,
+          "normalSaveUnchanged": true
+        },
+        {
+          "scenario": "hostile fire, front shield depletion and two-second reserve exchange",
+          "status": "PASS"
+        },
+        {
+          "scenario": "real jobs, evidence export, movement blocking, dismantle/pickup, return/HUB/re-sortie, explicit reset, all-module and exit isolation",
+          "status": "PASS"
+        }
+      ]
+    },
+    "existing319": {
+      "viewport": [
+        390,
+        844
+      ],
+      "gameVersion": "2e92248eb84996032755f5e4daa9d58d29018842-dirty",
+      "results": [
+        {
+          "scenario": "public entry and credit set/add/zero/initial, invalid numbers, reload",
+          "status": "PASS"
+        },
+        {
+          "scenario": "actual shield/P-shield Online/Offline creation, per-unit equip, duplicate rejection and delete",
+          "status": "PASS"
+        },
+        {
+          "scenario": "equipped/reserve/ground generation, identity-preserving transfer, fractional HP, invalid HP and delete",
+          "status": "PASS"
+        },
+        {
+          "scenario": "bounded per-unit edits and persisted paused sortie across HUB changes",
+          "status": "PASS"
+        },
+        {
+          "scenario": "free edits use real barricade/dismantle/pickup and return/re-sortie persistence",
+          "status": "PASS"
+        },
+        {
+          "scenario": "curated ALPHA_LAB/DEBUG_FIXTURE evidence, confirmed/cancelled copy, original unchanged, reset and exit",
+          "status": "PASS"
+        }
+      ],
+      "normalSaveProtection": "PASS",
+      "physicalDevice": "NOT_RUN",
+      "publicVersionNewFeature": "NOT_RUN"
+    },
+    "newTargets": {
+      "viewport": [
+        390,
+        844
+      ],
+      "method": "local production builds, real controls; read-only observations only",
+      "results": [
+        {
+          "scenario": "dense wall, ground and wreck individually selectable via real map taps",
+          "status": "PASS"
+        },
+        {
+          "scenario": "dense wingman selection opens its actual eligible individual actions (no captain 1x1 in preset)",
+          "status": "PASS"
+        },
+        {
+          "scenario": "isolated placed wall opens dismantle panel in one tap",
+          "status": "PASS"
+        },
+        {
+          "scenario": "explicit stripping, single ground shield and ordinary movement retain existing flow",
+          "status": "PASS"
+        },
+        {
+          "scenario": "explicit movement/cancel, 390px overflow and normal save isolation",
+          "status": "PASS"
+        }
+      ],
+      "physicalDevice": "NOT_RUN",
+      "publicFixedVersion": "NOT_RUN"
+    }
+  },
+  "limits": [
+    "Chromium390x844エミュレーション、物理端末ではない",
+    "公開版には未反映。修正後の公開操作はNOT_RUN",
+    "僚機の移動コマンドは隊長真1x1が必要。盾プリセットにないため新UI実測は僚機の利用可能な個別操作表示まで。既存circuitPlayの指示テストも実施",
+    "ローカル生成物は提出前コミット＋dirtyのgameVersionを含む。最終headの全ビルド/型検査/テストはCI参照"
+  ]
+}

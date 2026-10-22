@@ -17,7 +17,7 @@ export function mapTargetsAt(world: World, point: Vec2, radius: number): MapTarg
     if (item) targets.push({kind: 'wall', key, label: `設置盾 ${Number(item.hp.toFixed(1))}/${Number(item.maxHp.toFixed(1))}`, pos: {...wall.pos}});
   }
   for (const group of groundShieldGroups(world)) if (dist(group.pos, point) <= radius)
-    targets.push({kind: 'ground', key: group.keys[0]!, label: `地面盾 ${group.keys.length}個`, pos: {...group.pos}});
+    targets.push({kind: 'ground', key: group.keys[0]!, label: `地面盾 ${group.keys.length}個（${group.keys.map(key=>{const s=shieldItem(world,key)!;return `${Number(s.hp.toFixed(1))}/${Number(s.maxHp.toFixed(1))}`;}).join("・")}）`, pos: {...group.pos}});
   if (canStripWreck(world)) for (const wreck of strippingTargets(world)) {
     if (dist(wreck.pos, point) <= radius && squadSees(world, wreck.pos))
       targets.push({kind: 'wreck', key: wreck.id, label: `残骸盾：${wreck.unit?.name ?? '残骸'}`, pos: {...wreck.pos}});
@@ -32,5 +32,5 @@ export function mapTargetsAt(world: World, point: Vec2, radius: number): MapTarg
 export function mapTargetChoicesHtml(targets: MapTarget[]): string {
   if (targets.length < 2) return '';
   const escape = (s: string) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-  return `<div class="card" id="map-target-choices" role="group" aria-label="重なった操作候補"><strong>対象を選択</strong>${targets.map((t,i)=>`<button type="button" class="secondary" data-map-choice="${i}">${escape(t.label)}</button>`).join('')}<button type="button" class="secondary" data-map-choice="move">この地点へ移動</button><button type="button" class="secondary" data-map-choice="cancel">取消</button></div>`;
+  return `<div class="card" id="map-target-choices" role="group" aria-label="重なった操作候補"><strong>対象を選択</strong>${targets.map((t,i)=>`<button type="button" class="secondary" data-map-choice="${i}" data-map-target-key="${escape(t.key)}" data-map-target-kind="${t.kind}">${escape(t.label)}</button>`).join('')}<button type="button" class="secondary" data-map-choice="move">この地点へ移動</button><button type="button" class="secondary" data-map-choice="cancel">取消</button></div>`;
 }

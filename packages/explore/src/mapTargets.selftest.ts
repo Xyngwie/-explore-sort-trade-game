@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildShieldFixture } from './debug/shieldFixture';
+import { startStrippingAt } from './game/strippingRuntime';
 import { mapTargetsAt, mapTargetChoicesHtml } from './ui/mapTargets';
 const {world}=buildShieldFixture('BARRICADE_PERSISTENCE_READY');
 const before=JSON.stringify(world);
@@ -19,3 +20,13 @@ assert(!mapTargetsAt(world,{x:622,y:600},56).some(t=>t.kind==='wreck'),'no strip
 const html=mapTargetChoicesHtml([{kind:'wing',key:'x',label:'<script>"',pos:{x:0,y:0}},targets[0]!]);
 assert(!html.includes('<script>'));
 console.log('Map candidates: dense wall/ground/wreck/wing, single/empty flow, circuit gate, escaping, no world mutation PASS');
+
+const single=buildShieldFixture('BARRICADE_PERSISTENCE_READY').world;
+single.shieldState!.ground={};single.enemies=[];single.wingmen=[];
+assert.deepEqual(mapTargetsAt(single,{x:622,y:600},24).map(t=>t.kind),['wall']);
+
+const exact=buildShieldFixture('STRIPPING_READY');
+const duplicate=structuredClone(exact.world.enemies[0]!);duplicate.id='second-wreck';exact.world.enemies.push(duplicate);
+assert.equal(startStrippingAt(exact.world,duplicate.pos,exact.hub,0,duplicate.id),'started');
+assert(exact.world.stripping!.jobs['second-wreck']);
+assert(!exact.world.stripping!.jobs['debug-wreck'],'identical-position wreck choice uses the selected identity');

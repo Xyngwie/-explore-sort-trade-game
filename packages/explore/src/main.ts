@@ -1198,7 +1198,7 @@ function renderDom(): void {
       else if (target.kind === "ground") selectedShieldPosition = {...target.pos};
       else if (target.kind === "wing") { openWingPalette(world,[target.key]); paintWingPalette(); }
       else {
-        const result = startStrippingAt(world,target.pos,freshHub(),0);
+        const result = startStrippingAt(world,target.pos,freshHub(),0,target.key);
         if (result === "started") { input.clickMove=null; input.fire=false; input.interact=false; }
         flashLogToast(result === "started" ? "残骸盾：剥離開始" : result === "far" ? "残骸が遠すぎます" : "この残骸は作業できません");
         needsDom = true;
