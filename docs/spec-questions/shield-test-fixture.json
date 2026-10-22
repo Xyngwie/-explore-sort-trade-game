@@ -1,0 +1,64 @@
+{
+  "sender": "lead",
+  "recipient": "inspector",
+  "type": "SPEC_QUESTION",
+  "payload": {
+    "title": "テスト用の最大回路サイズ・P回路ロック切替",
+    "status": "HOLD",
+    "date": "2026-10-22",
+    "details": "神宮の追加提案：ニューゲーム直後でもテスト用に最大回路サイズを選択し、P回路のロック/アンロックを強制変更する操作を用意する。現行コードでは初回Invadeクリア前は通常の真盤混入率が0。テスターの実際の初クリア状態は未確認。以下の案は未承認。",
+    "source": "docs/SHIELD_PLAYTEST_PR317_REVIEW.md",
+    "in": [
+      "テスト用切替操作の仕様決定"
+    ],
+    "out": [
+      "未再現の購入不具合の修正",
+      "回路上限や回路効果の独断変更",
+      "マージ・デプロイ"
+    ],
+    "unresolved": [
+      {
+        "id": "T2",
+        "question_ja": "テスト用のサイズ・P回路切替は、通常の進行データを保った独立した上書き設定にしますか？",
+        "options": [
+          {
+            "choice": "A",
+            "label_ja": "★推奨：独立したテスト設定",
+            "description_ja": "検証用エリアで最大回路サイズを選び、P回路を通常進行に従う/強制ロック/強制アンロックから選択し適用する。解除すると実際の進行に戻る。初クリア報酬や段位を付与・削除しない。選択値の保存範囲とサイズの対象機能は別途確定する。"
+          },
+          {
+            "choice": "B",
+            "label_ja": "既存の進行記録を直接変更",
+            "description_ja": "実際のサイズ進行と初クリア状態を書き換える。初クリア報酬や既存回路との整合、復元方法を先に決める必要がある。"
+          }
+        ],
+        "selected": null
+      }
+    ],
+    "scopeLockViolation": false,
+    "tests": {
+      "selfTest": "NOT_RUN",
+      "typecheck": "NOT_RUN",
+      "build": "NOT_RUN",
+      "ci": "NOT_RUN",
+      "previewPlay": "PASS: 公開HUBの購入承認/取消・装備上限の3ケース",
+      "deploy": "NOT_TRIGGERED"
+    },
+    "pr": null,
+    "confirmed_observations": [
+      "初回Invadeクリア前は通常の真盤混入率が0。",
+      "真盤出現の解放と、特定効果P盾の入手・完成・装備は別条件。",
+      "回路最大サイズと部隊の回路装備枚数上限は別の制約。サイズ変更だけでは装備枠不足は解消しない。"
+    ],
+    "follow_up_spec_needed": [
+      "最大サイズの意味：作製可能サイズ・所持完璧回路の進行値・生成される回路サイズのどこに適用するか。",
+      "選択できる値と、回路生成/Restore/購入への適用範囲。",
+      "P回路ロックは新規入手だけを制御するか、既存の真盤の装備・効果まで停止するか。",
+      "テスト設定の保存/解除/初期化と、公開画面での表示条件。",
+      "通常盾/P盾の完成済み検証回路の付与と装備枠確保を別途必要とするか。"
+    ],
+    "current_scope_resolved_by": "docs/spec-questions/shield-debug-decision.json",
+    "blocking_current_implementation": false,
+    "scope_note": "以下の任意サイズ・任意ロック切替は汎用デバッグコンソールの後続議題。今回の盾用6プリセットは新しいSPEC_DECISIONに従い実装し、この旧質問を理由に保留しない。"
+  }
+}

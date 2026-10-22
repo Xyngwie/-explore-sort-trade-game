@@ -1,3 +1,4 @@
+import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
 import {
   CTA_COPY,
@@ -796,3 +797,5 @@ function render() {
 }
 
 render();
+
+mountShieldDebugConsole();

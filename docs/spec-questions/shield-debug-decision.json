@@ -1,0 +1,29 @@
+{
+  "type": "SPEC_DECISION",
+  "title": "盾システム検証用デバッグモード",
+  "status": "PROPOSED_FOR_IMPLEMENTATION",
+  "requested_by": "神宮",
+  "objective": "第三者テストプレイヤーが通常盾・P盾・屹立を確実に検証できる環境を用意する",
+  "scope": {
+    "in": ["検証用セーブまたは専用テストモード", "通常盾・予備盾の付与", "通常盾回路の付与", "配線済みP盾回路の付与", "隊長機・僚機の個別装備設定", "剥離可能な残骸と地面盾の準備", "設置盾・作業途中状態の準備", "盾ID・現在HP・最大HP・所有状態の確認表示", "テスト状態の初期化・再生成"],
+    "out": ["盾の防御・剥離・屹立ルールの変更", "通常の回路購入価格や入手確率の変更", "通常プレイヤーへの無料アイテム配布", "通常セーブへの無断書き込み", "マージ・デプロイ"]
+  },
+  "debug_mode": {
+    "isolation": "通常プレイとは独立した検証用セーブを使用する",
+    "entry": "開発・検証用の明示的な入口を用意する",
+    "production_safety": "通常プレイの進行・所持金・倉庫を変更しない",
+    "presets": ["NO_SHIELD_NO_CIRCUIT", "NORMAL_SHIELD_AND_RESERVE", "STRIPPING_READY", "P_SHIELD_LEADER_READY", "P_SHIELD_WINGMAN_READY", "BARRICADE_PERSISTENCE_READY"],
+    "circuit_setup": {"normal_circuit": "偽盤の通常盾回路", "p_circuit": "真盤のP盾回路", "online_ready": true, "respect_normal_rules_outside_debug": true},
+    "shield_setup": {"preserve_unique_ids": true, "allow_fractional_hp": true, "allow_equipped_reserve_ground_and_wall_states": true, "prevent_duplicate_ownership": true},
+    "controls": {"reset_test_save": true, "select_preset": true, "start_test": true, "show_expected_steps": true, "export_test_evidence": true}
+  },
+  "reported_issues": [
+    {"id": "SHIELD-ISSUE-01", "reported_severity": "P1", "description": "10000c回路購入ボタンが反応しない", "action": "現行mainで独立に再現し、購入処理とエラーを調査する", "do_not_mask_with_debug_mode": true},
+    {"id": "SHIELD-ISSUE-02", "reported_severity": "P2", "description": "検証用真盤がOfflineで装備できない", "action": "通常仕様と検証用データの問題を切り分け、デバッグプリセットでは配線済み状態を準備する", "do_not_change_normal_equipment_rules": true}
+  ],
+  "verification": {
+    "required": ["通常セーブが変更されない", "全プリセットからExploreへ出撃できる", "盾ID・HPが正しく保存される", "通常盾の防御・交換が確認できる", "通常盾回路による剥離が確認できる", "P盾の設置・遮断・撤去・回収が確認できる", "再読込・帰還・再出撃で状態が維持される", "テスト結果にDEBUG_FIXTURE使用の有無が残る"],
+    "tests": ["全workspaceテスト", "型検査", "全5本番ビルド", "390x844ブラウザーテスト", "CI"]
+  },
+  "delivery": {"draft_pr": true, "merge": false, "deploy": false, "review_required": true}
+}

@@ -1,3 +1,5 @@
+// This is the first HTML entry: isolate storage before validating any return token.
+import "@estg/shared";
 import { validateAndConsumeSortHandoff } from "./sort-handoff-guard";
 
 const RESOURCE_KEYS = [

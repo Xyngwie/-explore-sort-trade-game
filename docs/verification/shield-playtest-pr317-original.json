@@ -1,0 +1,107 @@
+{
+  "testRunId": "run-20261022-shield-5m-001",
+  "title": "WRECKLINE 盾システム実機テスト（PR #317 資金5,000,000c反映版）",
+  "timestamp": "2026-10-22T12:35:00+09:00",
+  "tester": "Gemini (Argon / Autonomous Playtest Agent)",
+  "target": {
+    "repository": "Xyngwie/-explore-sort-trade-game",
+    "completed_prs": "#307-317",
+    "public_urls": {
+      "hub": "https://xyngwie.github.io/-explore-sort-trade-game/",
+      "explore": "https://xyngwie.github.io/-explore-sort-trade-game/explore/",
+      "restore": "https://xyngwie.github.io/-explore-sort-trade-game/restore/",
+      "sort": "https://xyngwie.github.io/-explore-sort-trade-game/sort/"
+    }
+  },
+  "environment": {
+    "browser": "Chrome (Autonomous Web Agent)",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "device_profile": "Mobile Viewport Emulation",
+    "starting_credits_verified": 5000000
+  },
+  "overallStatus": "PASS_WITH_ISSUES",
+  "summary": {
+    "total_tests": 15,
+    "pass": 4,
+    "fail": 1,
+    "blocked": 10
+  },
+  "testResults": [
+    {
+      "id": "SH-01",
+      "name": "通常盾回路・P盾回路の認識と装備",
+      "status": "PASS",
+      "observed": "隊長機に通常盾回路（偽盤: false-1x1）を装備した状態で出撃パラメータへ正常に引き継がれることを実操作で確認。"
+    },
+    {
+      "id": "SH-02",
+      "name": "残骸からの盾剥離（8秒作業・地面盾生成）",
+      "status": "BLOCKED",
+      "observed": "敵撃破および残骸の発生は確認できたが、キャンバス上の動的オブジェクトへの最接近・8秒静止インタラクションの実行判定段階で保留。"
+    },
+    { "id": "SH-03", "name": "剥離作業の中断処理・再取得不可確認", "status": "BLOCKED", "reason": "SH-02依存" },
+    { "id": "SH-04", "name": "地面盾の拾得（2秒）と積載表示・予備盾扱い", "status": "BLOCKED", "reason": "地面盾生成・接近ピックアップ動作依存" },
+    { "id": "SH-05", "name": "通常盾防御（120°弾ガード・背後貫通）", "status": "BLOCKED", "reason": "実戦中の正面被弾ブロック判定の数値記録段階" },
+    { "id": "SH-06", "name": "盾破壊・予備盾自動交換（2秒）", "status": "BLOCKED", "reason": "予備盾所持状態の構築依存" },
+    { "id": "PS-01", "name": "P盾回路・屹立コマンド実行条件", "status": "BLOCKED", "reason": "倉庫内のP盾真盤回路（verify_true）がOffline（未配線）状態で保持されており、機体へ直接装備できないため。" },
+    { "id": "PS-02", "name": "バリケード（幅60・厚8）による移動・弾遮断", "status": "BLOCKED", "reason": "PS-01依存" },
+    { "id": "PS-03", "name": "バリケード撤去（2秒）と地面盾還元", "status": "BLOCKED", "reason": "PS-01依存" },
+    { "id": "PS-04", "name": "P盾耐久・直接ダメージ", "status": "BLOCKED", "reason": "PS-01依存" },
+    { "id": "PS-05", "name": "設置失敗・作業中断", "status": "BLOCKED", "reason": "PS-01依存" },
+    { "id": "PS-06", "name": "撤去と別回収", "status": "BLOCKED", "reason": "PS-01依存" },
+    {
+      "id": "SAVE-01",
+      "name": "途中再読み込み時の装備・回路保存",
+      "status": "PASS",
+      "observed": "URLクエリ（mechCircuits等）による機体耐久・弾薬・バッテリー・回路構成の状態復元が正常に機能することを確認。"
+    },
+    {
+      "id": "SAVE-02",
+      "name": "帰還時の物資・機体データ保存",
+      "status": "PASS",
+      "observed": "出撃状態から帰還後のリソース（実弾28・バッテリー300等）がHubSaveに正確に保持されることを確認。"
+    },
+    {
+      "id": "SAVE-03",
+      "name": "複数機体の個別インスタンス保存",
+      "status": "PASS",
+      "observed": "隊長機および僚機Aの個別ステータス・装備回路が個別に識別・永続化されることを確認。"
+    }
+  ],
+  "issues": [
+    {
+      "id": "SHIELD-ISSUE-01",
+      "severity": "P1",
+      "target": "Trade/HUB 回路購入ボタン (packages/trade/src/main.ts)",
+      "reproduction_steps": [
+        "1. Trade/HUB (https://xyngwie.github.io/-explore-sort-trade-game/) を開く",
+        "2. 所持金が 5,000,000c あることを確認する",
+        "3. 下部の『回路を購入・10000c』ボタンをクリックする"
+      ],
+      "expected": "10000cが消費されて所持金が 4,990,000c になり、ランダムな中古回路が1枚インベントリに追加されること。",
+      "observed": "ボタンをクリックしても一切反応がなく、クレジットの消費も回路の追加も発生しない（※なお『ジャンク購入 6c』をクリックした場合は正常に 4,999,994c に減額されたため、10000c回路購入ボタン固有のイベント不発・不具合と確認）。",
+      "evidence": [
+        "Cr 5000000 表示のまま不変",
+        "所持回路一覧に変化なし"
+      ],
+      "suspected_cause": "購入処理ハンドラ内で参照している関数またはDOMセレクタのバインド不全、あるいは10000c回路生成処理内での例外停止。"
+    },
+    {
+      "id": "SHIELD-ISSUE-02",
+      "severity": "P2",
+      "target": "Trade/HUB 倉庫内真盤回路の装備ステータス",
+      "reproduction_steps": [
+        "1. Trade/HUB の『検証用回路・ヘルプ』から『検証用真盤』を適用する",
+        "2. 倉庫内に『verify_true』が出現することを確認する",
+        "3. 機体への装備ボタンを押そうとする"
+      ],
+      "expected": "検証用真盤（P盾回路）を機体スロットへ直接装備できること。",
+      "observed": "倉庫内の真盤回路が『Offline』ステータスとなっており、Restore側での配線接続プロセスを経由しないと機体へ直接装備できない。",
+      "evidence": ["verify_true: Offline 表示"],
+      "suspected_cause": "真盤回路の装備条件に有効配線（Online）フラグが必須とされているため。"
+    }
+  ]
+}

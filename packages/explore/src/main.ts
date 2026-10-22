@@ -1,3 +1,5 @@
+import { mountShieldDebugConsole } from "@estg/shared";
+import { prepareRequestedShieldFixture, inspectShieldFixture } from "./debug/shieldFixture";
 import { squadSees } from "./game/vision";
 import { canBuildBarricade, startBarricade, startDismantle, wallEntries, barricadeWorking, interruptBarricade } from "./game/barricades";
 import { wallCircleOverlap } from "./game/barricadeGeometry";
@@ -158,6 +160,7 @@ import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSa
 import { checkpointSortieSearch, resortiePlan, resortieSearch } from "./game/resortie";
 import { refillBeforeSortie } from "./game/preSortieAmmo";
 
+prepareRequestedShieldFixture();
 const root = document.querySelector<HTMLDivElement>("#app")!;
 /** 項目4-1 C8: the captain's 「積載 n/2・速度 N」 in the existing captain HUD line. */
 function leaderLoadHud(world: World): string {
@@ -279,6 +282,7 @@ function bootExploreSession(): { world: World; paused: boolean; leaveForHub: boo
 
 const exploreSession = bootExploreSession();
 let world: World = exploreSession.world;
+mountShieldDebugConsole(() => inspectShieldFixture(world));
 let sortiePaused = exploreSession.paused;
 const leaveForHub = exploreSession.leaveForHub;
 if (leaveForHub) {

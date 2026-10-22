@@ -1,3 +1,4 @@
+import { DEBUG_FIXTURE_ACTIVE, debugModuleUrl } from "./debug-storage";
 /** Canonical preview hosts on GitHub Pages (single project site, module subpaths). */
 export const MODULE_URLS = {
   explore: "https://xyngwie.github.io/-explore-sort-trade-game/explore/",
@@ -40,7 +41,7 @@ export function resolveModuleBaseUrl(
   },
 ): string {
   const fromOverride = opts?.overrides?.[key]?.trim();
-  if (fromOverride) return fromOverride;
+  if (fromOverride) return debugModuleUrl(fromOverride);
 
   const host =
     opts?.hostname ??
@@ -50,10 +51,10 @@ export function resolveModuleBaseUrl(
     (globalThis as { location?: { hostname?: string } }).location
       ? (globalThis as { location: { hostname: string } }).location.hostname
       : null);
-  if (host === "localhost" || host === "127.0.0.1") {
-    return LOCAL_DEV_MODULE_URLS[key];
+  if ((host === "localhost" || host === "127.0.0.1") && !(DEBUG_FIXTURE_ACTIVE && location.pathname.startsWith("/-explore-sort-trade-game/"))) {
+    return debugModuleUrl(LOCAL_DEV_MODULE_URLS[key]);
   }
-  return MODULE_URLS[key];
+  return debugModuleUrl(MODULE_URLS[key]);
 }
 
 export const PIECES_PER_CONTAINER = 25;

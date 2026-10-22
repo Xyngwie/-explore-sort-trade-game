@@ -1,3 +1,4 @@
+import { mountShieldDebugConsole } from "@estg/shared";
 /**
  * Restore entry. Large v2 Perfect boards (N ≥ 15) run a uniqueness search
  * while the app bootstraps; paint a 「生成中…」 notice first, then load the
@@ -27,3 +28,5 @@ if (slowSide != null) {
 } else {
   loadApp();
 }
+
+mountShieldDebugConsole();

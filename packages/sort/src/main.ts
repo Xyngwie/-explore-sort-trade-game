@@ -1,3 +1,4 @@
+import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
 import {
   BASIC_MATERIAL_LABEL_JA,
@@ -582,3 +583,5 @@ window.addEventListener("popstate", () => {
 });
 
 render();
+
+mountShieldDebugConsole();

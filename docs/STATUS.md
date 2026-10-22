@@ -2,7 +2,23 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / 盾検証デバッグモード（2026-10-22）
+- Who: Codex / 実装担当
+- What: cursor/codex-shield-debug。専用保存領域・6プリセット・状態表示・証拠出力
+- Why: 神宮提示SPEC_DECISION「盾システム検証用デバッグモード」
+- Scope: 盾検証用環境のみ。通常の購入/装備/盾ルールは維持。マージ・デプロイは行わない
+- Status: main f53788c（#317）、公開デプロイ39713446582 PASSを基準に実装完了。全workspaceテスト/型検査・全5本番ビルドPASS。390x844の全プリセット、盾実射撃/予備交換、剥離/建設途中再開、移動遮断/撤去/別拾得、帰還/HUB/再出撃、証拠出力/明示初期化、全5モジュールの通常local/session保存不変をPASS。詳細SHIELD_DEBUG_MODE.md、最終head/CIはDraft PR本文参照。監査待ち。物理実機・公開版の新機能NOT_RUN。未マージ・未デプロイ
+
+## Codex / PR317第三者テストの再検証（2026-10-22）
+- Who: Codex / 調査・検証担当
+- What: cursor/codex-circuit-purchase-review。購入/Offline装備の公開版再現確認と証拠保存
+- Why: 神宮からのrun-20261022-shield-5m-001レポート
+- Scope: 原本・調査結果・再実行スクリプト・仕様質問のみ。ゲームコードと保存契約は変更しない
+- Status: main f53788c（#317）を基準に公開390x844で購入取消/承認/Offline装備PASS。購入ハンドラ不良は未再現。装備上限と検証回路の種類の誤認を確認。詳細SHIELD_PLAYTEST_PR317_REVIEW.md。T1をspec-questions/shield-test-fixture.jsonへ提出し、追加テスト機能は判断待ち。物理実機NOT_RUN。本作業のマージ/デプロイNOT_TRIGGERED
+
 ## Codex / 実機テスト用の初期資金（2026-10-22）
+
+追記：#317はf53788cでマージ済み。公開デプロイ39713446582 PASS。以下は提出時の履歴。
 - Who: Codex / 実装担当
 - What: cursor/codex-test-starting-credits。新規開始とシード読込の資金を5,000,000cへ変更
 - Why: 神宮の実機テストの資金不足への対応指示

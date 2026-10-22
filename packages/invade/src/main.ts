@@ -1,3 +1,4 @@
+import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
 import {
   CTA_CHIP,
@@ -871,3 +872,5 @@ window.addEventListener("popstate", () => {
   forcedLockHistoryArmed = false;
   armForcedLockIfNeeded();
 });
+
+mountShieldDebugConsole();
