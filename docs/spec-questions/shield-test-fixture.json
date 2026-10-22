@@ -56,6 +56,9 @@
       "P回路ロックは新規入手だけを制御するか、既存の真盤の装備・効果まで停止するか。",
       "テスト設定の保存/解除/初期化と、公開画面での表示条件。",
       "通常盾/P盾の完成済み検証回路の付与と装備枠確保を別途必要とするか。"
-    ]
+    ],
+    "current_scope_resolved_by": "docs/spec-questions/shield-debug-decision.json",
+    "blocking_current_implementation": false,
+    "scope_note": "以下の任意サイズ・任意ロック切替は汎用デバッグコンソールの後続議題。今回の盾用6プリセットは新しいSPEC_DECISIONに従い実装し、この旧質問を理由に保留しない。"
   }
 }

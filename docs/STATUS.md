@@ -7,7 +7,7 @@
 - What: cursor/codex-shield-debug。専用保存領域・6プリセット・状態表示・証拠出力
 - Why: 神宮提示SPEC_DECISION「盾システム検証用デバッグモード」
 - Scope: 盾検証用環境のみ。通常の購入/装備/盾ルールは維持。マージ・デプロイは行わない
-- Status: main f53788c（#317）、公開デプロイ39713446582 PASSを基準に実装中。通常セーブ隔離を最優先で検証しDraftへ提出予定。物理実機NOT_RUN
+- Status: main f53788c（#317）、公開デプロイ39713446582 PASSを基準に実装完了。全workspaceテスト/型検査・全5本番ビルドPASS。390x844の全プリセット、盾実射撃/予備交換、剥離/建設途中再開、移動遮断/撤去/別拾得、帰還/HUB/再出撃、証拠出力/明示初期化、全5モジュールの通常local/session保存不変をPASS。詳細SHIELD_DEBUG_MODE.md、最終head/CIはDraft PR本文参照。監査待ち。物理実機・公開版の新機能NOT_RUN。未マージ・未デプロイ
 
 ## Codex / PR317第三者テストの再検証（2026-10-22）
 - Who: Codex / 調査・検証担当

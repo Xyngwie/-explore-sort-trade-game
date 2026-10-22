@@ -1,0 +1,72 @@
+{
+  "viewport": [
+    390,
+    844
+  ],
+  "method": "same-origin local production builds, real UI, DEBUG_FIXTURE",
+  "physicalDevice": "NOT_RUN",
+  "publicVersion": "NOT_RUN",
+  "results": [
+    {
+      "preset": "NO_SHIELD_NO_CIRCUIT",
+      "status": "PASS",
+      "reloadPreservesIdentity": true,
+      "normalSaveUnchanged": true
+    },
+    {
+      "preset": "NORMAL_SHIELD_AND_RESERVE",
+      "status": "PASS",
+      "reloadPreservesIdentity": true,
+      "normalSaveUnchanged": true
+    },
+    {
+      "preset": "STRIPPING_READY",
+      "status": "PASS",
+      "reloadPreservesIdentity": true,
+      "normalSaveUnchanged": true
+    },
+    {
+      "preset": "P_SHIELD_LEADER_READY",
+      "status": "PASS",
+      "reloadPreservesIdentity": true,
+      "normalSaveUnchanged": true
+    },
+    {
+      "preset": "P_SHIELD_WINGMAN_READY",
+      "status": "PASS",
+      "reloadPreservesIdentity": true,
+      "normalSaveUnchanged": true
+    },
+    {
+      "preset": "BARRICADE_PERSISTENCE_READY",
+      "status": "PASS",
+      "reloadPreservesIdentity": true,
+      "normalSaveUnchanged": true
+    },
+    {
+      "scenario": "hostile fire, front shield depletion and two-second reserve exchange",
+      "status": "PASS"
+    },
+    {
+      "scenario": "real jobs, evidence export, movement blocking, dismantle/pickup, return/HUB/re-sortie, explicit reset, all-module and exit isolation",
+      "status": "PASS"
+    }
+  ],
+  "date": "2026-10-22",
+  "baseline_main": "f53788cb19b4b61d29663d66f50accfc9de4e05c",
+  "type": "DEBUG_FIXTURE_VERIFICATION",
+  "workspaceTests": "PASS",
+  "typecheck": "PASS (all workspace test commands run tsc)",
+  "productionBuilds": {
+    "trade": "PASS",
+    "explore": "PASS",
+    "sort": "PASS",
+    "invade": "PASS",
+    "restore": "PASS"
+  },
+  "projectileCollisionRegression": "PASS: existing barricades selftest (raw/EMP/overkill/rectangle sweeps)",
+  "returnTokenIsolation": "PASS: first HTML gate cannot consume a matching normal-save token",
+  "ci": "See final PR head checks",
+  "merge": "NOT_PERFORMED",
+  "deploy": "NOT_TRIGGERED"
+}

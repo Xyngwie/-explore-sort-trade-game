@@ -1,4 +1,6 @@
 export * from "./constants";
+export * from "./debug-storage";
+export * from "./debug-console";
 export * from "./catalog";
 export * from "./expedition";
 export * from "./handoff";
