@@ -7,7 +7,7 @@
 - What: cursor/codex-lab-public-tests。第三者手順15項目を先に作成、その後2件のUXを再現調査
 - Why: 神宮の公開アルファ実験室第三者検証準備IMPLEMENTATION_ORDER
 - Scope: 手順・再現済み問題のみ。独立修正は別Draft。マージ・デプロイしない
-- Status: #319はd093141でマージ済み、同一コミットの公開デプロイ39777940991 SUCCESS。公開入口を確認中。手順はverification/alpha-lab-319-public-test-plan.json。新UX指摘は過去の購入/Offline指摘とは別件
+- Status: #319はd093141でマージ済み、同一コミットの公開デプロイ39777940991 SUCCESS。公開入口PASS。公開390x844の7プリセット切替で旧セッション残留は未再現、密集タップの設置盾優先を再現。詳細ALPHA_LAB_PUBLIC_REVIEW.md。手順はverification/alpha-lab-319-public-test-plan.json。新UX指摘は過去の購入/Offline指摘とは別件
 
 ## Codex / 公開アルファ実験室（2026-10-22）
 
