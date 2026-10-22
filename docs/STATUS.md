@@ -2,7 +2,16 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / 公開版検証準備・盾UX調査（2026-10-22）
+- Who: Codex / 調査・実装担当
+- What: cursor/codex-lab-public-tests。第三者手順15項目を先に作成、その後2件のUXを再現調査
+- Why: 神宮の公開アルファ実験室第三者検証準備IMPLEMENTATION_ORDER
+- Scope: 手順・再現済み問題のみ。独立修正は別Draft。マージ・デプロイしない
+- Status: #319はd093141でマージ済み、同一コミットの公開デプロイ39777940991 SUCCESS。公開入口を確認中。手順はverification/alpha-lab-319-public-test-plan.json。新UX指摘は過去の購入/Offline指摘とは別件
+
 ## Codex / 公開アルファ実験室（2026-10-22）
+
+追記：#319はd093141でマージ済み、公開デプロイ39777940991 PASS。以下は提出時の履歴。
 - Who: Codex / 実装担当
 - What: cursor/codex-alpha-lab。#319自由編集UI・通常セーブの一方向コピー・証拠出力
 - Why: 神宮提示IMPLEMENTATION_ORDER #319
