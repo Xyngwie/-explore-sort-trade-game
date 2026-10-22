@@ -259,6 +259,7 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
   const statuses = seedHub.fleet.map((m) => m.status).sort();
   assert.deepEqual(statuses, ["needs_repair", "operational", "operational"]);
   assert.ok(seedHub.credits >= 50);
+  assert.equal(seedHub.credits, INITIAL_HUB.credits, "playtest seed must keep the configured starting wallet");
   // Four-resource model (#115/#119): typed repair cost collapses to armor;
   // legacy ids (mat_* / part_*) are compatibility-only and never stored.
   assert.ok((seedHub.inventory.armor ?? 0) >= 1);

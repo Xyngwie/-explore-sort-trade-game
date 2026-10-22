@@ -4,10 +4,10 @@
 
 ## Codex / 実機テスト用の初期資金（2026-10-22）
 - Who: Codex / 実装担当
-- What: cursor/codex-test-starting-credits。新規開始時のINITIAL_HUB資金を5,000,000cへ変更
+- What: cursor/codex-test-starting-credits。新規開始とシード読込の資金を5,000,000cへ変更
 - Why: 神宮の実機テストの資金不足への対応指示
 - Scope: 初期資金のみ。既存セーブ残高の上書きや自動再給付は追加しない
-- Status: #316は00a4cb2でマージ済み。初期値変更済み。全workspace型検査/テスト・Trade本番ビルドPASS。390pxブラウザーで新規/初期化5,000,000c、既存123c/0cの保持とHUB表示PASS。Draft提出・監査待ち、最終head/CIはPR本文参照。未マージ・未デプロイ
+- Status: #316は00a4cb2でマージ済み。初期値変更済み。全workspace型検査/テスト・Trade本番ビルドPASS。390pxブラウザーで新規/初期化5,000,000c、既存123c/0cの保持（シード経路も同額に統一）とHUB表示PASS。Draft提出・監査待ち、最終head/CIはPR本文参照。未マージ・未デプロイ
 
 ## Codex / #316 盾関連統合確認（2026-10-21）
 - Who: Codex / 実装担当
