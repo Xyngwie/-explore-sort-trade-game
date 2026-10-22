@@ -7,7 +7,7 @@
 - What: cursor/codex-alpha-lab。#319自由編集UI・通常セーブの一方向コピー・証拠出力
 - Why: 神宮提示IMPLEMENTATION_ORDER #319
 - Scope: 実験用保存領域の編集のみ。既存6プリセット・通常ルールを維持。通常セーブへの書戻し・マージ・デプロイなし
-- Status: #318は64d3f83でマージ済み。同コミットの公開デプロイ39764118392 PASS。最新mainから新規ブランチを作成し実装中。Draft提出まで進める。物理実機・公開版の新機能NOT_RUN
+- Status: #318は64d3f83でマージ済み。同コミットの公開デプロイ39764118392 PASS。最新mainから実装完了。全workspaceテスト/型検査・全5ビルド、旧#318全6プリセット/操作、追加390x844の自由編集/小数HP/個別機体/屹立撤去拾得/帰還再出撃/コピー承認取消/通常local-session不変/署名除外をPASS。詳細ALPHA_LAB.mdとverification/alpha-lab-319.json。最終head・CIはDraft PR本文参照。監査待ち、未マージ・未デプロイ。物理実機・公開版の新機能NOT_RUN
 
 ## Codex / 盾検証デバッグモード（2026-10-22）
 

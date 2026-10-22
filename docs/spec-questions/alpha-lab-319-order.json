@@ -1,0 +1,28 @@
+{
+  "type": "IMPLEMENTATION_ORDER",
+  "issue": 319,
+  "title": "公開アルファ実験室：自由編集型デバッグモード",
+  "requested_by": "神宮",
+  "assigned_to": "Codex / 実装担当",
+  "reviewer": "風紀委員",
+  "status": "IMPLEMENTATION_REQUEST",
+  "priority": "HIGH",
+  "repository": "Xyngwie/-explore-sort-trade-game",
+  "source_record": "神宮がチャットで提示したIMPLEMENTATION_ORDERの実装要件を記録した抜粋。仕様の追加決定ではない。",
+  "branch_policy": {"base": "PR #318がマージされた最新main", "pr": "新規Draft PR #319", "do_not_start_from": "未マージの#318ブランチ", "prerequisite": "PR #318のマージとデプロイ状況を確認する", "merge_allowed": false, "deploy_allowed": false},
+  "public_access": {"name": "アルファ実験室", "location": "HUB", "visibility": "全プレイヤーに公開", "authentication_required": false, "secret_command_required": false, "description": "資金・回路・盾・機体の状態を自由に変更して遊べるアルファ版の実験機能", "alpha_notice": "実験用の機能です。予期しない挙動が発生する場合があります。"},
+  "inherit_from_pr318": {"preserve": ["6種類の盾検証プリセット", "DEBUG_FIXTUREの状態表示", "盾ID・現在HP・最大HP・所有先の確認", "JSON証拠出力", "作業途中状態の保存", "帰還・再出撃時の検証状態維持", "通常セーブとの保存隔離", "検証領域の初期化・再生成"], "do_not_regress": true, "reuse_existing_implementation": true, "avoid_reimplementing_shield_logic": true},
+  "features": {
+    "credits_editor": {"operations": ["現在の所持金を表示", "任意の非負整数を入力", "指定額へ設定", "指定額を加算", "0へ設定", "初期状態へ戻す"], "validation": ["NaN・Infinity・負数を拒否", "安全に保存できない数値を拒否", "変更後はHUB表示と保存データを一致させる"]},
+    "circuit_editor": {"operations": ["既存の回路一覧を表示", "既存の回路効果から種類を選んで生成", "真盤・偽盤を選択", "Online・Offlineを選択", "装備先の機体を指定", "装備解除", "検証用回路の削除", "効果・装備先・配線状態を確認"], "required_effects": ["shield", "p_shield"], "rules": ["回路の効果名は実装済みの定義から取得する", "存在しない効果を作らない", "真盤・偽盤の構造的制約を無視して不正な通常データを生成しない", "有効な回路の作成には#318の検証用生成処理を再利用する", "通常モードの回路枚数上限や配線ルールは変更しない", "実験室で制限を緩和する場合は実験室内部に限定し、その状態を明示する"]},
+    "shield_editor": {"operations": ["通常盾を生成", "隊長機へ装備", "僚機へ装備", "予備盾として追加", "地面盾として配置", "現在HPを変更", "最大HPを変更", "盾を削除", "盾のID・HP・所在を一覧表示"], "validation": ["HPは小数を許容", "現在HPは0以上かつ最大HP以下", "最大HPは正の有限数", "盾IDを重複させない", "同じ盾が複数の所有場所に存在しない", "装備・予備・地面・設置状態の遷移に既存の保存形式を使用する"], "barricade": {"allow_setup_preset": true, "allow_existing_wall_inspection": true, "actual_placement_and_dismantle": "既存の屹立・撤去処理を使用する", "do_not_bypass_collision_in_normal_game": true}},
+    "unit_editor": {"targets": ["隊長機", "個別の僚機"], "operations": ["対象機体を選択", "機体HPを表示・変更", "弾薬を表示・変更", "バッテリーを表示・変更", "積載状態を確認", "装備盾・予備盾を確認", "装備回路を確認"], "constraints": ["機体IDを維持", "他機体の装備を誤って変更しない", "保存形式と既存の機体上限を確認する", "通常モードの機体性能を変更しない"]},
+    "scenario_editor": {"operations": ["既存の6プリセットを選択", "現在の実験状態を再生成", "剥離可能な残骸を準備", "地面盾を準備", "設置盾を準備", "通常盾防御を試せる戦闘状態を準備", "帰還・再出撃の保存検証状態を準備"], "note": "敵AI・ダメージ計算・盾の判定ルールは既存のゲーム処理を使用する"}
+  },
+  "save_policy": {"default_mode": "ISOLATED_EXPERIMENT", "default_behavior": "実験室では専用セーブを使用する", "normal_save_protection": true, "allow_normal_save_copy": true, "copy_behavior": "通常セーブを実験領域へ一方向コピーする", "copy_requires_confirmation": true, "copy_does_not_modify_original": true, "allow_writeback_to_normal_save": false, "persistence": ["実験中の再読込", "モジュール間移動", "帰還", "再出撃"], "reset": {"experiment_only": true, "confirmation_required": true, "normal_save_untouched": true}},
+  "ui_requirements": {"mobile_first": true, "reference_viewport": "390x844", "sections": ["実験室トップ", "プリセット", "資金", "回路", "盾", "機体", "状態確認", "証拠JSON", "初期化・終了"], "interaction": ["タップで操作可能", "各変更の対象と変更前後を表示", "危険な変更は確認を求める", "成功・失敗を画面内で通知", "数値入力時にモバイルキーボードで操作可能", "横スクロールを発生させない", "実験モード中は常に識別表示を出す"], "avoid": ["開発者ツールを必須にする", "JSONの手入力を必須にする", "一般プレイヤーに内部IDの入力を要求する", "通常ゲーム画面を操作不能にする"]},
+  "evidence_and_reporting": {"export_json": true, "required_fields": ["type", "runId", "timestamp", "preset", "experimentMode", "gameVersion", "units", "circuits", "shields", "currentModule", "saveState"], "type_value": "ALPHA_LAB", "retain_debug_fixture_marker": true, "separate_from_normal_play_results": true, "exclude_unnecessary_personal_data": true},
+  "security_and_integrity": {"scope": "ブラウザー内のローカル実験機能", "no_server_admin_privileges": true, "no_remote_user_data_access": true, "no_automatic_normal_save_overwrite": true, "no_eval_or_arbitrary_code_execution": true, "validate_all_user_inputs": true, "preserve_existing_save_schema_where_possible": true, "fail_safely_on_invalid_data": true},
+  "testing": {"automated": ["全workspaceテスト", "型検査", "全5本番ビルド", "既存#318盾デバッグテスト", "390x844 Chromium操作テスト", "CI"], "manual": ["公開版の一般プレイヤー操作", "物理スマートフォンでの確認"], "report_not_run_separately": true},
+  "handoff": {"deliverable": "Draft PR #319", "review_gate": "風紀委員チェック", "owner_approval": "神宮", "merge": "別途承認", "deploy": "別途確認", "final_report": ["変更ファイル", "機能一覧", "通常セーブ保護の検証結果", "既存#318テスト結果", "追加テスト結果", "CI URL", "未実施項目", "既知の制限"]}
+}

@@ -1,5 +1,5 @@
 import {
-  DEBUG_FIXTURE_ACTIVE, DEBUG_META_KEY, INITIAL_HUB, buildVerifyPerfectLockedBoard,
+  DEBUG_FIXTURE_ACTIVE, DEBUG_META_KEY, INITIAL_HUB, buildDebugCircuit,
   buildTradeToExplorePayloadFromFleet, buildTradeToExploreUrl, createOwnedMech,
   emptyFieldObjectIdentities, isShieldPreset, normalizeHubSnapshot, registerWreckIdentity,
   saveHubSaveToLocalStorage, shieldIdentityFromWreck, writeSortieCheckpoint,
@@ -15,12 +15,7 @@ import { initializeEnemy } from "../game/enemyBehavior";
 import { worldFromCheckpointBody } from "../game/checkpoint";
 import type { World } from "../game/types";
 
-function circuit(id: string, owner: string, key: "shield" | "p_shield"): HubCircuitRecord {
-  const p = key === "p_shield", board = buildVerifyPerfectLockedBoard("DEBUG_FIXTURE");
-  if (!p) { board.puzzleId = "debug-normal-shield"; board.outcome = "bypass"; board.perfect = false; board.locked = false; }
-  return { circuitId: id, circuitBoard: board, outcome: p ? "fully_awakened" : "bypass", restoreState: p ? "fully_awakened" : "bypass",
-    locked: p, origin: "crafted", equippedTo: owner, effectKey: key };
-}
+const circuit = (id: string, owner: string, key: "shield" | "p_shield") => buildDebugCircuit(id, owner, key, key === "p_shield");
 
 /** Prepared state only. Every subsequent action runs the normal simulation. */
 export function buildShieldFixture(preset: ShieldPreset): {hub: HubSnapshot; world: World} {

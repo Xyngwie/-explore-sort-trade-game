@@ -1,5 +1,7 @@
 # 盾システム検証用デバッグモード
 
+#319で公開アルファ実験室へ拡張した。確認付きの通常セーブ一方向コピー・自由編集の最新仕様は [ALPHA_LAB.md](ALPHA_LAB.md) を参照。以下は#318の初期実装とプリセットの説明。
+
 仕様源: 神宮提示の [SPEC_DECISION](spec-questions/shield-debug-decision.json)。基準mainは `f53788cb19b4b61d29663d66f50accfc9de4e05c`（#317）。この変更はDraft・監査待ち。マージ・デプロイは行わない。
 
 ## 入口と操作

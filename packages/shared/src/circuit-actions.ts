@@ -513,3 +513,14 @@ export function keyIsFalse(key: string | null | undefined): key is FalseBoardEff
 export function keyIsTrue(key: string | null | undefined): key is TrueBoardEffectKey {
   return typeof key === "string" && TRUE_SET.has(key);
 }
+
+export const CIRCUIT_EFFECT_LABEL_JA: Record<string, string> = {
+  escort_range: "帯同", raid_attack: "遊撃", scout_activity: "偵察", point_defense_armor: "地点防衛",
+  orbit_speed: "周回戦闘", cover_fight: "カバー戦闘", dodge: "回避", melee: "接近戦", smg: "SMG",
+  shotgun: "散弾", mmr: "MMR", lmg: "LMG", fast_round: "高速弾", homing_round: "誘導弾", emp_round: "EMP 弾",
+  haul_speed: "運搬", cargo_slots: "積載力", cover_move: "カバー間移動", recover: "回収", shield: "盾", p_shield: "P盾",
+  march: "行進", protect: "保護", scatter: "散開", focus: "集中", pincer: "挟撃", entrench_hold: "陣地防衛",
+  forced_march: "強行軍", read_ahead: "先読", squad_haul: "運搬", trench: "塹壕", distribute: "分配",
+  lure: "誘引", suppress: "牽制", sort_yield: "資源確保", perfect_rate: "良品確保", gun_tune: "銃器整備",
+  armor_tune: "装甲改良", power_tune: "電源改良",
+};

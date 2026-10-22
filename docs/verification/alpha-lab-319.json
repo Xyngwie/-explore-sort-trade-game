@@ -1,0 +1,114 @@
+{
+  "date": "2026-10-22",
+  "baseline_main": "64d3f83d1bdaaee65d1891607bae5ce3a3f83ca5",
+  "pr318_deploy": {
+    "run": 39764118392,
+    "status": "PASS"
+  },
+  "workspaceTests": "PASS",
+  "typecheck": "PASS (all workspace test commands run tsc)",
+  "productionBuilds": {
+    "trade": "PASS",
+    "explore": "PASS",
+    "sort": "PASS",
+    "invade": "PASS",
+    "restore": "PASS"
+  },
+  "existing318": {
+    "viewport": [
+      390,
+      844
+    ],
+    "method": "same-origin local production builds, real UI, DEBUG_FIXTURE",
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN",
+    "results": [
+      {
+        "preset": "NO_SHIELD_NO_CIRCUIT",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "NORMAL_SHIELD_AND_RESERVE",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "STRIPPING_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "P_SHIELD_LEADER_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "P_SHIELD_WINGMAN_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "BARRICADE_PERSISTENCE_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "scenario": "hostile fire, front shield depletion and two-second reserve exchange",
+        "status": "PASS"
+      },
+      {
+        "scenario": "real jobs, evidence export, movement blocking, dismantle/pickup, return/HUB/re-sortie, explicit reset, all-module and exit isolation",
+        "status": "PASS"
+      }
+    ]
+  },
+  "alphaLab": {
+    "viewport": [
+      390,
+      844
+    ],
+    "gameVersion": "fdc0743eb8971cd37843744a5b6afe07a2faab0e-dirty",
+    "results": [
+      {
+        "scenario": "public entry and credit set/add/zero/initial, invalid numbers, reload",
+        "status": "PASS"
+      },
+      {
+        "scenario": "actual shield/P-shield Online/Offline creation, per-unit equip, duplicate rejection and delete",
+        "status": "PASS"
+      },
+      {
+        "scenario": "equipped/reserve/ground generation, identity-preserving transfer, fractional HP, invalid HP and delete",
+        "status": "PASS"
+      },
+      {
+        "scenario": "bounded per-unit edits and persisted paused sortie across HUB changes",
+        "status": "PASS"
+      },
+      {
+        "scenario": "free edits use real barricade/dismantle/pickup and return/re-sortie persistence",
+        "status": "PASS"
+      },
+      {
+        "scenario": "curated ALPHA_LAB/DEBUG_FIXTURE evidence, confirmed/cancelled copy, original unchanged, reset and exit",
+        "status": "PASS"
+      }
+    ],
+    "normalSaveProtection": "PASS",
+    "physicalDevice": "NOT_RUN",
+    "publicVersionNewFeature": "NOT_RUN"
+  },
+  "localBuildNote": "コミット前の作業ツリーをビルドしたためgameVersionに-dirtyを記録。最終headのCIはPR本文参照。",
+  "ci": "See final PR head checks",
+  "publicNewFeature": "NOT_RUN",
+  "physicalSmartphone": "NOT_RUN",
+  "merge": "NOT_PERFORMED",
+  "deploy": "NOT_TRIGGERED"
+}

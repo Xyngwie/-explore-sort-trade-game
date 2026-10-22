@@ -93,6 +93,7 @@ const showInjectionDetails = isPerfectCircuitDebugContext({
 /** M4/M5: trade→invade / trade→restore links + invade/restore query ingest (HANDOFF_M45). */
 
 let state: HangarState = createInitialHangar();
+window.addEventListener("alpha-lab-change",()=>{state=createInitialHangar();render();});
 {
   const ingested = ingestLocationSearch(state, window.location.search);
   state = ingested.state;
