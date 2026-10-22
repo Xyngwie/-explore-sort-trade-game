@@ -1,3 +1,4 @@
+import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
 import { mountShieldDebugConsole } from "@estg/shared";
 import { prepareRequestedShieldFixture, inspectShieldFixture } from "./debug/shieldFixture";
 import { createAlphaLabHost, applyPendingLabCircuits } from "./debug/alphaLabHost";
@@ -389,11 +390,13 @@ let last = performance.now();
 let needsDom = true;
 let selectedBarricadeKey:string|null=null;
 let stripTargetPending = false;
+let mapTargetPick: { point: {x:number;y:number}; radius:number; targets:MapTarget[] } | null = null;
 const shieldPanelPainted = new WeakMap<HTMLElement,string>();
 let selectedShieldPosition: {x:number;y:number}|null = null;
 function paintShieldPanel():void {
   const panel=document.getElementById("shield-panel");if(!panel)return;
-  const html=shieldPanelHtml(world,selectedShieldPosition)+barricadePanelHtml(world,selectedBarricadeKey);
+  if (world.phase !== "sortie" || stripTargetPending || world.circuitPlay?.pending) mapTargetPick = null;
+  const html=mapTargetChoicesHtml(mapTargetPick?.targets ?? [])+shieldPanelHtml(world,selectedShieldPosition)+barricadePanelHtml(world,selectedBarricadeKey);
   if(shieldPanelPainted.get(panel)!==html){panel.innerHTML=html;shieldPanelPainted.set(panel,html);}
 }
 function showShieldNotices():void {for(const message of takeShieldNotices(world))flashLogToast(message);}
@@ -611,6 +614,7 @@ function bindCanvas(): void {
   canvas.addEventListener("pointerdown", (e) => {
     if (world.phase !== "sortie" || !canvas) return;
     const pt = worldFromCanvas(canvas, world, e.clientX, e.clientY);
+    mapTargetPick = null;
     if (stripTargetPending) {
       const result = startStrippingAt(world, pt, freshHub(), world.balance.interactRadius);
       if (result === "started") { stripTargetPending = false; input.clickMove = null; input.fire = false; input.interact = false; }
@@ -621,6 +625,15 @@ function bindCanvas(): void {
     // P1: ~24 screen px around a wingman selects it (scaled for phone widths).
     const rect = canvas.getBoundingClientRect();
     const perPx = rect.width > 0 ? world.camera.w / rect.width : 1;
+    const radius = Math.max(24,24*perPx);
+    if (!world.circuitPlay?.pending) {
+      const targets = mapTargetsAt(world, pt, radius);
+      if (targets.length > 1) {
+        mapTargetPick = {point: pt, radius, targets};
+        selectedBarricadeKey = null; selectedShieldPosition = null;
+        paintShieldPanel(); return;
+      }
+    }
     const wall=wallEntries(world).find(([,b])=>squadSees(world,b.pos)&&wallCircleOverlap(b,pt,Math.max(24,24*perPx)));
     selectedBarricadeKey=wall?.[0]??null;
     if(wall && !world.circuitPlay?.pending){paintShieldPanel();return;}
@@ -1167,6 +1180,31 @@ function renderDom(): void {
   });
   document.getElementById("btn-scatter")?.addEventListener("click", () => {
     afterCommand(executeExploreCommand(world, { id: "scatter_search" }));
+  });
+  document.getElementById("shield-panel")?.addEventListener("click",e=>{
+    const button=(e.target as Element).closest<HTMLButtonElement>("[data-map-choice]");
+    if (!button || !mapTargetPick) return;
+    const pick = mapTargetPick, choice = button.dataset.mapChoice;
+    mapTargetPick = null;
+    if (choice === "move") {
+      if (world.circuitPlay) world.circuitPlay.wingSelect = null;
+      noteCollectTap(world, pick.point); input.clickMove = {...pick.point};
+      paintWingPalette();
+    } else if (choice !== "cancel") {
+      const old = pick.targets[Number(choice)];
+      const target = old && mapTargetsAt(world,pick.point,pick.radius).find(t=>t.kind===old.kind && t.key===old.key);
+      if (!target || world.circuitPlay?.pending || stripTargetPending) flashLogToast("対象が変わりました。もう一度タップしてください");
+      else if (target.kind === "wall") selectedBarricadeKey = target.key;
+      else if (target.kind === "ground") selectedShieldPosition = {...target.pos};
+      else if (target.kind === "wing") { openWingPalette(world,[target.key]); paintWingPalette(); }
+      else {
+        const result = startStrippingAt(world,target.pos,freshHub(),0);
+        if (result === "started") { input.clickMove=null; input.fire=false; input.interact=false; }
+        flashLogToast(result === "started" ? "残骸盾：剥離開始" : result === "far" ? "残骸が遠すぎます" : "この残骸は作業できません");
+        needsDom = true;
+      }
+    }
+    paintShieldPanel();
   });
   document.getElementById("shield-panel")?.addEventListener("click",e=>{
     const target=(e.target as Element).closest<HTMLButtonElement>("[data-shield-pick],[data-shield-drop]");if(!target)return;

@@ -600,3 +600,7 @@ button.cover-active {
 
 /* #316: authored button layout must not override the P-shield eligibility gate. */
 #btn-barricade[hidden] { display: none; }
+
+#map-target-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+#map-target-choices strong { flex-basis: 100%; }
+#map-target-choices button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
