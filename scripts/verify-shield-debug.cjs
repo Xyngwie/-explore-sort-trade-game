@@ -46,9 +46,9 @@ const presets=['NO_SHIELD_NO_CIRCUIT','NORMAL_SHIELD_AND_RESERVE','STRIPPING_REA
   // Leader placement, actual wall tap/dismantle and separate pickup.
   await start('P_SHIELD_LEADER_READY');await resume();await p.locator('#btn-barricade').click();await p.waitForFunction(()=>document.body.textContent.includes('屹立：盾を設置しました'));
   await p.keyboard.down('d');await p.waitForTimeout(500);await p.keyboard.up('d');const blocked=await inspect();assert(blocked.units[0].pos.x<610,'movement must stop at wall');
-  await tap('wallPoints');
+  await tap('wallPoints');if(await p.locator('#map-target-choices').count())await p.locator('[data-map-choice]').filter({hasText:/^設置盾/}).first().click();
   await p.locator('[data-barricade-dismantle="debug-equipped"]').click();await p.waitForFunction(()=>document.body.textContent.includes('撤去：盾を地面に戻しました'));
-  await tap('wallPoints');await p.locator('[data-shield-pick="debug-equipped"]').click();await p.locator('[data-shield-drop="debug-equipped"]').waitFor();
+  await tap('wallPoints');if(await p.locator('#map-target-choices').count())await p.locator('[data-map-target-kind=ground][data-map-target-key=debug-equipped]').click();await p.locator('[data-shield-pick="debug-equipped"]').click();await p.locator('[data-shield-drop="debug-equipped"]').waitFor();
   // The recovered wall is the same shield, now equipped after a separate pickup.
   await p.reload();await p.locator('#sortie-paused').waitFor();w=await checkpoint();assert.equal(w.shieldState.identities.shields['debug-equipped'].hp,47.25);assert.equal(w.shieldState.equipped.leader.key,'debug-equipped');await resume();
   await p.locator('#btn-extract').click();await p.waitForFunction(()=>document.body.textContent.includes('作戦結果'),null,{timeout:25000});await open();const result=await inspect();assert.equal(result.type,'DEBUG_FIXTURE');
