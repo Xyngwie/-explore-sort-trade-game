@@ -510,5 +510,10 @@
     "groundCandidates": 0,
     "candidateMenu": 0
   },
-  "errors": []
+  "errors": [],
+  "asset": {
+    "url": "https://xyngwie.github.io/-explore-sort-trade-game/assets/index-drgZncmp.js",
+    "expectedCommitPresent": true,
+    "method": "public HTML script URL resolved, fetched JS contains full deployment commit SHA"
+  }
 }

@@ -1,7 +1,7 @@
 # #319 公開版の第三者検証準備・UX調査
 
 2026-10-22、main `d093141a54e0e788d173182df26d49ee5c0ac75c`。
-#319はMERGED。同コミットの[公開デプロイ39777940991](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/39777940991)はSUCCESS。
+#319はMERGED。同コミットの[公開デプロイ39777940991](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/39777940991)はSUCCESS。公開HUBの配信JS `assets/index-drgZncmp.js` 内にも同じフルSHAが含まれることを確認した。
 
 Gemini用手順：[15項目のJSON](verification/alpha-lab-319-public-test-plan.json)。各項目は未実行のテンプレートであり、下記の限定調査のPASSを転記してはいけない。
 各ケースの手順・判定・証拠・通常セーブの前後比較を記載。コピー/初期化はテスター本人が確認し承認する。画面比較だけで保存全キー不変と断定しない。
@@ -23,7 +23,7 @@ Gemini用手順：[15項目のJSON](verification/alpha-lab-319-public-test-plan.
 
 SHIELD-ISSUE-01：未再現。強制再起動などの推測修正はしない。今回の7切替は全30通りの組合せやすべての編集途中/チェックポイント状態の網羅ではない。継続報告には切替前後preset・debug_run・確認ダイアログの承認有無・状態JSONを添付してほしい。
 
-SHIELD-ISSUE-02：再現。独立した最新main起点のDraftで、重複候補があるときだけ候補を選べるよう修正する。単独対象・明示的個別指示・剥離対象指定を維持。物理・盾値・作業時間・保存契約は変更しない。
+SHIELD-ISSUE-02：再現。独立した最新main起点のDraft #321で、重複候補があるときだけ候補を選べるよう修正する。単独対象・明示的個別指示・剥離対象指定を維持。物理・盾値・作業時間・保存契約は変更しない。
 
 これらのIDは、以前の同名ID「回路購入」「Offline回路」の指摘とは別件。
 本PRは文書・調査スクリプトのみ。ゲームコード変更なし、デプロイNOT_TRIGGERED。マージ・デプロイは行わない。
