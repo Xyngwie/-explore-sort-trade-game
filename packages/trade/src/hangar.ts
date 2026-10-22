@@ -859,7 +859,7 @@ export function buildSeedYieldBagForTypedRepair(
 export function buildPlaytestSeedHub(): HubSnapshot {
   const inventory = buildSeedYieldBagForTypedRepair();
   const credits = Math.max(
-    800,
+    INITIAL_HUB.credits,
     EXAMPLE_TYPED_REPAIR_COST.credits * SEED_TYPED_REPAIR_COPIES * 2,
   );
   return normalizeHubSnapshot({

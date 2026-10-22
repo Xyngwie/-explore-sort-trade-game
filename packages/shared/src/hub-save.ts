@@ -356,7 +356,7 @@ export type HubSaveV3 = {
 export type HubSave = HubSaveV3;
 
 export const INITIAL_HUB: HubSnapshot = {
-  credits: 500,
+  credits: 5_000_000,
   fleet: [],
   inventory: emptyYieldBag(),
   circuits: [],
