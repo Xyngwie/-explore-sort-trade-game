@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / 盾検証デバッグモード（2026-10-22）
+- Who: Codex / 実装担当
+- What: cursor/codex-shield-debug。専用保存領域・6プリセット・状態表示・証拠出力
+- Why: 神宮提示SPEC_DECISION「盾システム検証用デバッグモード」
+- Scope: 盾検証用環境のみ。通常の購入/装備/盾ルールは維持。マージ・デプロイは行わない
+- Status: main f53788c（#317）、公開デプロイ39713446582 PASSを基準に実装中。通常セーブ隔離を最優先で検証しDraftへ提出予定。物理実機NOT_RUN
+
 ## Codex / PR317第三者テストの再検証（2026-10-22）
 - Who: Codex / 調査・検証担当
 - What: cursor/codex-circuit-purchase-review。購入/Offline装備の公開版再現確認と証拠保存
