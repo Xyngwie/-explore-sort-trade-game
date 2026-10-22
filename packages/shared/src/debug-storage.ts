@@ -30,6 +30,13 @@ export function scopedStorage(native: Storage, prefix = DEBUG_PREFIX): Storage {
 }
 
 export const DEBUG_FIXTURE_ACTIVE = typeof window !== "undefined" && debugRequested(window.location.search);
+const normalReader = DEBUG_FIXTURE_ACTIVE ? window.localStorage.getItem.bind(window.localStorage) : null;
+
+/** Explicit copy is read-only: callers never receive a writable normal store. */
+export function readNormalSaveKey(key: string): string | null {
+  if (!DEBUG_FIXTURE_ACTIVE || !normalReader) throw new Error("実験室の外では使用できません");
+  return normalReader(key);
+}
 
 // Run before any app imports read storage (constants.ts imports this module).
 // Failure is fatal rather than silently proceeding with the normal save.

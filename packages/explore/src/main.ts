@@ -1,5 +1,6 @@
 import { mountShieldDebugConsole } from "@estg/shared";
 import { prepareRequestedShieldFixture, inspectShieldFixture } from "./debug/shieldFixture";
+import { createAlphaLabHost, applyPendingLabCircuits } from "./debug/alphaLabHost";
 import { squadSees } from "./game/vision";
 import { canBuildBarricade, startBarricade, startDismantle, wallEntries, barricadeWorking, interruptBarricade } from "./game/barricades";
 import { wallCircleOverlap } from "./game/barricadeGeometry";
@@ -161,6 +162,7 @@ import { checkpointSortieSearch, resortiePlan, resortieSearch } from "./game/res
 import { refillBeforeSortie } from "./game/preSortieAmmo";
 
 prepareRequestedShieldFixture();
+applyPendingLabCircuits();
 const root = document.querySelector<HTMLDivElement>("#app")!;
 /** 項目4-1 C8: the captain's 「積載 n/2・速度 N」 in the existing captain HUD line. */
 function leaderLoadHud(world: World): string {
@@ -282,7 +284,11 @@ function bootExploreSession(): { world: World; paused: boolean; leaveForHub: boo
 
 const exploreSession = bootExploreSession();
 let world: World = exploreSession.world;
-mountShieldDebugConsole(() => inspectShieldFixture(world));
+mountShieldDebugConsole(() => inspectShieldFixture(world),createAlphaLabHost(()=>world,next=>{
+  world=next;const hub=freshHub();
+  if(hub){const plan=resortieSearch(checkpointSortieSearch("",world.invadeSector),hub,world.deployedInstanceIds);if(plan)bootSearch=plan.search;}
+  keys.clear();input.move={x:0,y:0};input.clickMove=null;input.fire=false;input.interact=false;needsDom=true;renderDom();
+},()=>{if(world.phase!=="sortie")throw new Error("出撃中に一時停止できます");sortiePaused=!sortiePaused;needsDom=true;renderDom();return sortiePaused;}));
 let sortiePaused = exploreSession.paused;
 const leaveForHub = exploreSession.leaveForHub;
 if (leaveForHub) {
@@ -357,6 +363,7 @@ window.addEventListener("storage", event => {
 window.addEventListener(
   "pointerdown",
   (e) => {
+    if ((e.target as Element | null)?.closest("#alpha-lab")) return;
     if (leaveForHub || !sortiePaused || world.phase !== "sortie") return;
     sortiePaused = sortiePausedAfter("tap", sortiePaused);
     e.preventDefault();
@@ -375,6 +382,7 @@ const input: PlayerInput = {
   fire: false,
   interact: false,
 };
+window.addEventListener("focusin",e=>{if((e.target as Element|null)?.closest("#shield-debug-console")){keys.clear();input.move={x:0,y:0};input.fire=false;input.interact=false;}});
 
 let canvas: HTMLCanvasElement | null = null;
 let last = performance.now();
@@ -404,6 +412,7 @@ function flashCampToast(msg: string): void {
 }
 
 window.addEventListener("keydown", (e) => {
+  if ((e.target as Element | null)?.closest("#shield-debug-console")) return;
   if (sortiePaused && world.phase === "sortie") return;
   const k = e.key.toLowerCase();
   keys.add(k);

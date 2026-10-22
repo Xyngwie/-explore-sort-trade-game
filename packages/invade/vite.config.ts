@@ -1,3 +1,4 @@
+import { gameVersionDefine } from "../shared/build-version";
 import path from "node:path";
 import { defineConfig } from "vite";
 
@@ -6,6 +7,7 @@ const base =
   process.env.VITE_BASE ?? process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
+  define: gameVersionDefine(),
   root: ".",
   base,
   resolve: {

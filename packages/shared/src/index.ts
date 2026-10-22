@@ -46,3 +46,6 @@ export * from "./front-board";
 export * from "./front-sweep";
 
 export * from "./lost-mech-shields";
+
+export * from "./debug-circuit";
+export * from "./alpha-lab";
