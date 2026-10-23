@@ -39,12 +39,12 @@ export function strippingTargets(world: World): Target[] {
 export function canStripWreck(world:World,unit:Unit=world.leader):boolean {
   return (world.circuitPlay?.loadout[unit.id] ?? []).some(c=>c.effectKey==='shield');
 }
-export function startStrippingAt(world: World, point: Vec2, hub: HubSnapshot | null, hitRadius: number): 'started' | 'none' | 'far' | 'busy' | 'locked' {
+export function startStrippingAt(world: World, point: Vec2, hub: HubSnapshot | null, hitRadius: number, targetId?: string): 'started' | 'none' | 'far' | 'busy' | 'locked' {
   const unit = world.leader;
   interruptBarricade(world,unit.id);
   if (!canStripWreck(world,unit)) return 'locked';
   if (world.phase !== 'sortie' || !unit.alive || world.operationTimedOut || wreckCarrierId(world, unit.id)) return 'none';
-  const target = strippingTargets(world).filter(t => dist(t.pos, point) <= hitRadius).sort((a,b) => dist(a.pos,point) - dist(b.pos,point))[0];
+  const target = strippingTargets(world).filter(t => (!targetId || t.id === targetId) && dist(t.pos, point) <= hitRadius).sort((a,b) => dist(a.pos,point) - dist(b.pos,point))[0];
   if (!target) return 'none';
   if (dist(unit.pos, target.pos) > world.balance.interactRadius) return 'far';
   // Don't steal a wreck already being lifted by another worker.

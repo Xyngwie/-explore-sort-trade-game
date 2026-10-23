@@ -7,7 +7,16 @@
 - What: cursor/codex-lab-public-tests。第三者手順15項目を先に作成、その後2件のUXを再現調査
 - Why: 神宮の公開アルファ実験室第三者検証準備IMPLEMENTATION_ORDER
 - Scope: 手順・再現済み問題のみ。独立修正は別Draft。マージ・デプロイしない
-- Status: #319はd093141でマージ済み、同一コミットの公開デプロイ39777940991 SUCCESS。公開入口PASS。公開390x844の7プリセット切替で旧セッション残留は未再現、密集タップの設置盾優先を再現。詳細ALPHA_LAB_PUBLIC_REVIEW.md。手順はverification/alpha-lab-319-public-test-plan.json。新UX指摘は過去の購入/Offline指摘とは別件
+- Status: 2026-10-23、最新main（#321の3d64579）を取り込みSTATUSの競合を両方の記録を保持して解消。#319はd093141でマージ済み、同一コミットの公開デプロイ39777940991 SUCCESS。公開入口PASS。公開390x844の7プリセット切替で旧セッション残留は未再現、密集タップの設置盾優先を再現。詳細ALPHA_LAB_PUBLIC_REVIEW.md。手順はverification/alpha-lab-319-public-test-plan.json。新UX指摘は過去の購入/Offline指摘とは別件
+
+## Codex / 密集タップ候補（2026-10-22）
+
+追記（2026-10-23）：#321は3d64579でマージ済み。以下は提出時の履歴。
+- Who: Codex / 実装担当
+- What: cursor/codex-map-targets。重複する設置盾・地面盾・残骸・僚機の操作候補
+- Why: 神宮の第三者検証準備・盾UX指摘切り分け命令。公開d093141で地面盾候補が設置盾に隠れる現象を再現
+- Scope: 複数候補のみ選択UI。物理・保存・盾ルールは変更しない。手順/再現調査は独立Draft #320。旧セッション残留は未再現で修正なし
+- Status: 最新main d093141起点、Draft #321提出。全workspaceテスト・型検査・5本番ビルド、旧318/319ブラウザーと新390x844操作PASS。単独壁・盾/明示剥離/移動・候補選択/取消・小数HP/ID/通常セーブ不変を確認。詳細verification/map-targets-20261022.json。最終head CIはPR本文。監査待ち、物理実機/修正後公開版NOT_RUN。マージ・デプロイなし
 
 ## Codex / 公開アルファ実験室（2026-10-22）
 
