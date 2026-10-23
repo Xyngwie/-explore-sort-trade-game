@@ -1,0 +1,241 @@
+{
+  "type": "THIRD_PARTY_TEST_PLAN",
+  "target": "PR #319",
+  "baseline": {
+    "commit": "d093141a54e0e788d173182df26d49ee5c0ac75c",
+    "deployment": "https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/39777940991",
+    "hub": "https://xyngwie.github.io/-explore-sort-trade-game/"
+  },
+  "prior_report": {
+    "runId": "run-20261022-alpha-lab-001",
+    "scope": "PR318の6プリセットのみ。319自由編集UIの結果ではない",
+    "reportedPass": 15,
+    "environment": "Chrome Autonomous Web Agent 390x844エミュレーション",
+    "physicalDevice": "NOT_RUN"
+  },
+  "preconditions": [
+    "テスター本人の了承を得て専用ブラウザープロファイルを使用する。通常セーブの初期化はしない",
+    "実験室のコピー・初期化は確認ダイアログの内容を読み承認/取消を明示する",
+    "実戦前に実験室の一時停止を解除する。初期再開タップが操作を消費した場合は記録する",
+    "ゲームの装備枚数・同種回路制限は維持。生成回路は2x2。編集可能範囲を超えない"
+  ],
+  "judgement": {
+    "PASS": "実際に全手順を操作し期待結果を証拠で確認",
+    "FAIL": "操作できたが期待結果と異なる。再現手順と観測値を残す",
+    "BLOCKED": "未公開・必要状態不足・操作不能等で判定まで進めない。理由を残す"
+  },
+  "evidence_per_case": [
+    "id",
+    "actualSteps",
+    "expected",
+    "observed",
+    "status",
+    "targetUrl",
+    "gameVersionOrPublicCommit",
+    "browser",
+    "deviceKind (emulated/physical)",
+    "screenshotsIfNeeded",
+    "alphaLabEvidenceFile",
+    "normalSaveComparison"
+  ],
+  "export": {
+    "control": "実験室→証拠JSON・通常セーブのコピー→証拠JSON出力",
+    "requiredFields": [
+      "type",
+      "runId",
+      "timestamp",
+      "preset",
+      "experimentMode",
+      "gameVersion",
+      "units",
+      "circuits",
+      "shields",
+      "currentModule",
+      "saveState"
+    ],
+    "privacy": "署名・個人情報や無関係な通常セーブ全文を共有しない。必要箇所のみ比較する",
+    "timing": "編集前・編集後・再読込後・帰還再出撃後に保存。操作スクリーンショットと組にする"
+  },
+  "normalSaveComparison": {
+    "required": "通常HUBの残高・機体ID・回路ID・装備・進行を前後比較し結果を記録",
+    "strongerOptional": "了承がある場合のみ検証ツールで通常localStorage/sessionStorageの非実験キーを前後比較。開発者ツールは必須ではない",
+    "limitation": "画面比較だけの場合、全キーのバイト単位不変まで検証したと記載しない"
+  },
+  "cases": [
+    {
+      "id": "LAB-01",
+      "name": "公開入口",
+      "steps": [
+        "通常HUBを開く",
+        "「アルファ実験室」を開き「実験室へ入る」を押す"
+      ],
+      "expected": "認証・開発者ツール不要で専用セーブへ入れる",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-02",
+      "name": "隔離表示",
+      "steps": [
+        "実験室の上部と固定表示を確認する"
+      ],
+      "expected": "ALPHA_LABとDEBUG_FIXTUREが表示される",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-03",
+      "name": "資金編集",
+      "steps": [
+        "資金欄で123456を設定、44を加算、ゼロ、初期値復帰する",
+        "再読込し残高を確認する"
+      ],
+      "expected": "123456→123500→0→5000000となり再読込後も一致する",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-04",
+      "name": "不正資金入力",
+      "steps": [
+        "資金に-1、1.5、9007199254740992を順に入力して設定する",
+        "各失敗後の残高を確認する"
+      ],
+      "expected": "全入力が拒否され、変更前残高を維持する",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-05",
+      "name": "通常盾回路生成",
+      "steps": [
+        "回路欄で偽盤・盾・Online・隊長を選択して生成する"
+      ],
+      "expected": "有効なOnline通常盾回路が隊長に装備される",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-06",
+      "name": "P盾回路生成",
+      "steps": [
+        "真盤・P盾・Online・僚機を選択して生成する",
+        "隊長用にも生成する"
+      ],
+      "expected": "各機体自身に有効なOnline P盾が装備される",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-07",
+      "name": "回路状態",
+      "steps": [
+        "未装備でOfflineのP盾を生成し一覧を確認する",
+        "OnlineのP盾と比較し、Offlineを装備しようとする"
+      ],
+      "expected": "Offlineは効果0かつ装備不可。Onlineと区別される",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-08",
+      "name": "回路の装備変更",
+      "steps": [
+        "回路一覧から生成回路を装備解除し再装備する",
+        "同じ機体に同種の盾回路を追加し失敗を確認する",
+        "未装備の検証回路を削除する"
+      ],
+      "expected": "解除・再装備・削除が成功し重複は拒否される",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-09",
+      "name": "盾の生成",
+      "steps": [
+        "盾欄で隊長装備・隊長予備・地面へ順に生成する",
+        "状態確認でIDと所有先を確認する"
+      ],
+      "expected": "3個の異なるIDが生成され各所有先が1つである",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-10",
+      "name": "盾HPと所有先",
+      "steps": [
+        "現在HP12.125・最大HP62.75を設定する",
+        "所有先を僚機装備へ変更する",
+        "現在HPが最大HPを超える値や負数を試す",
+        "同一盾の所有先が1つであることを確認する"
+      ],
+      "expected": "小数を保持し所有先のみ移動。不正値は保存を変えない",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-11",
+      "name": "機体個別編集",
+      "steps": [
+        "隊長のHP・弾薬・バッテリーを有効な範囲内で変更する",
+        "僚機に別の値を設定し隊長の値が変わらないことを確認する"
+      ],
+      "expected": "対象機体だけ変更され他機体の状態は変わらない",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-12",
+      "name": "編集後の実戦",
+      "steps": [
+        "自分のOnline P盾と装備盾がある機体で出撃を再開する",
+        "屹立を実行し2秒後に設置壁を確認する",
+        "壁をタップして撤去し2秒待つ",
+        "地面盾を別途回収し2秒待つ",
+        "通常盾と予備盾を用意し正面から被弾して防御・交換を確認する"
+      ],
+      "expected": "通常の防御・屹立・撤去・拾得ルールで動作する",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-13",
+      "name": "保存と復元",
+      "steps": [
+        "小数HPと盾IDを記録して再読込する",
+        "帰還要請し離昇まで待ちHUBへ戻る",
+        "再出撃し帰還時に現地へ残した盾を確認する"
+      ],
+      "expected": "再読込は盾ID/HPを保持。帰還機の盾は現地に残り同じ盤面同じマスの再出撃で復元される",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-14",
+      "name": "通常セーブ保護",
+      "steps": [
+        "通常HUBの所持金・編成・回路・装備を記録する",
+        "実験室で通常セーブのコピー確認を一度取消し、その後承認する",
+        "実験室で資金・装備を変更する",
+        "初期化確認を取消し、その後承認する",
+        "実験室を終了し通常HUBの記録と比較する"
+      ],
+      "expected": "取消は変更なし。コピーは一方向。実験編集・初期化・終了後も通常セーブが不変",
+      "status": "NOT_RUN",
+      "observed": null
+    },
+    {
+      "id": "LAB-15",
+      "name": "証拠出力とモバイル操作",
+      "steps": [
+        "証拠JSONからALPHA_LAB JSONをダウンロードする",
+        "390x844で全欄をタップし数値入力する",
+        "横あふれや操作不能がないことを確認する"
+      ],
+      "expected": "type=ALPHA_LAB、DEBUG_FIXTURE=true、必要項目あり。横スクロールや操作不能なし",
+      "status": "NOT_RUN",
+      "observed": null
+    }
+  ],
+  "reporting": "コード期待・ローカル実測・公開版実測・第三者報告を分離。物理スマートフォンは実施時のみPASS"
+}

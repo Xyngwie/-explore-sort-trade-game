@@ -1,0 +1,519 @@
+{
+  "scope": "public browser emulation, not physical",
+  "commit": "d093141a54e0e788d173182df26d49ee5c0ac75c",
+  "entry": "PASS",
+  "results": [
+    {
+      "preset": "NO_SHIELD_NO_CIRCUIT",
+      "newRun": "283bda89-b184-4601-8de9-0cc816a0248e",
+      "units": [
+        {
+          "id": "leader",
+          "instanceId": "debug-leader",
+          "pos": {
+            "x": 600,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 50,
+          "alive": true
+        },
+        {
+          "id": "wing-a",
+          "instanceId": "debug-wing",
+          "pos": {
+            "x": 700,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 40,
+          "alive": true
+        }
+      ],
+      "shields": [
+        {
+          "key": "debug-ground",
+          "hp": 17.25,
+          "maxHp": 62.75,
+          "shieldId": "1",
+          "sourceWreckId": "1",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "1",
+          "owners": [
+            {
+              "kind": "ground",
+              "position": {
+                "x": 610,
+                "y": 620
+              }
+            }
+          ]
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "preset": "NORMAL_SHIELD_AND_RESERVE",
+      "newRun": "76f9c4f9-8fb5-4918-81d9-f60d5d432d63",
+      "units": [
+        {
+          "id": "leader",
+          "instanceId": "debug-leader",
+          "pos": {
+            "x": 600,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 50,
+          "alive": true
+        },
+        {
+          "id": "wing-a",
+          "instanceId": "debug-wing",
+          "pos": {
+            "x": 600,
+            "y": 680
+          },
+          "heading": 0,
+          "hp": 40,
+          "alive": true
+        }
+      ],
+      "shields": [
+        {
+          "key": "debug-ground",
+          "hp": 17.25,
+          "maxHp": 62.75,
+          "shieldId": "1",
+          "sourceWreckId": "1",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "1",
+          "owners": [
+            {
+              "kind": "ground",
+              "position": {
+                "x": 610,
+                "y": 620
+              }
+            }
+          ]
+        },
+        {
+          "key": "debug-equipped",
+          "hp": 47.25,
+          "maxHp": 62.75,
+          "shieldId": "2",
+          "sourceWreckId": "2",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "2",
+          "owners": [
+            {
+              "kind": "equipped",
+              "unit": "leader"
+            }
+          ]
+        },
+        {
+          "key": "debug-reserve",
+          "hp": 35.5,
+          "maxHp": 50,
+          "shieldId": "3",
+          "sourceWreckId": "3",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "3",
+          "owners": [
+            {
+              "kind": "reserve",
+              "unit": "leader"
+            }
+          ]
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "preset": "STRIPPING_READY",
+      "newRun": "93ab214c-65b1-447e-bade-8773cc153886",
+      "units": [
+        {
+          "id": "leader",
+          "instanceId": "debug-leader",
+          "pos": {
+            "x": 600,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 50,
+          "alive": true
+        },
+        {
+          "id": "wing-a",
+          "instanceId": "debug-wing",
+          "pos": {
+            "x": 700,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 40,
+          "alive": true
+        }
+      ],
+      "shields": [
+        {
+          "key": "debug-ground",
+          "hp": 17.25,
+          "maxHp": 62.75,
+          "shieldId": "1",
+          "sourceWreckId": "1",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "1",
+          "owners": [
+            {
+              "kind": "ground",
+              "position": {
+                "x": 610,
+                "y": 620
+              }
+            }
+          ]
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "preset": "P_SHIELD_LEADER_READY",
+      "newRun": "73e5124f-4cac-474f-8112-af49ff30b61b",
+      "units": [
+        {
+          "id": "leader",
+          "instanceId": "debug-leader",
+          "pos": {
+            "x": 600,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 50,
+          "alive": true
+        },
+        {
+          "id": "wing-a",
+          "instanceId": "debug-wing",
+          "pos": {
+            "x": 700,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 40,
+          "alive": true
+        }
+      ],
+      "shields": [
+        {
+          "key": "debug-ground",
+          "hp": 17.25,
+          "maxHp": 62.75,
+          "shieldId": "1",
+          "sourceWreckId": "1",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "1",
+          "owners": [
+            {
+              "kind": "ground",
+              "position": {
+                "x": 610,
+                "y": 620
+              }
+            }
+          ]
+        },
+        {
+          "key": "debug-equipped",
+          "hp": 47.25,
+          "maxHp": 62.75,
+          "shieldId": "2",
+          "sourceWreckId": "2",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "2",
+          "owners": [
+            {
+              "kind": "equipped",
+              "unit": "leader"
+            }
+          ]
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "preset": "P_SHIELD_WINGMAN_READY",
+      "newRun": "13d5df86-e187-4ad3-abc6-b3d537299602",
+      "units": [
+        {
+          "id": "leader",
+          "instanceId": "debug-leader",
+          "pos": {
+            "x": 600,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 50,
+          "alive": true
+        },
+        {
+          "id": "wing-a",
+          "instanceId": "debug-wing",
+          "pos": {
+            "x": 700,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 40,
+          "alive": true
+        }
+      ],
+      "shields": [
+        {
+          "key": "debug-ground",
+          "hp": 17.25,
+          "maxHp": 62.75,
+          "shieldId": "1",
+          "sourceWreckId": "1",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "1",
+          "owners": [
+            {
+              "kind": "ground",
+              "position": {
+                "x": 610,
+                "y": 620
+              }
+            }
+          ]
+        },
+        {
+          "key": "debug-equipped",
+          "hp": 47.25,
+          "maxHp": 62.75,
+          "shieldId": "2",
+          "sourceWreckId": "2",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "2",
+          "owners": [
+            {
+              "kind": "equipped",
+              "unit": "wing-a"
+            }
+          ]
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "preset": "BARRICADE_PERSISTENCE_READY",
+      "newRun": "9b43ca0c-b82d-42e8-844b-b012b788d374",
+      "units": [
+        {
+          "id": "leader",
+          "instanceId": "debug-leader",
+          "pos": {
+            "x": 600,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 50,
+          "alive": true
+        },
+        {
+          "id": "wing-a",
+          "instanceId": "debug-wing",
+          "pos": {
+            "x": 700,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 40,
+          "alive": true
+        }
+      ],
+      "shields": [
+        {
+          "key": "debug-ground",
+          "hp": 17.25,
+          "maxHp": 62.75,
+          "shieldId": "1",
+          "sourceWreckId": "1",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "1",
+          "owners": [
+            {
+              "kind": "ground",
+              "position": {
+                "x": 610,
+                "y": 620
+              }
+            }
+          ]
+        },
+        {
+          "key": "debug-equipped",
+          "hp": 47.25,
+          "maxHp": 62.75,
+          "shieldId": "2",
+          "sourceWreckId": "2",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "2",
+          "owners": [
+            {
+              "kind": "equipped",
+              "unit": "leader"
+            }
+          ]
+        },
+        {
+          "key": "debug-wall",
+          "hp": 29.25,
+          "maxHp": 62.75,
+          "shieldId": "3",
+          "sourceWreckId": "3",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "3",
+          "owners": [
+            {
+              "kind": "barricade",
+              "pos": {
+                "x": 622,
+                "y": 600
+              },
+              "heading": 0
+            }
+          ]
+        },
+        {
+          "key": "debug-wing-equipped",
+          "hp": 38.5,
+          "maxHp": 50,
+          "shieldId": "4",
+          "sourceWreckId": "4",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "4",
+          "owners": [
+            {
+              "kind": "equipped",
+              "unit": "wing-a"
+            }
+          ]
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "preset": "BARRICADE_PERSISTENCE_READY",
+      "newRun": "fdf14dd3-4f1c-4707-8c63-5d8ebe5a16aa",
+      "units": [
+        {
+          "id": "leader",
+          "instanceId": "debug-leader",
+          "pos": {
+            "x": 600,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 50,
+          "alive": true
+        },
+        {
+          "id": "wing-a",
+          "instanceId": "debug-wing",
+          "pos": {
+            "x": 700,
+            "y": 600
+          },
+          "heading": 0,
+          "hp": 40,
+          "alive": true
+        }
+      ],
+      "shields": [
+        {
+          "key": "debug-ground",
+          "hp": 17.25,
+          "maxHp": 62.75,
+          "shieldId": "1",
+          "sourceWreckId": "1",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "1",
+          "owners": [
+            {
+              "kind": "ground",
+              "position": {
+                "x": 610,
+                "y": 620
+              }
+            }
+          ]
+        },
+        {
+          "key": "debug-equipped",
+          "hp": 47.25,
+          "maxHp": 62.75,
+          "shieldId": "2",
+          "sourceWreckId": "2",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "2",
+          "owners": [
+            {
+              "kind": "equipped",
+              "unit": "leader"
+            }
+          ]
+        },
+        {
+          "key": "debug-wall",
+          "hp": 29.25,
+          "maxHp": 62.75,
+          "shieldId": "3",
+          "sourceWreckId": "3",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "3",
+          "owners": [
+            {
+              "kind": "barricade",
+              "pos": {
+                "x": 622,
+                "y": 600
+              },
+              "heading": 0
+            }
+          ]
+        },
+        {
+          "key": "debug-wing-equipped",
+          "hp": 38.5,
+          "maxHp": 50,
+          "shieldId": "4",
+          "sourceWreckId": "4",
+          "sourceWreckIdInferred": false,
+          "generationOrder": "4",
+          "owners": [
+            {
+              "kind": "equipped",
+              "unit": "wing-a"
+            }
+          ]
+        }
+      ],
+      "status": "PASS"
+    }
+  ],
+  "denseTap": {
+    "wall": 1,
+    "groundCandidates": 0,
+    "candidateMenu": 0
+  },
+  "errors": [],
+  "asset": {
+    "url": "https://xyngwie.github.io/-explore-sort-trade-game/assets/index-drgZncmp.js",
+    "expectedCommitPresent": true,
+    "method": "public HTML script URL resolved, fetched JS contains full deployment commit SHA"
+  }
+}
