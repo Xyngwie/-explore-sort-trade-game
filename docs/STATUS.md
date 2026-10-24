@@ -9,6 +9,13 @@
 - Scope: マージ・デプロイは行わない（監査不合格）。機能コードは変更しない
 - Status: **AUDIT_REJECT** → lead。ScopeLock PASS、PR Build Check run **40100463258** **SUCCESS**。仕様差分: `sim.ts` の `misses` 記録条件が逆（ttl 切れで `alive` な弾に `misses` が付かない）、回収中断時の `quizFailure` 未記録。修正待ち
 
+## 風紀委員 / 僚機の自律学習 v0 回避の点数（2026-10-24）
+- Who: inspector（風紀委員）
+- What: 敵の攻撃を回避したら +1、当たったら −1。狙われた僚機の小テスト。新しい回避の動きは作らない
+- Why: 神宮が戦闘の暫定点として追加した
+- Scope: 文書の追加。PR #325 はマージせず、同じ arrow の PR に足す
+- Status: Issue #324 に `SPEC_DECISION` を出す。Deploy は文書だけのため **NOT_TRIGGERED**
+
 ## 風紀委員 / 僚機の自律学習 v0（2026-10-24）
 - Who: inspector（風紀委員）
 - What: 正式仕様 `docs/AUTONOMOUS_LEARNING_V0.md` と、`docs/IMPLEMENTATION_PLAN.md` のロードマップ（帳簿 → 選択 → 小テスト → 精算）
