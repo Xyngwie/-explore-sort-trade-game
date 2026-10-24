@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / Issue #324 誤 revert ブランチ整理（2026-10-24）
+- Who: lead（実装隊長）
+- What: arrow WORK_REPORT `907e985`（30b4896 revert）照合。技術内容は 640a667 一致だが、6385420381 CORRECTION は撤回後の誤送信（6385435539 HOLD）
+- Why: main `2b60a82` が監査 PASS・デプロイ済。907e985 を main へ載せない
+- Scope: コード変更なし。`cursor/arrow-mech-learning-v0` @ `907e985` は孤立（main 向け PR 禁止）
+- Status: **v0 完了**。追加 TASK なし
+
 ## 風紀委員 / 僚機の自律学習 v0 PR #325 監査・マージ（2026-10-24）
 - Who: inspector（風紀委員）
 - What: PR #325（arrow / Issue #324）再監査・squash merge・Deploy Modules Preview 確認
