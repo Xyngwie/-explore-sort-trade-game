@@ -7,7 +7,7 @@
 - What: 正式仕様 `docs/AUTONOMOUS_LEARNING_V0.md` と、`docs/IMPLEMENTATION_PLAN.md` のロードマップ（帳簿 → 選択 → 小テスト → 精算）
 - Why: 神宮が大枠の実装を実装隊長へ渡すよう指示し、大きい項目なので文章の実装計画へ順序を残すよう指示した
 - Scope: 文書のみ。機能コードは変更しない。隊長機の自律、中隊功績、敵評価の平均、点数表の差し替えは対象外
-- Status: 仕様と計画は main に記録。Deploy Modules Preview は文書だけのため **NOT_TRIGGERED**。実装は `SPEC_DECISION` のあと、実装隊長の `TASK_ASSIGNMENT` まで着手しない
+- Status: 仕様と計画は main `9869b839289294c014497fefa37d61b2367a3714`。Issue #324 コメント 6384970161 が実装隊長への `SPEC_DECISION`（PASS、unresolved 空）。Deploy Modules Preview は文書だけのため **NOT_TRIGGERED**。実装は実装隊長の `TASK_ASSIGNMENT` まで着手しない
 
 ## 風紀委員 / 貫通弾 piercing_round（2026-10-24）
 - Who: inspector（風紀委員）
