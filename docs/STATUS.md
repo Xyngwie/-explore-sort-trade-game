@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 三つの回路の役割（2026-10-25）
+- Who: inspector（風紀委員）
+- What: 1×1 不完全はマニュアル操作の解放。1×1 完全は装備した機体の自律。早期に全機体へ装備すると全員が自律行動になる。小隊長はサイズも完全・不完全も未定の小隊長回路。隊長機も僚機も同じキー
+- Why: 神宮が回路の役割を整理した（2026-10-25）
+- Scope: 文書のみ。`SPEC_DECISION` は出していない。10/12 の開き方（偽の 1×1 はコマンドなし、隊長の「4」は移動命令と航空支援、僚機の「4」は自律）は維持。移動命令と航空支援を残すかは未決
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md`、`docs/CIRCUIT_SQUAD_DESIGN_V0.md`、`docs/EXPLORE_COMMAND_UNLOCK_V0.md`、`docs/IMPLEMENTATION_PLAN.md`、`docs/MECH_WORLD_BUILDING_DESIGN.md` §6 に反映
+
 ## 風紀委員 / 小隊長の指定キーは小隊長回路（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 僚機を小隊長にするキーは、その機体に小隊長回路を装備すること。効果キー、盤、真偽、外したときの扱いは未決。v0 では回路を作らない
