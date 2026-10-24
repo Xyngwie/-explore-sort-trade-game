@@ -110,9 +110,12 @@ export function learningExpectation(cell: MechLearningCell): number {
     const misses = counter(cell, "misses");
     const kills = counter(cell, "kills");
     const tries = counter(cell, "tries");
+    const dodged = counter(cell, "dodged");
+    const struck = counter(cell, "struck");
     const shootTerm = ratio(hits * 1 + misses * -1, hits + misses);
+    const dodgeTerm = ratio(dodged * 1 + struck * -1, dodged + struck);
     const killTerm = ratio(kills, tries) * killScore(cell.subject);
-    return shootTerm + killTerm;
+    return shootTerm + dodgeTerm + killTerm;
   }
   return 0;
 }
@@ -151,6 +154,8 @@ export function upsertCellCounter(
     else if (field === "hits") row.hits = cur + delta;
     else if (field === "misses") row.misses = cur + delta;
     else if (field === "kills") row.kills = cur + delta;
+    else if (field === "dodged") row.dodged = cur + delta;
+    else if (field === "struck") row.struck = cur + delta;
     next[idx] = row;
     return next;
   }
@@ -167,6 +172,8 @@ export function upsertCellCounter(
   else if (field === "hits") row.hits = delta;
   else if (field === "misses") row.misses = delta;
   else if (field === "kills") row.kills = delta;
+  else if (field === "dodged") row.dodged = delta;
+  else if (field === "struck") row.struck = delta;
   return [...cells, row];
 }
 
@@ -255,7 +262,7 @@ export function chooseLearningAction(
 }
 
 export type LearningEvent =
-  | { kind: "hit" | "miss" | "kill"; subject: LearningSubject }
+  | { kind: "hit" | "miss" | "kill" | "dodged" | "struck"; subject: LearningSubject }
   | { kind: "quizSuccess" | "quizFailure"; subject: Exclude<LearningSubject, "none"> }
   | { kind: "survived" | "died" | "leftBehind" }
   | { kind: "broughtHome" | "abandoned"; subject: Exclude<LearningSubject, "none" | "normal"> };
@@ -277,14 +284,24 @@ export function noteLearningEvent(
       maxCells,
     );
   }
-  if (event.kind === "hit" || event.kind === "miss" || event.kind === "kill") {
-    return upsertCellCounter(
-      cells,
-      { ledger: "combat", subject: event.subject, ...base },
-      event.kind === "kill" ? "kills" : event.kind === "hit" ? "hits" : "misses",
-      1,
-      maxCells,
-    );
+  if (
+    event.kind === "hit" ||
+    event.kind === "miss" ||
+    event.kind === "kill" ||
+    event.kind === "dodged" ||
+    event.kind === "struck"
+  ) {
+    const field =
+      event.kind === "kill"
+        ? "kills"
+        : event.kind === "hit"
+          ? "hits"
+          : event.kind === "miss"
+            ? "misses"
+            : event.kind === "dodged"
+              ? "dodged"
+              : "struck";
+    return upsertCellCounter(cells, { ledger: "combat", subject: event.subject, ...base }, field, 1, maxCells);
   }
   if (event.kind === "quizSuccess" || event.kind === "quizFailure") {
     return upsertCellCounter(

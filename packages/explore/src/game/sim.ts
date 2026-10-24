@@ -131,7 +131,6 @@ function inCamera(world: World, pos: Vec2): boolean {
 }
 
 function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): void {
-  void to; // muzzle is fixed forward
   const angle = from.heading + spreadRadians("normal");
   const dir = { x: Math.cos(angle), y: Math.sin(angle) };
   const speed = world.balance.bulletSpeed * (fromEnemy ? 1 : abilityOf(world, from.id).bulletSpeed);
@@ -143,8 +142,20 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
     damage: fromEnemy ? world.balance.enemyDamage * enemyDamageMultiplier(from) : world.balance.bulletDamage * attackMul(world, from.id),
     fromEnemy,
     ownerId: from.id,
+    ...(fromEnemy ? { aimUnitId: to.id } : {}),
   };
   world.bullets.push(b);
+}
+
+function retireBullet(world: World, b: Bullet): void {
+  if (!b.alive) return;
+  b.alive = false;
+  if (b.fromEnemy && b.aimUnitId && !b.aimUnitHit) {
+    const aim = world.wingmen.find((w) => w.id === b.aimUnitId);
+    if (aim && isLearningWingman(aim)) {
+      noteLearningForUnit(world, aim, { kind: "dodged", subject: "normal" });
+    }
+  }
 }
 
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean, commanded = false): void {
@@ -192,7 +203,7 @@ export function updateBullets(world: World, dt: number): void {
   for (const b of world.bullets) {
     if (!b.alive) continue;
     const travel=Math.min(dt,Math.max(0,b.ttl));
-    if(travel<=0){b.alive=false;continue;}
+    if(travel<=0){retireBullet(world,b);continue;}
     bendHoming(world,b,travel);
     let start={...b.pos};
     const end={x:start.x+b.vel.x*travel,y:start.y+b.vel.y*travel};
@@ -203,12 +214,16 @@ export function updateBullets(world: World, dt: number): void {
       if(!contact){b.pos=end;break;}
       b.pos={x:start.x+(end.x-start.x)*contact.t,y:start.y+(end.y-start.y)*contact.t};
       const t=contact.unit;
-      if(!t){if(contact.barricadeKey)damageBarricade(world,contact.barricadeKey,b.damage);b.alive=false;break;}
+      if(!t){if(contact.barricadeKey)damageBarricade(world,contact.barricadeKey,b.damage);retireBullet(world,b);break;}
       if(tryDodge(world,t,b,end)){
         const dx=end.x-start.x,dy=end.y-start.y,len=Math.hypot(dx,dy)||1;
         start={x:b.pos.x+dx/len*.001,y:b.pos.y+dy/len*.001};continue;
       }
-      b.alive=false;
+      if (b.fromEnemy && isLearningWingman(t)) {
+        noteLearningForUnit(world, t, { kind: "struck", subject: "normal" });
+        if (b.aimUnitId === t.id) b.aimUnitHit = true;
+      }
+      retireBullet(world, b);
       const shooter=[...friendlyUnits(world),...world.enemies].find(u=>u.id===b.ownerId);
       const friendly=!b.fromEnemy && t.kind!=="enemy";
       const hitDmg = incomingDamage(world, t, b.damage);
@@ -248,12 +263,12 @@ export function updateBullets(world: World, dt: number): void {
       }else if(!inCamera(world,t.pos) || !inCamera(world,b.pos))reportBattle(world,`${t.name} が被弾 (−${Math.round(hitDmg)})`,t.pos);
       break;
     }
-    if(b.ttl<=0){
-      if(!b.fromEnemy && b.alive){
+    if(b.ttl<=0 && b.alive){
+      if(!b.fromEnemy){
         const shooter=friendlyUnits(world).find(u=>u.id===b.ownerId);
         if(shooter && isLearningWingman(shooter)) noteLearningForUnit(world, shooter, { kind: "miss", subject: "normal" });
       }
-      b.alive=false;
+      retireBullet(world, b);
     }
   }
   world.bullets=world.bullets.filter(b=>b.alive);

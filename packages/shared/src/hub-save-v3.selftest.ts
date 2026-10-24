@@ -565,6 +565,30 @@ const v2Text = JSON.stringify(v2Save);
   const copied = copyMechLearningForInstance(hub.mechLearning, "m1");
   assert.equal(copied[0]!.tries, 1);
   assert.equal(copyMechLearningForInstance(hub.mechLearning, "missing").length, 0);
+  const dodgeHub = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    mechLearning: {
+      byMech: {
+        m1: [
+          {
+            ledger: "combat",
+            action: "fight",
+            subject: "normal",
+            distance: "near",
+            circle: "inside",
+            hp: "high",
+            cargo: "none",
+            dodged: 2,
+            struck: 1,
+          },
+        ],
+      },
+      settledSortieIds: [],
+    },
+  });
+  const dodgeCell = dodgeHub.mechLearning!.byMech.m1![0]!;
+  assert.equal(dodgeCell.dodged, 2);
+  assert.equal(dodgeCell.struck, 1);
 }
 
 console.log("shared hub-save-v3 selftest: ok");

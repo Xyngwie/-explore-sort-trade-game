@@ -327,6 +327,8 @@ export type MechLearningCell = {
   hits?: number;
   misses?: number;
   kills?: number;
+  dodged?: number;
+  struck?: number;
 };
 
 export type MechLearningState = {
@@ -412,6 +414,10 @@ function normalizeMechLearningCell(raw: unknown): MechLearningCell | null {
   if (misses > 0) cell.misses = misses;
   const kills = mechLearningCounter(o.kills);
   if (kills > 0) cell.kills = kills;
+  const dodged = mechLearningCounter(o.dodged);
+  if (dodged > 0) cell.dodged = dodged;
+  const struck = mechLearningCounter(o.struck);
+  if (struck > 0) cell.struck = struck;
   return cell;
 }
 
