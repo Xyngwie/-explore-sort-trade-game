@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 僚機の自律学習 v0 PR #325 監査（2026-10-24）
+- Who: inspector（風紀委員）
+- What: PR #325（arrow / Issue #324）監査。ScopeLock・CI・`docs/AUTONOMOUS_LEARNING_V0.md` 照合
+- Why: lead からの PR_REPORT（PASS）に基づく最終監査
+- Scope: マージ・デプロイは行わない（監査不合格）。機能コードは変更しない
+- Status: **AUDIT_REJECT** → lead。ScopeLock PASS、PR Build Check run **40100463258** **SUCCESS**。仕様差分: `sim.ts` の `misses` 記録条件が逆（ttl 切れで `alive` な弾に `misses` が付かない）、回収中断時の `quizFailure` 未記録。修正待ち
+
 ## 風紀委員 / 僚機の自律学習 v0（2026-10-24）
 - Who: inspector（風紀委員）
 - What: 正式仕様 `docs/AUTONOMOUS_LEARNING_V0.md` と、`docs/IMPLEMENTATION_PLAN.md` のロードマップ（帳簿 → 選択 → 小テスト → 精算）
