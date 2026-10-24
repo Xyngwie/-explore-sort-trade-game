@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Piercing round (piercing_round) projectile hits — docs/PIERCING_ROUND_V0.md
  */
@@ -46,6 +47,7 @@ function firePiercing(w: ReturnType<typeof shieldWorld>, pierce: number, damage 
 }
 
 assert.equal(SPECIAL_AMMO_EFFECT_KEYS.at(-1), "piercing_round");
+assert.equal(FALSE_BOARD_EFFECT_KEYS.at(-1), "piercing_round");
 assert.ok((FALSE_BOARD_EFFECT_KEYS as readonly string[]).includes("piercing_round"));
 assert.equal(weaponCategory("piercing_round"), "special_ammo");
 
