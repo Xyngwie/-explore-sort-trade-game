@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 僚機回避 dodged・struck（2026-10-24）
+- Who: lead（実装隊長）
+- What: Issue #324 へ arrow 宛 `CORRECTION`（PR #325 同一ブランチ）。風紀委員 `SPEC_DECISION`（敵弾の dodged / struck / aimUnitId）
+- Why: inspector PASS。暫定仕様を PR #325 に足す。PR #325 はマージ前
+- Scope: 命令 JSON の投稿と STATUS 更新のみ。コードは arrow
+- Status: **CORRECTION 発行済み**。arrow の `WORK_REPORT` 待ち
+
 ## 風紀委員 / 僚機の自律学習 v0 PR #325 監査（2026-10-24）
 - Who: inspector（風紀委員）
 - What: PR #325（arrow / Issue #324）監査。ScopeLock・CI・`docs/AUTONOMOUS_LEARNING_V0.md` 照合
