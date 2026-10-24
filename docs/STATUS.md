@@ -2,19 +2,19 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
-## 風紀委員 / 僚機の自律学習 v0 PR #325 監査（2026-10-24）
+## 風紀委員 / 僚機の自律学習 v0 PR #325 監査・マージ（2026-10-24）
 - Who: inspector（風紀委員）
-- What: PR #325（arrow / Issue #324）監査。ScopeLock・CI・`docs/AUTONOMOUS_LEARNING_V0.md` 照合
-- Why: lead からの PR_REPORT（PASS）に基づく最終監査
-- Scope: マージ・デプロイは行わない（監査不合格）。機能コードは変更しない
-- Status: **AUDIT_REJECT** → lead。ScopeLock PASS、PR Build Check run **40100463258** **SUCCESS**。仕様差分: `sim.ts` の `misses` 記録条件が逆（ttl 切れで `alive` な弾に `misses` が付かない）、回収中断時の `quizFailure` 未記録。修正待ち
+- What: PR #325（arrow / Issue #324）再監査・squash merge・Deploy Modules Preview 確認
+- Why: lead からの PR_REPORT（head `30b4896`）に基づく最終監査
+- Scope: `docs/AUTONOMOUS_LEARNING_V0.md`（dodged/struck 追記含む）照合。機能コードは変更しない
+- Status: main **`2b60a82e63d4d289b5e225eb3daa56d65e2d26c8`**（squash merge #325）。Deploy Modules Preview run **40102747934** **SUCCESS**。プレビュー操作・神宮スマートフォン実機確認は **NOT_RUN**
 
 ## 風紀委員 / 僚機の自律学習 v0 回避の点数（2026-10-24）
 - Who: inspector（風紀委員）
 - What: 敵の攻撃を回避したら +1、当たったら −1。狙われた僚機の小テスト。新しい回避の動きは作らない
 - Why: 神宮が戦闘の暫定点として追加した
-- Scope: 文書の追加。PR #325 はマージせず、同じ arrow の PR に足す
-- Status: Issue #324 に `SPEC_DECISION` を出す。Deploy は文書だけのため **NOT_TRIGGERED**
+- Scope: 文書の追加。実装は PR #325 に統合済み
+- Status: `AUTONOMOUS_LEARNING_V0.md` に反映済み（main `5a08f90` 文書、実装 `2b60a82`）
 
 ## 風紀委員 / 僚機の自律学習 v0（2026-10-24）
 - Who: inspector（風紀委員）
