@@ -2,12 +2,26 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
-## 風紀委員 / 僚機の自律学習 v0 PR #325 監査（2026-10-24）
+## 実装隊長 / 僚機の自律学習 v0 PR #325（2026-10-24）
+- Who: lead（実装隊長）
+- What: 風紀委員 `AUDIT_REJECT`（commit `30b4896`）を arrow へ `CORRECTION` に変換
+- Why: `docs/AUTONOMOUS_LEARNING_V0.md` §セル・§想定・§対象外に無い `dodged`/`struck`/`aimUnitId` が PR head に含まれている
+- Scope: コードは触らない。Issue #324 に JSON のみ投稿。`640a667` 状態へ戻させる
+- Status: **CORRECTION 発行済み** → arrow の `WORK_REPORT` 待ち。マージしない
+
+## 風紀委員 / 僚機の自律学習 v0 PR #325 監査（2026-10-24・再）
+- Who: inspector（風紀委員）
+- What: PR #325 head `30b4896` 監査。`docs/AUTONOMOUS_LEARNING_V0.md` 照合
+- Why: lead からの PR_REPORT（640a667 PASS）後に追加された commit の監査
+- Scope: マージ・デプロイは行わない。機能コードは変更しない
+- Status: **AUDIT_REJECT** → lead。**FAIL**（ScopeLock PASS、CI PASS）。`hub-save.ts` / `learning.ts` / `sim.ts` の `dodged`・`struck`・`aimUnitId` は v0 正式仕様外。`640a667` まで revert するか神宮承認の SPEC_UPDATE が必要。lead は revert 方向で CORRECTION
+
+## 風紀委員 / 僚機の自律学習 v0 PR #325 監査（2026-10-24・初回）
 - Who: inspector（風紀委員）
 - What: PR #325（arrow / Issue #324）監査。ScopeLock・CI・`docs/AUTONOMOUS_LEARNING_V0.md` 照合
 - Why: lead からの PR_REPORT（PASS）に基づく最終監査
 - Scope: マージ・デプロイは行わない（監査不合格）。機能コードは変更しない
-- Status: **AUDIT_REJECT** → lead。ScopeLock PASS、PR Build Check run **40100463258** **SUCCESS**。仕様差分: `sim.ts` の `misses` 記録条件が逆（ttl 切れで `alive` な弾に `misses` が付かない）、回収中断時の `quizFailure` 未記録。修正待ち
+- Status: **AUDIT_REJECT**（履歴）。`misses` / `quizFailure` → arrow CORRECTION → **640a667** で解消済み
 
 ## 風紀委員 / 僚機の自律学習 v0（2026-10-24）
 - Who: inspector（風紀委員）
