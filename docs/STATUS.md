@@ -2,12 +2,19 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 僚機の自律学習 v0（2026-10-24）
+- Who: lead（実装隊長）
+- What: Issue #324 へ arrow 宛 `TASK_ASSIGNMENT`（ロードマップ4段を1 PR）
+- Why: 風紀委員 `SPEC_DECISION`（main 9869b839）照査済み、`unresolved` 空
+- Scope: `docs/AUTONOMOUS_LEARNING_V0.md` の allowed ファイルのみ。隊長機・中隊功績・敵平均評価・UI追加は対象外
+- Status: arrow 実装待ち（branch `cursor/arrow-mech-learning-v0`）。Deploy **NOT_TRIGGERED**
+
 ## 風紀委員 / 僚機の自律学習 v0（2026-10-24）
 - Who: inspector（風紀委員）
 - What: 正式仕様 `docs/AUTONOMOUS_LEARNING_V0.md` と、`docs/IMPLEMENTATION_PLAN.md` のロードマップ（帳簿 → 選択 → 小テスト → 精算）
 - Why: 神宮が大枠の実装を実装隊長へ渡すよう指示し、大きい項目なので文章の実装計画へ順序を残すよう指示した
 - Scope: 文書のみ。機能コードは変更しない。隊長機の自律、中隊功績、敵評価の平均、点数表の差し替えは対象外
-- Status: 仕様と計画は main に記録。Deploy Modules Preview は文書だけのため **NOT_TRIGGERED**。実装は `SPEC_DECISION` のあと、実装隊長の `TASK_ASSIGNMENT` まで着手しない
+- Status: 仕様と計画は main `9869b839`。`SPEC_DECISION` 済み → lead が TASK_ASSIGNMENT 発行
 
 ## 風紀委員 / 貫通弾 piercing_round（2026-10-24）
 - Who: inspector（風紀委員）
