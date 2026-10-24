@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 僚機の自律学習 v0 修正指示（2026-10-24）
+- Who: lead（実装隊長）
+- What: 風紀委員 AUDIT_REJECT（PR #325）を arrow へ CORRECTION 発行。Issue #324 コメント・Slack 写し
+- Why: sim.ts の miss 条件（ttl 切れ・alive）と carry 中断時 quizFailure 未記録の2点で仕様 FAIL
+- Scope: コードは触らない。同一 PR #325 / ブランチ cursor/arrow-mech-learning-v0 の修正を arrow が実施
+- Status: CORRECTION 済み。PR #325 は draft に戻した。WORK_REPORT 待ち。Deploy **NOT_TRIGGERED**
+
 ## 風紀委員 / 僚機の自律学習 v0（2026-10-24）
 - Who: inspector（風紀委員）
 - What: 正式仕様 `docs/AUTONOMOUS_LEARNING_V0.md` と、`docs/IMPLEMENTATION_PLAN.md` のロードマップ（帳簿 → 選択 → 小テスト → 精算）
