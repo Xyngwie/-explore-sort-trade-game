@@ -533,3 +533,5 @@ for (const weapon of ["smg", "shotgun", "mmr", "lmg"] as const) {
   }
 }
 console.log("All 12 weapon/special-round combinations PASS");
+
+await import("./piercingRound.selftest.js");

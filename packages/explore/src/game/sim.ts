@@ -2,7 +2,7 @@ import { barricadeWorking, interruptBarricade, tickBarricades, damageBarricade }
 import { settleReturnedShields } from "./shieldReturn";
 import { tickShieldOperations } from "./shieldOperations";
 import { activeStripping, interruptStripping, tickStripping, wreckWasStripped } from "./strippingRuntime";
-import { absorbShieldHit } from "./shields";
+import { absorbShieldHit, resolvePiercingProjectileHit } from "./shields";
 import { incomingDamage } from "./incomingDamage";
 import { boardingAssemblyTarget } from "./boardingMovement";
 import { firstShotContact, friendlyFireRisk, clearFiringLine, lineClearTarget, spreadRadians } from "./projectiles";
@@ -205,11 +205,20 @@ export function updateBullets(world: World, dt: number): void {
       const friendly=!b.fromEnemy && t.kind!=="enemy";
       const hitDmg = incomingDamage(world, t, b.damage);
       const incomingAngle = Math.hypot(b.vel.x, b.vel.y) > 0 ? Math.atan2(-b.vel.y, -b.vel.x) : Number.NaN;
-      const shielded = absorbShieldHit(world, t, incomingAngle, hitDmg);
-      if(t.kind!=="enemy" && b.fromEnemy) world.combatHitsTaken+=1;
-      noteEmpHit(world,t,b);
-      if(!b.fromEnemy)noteDamageBreaksSuppress(world,t);
-      if (!shielded) t.hp=Math.max(0,t.hp-hitDmg);
+      const pierce = b.pierce;
+      if (pierce != null && pierce > 0) {
+        const armorDmg = resolvePiercingProjectileHit(world, t, incomingAngle, hitDmg, pierce);
+        if(t.kind!=="enemy" && b.fromEnemy) world.combatHitsTaken+=1;
+        noteEmpHit(world,t,b);
+        if(!b.fromEnemy)noteDamageBreaksSuppress(world,t);
+        t.hp = Math.max(0, t.hp - armorDmg);
+      } else {
+        const shielded = absorbShieldHit(world, t, incomingAngle, hitDmg);
+        if(t.kind!=="enemy" && b.fromEnemy) world.combatHitsTaken+=1;
+        noteEmpHit(world,t,b);
+        if(!b.fromEnemy)noteDamageBreaksSuppress(world,t);
+        if (!shielded) t.hp=Math.max(0,t.hp-hitDmg);
+      }
       if(t.kind==="wingman")t.hitWarnT=world.balance.wingHitWarnSec;
       if(friendly){
         recordFriendlyFire(world,shooter?.instanceId??b.ownerId);

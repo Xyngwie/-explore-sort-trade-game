@@ -42,6 +42,7 @@ assert.equal(resolveCluesForCircuitBoard(truth.circuitBoard)[0]?.[0], 4);
 assert.equal(weaponCategory("mmr"), "weapon");
 assert.equal(weaponCategory("lmg"), "weapon");
 assert.equal(weaponCategory("emp_round"), "special_ammo");
+assert.equal(weaponCategory("piercing_round"), "special_ammo");
 assert.equal(weaponCategory("cargo_slots"), null);
 
 const keyed = { ...fals, effectKey: "smg" as const };
@@ -81,8 +82,10 @@ assert.equal(circuitTrueBoardRate(rated, 0.4), pt > 0 ? 0.4 + add : 0.4);
 // 項目4-2 C1e compat: 「回収」 (recover) is the 19th false-board key. Saved keys are kept
 // as they are; only a circuit that gets its key from now on can roll recover.
 {
-  assert.equal(FALSE_BOARD_EFFECT_KEYS.length, 20);
-  assert.equal(FALSE_BOARD_EFFECT_KEYS[18], "recover");
+  assert.equal(FALSE_BOARD_EFFECT_KEYS.length, 21);
+  assert.equal(FALSE_BOARD_EFFECT_KEYS[19], "recover");
+  assert.equal(FALSE_BOARD_EFFECT_KEYS[15], "piercing_round");
+  assert.equal(FALSE_BOARD_EFFECT_KEYS[20], "shield");
   const OLD18 = FALSE_BOARD_EFFECT_KEYS.slice(0, 18);
   const recs = Array.from({ length: 120 }, (_, i) => ({
     circuitId: `c1e-${i}`,

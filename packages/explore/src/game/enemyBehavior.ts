@@ -79,6 +79,7 @@ export function enemyMode(e: Unit): EnemyMode {
       "fast_round",
       "homing_round",
       "emp_round",
+      "piercing_round",
     ].includes(key ?? "")
   )
     return "range";
