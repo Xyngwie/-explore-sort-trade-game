@@ -43,6 +43,7 @@
     "src/fieldPersistence.selftest.ts",
     "src/shieldReturn.selftest.ts",
     "src/shieldCircuit.selftest.ts",
+    "src/piercingRound.selftest.ts",
     "src/barricades.selftest.ts",
     "src/debug/**/*.selftest.ts",
     "src/mapTargets.selftest.ts"

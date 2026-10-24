@@ -83,9 +83,10 @@ assert.equal(circuitTrueBoardRate(rated, 0.4), pt > 0 ? 0.4 + add : 0.4);
 // as they are; only a circuit that gets its key from now on can roll recover.
 {
   assert.equal(FALSE_BOARD_EFFECT_KEYS.length, 21);
-  assert.equal(FALSE_BOARD_EFFECT_KEYS[19], "recover");
-  assert.equal(FALSE_BOARD_EFFECT_KEYS[15], "piercing_round");
-  assert.equal(FALSE_BOARD_EFFECT_KEYS[20], "shield");
+  assert.equal(FALSE_BOARD_EFFECT_KEYS[18], "recover");
+  assert.equal(FALSE_BOARD_EFFECT_KEYS[19], "shield");
+  assert.equal(FALSE_BOARD_EFFECT_KEYS[20], "piercing_round");
+  assert.equal(FALSE_BOARD_EFFECT_KEYS.at(-1), "piercing_round");
   const OLD18 = FALSE_BOARD_EFFECT_KEYS.slice(0, 18);
   const recs = Array.from({ length: 120 }, (_, i) => ({
     circuitId: `c1e-${i}`,

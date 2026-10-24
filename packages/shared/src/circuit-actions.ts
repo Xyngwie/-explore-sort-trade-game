@@ -46,7 +46,6 @@ export const FALSE_BOARD_EFFECT_KEYS = [
   "fast_round",
   "homing_round",
   "emp_round",
-  "piercing_round",
   "haul_speed",
   "cargo_slots",
   "cover_move",
@@ -56,6 +55,8 @@ export const FALSE_BOARD_EFFECT_KEYS = [
   "recover",
   // #314: new false-board passive; saved keys are kept unchanged.
   "shield",
+  // #322: appended after shield; saved keys are kept unchanged.
+  "piercing_round",
 ] as const;
 
 export const TRUE_BOARD_EFFECT_KEYS = [

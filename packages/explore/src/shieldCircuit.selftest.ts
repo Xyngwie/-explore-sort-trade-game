@@ -14,7 +14,7 @@ import { CIRCUIT_EFFECT_LABEL_JA } from './game/statusBadges';
 function circuit(id:string,effect=100,owner:string|null='leader'):HubCircuitRecord {
  return {circuitId:id,circuitBoard:buildVerifyPerfectLockedBoard('shield-test'),restoreState:'bypass',origin:'crafted',equippedTo:owner,effectKey:'shield',enemyEffect:effect};
 }
-assert.equal(FALSE_BOARD_EFFECT_KEYS.at(-1),'shield');
+assert.equal(FALSE_BOARD_EFFECT_KEYS.at(-1),'piercing_round');
 assert(!(TRUE_BOARD_EFFECT_KEYS as readonly string[]).includes('shield'));
 assert.equal(CIRCUIT_EFFECT_LABEL_JA.shield,'盾');
 const assigned=assignMissingEffectKeys(Array.from({length:300},(_,i)=>{const c=circuit(`new-${i}`);delete c.effectKey;return c;}));

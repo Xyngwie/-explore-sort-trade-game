@@ -174,4 +174,40 @@ assert.equal(weaponCategory("piercing_round"), "special_ammo");
   assert.equal(resolvePiercingProjectileHit(bare, bare.leader, 0, 100, 0.5), 80);
 }
 
+{
+  const w = shieldWorld();
+  const identities = w.shieldState!.identities;
+  identities.shields.spare = shieldIdentityFromWreck(
+    registerWreckIdentity(identities, "wreck2"),
+    "wreck2",
+    "spare",
+    { hp: 50, maxHp: 50 },
+  ).shields.spare!;
+  delete w.shieldState!.equipped[w.leader.id];
+  w.shieldState!.spares = { [w.leader.id]: [{ kind: "shield", key: "spare" }] };
+  assert.equal(resolvePiercingProjectileHit(w, w.leader, 0, 100, 0.5), 80, "reserve-only (no equipped shield) uses 0.8");
+}
+
+{
+  const w = shieldWorld();
+  w.shieldState!.exchanges = { [w.leader.id]: { key: "shield", until: w.elapsed + 999 } };
+  delete w.shieldState!.equipped[w.leader.id];
+  assert.equal(resolvePiercingProjectileHit(w, w.leader, 0, 100, 0.5), 80, "shield exchange with no equipped uses 0.8");
+}
+
+{
+  const w = shieldWorld(10);
+  assert.equal(resolvePiercingProjectileHit(w, w.leader, 0, 100, 0.5), 50, "first hit pierces armor while shield breaks");
+  assert.equal(equippedShield(w, w.leader), null);
+  assert.equal(resolvePiercingProjectileHit(w, w.leader, 0, 100, 0.5), 80, "second hit after shield gone uses 0.8");
+}
+
+{
+  const w = shieldWorld(100);
+  const armor = w.leader.hp;
+  firePiercing(w, 0.5, 100, 0);
+  assert.equal(w.leader.hp, armor - 50, "armor takes full pierce share while shield keeps durability");
+  assert.equal(equippedShield(w, w.leader)!.shield.hp, 50);
+}
+
 console.log("piercingRound.selftest ok");
