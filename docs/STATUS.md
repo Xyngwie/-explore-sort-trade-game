@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 貫通弾 piercing_round（2026-10-24）
+- Who: inspector（風紀委員）
+- What: PR #323（arrow / Issue #322）監査・マージ・Deploy Modules Preview 確認
+- Why: lead からの PR_REPORT（PASS）に基づく最終監査
+- Scope: `docs/PIERCING_ROUND_V0.md` 照合、13 ファイル ScopeLock 内、CI 再確認。機能コードは変更しない
+- Status: main `f01b43f15281d1a5c8cbbd031a6cd96117e26ef6`（squash merge #323）。Deploy Modules Preview run **40078815487** **SUCCESS**。プレビュー操作・神宮スマートフォン実機確認は **NOT_RUN**（DM 依頼済み）
+
 ## Codex / 公開版検証準備・盾UX調査（2026-10-22）
 - Who: Codex / 調査・実装担当
 - What: cursor/codex-lab-public-tests。第三者手順15項目を先に作成、その後2件のUXを再現調査
