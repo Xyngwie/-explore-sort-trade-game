@@ -55,6 +55,8 @@ export const FALSE_BOARD_EFFECT_KEYS = [
   "recover",
   // #314: new false-board passive; saved keys are kept unchanged.
   "shield",
+  // #322: appended after shield; saved keys are kept unchanged.
+  "piercing_round",
 ] as const;
 
 export const TRUE_BOARD_EFFECT_KEYS = [
@@ -93,7 +95,7 @@ const TRUE_SET = new Set<string>(TRUE_BOARD_EFFECT_KEYS);
 const ALL_KEYS = new Set<string>(CIRCUIT_EFFECT_KEYS);
 
 export const WEAPON_EFFECT_KEYS = ["smg", "shotgun", "mmr", "lmg"] as const;
-export const SPECIAL_AMMO_EFFECT_KEYS = ["fast_round", "homing_round", "emp_round"] as const;
+export const SPECIAL_AMMO_EFFECT_KEYS = ["fast_round", "homing_round", "emp_round", "piercing_round"] as const;
 export const GUN_EFFECT_ORDER = [...WEAPON_EFFECT_KEYS, ...SPECIAL_AMMO_EFFECT_KEYS] as const;
 export function weaponCategory(key: string | null | undefined): "weapon" | "special_ammo" | "shield" | "p_shield" | null {
   if (key === "shield") return "shield";
@@ -517,7 +519,7 @@ export function keyIsTrue(key: string | null | undefined): key is TrueBoardEffec
 export const CIRCUIT_EFFECT_LABEL_JA: Record<string, string> = {
   escort_range: "帯同", raid_attack: "遊撃", scout_activity: "偵察", point_defense_armor: "地点防衛",
   orbit_speed: "周回戦闘", cover_fight: "カバー戦闘", dodge: "回避", melee: "接近戦", smg: "SMG",
-  shotgun: "散弾", mmr: "MMR", lmg: "LMG", fast_round: "高速弾", homing_round: "誘導弾", emp_round: "EMP 弾",
+  shotgun: "散弾", mmr: "MMR", lmg: "LMG", fast_round: "高速弾", homing_round: "誘導弾", emp_round: "EMP 弾", piercing_round: "貫通弾",
   haul_speed: "運搬", cargo_slots: "積載力", cover_move: "カバー間移動", recover: "回収", shield: "盾", p_shield: "P盾",
   march: "行進", protect: "保護", scatter: "散開", focus: "集中", pincer: "挟撃", entrench_hold: "陣地防衛",
   forced_march: "強行軍", read_ahead: "先読", squad_haul: "運搬", trench: "塹壕", distribute: "分配",

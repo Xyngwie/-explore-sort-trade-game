@@ -52,6 +52,34 @@ export function absorbShieldHit(world: World, unit: Unit, incomingAngle: number,
   }
   return true;
 }
+
+/** Piercing projectile: split damage between armor and the single equipped shield in arc. */
+export function resolvePiercingProjectileHit(
+  world: World,
+  unit: Unit,
+  incomingAngle: number,
+  damage: number,
+  pierceRate: number,
+): number {
+  if (!unit.alive || !Number.isFinite(incomingAngle) || !Number.isFinite(damage) || damage < 0) return damage;
+  const entry = equippedShield(world, unit);
+  const inArc = entry != null &&
+    Math.abs(Math.atan2(Math.sin(incomingAngle - unit.heading), Math.cos(incomingAngle - unit.heading))) <= SHIELD_HALF_ARC + 1e-9;
+  if (!entry) return damage * 0.8;
+  if (!inArc) return damage;
+  const armorDamage = damage * pierceRate;
+  const shieldDamage = damage * (1 - pierceRate);
+  entry.shield.hp = Math.max(0, entry.shield.hp - shieldDamage);
+  if (entry.shield.hp === 0) {
+    const state = world.shieldState!;
+    delete state.equipped[unit.id];
+    delete state.ground[entry.key];
+    delete state.identities.shields[entry.key];
+    beginShieldExchange(world, unit);
+  }
+  return armorDamage;
+}
+
 /** Same item, HP, IDs and generation order; no transfer to the carrier. */
 export function dropEquippedShield(world: World, unit: Unit): boolean {
   const state = world.shieldState, entry = equippedShield(world, unit);

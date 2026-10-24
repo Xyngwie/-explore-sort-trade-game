@@ -482,9 +482,9 @@ const v2Text = JSON.stringify(v2Save);
     ],
   } as unknown as HubSnapshot);
   const built = buildMechCircuitsForDeploy(hub, ["owned_a", "owned_b"]);
-  // #314: this record has no saved key, so it is drawn now from the 20-key pool
-  // (19-key pool drew fast_round). Saved keys remain unchanged; see circuit-actions.selftest.
-  assert.deepEqual(built, { owned_a: [{ circuitId: "ha", restoreState: "bypass", effect: 1, effectKey: "recover" }] });
+  // #322: this record has no saved key, so it is drawn now from the 21-key pool
+  // (FALSE_BOARD tail is piercing_round). Saved keys remain unchanged; see circuit-actions.selftest.
+  assert.deepEqual(built, { owned_a: [{ circuitId: "ha", restoreState: "bypass", effect: 1, effectKey: "mmr" }] });
 }
 
 // ---------------------------------------------------------------------------

@@ -1111,6 +1111,12 @@ function gunR(world: World, unitId: string, gun: GunEffectKey): number {
   return selfKey(world, unitId, gun)?.r ?? 0;
 }
 
+function pierceRateForUnit(world: World, unitId: string): number | undefined {
+  const c = selfKey(world, unitId, "piercing_round");
+  if (!c) return undefined;
+  return Math.min(c.effect, 50) / 100;
+}
+
 /** Melee works inside the 270° peripheral arc (±135°), not only the 3° muzzle arc. */
 export const MELEE_HALF_ARC_RAD = (135 * Math.PI) / 180;
 export function inMeleeArc(from: Unit, target: Unit): boolean {
@@ -1219,6 +1225,13 @@ function spawnShot(
       extra = { ...extra, empSlow: Math.min(EMP_SLOW_CAP, EMP_SLOW_BASE + gunR(world, from.id, round)) };
     }
   }
+  let pierce: number | undefined;
+  if (WEAPON_EFFECT_KEYS.some((key) => key === weapon)) {
+    const round = SPECIAL_AMMO_EFFECT_KEYS.find((key) => selfKey(world, from.id, key));
+    if (round === "piercing_round") pierce = pierceRateForUnit(world, from.id);
+  } else if (weapon === "piercing_round") {
+    pierce = pierceRateForUnit(world, from.id);
+  }
   const base = from.heading + angleOff + spreadRadians(weapon); // muzzle fixed forward (facing PR1)
   const speed = world.balance.bulletSpeed * speedMul * abilityOf(world, from.id).bulletSpeed;
   const b: Bullet = {
@@ -1231,6 +1244,7 @@ function spawnShot(
     ownerId: from.id,
     ...(emp ? { emp: true, empSlow: extra?.empSlow } : {}),
     ...(extra?.homingId ? { homingId: extra.homingId, bend: extra.bend } : {}),
+    ...(pierce != null && pierce > 0 ? { pierce } : {}),
   };
   world.bullets.push(b);
 }
