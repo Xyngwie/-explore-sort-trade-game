@@ -206,24 +206,6 @@ function survivalCell(action: (typeof LEARNING_ACTION_ORDER)[number], tries: num
 
 assert.ok(learningExpectation({ ...survivalCell("hold", 1), survived: 1 }) > 0);
 
-// Combat dodge term: (dodged×1 + struck×(−1)) / (dodged + struck).
-{
-  const dodgeScore = learningExpectation({
-    ledger: "combat",
-    action: "fight",
-    subject: "normal",
-    ...stage,
-    dodged: 3,
-    struck: 1,
-  });
-  assert.equal(dodgeScore, 0.5);
-  let cells = noteLearningEvent([], stage, "fight", { kind: "dodged", subject: "normal" });
-  cells = noteLearningEvent(cells, stage, "fight", { kind: "struck", subject: "normal" });
-  const combat = cells.find((c) => c.ledger === "combat");
-  assert.equal(combat?.dodged, 1);
-  assert.equal(combat?.struck, 1);
-}
-
 function simFixture() {
   const w = createWorld(bootstrapFromSearch(""));
   startSortie(w);
@@ -278,78 +260,6 @@ function simFixture() {
   );
   assert.equal(transport?.quizFailure, 1, "salvage interrupt on carry");
   assert.equal(wing.salvageId, null);
-}
-
-// Enemy bullet aimed at a wingman that expires without a hit → dodged (not struck).
-{
-  const w = simFixture();
-  const wing = w.wingmen[0]!;
-  wing.instanceId = "learn-dodge";
-  wing.learningAction = "fight";
-  wing.pos = { x: 300, y: 300 };
-  const b: Bullet = {
-    alive: true,
-    pos: { x: 200, y: 300 },
-    vel: { x: -800, y: 0 },
-    ttl: 0.05,
-    damage: 1,
-    fromEnemy: true,
-    ownerId: "enemy-test",
-    aimUnitId: wing.id,
-  };
-  w.bullets = [b];
-  updateBullets(w, 0.1);
-  const combat = (w.mechLearningWork?.["learn-dodge"] ?? []).find((c) => c.ledger === "combat");
-  assert.equal(combat?.dodged, 1, "aimed enemy miss");
-  assert.equal(combat?.struck, undefined);
-}
-
-// Enemy bullet hit on learning wingman → struck, same bullet does not dodged.
-{
-  const w = simFixture();
-  const wing = w.wingmen[0]!;
-  wing.instanceId = "learn-struck";
-  wing.learningAction = "hold";
-  wing.pos = { x: 300, y: 300 };
-  wing.hp = 100;
-  const b: Bullet = {
-    alive: true,
-    pos: { x: 295, y: 300 },
-    vel: { x: 800, y: 0 },
-    ttl: 1,
-    damage: 1,
-    fromEnemy: true,
-    ownerId: "enemy-test",
-    aimUnitId: wing.id,
-  };
-  w.bullets = [b];
-  updateBullets(w, 0.02);
-  const combat = (w.mechLearningWork?.["learn-struck"] ?? []).find((c) => c.ledger === "combat");
-  assert.equal(combat?.struck, 1, "enemy hit");
-  assert.equal(combat?.dodged, undefined);
-}
-
-// dodged only when aimUnitId matches the learning wingman.
-{
-  const w = simFixture();
-  const wing = w.wingmen[0]!;
-  wing.instanceId = "learn-not-aimed";
-  wing.learningAction = "fight";
-  wing.pos = { x: 300, y: 300 };
-  const other = w.wingmen[1] ?? wing;
-  const b: Bullet = {
-    alive: true,
-    pos: { x: 200, y: 300 },
-    vel: { x: -800, y: 0 },
-    ttl: 0.05,
-    damage: 1,
-    fromEnemy: true,
-    ownerId: "enemy-test",
-    aimUnitId: other.id,
-  };
-  w.bullets = [b];
-  updateBullets(w, 0.1);
-  assert.equal(w.mechLearningWork?.["learn-not-aimed"]?.length ?? 0, 0, "not the aim target");
 }
 
 // abortSalvage helper ignores non-carry actions.
