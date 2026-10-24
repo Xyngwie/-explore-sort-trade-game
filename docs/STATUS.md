@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 小隊長の同時指定に上限はない（2026-10-25）
+- Who: inspector（風紀委員）
+- What: `instanceId` がある僚機を小隊長にする数に上限はない。全員指定はできる。全員指定の追加の意味は薄い。指定の操作は未決
+- Why: 神宮が確認した（2026-10-25）
+- Scope: 文書のみ。`SPEC_DECISION` は出していない。人数による減点は足していない
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md`、`docs/IMPLEMENTATION_PLAN.md`、`docs/MECH_WORLD_BUILDING_DESIGN.md` §6 に反映
+
 ## 風紀委員 / 別の小隊長は instanceId のある僚機（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 隊長機とは別に小隊長へ指定できるのは、`instanceId` がある僚機。指定の操作と同時の機数は未決
