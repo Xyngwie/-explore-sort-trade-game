@@ -17,8 +17,19 @@ export type Phase = "briefing" | "sortie" | "result";
 export type FailReason = "timeout" | "leader_down" | "extract_missed" | null;
 export type UnitKind = "leader" | "wingman" | "enemy";
 import type { EnemyIdentity } from "./enemyIdentity";
+export type LearningAction = import("./learning").LearningAction;
+
 export type Unit = {
   id: string; kind: UnitKind; name: string; pos: Vec2; vel: Vec2; heading: number; moveHeading?: number | null; aimWant?: number | null; hp: number; maxHp: number; radius: number; alive: boolean; stance: Stance; waypoint: Vec2 | null; moveTarget: Vec2 | null; /** Explicit captain click input, distinct from resolved AI targets; optional in old checkpoints. */ playerMoveTarget?: Vec2 | null; cooldown: number; patrolAngle: number; salvageId: string | null; salvageT: number; salvagedCount: number; capacity: number; instanceId: string | null;
+  /** Runtime-only wingman learning (AUTONOMOUS_LEARNING_V0). */
+  learningAction?: LearningAction;
+  droppedThisSortie?: boolean;
+  learningDecisionCount?: number;
+  learningDecisionAt?: number;
+  /** Subject keys held at least once this sortie (transport settlement). */
+  learningHeldSubjects?: Partial<Record<"container" | "circuit" | "wreck", true>>;
+  learningFightEnemyId?: string | null;
+  learningDropPending?: boolean;
   /** Enemy PR1: model / durability / hidden false-board circuits (enemies only; optional for old checkpoints). */ enemyIdentity?: EnemyIdentity; enemyState?: import("./enemyBehavior").EnemyState;
   inCover: boolean; coverEscapeT?: number; coverId?: string | null; quirk: WingmanQuirk | null; hitWarnT: number; engageWarnT: number;
   /** Player-issued individual stance; optional for old checkpoints, cleared by the next order or completed recovery. */ individualOrder?: boolean;
@@ -61,5 +72,10 @@ export type World = { barricades?: import("./barricades").BarricadeState; shield
   /** 項目5-2: there was cargo (salvage, carried containers, or a camp stash) when the rescue started. */
   rescueLostCargo?: boolean;
   /** 項目5-2: a camp site was on the field when the rescue started. */
-  rescueLostCamp?: boolean; };
+  rescueLostCamp?: boolean;
+  /** Working mech learning cells keyed by OwnedMech.instanceId (runtime only). */
+  mechLearningWork?: Record<string, import("@estg/shared").MechLearningCell[]>;
+  mechLearningReady?: boolean;
+  mechLearningFinalized?: boolean;
+};
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };

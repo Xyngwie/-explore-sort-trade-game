@@ -296,7 +296,184 @@ export type HubSnapshot = {
    * URL and Explore's 再出撃 both read it via `resolveSortieSelection`.
    */
   sortieSelection?: string[];
+  /** Wingman autonomous learning ledger (AUTONOMOUS_LEARNING_V0). */
+  mechLearning?: MechLearningState;
 };
+
+export type MechLearningLedger = "survival" | "transport" | "combat";
+export type MechLearningAction = "drop" | "flee" | "fight" | "carry" | "extract" | "hold";
+export type MechLearningSubject = "none" | "normal" | "container" | "circuit" | "wreck";
+export type MechLearningDistance = "near" | "mid" | "far";
+export type MechLearningCircle = "inside" | "close" | "late";
+export type MechLearningHp = "high" | "low";
+export type MechLearningCargo = "holding" | "dropped" | "none";
+
+export type MechLearningCell = {
+  ledger: MechLearningLedger;
+  action: MechLearningAction;
+  subject: MechLearningSubject;
+  distance: MechLearningDistance;
+  circle: MechLearningCircle;
+  hp: MechLearningHp;
+  cargo: MechLearningCargo;
+  tries?: number;
+  survived?: number;
+  died?: number;
+  leftBehind?: number;
+  quizSuccess?: number;
+  quizFailure?: number;
+  broughtHome?: number;
+  abandoned?: number;
+  hits?: number;
+  misses?: number;
+  kills?: number;
+};
+
+export type MechLearningState = {
+  byMech: Record<string, MechLearningCell[]>;
+  settledSortieIds: string[];
+};
+
+export const MECH_LEARNING_LIMITS = {
+  maxCellsPerMech: 4096,
+  maxSettledSortieIds: 64,
+} as const;
+
+const MECH_LEARNING_LEDGERS = new Set<MechLearningLedger>(["survival", "transport", "combat"]);
+const MECH_LEARNING_ACTIONS = new Set<MechLearningAction>(["drop", "flee", "fight", "carry", "extract", "hold"]);
+const MECH_LEARNING_SUBJECTS = new Set<MechLearningSubject>(["none", "normal", "container", "circuit", "wreck"]);
+const MECH_LEARNING_DISTANCES = new Set<MechLearningDistance>(["near", "mid", "far"]);
+const MECH_LEARNING_CIRCLES = new Set<MechLearningCircle>(["inside", "close", "late"]);
+const MECH_LEARNING_HP = new Set<MechLearningHp>(["high", "low"]);
+const MECH_LEARNING_CARGO = new Set<MechLearningCargo>(["holding", "dropped", "none"]);
+
+function mechLearningCounter(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+}
+
+function normalizeMechLearningCell(raw: unknown): MechLearningCell | null {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const ledger = o.ledger;
+  const action = o.action;
+  const subject = o.subject;
+  const distance = o.distance;
+  const circle = o.circle;
+  const hp = o.hp;
+  const cargo = o.cargo;
+  if (
+    typeof ledger !== "string" ||
+    !MECH_LEARNING_LEDGERS.has(ledger as MechLearningLedger) ||
+    typeof action !== "string" ||
+    !MECH_LEARNING_ACTIONS.has(action as MechLearningAction) ||
+    typeof subject !== "string" ||
+    !MECH_LEARNING_SUBJECTS.has(subject as MechLearningSubject) ||
+    typeof distance !== "string" ||
+    !MECH_LEARNING_DISTANCES.has(distance as MechLearningDistance) ||
+    typeof circle !== "string" ||
+    !MECH_LEARNING_CIRCLES.has(circle as MechLearningCircle) ||
+    typeof hp !== "string" ||
+    !MECH_LEARNING_HP.has(hp as MechLearningHp) ||
+    typeof cargo !== "string" ||
+    !MECH_LEARNING_CARGO.has(cargo as MechLearningCargo)
+  ) {
+    return null;
+  }
+  const cell: MechLearningCell = {
+    ledger: ledger as MechLearningLedger,
+    action: action as MechLearningAction,
+    subject: subject as MechLearningSubject,
+    distance: distance as MechLearningDistance,
+    circle: circle as MechLearningCircle,
+    hp: hp as MechLearningHp,
+    cargo: cargo as MechLearningCargo,
+  };
+  const tries = mechLearningCounter(o.tries);
+  if (tries > 0) cell.tries = tries;
+  const survived = mechLearningCounter(o.survived);
+  if (survived > 0) cell.survived = survived;
+  const died = mechLearningCounter(o.died);
+  if (died > 0) cell.died = died;
+  const leftBehind = mechLearningCounter(o.leftBehind);
+  if (leftBehind > 0) cell.leftBehind = leftBehind;
+  const quizSuccess = mechLearningCounter(o.quizSuccess);
+  if (quizSuccess > 0) cell.quizSuccess = quizSuccess;
+  const quizFailure = mechLearningCounter(o.quizFailure);
+  if (quizFailure > 0) cell.quizFailure = quizFailure;
+  const broughtHome = mechLearningCounter(o.broughtHome);
+  if (broughtHome > 0) cell.broughtHome = broughtHome;
+  const abandoned = mechLearningCounter(o.abandoned);
+  if (abandoned > 0) cell.abandoned = abandoned;
+  const hits = mechLearningCounter(o.hits);
+  if (hits > 0) cell.hits = hits;
+  const misses = mechLearningCounter(o.misses);
+  if (misses > 0) cell.misses = misses;
+  const kills = mechLearningCounter(o.kills);
+  if (kills > 0) cell.kills = kills;
+  return cell;
+}
+
+export function emptyMechLearningState(): MechLearningState {
+  return { byMech: {}, settledSortieIds: [] };
+}
+
+export function normalizeMechLearning(raw: unknown): MechLearningState {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return emptyMechLearningState();
+  const o = raw as Record<string, unknown>;
+  const byMech: Record<string, MechLearningCell[]> = {};
+  if (o.byMech != null && typeof o.byMech === "object" && !Array.isArray(o.byMech)) {
+    for (const [idRaw, rows] of Object.entries(o.byMech as Record<string, unknown>)) {
+      const id = typeof idRaw === "string" ? idRaw.trim().slice(0, MECH_INSTANCE_ID_MAX) : "";
+      if (!id || !Array.isArray(rows)) continue;
+      const cells: MechLearningCell[] = [];
+      for (const row of rows) {
+        const cell = normalizeMechLearningCell(row);
+        if (cell) cells.push(cell);
+        if (cells.length >= MECH_LEARNING_LIMITS.maxCellsPerMech) break;
+      }
+      if (cells.length > 0) byMech[id] = cells;
+    }
+  }
+  const settled: string[] = [];
+  if (Array.isArray(o.settledSortieIds)) {
+    for (const item of o.settledSortieIds) {
+      const id = sanitizeSortieId(item);
+      if (id && !settled.includes(id)) settled.push(id);
+    }
+  }
+  while (settled.length > MECH_LEARNING_LIMITS.maxSettledSortieIds) settled.shift();
+  return { byMech, settledSortieIds: settled };
+}
+
+export function copyMechLearningForInstance(
+  state: MechLearningState | undefined,
+  instanceId: string,
+): MechLearningCell[] {
+  const rows = state?.byMech[instanceId] ?? [];
+  return rows.map((c) => ({ ...c }));
+}
+
+export function settleMechLearningOnHub(
+  hub: HubSnapshot,
+  workByMech: Record<string, MechLearningCell[]>,
+  sortieId: string,
+): HubSnapshot {
+  const sid = sanitizeSortieId(sortieId);
+  if (!sid) return hub;
+  const prev = normalizeMechLearning(hub.mechLearning);
+  if (prev.settledSortieIds.includes(sid)) return hub;
+  const byMech = { ...prev.byMech };
+  for (const [instanceId, cells] of Object.entries(workByMech)) {
+    const id = instanceId.trim().slice(0, MECH_INSTANCE_ID_MAX);
+    if (!id || cells.length === 0) continue;
+    byMech[id] = cells.slice(0, MECH_LEARNING_LIMITS.maxCellsPerMech).map((c) => ({ ...c }));
+  }
+  const settledSortieIds = [...prev.settledSortieIds, sid];
+  while (settledSortieIds.length > MECH_LEARNING_LIMITS.maxSettledSortieIds) settledSortieIds.shift();
+  return { ...hub, mechLearning: { byMech, settledSortieIds } };
+}
 
 /**
  * First Invade clear record. `boardSeed` is the board swept first (null when
@@ -1061,6 +1238,12 @@ export function normalizeHubSnapshot(
     ...(normalizeInvadeRank(rawRec?.invadeRank) ? { invadeRank: normalizeInvadeRank(rawRec?.invadeRank)! } : {}),
     ...(ammoBatteryRepaired ? { ammoBatteryRepaired: true } : {}),
     ...(rawRec?.starterCircuitGranted === true || circuits.some(c => c.circuitId.startsWith("false-1x1-")) ? { starterCircuitGranted: true } : {}),
+    ...((): { mechLearning?: MechLearningState } => {
+      const mechLearning = normalizeMechLearning(rawRec?.mechLearning ?? fallback.mechLearning);
+      const empty =
+        Object.keys(mechLearning.byMech).length === 0 && mechLearning.settledSortieIds.length === 0;
+      return empty ? {} : { mechLearning };
+    })(),
   };
   // Ammo rules (mech-ammo.ts): per-mech cap clamp into the stock, M5 reload, M6 once.
   return applyHubAmmoRules(snapshot, { reloadIds: [...integrityReload] });

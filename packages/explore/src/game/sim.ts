@@ -14,7 +14,14 @@ import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
-import { decideWingman } from "./brain";
+import { wingmanIntent } from "./brain";
+import { isLearningWingman } from "./learning";
+import {
+  ensureMechLearningWorld,
+  finalizeMechLearningSortie,
+  noteLearningForUnit,
+  trackLearningCargoHeld,
+} from "./outcome";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
 import { recoverStrandedDropsAtLiftOff } from "./circuitDrops";
 import { maybeAutoRescue, noteLeaderDown, resolveForcedRescueTimeout } from "./rescue";
@@ -225,14 +232,28 @@ export function updateBullets(world: World, dt: number): void {
         showCombatFeedback(world,t,"friendly_fire");
         pushLog(world,`誤射：${shooter?.name??b.ownerId} → ${t.name}（−${Math.round(hitDmg)}）`);
       }
+      if (!b.fromEnemy && t.kind === "enemy" && shooter && isLearningWingman(shooter)) {
+        noteLearningForUnit(world, shooter, { kind: "hit", subject: "normal" });
+      }
       if(t.hp<=0){
         t.alive=false;
         reportBattle(world,friendly ? `${shooter?.name??b.ownerId} の誤射で ${t.name} 大破` : `${b.fromEnemy?"敵":shooter?.name??"分隊"} が ${t.name} を撃破`,t.pos);
-        if(t.kind==="enemy")handleEnemyDeaths(world);
+        if(t.kind==="enemy"){
+          if (!b.fromEnemy && shooter && isLearningWingman(shooter)) {
+            noteLearningForUnit(world, shooter, { kind: "kill", subject: "normal" });
+          }
+          handleEnemyDeaths(world);
+        }
       }else if(!inCamera(world,t.pos) || !inCamera(world,b.pos))reportBattle(world,`${t.name} が被弾 (−${Math.round(hitDmg)})`,t.pos);
       break;
     }
-    if(b.ttl<=0)b.alive=false;
+    if(b.ttl<=0){
+      if(!b.fromEnemy && !b.alive){
+        const shooter=friendlyUnits(world).find(u=>u.id===b.ownerId);
+        if(shooter && isLearningWingman(shooter)) noteLearningForUnit(world, shooter, { kind: "miss", subject: "normal" });
+      }
+      b.alive=false;
+    }
   }
   world.bullets=world.bullets.filter(b=>b.alive);
 }
@@ -264,7 +285,9 @@ function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): voi
   const salvageNeed = salvageSeconds(world) ?? world.balance.salvageSeconds;
   if (unit.salvageT >= salvageNeed) {
     crate.taken = true;
+    if (isLearningWingman(unit)) noteLearningForUnit(world, unit, { kind: "quizSuccess", subject: "container" });
     onSalvageCompleted(world, unit);
+    trackLearningCargoHeld(world, unit);
   }
 }
 
@@ -390,7 +413,7 @@ function resolveBoardingLiftOff(world: World): void {
   const recoveredDrops = recoverStrandedDropsAtLiftOff(world, boarding, captainIn);
   if (recoveredDrops.length > 0) pushLog(world, `落とし物の回路を回収：${recoveredDrops.length}件。`);
   noteCircuitExtract(world, captainIn);
-  world.boarding = null; world.camp = null; settleReturnedShields(world); world.phase = "result";
+  world.boarding = null; world.camp = null; settleReturnedShields(world); finalizeMechLearningSortie(world); world.phase = "result";
   if (captainIn) {
     let circleCrates = 0;
     for (const c of world.containers) {
@@ -419,6 +442,7 @@ function updateBoarding(world: World): void {
 function leaderAbortSalvageOnTimeout(world: World): void { for (const u of friendlyUnits(world)) { interruptStripping(world,u.id); u.salvageId = null; u.salvageT = 0; } }
 
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
+  if (world.phase === "sortie") ensureMechLearningWorld(world);
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") { tickStripping(world,0); return; }
   tickBarricades(world,0);
@@ -512,7 +536,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     w.cooldown = Math.max(0, w.cooldown - dt);
     const riding = wreckCarrierId(world, w.id) != null;
     if(barricadeWorking(world,w.id)){w.moveTarget=null;w.vel={x:0,y:0};continue;}
-    const intent = decideWingman(world, w, dt);
+    trackLearningCargoHeld(world, w);
+    const intent = wingmanIntent(world, w, dt);
     const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.moveSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed /* 項目4-1: load 0 is 120 for wingmen too (2026-10-07 7:36 神宮) */);
     const assembly = boardingAssemblyTarget(world, w);
     w.moveTarget = timedOut || riding ? null : assembly ?? lineClearTarget(world,w) ?? cruise.target;
