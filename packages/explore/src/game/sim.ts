@@ -19,6 +19,7 @@ import { isLearningWingman } from "./learning";
 import {
   ensureMechLearningWorld,
   finalizeMechLearningSortie,
+  noteLearningContainerSalvageAbort,
   noteLearningForUnit,
   trackLearningCargoHeld,
 } from "./outcome";
@@ -248,7 +249,7 @@ export function updateBullets(world: World, dt: number): void {
       break;
     }
     if(b.ttl<=0){
-      if(!b.fromEnemy && !b.alive){
+      if(!b.fromEnemy && b.alive){
         const shooter=friendlyUnits(world).find(u=>u.id===b.ownerId);
         if(shooter && isLearningWingman(shooter)) noteLearningForUnit(world, shooter, { kind: "miss", subject: "normal" });
       }
@@ -258,11 +259,12 @@ export function updateBullets(world: World, dt: number): void {
   world.bullets=world.bullets.filter(b=>b.alive);
 }
 
-function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): void {
+export function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): void {
   if (!unit.alive) return;
   if (!want && !unit.salvageId) return;
   // 項目4-1: no container pickup while an 8 s wreck pickup runs, or when full (C4).
   if (wreckChannelOf(world, unit.id) || !canTakeContainer(world, unit)) {
+    noteLearningContainerSalvageAbort(world, unit);
     unit.salvageId = null;
     unit.salvageT = 0;
     return;
@@ -271,11 +273,13 @@ function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): voi
     ? world.containers.find((c) => c.id === unit.salvageId)
     : world.containers.find((c) => c.discovered && !c.taken && dist(unit.pos, c.pos) < world.balance.interactRadius);
   if (!crate || crate.taken || !crate.discovered) {
+    noteLearningContainerSalvageAbort(world, unit);
     unit.salvageId = null;
     unit.salvageT = 0;
     return;
   }
   if (dist(unit.pos, crate.pos) > world.balance.interactRadius) {
+    noteLearningContainerSalvageAbort(world, unit);
     unit.salvageId = null;
     unit.salvageT = 0;
     return;

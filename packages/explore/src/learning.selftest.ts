@@ -9,6 +9,11 @@ import {
   noteLearningEvent,
   type LearningStage,
 } from "./game/learning";
+import { createWorld, bootstrapFromSearch, startSortie } from "./game/world";
+import { updateBullets, updateSalvage } from "./game/sim";
+import { noteLearningContainerSalvageAbort } from "./game/outcome";
+import { getCoverObjects } from "./game/coverObjects";
+import type { Bullet } from "./game/types";
 
 const stage: LearningStage = {
   distance: "mid",
@@ -200,5 +205,73 @@ function survivalCell(action: (typeof LEARNING_ACTION_ORDER)[number], tries: num
 }
 
 assert.ok(learningExpectation({ ...survivalCell("hold", 1), survived: 1 }) > 0);
+
+function simFixture() {
+  const w = createWorld(bootstrapFromSearch(""));
+  startSortie(w);
+  getCoverObjects(w).splice(0);
+  for (const e of w.enemies) e.pos = { x: 5000, y: 5000 };
+  w.leader.pos = { x: 100, y: 300 };
+  return w;
+}
+
+// Friendly bullet expiring in range records a combat miss (not obstacle-killed).
+{
+  const w = simFixture();
+  const wing = w.wingmen[0]!;
+  wing.instanceId = "learn-miss";
+  wing.learningAction = "fight";
+  wing.pos = { x: 200, y: 300 };
+  const b: Bullet = {
+    alive: true,
+    pos: { x: 200, y: 300 },
+    vel: { x: 800, y: 0 },
+    ttl: 0.05,
+    damage: 1,
+    fromEnemy: false,
+    ownerId: wing.id,
+  };
+  w.bullets = [b];
+  updateBullets(w, 0.1);
+  const combat = (w.mechLearningWork?.["learn-miss"] ?? []).find((c) => c.ledger === "combat");
+  assert.equal(combat?.misses, 1, "ttl expiry counts as miss while bullet still alive");
+}
+
+// Container salvage interrupted during carry records transport quizFailure.
+{
+  const w = simFixture();
+  const wing = w.wingmen[0]!;
+  wing.instanceId = "learn-carry";
+  wing.learningAction = "carry";
+  wing.pos = { x: 400, y: 400 };
+  wing.salvageId = "test-crate";
+  wing.salvageT = 0.4;
+  w.containers.push({
+    id: "test-crate",
+    pos: { x: 400, y: 400 },
+    discovered: true,
+    taken: false,
+    glowT: 0,
+  });
+  wing.pos = { x: 900, y: 400 };
+  updateSalvage(w, wing, true, 0.01);
+  const transport = (w.mechLearningWork?.["learn-carry"] ?? []).find(
+    (c) => c.ledger === "transport" && c.action === "carry" && c.subject === "container",
+  );
+  assert.equal(transport?.quizFailure, 1, "salvage interrupt on carry");
+  assert.equal(wing.salvageId, null);
+}
+
+// abortSalvage helper ignores non-carry actions.
+{
+  const w = simFixture();
+  const wing = w.wingmen[0]!;
+  wing.instanceId = "learn-hold";
+  wing.learningAction = "hold";
+  wing.salvageId = "x";
+  wing.salvageT = 1;
+  noteLearningContainerSalvageAbort(w, wing);
+  assert.equal(w.mechLearningWork?.["learn-hold"]?.length ?? 0, 0);
+}
 
 console.log("explore learning selftest: ok");

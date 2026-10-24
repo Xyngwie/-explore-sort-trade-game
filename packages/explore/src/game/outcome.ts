@@ -308,6 +308,14 @@ export function noteLearningForUnit(
   setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, event));
 }
 
+/** In-progress container salvage aborted while `carry` is selected (AUTONOMOUS_LEARNING_V0). */
+export function noteLearningContainerSalvageAbort(world: World, unit: import("./types").Unit): void {
+  if (!(unit.salvageId != null || unit.salvageT > 0)) return;
+  if (!isLearningWingman(unit)) return;
+  if (readLearningAction(unit) !== "carry") return;
+  noteLearningForUnit(world, unit, { kind: "quizFailure", subject: "container" });
+}
+
 export function trackLearningCargoHeld(world: World, unit: import("./types").Unit): void {
   if (!isLearningWingman(unit)) return;
   const subj = highestCargoSubjectForUnit(world, unit);

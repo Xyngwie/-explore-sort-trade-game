@@ -103,6 +103,21 @@ export function nextPatrolOrbitTarget(
   };
 }
 
+function noteLearningContainerSalvageAbort(world: World, unit: Unit): void {
+  if (!(unit.salvageId != null || unit.salvageT > 0)) return;
+  if (!isLearningWingman(unit)) return;
+  if (readLearningAction(unit) !== "carry") return;
+  const instanceId = unit.instanceId!.trim();
+  world.mechLearningWork ??= {};
+  const stage = buildLearningStage(world, unit);
+  const action = readLearningAction(unit);
+  const cells = world.mechLearningWork[instanceId] ?? [];
+  world.mechLearningWork[instanceId] = noteLearningEvent(cells, stage, action, {
+    kind: "quizFailure",
+    subject: "container",
+  });
+}
+
 export function decideWingman(world: World, self: Unit, dt: number): WingmanIntent {
   const b = world.balance;
   const shared = (e: Unit) => enemyVisibleToSquad(world, e) || canSee(world, self, e.pos);
@@ -113,7 +128,10 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
   // shoot enemies already within weapon range. No follow / chase / collect.
   if (!isWingmanMobileFor(world, self.id) || wreckCarrierId(world, self.id)) {
     // 項目4-2 C1: a palette 「回収」 runs its own salvage channel (circuitPlay) — keep it.
-    if (self.salvageId && !wingRecoverWantsSalvage(world, self)) abortSalvage(self);
+    if (self.salvageId && !wingRecoverWantsSalvage(world, self)) {
+      noteLearningContainerSalvageAbort(world, self);
+      abortSalvage(self);
+    }
     return {
       moveTarget: null,
       fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange, shared),
@@ -124,7 +142,10 @@ export function decideWingman(world: World, self: Unit, dt: number): WingmanInte
   // C20-b "stop" after an order it could not follow: hold in place, shoot only
   // enemies already in weapon range, no salvage, until the next order.
   if (self.holdOrder) {
-    if (self.salvageId) abortSalvage(self);
+    if (self.salvageId) {
+      noteLearningContainerSalvageAbort(world, self);
+      abortSalvage(self);
+    }
     return {
       moveTarget: null,
       fireAt: nearestAliveEnemy(self.pos, world.enemies, weaponRange, shared),
