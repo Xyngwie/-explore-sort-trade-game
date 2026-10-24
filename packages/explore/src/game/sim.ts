@@ -14,7 +14,15 @@ import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
-import { decideWingman } from "./brain";
+import { wingmanIntent } from "./brain";
+import { isLearningWingman } from "./learning";
+import {
+  ensureMechLearningWorld,
+  finalizeMechLearningSortie,
+  noteLearningContainerSalvageAbort,
+  noteLearningForUnit,
+  trackLearningCargoHeld,
+} from "./outcome";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
 import { recoverStrandedDropsAtLiftOff } from "./circuitDrops";
 import { maybeAutoRescue, noteLeaderDown, resolveForcedRescueTimeout } from "./rescue";
@@ -123,7 +131,6 @@ function inCamera(world: World, pos: Vec2): boolean {
 }
 
 function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): void {
-  void to; // muzzle is fixed forward
   const angle = from.heading + spreadRadians("normal");
   const dir = { x: Math.cos(angle), y: Math.sin(angle) };
   const speed = world.balance.bulletSpeed * (fromEnemy ? 1 : abilityOf(world, from.id).bulletSpeed);
@@ -135,8 +142,20 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
     damage: fromEnemy ? world.balance.enemyDamage * enemyDamageMultiplier(from) : world.balance.bulletDamage * attackMul(world, from.id),
     fromEnemy,
     ownerId: from.id,
+    ...(fromEnemy ? { aimUnitId: to.id } : {}),
   };
   world.bullets.push(b);
+}
+
+function retireBullet(world: World, b: Bullet): void {
+  if (!b.alive) return;
+  b.alive = false;
+  if (b.fromEnemy && b.aimUnitId && !b.aimUnitHit) {
+    const aim = world.wingmen.find((w) => w.id === b.aimUnitId);
+    if (aim && isLearningWingman(aim)) {
+      noteLearningForUnit(world, aim, { kind: "dodged", subject: "normal" });
+    }
+  }
 }
 
 function tryFire(world: World, from: Unit, target: Unit, fromEnemy: boolean, commanded = false): void {
@@ -184,7 +203,7 @@ export function updateBullets(world: World, dt: number): void {
   for (const b of world.bullets) {
     if (!b.alive) continue;
     const travel=Math.min(dt,Math.max(0,b.ttl));
-    if(travel<=0){b.alive=false;continue;}
+    if(travel<=0){retireBullet(world,b);continue;}
     bendHoming(world,b,travel);
     let start={...b.pos};
     const end={x:start.x+b.vel.x*travel,y:start.y+b.vel.y*travel};
@@ -195,12 +214,16 @@ export function updateBullets(world: World, dt: number): void {
       if(!contact){b.pos=end;break;}
       b.pos={x:start.x+(end.x-start.x)*contact.t,y:start.y+(end.y-start.y)*contact.t};
       const t=contact.unit;
-      if(!t){if(contact.barricadeKey)damageBarricade(world,contact.barricadeKey,b.damage);b.alive=false;break;}
+      if(!t){if(contact.barricadeKey)damageBarricade(world,contact.barricadeKey,b.damage);retireBullet(world,b);break;}
       if(tryDodge(world,t,b,end)){
         const dx=end.x-start.x,dy=end.y-start.y,len=Math.hypot(dx,dy)||1;
         start={x:b.pos.x+dx/len*.001,y:b.pos.y+dy/len*.001};continue;
       }
-      b.alive=false;
+      if (b.fromEnemy && isLearningWingman(t)) {
+        noteLearningForUnit(world, t, { kind: "struck", subject: "normal" });
+        if (b.aimUnitId === t.id) b.aimUnitHit = true;
+      }
+      retireBullet(world, b);
       const shooter=[...friendlyUnits(world),...world.enemies].find(u=>u.id===b.ownerId);
       const friendly=!b.fromEnemy && t.kind!=="enemy";
       const hitDmg = incomingDamage(world, t, b.damage);
@@ -225,23 +248,38 @@ export function updateBullets(world: World, dt: number): void {
         showCombatFeedback(world,t,"friendly_fire");
         pushLog(world,`誤射：${shooter?.name??b.ownerId} → ${t.name}（−${Math.round(hitDmg)}）`);
       }
+      if (!b.fromEnemy && t.kind === "enemy" && shooter && isLearningWingman(shooter)) {
+        noteLearningForUnit(world, shooter, { kind: "hit", subject: "normal" });
+      }
       if(t.hp<=0){
         t.alive=false;
         reportBattle(world,friendly ? `${shooter?.name??b.ownerId} の誤射で ${t.name} 大破` : `${b.fromEnemy?"敵":shooter?.name??"分隊"} が ${t.name} を撃破`,t.pos);
-        if(t.kind==="enemy")handleEnemyDeaths(world);
+        if(t.kind==="enemy"){
+          if (!b.fromEnemy && shooter && isLearningWingman(shooter)) {
+            noteLearningForUnit(world, shooter, { kind: "kill", subject: "normal" });
+          }
+          handleEnemyDeaths(world);
+        }
       }else if(!inCamera(world,t.pos) || !inCamera(world,b.pos))reportBattle(world,`${t.name} が被弾 (−${Math.round(hitDmg)})`,t.pos);
       break;
     }
-    if(b.ttl<=0)b.alive=false;
+    if(b.ttl<=0 && b.alive){
+      if(!b.fromEnemy){
+        const shooter=friendlyUnits(world).find(u=>u.id===b.ownerId);
+        if(shooter && isLearningWingman(shooter)) noteLearningForUnit(world, shooter, { kind: "miss", subject: "normal" });
+      }
+      retireBullet(world, b);
+    }
   }
   world.bullets=world.bullets.filter(b=>b.alive);
 }
 
-function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): void {
+export function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): void {
   if (!unit.alive) return;
   if (!want && !unit.salvageId) return;
   // 項目4-1: no container pickup while an 8 s wreck pickup runs, or when full (C4).
   if (wreckChannelOf(world, unit.id) || !canTakeContainer(world, unit)) {
+    noteLearningContainerSalvageAbort(world, unit);
     unit.salvageId = null;
     unit.salvageT = 0;
     return;
@@ -250,11 +288,13 @@ function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): voi
     ? world.containers.find((c) => c.id === unit.salvageId)
     : world.containers.find((c) => c.discovered && !c.taken && dist(unit.pos, c.pos) < world.balance.interactRadius);
   if (!crate || crate.taken || !crate.discovered) {
+    noteLearningContainerSalvageAbort(world, unit);
     unit.salvageId = null;
     unit.salvageT = 0;
     return;
   }
   if (dist(unit.pos, crate.pos) > world.balance.interactRadius) {
+    noteLearningContainerSalvageAbort(world, unit);
     unit.salvageId = null;
     unit.salvageT = 0;
     return;
@@ -264,7 +304,9 @@ function updateSalvage(world: World, unit: Unit, want: boolean, dt: number): voi
   const salvageNeed = salvageSeconds(world) ?? world.balance.salvageSeconds;
   if (unit.salvageT >= salvageNeed) {
     crate.taken = true;
+    if (isLearningWingman(unit)) noteLearningForUnit(world, unit, { kind: "quizSuccess", subject: "container" });
     onSalvageCompleted(world, unit);
+    trackLearningCargoHeld(world, unit);
   }
 }
 
@@ -390,7 +432,7 @@ function resolveBoardingLiftOff(world: World): void {
   const recoveredDrops = recoverStrandedDropsAtLiftOff(world, boarding, captainIn);
   if (recoveredDrops.length > 0) pushLog(world, `落とし物の回路を回収：${recoveredDrops.length}件。`);
   noteCircuitExtract(world, captainIn);
-  world.boarding = null; world.camp = null; settleReturnedShields(world); world.phase = "result";
+  world.boarding = null; world.camp = null; settleReturnedShields(world); finalizeMechLearningSortie(world); world.phase = "result";
   if (captainIn) {
     let circleCrates = 0;
     for (const c of world.containers) {
@@ -419,6 +461,7 @@ function updateBoarding(world: World): void {
 function leaderAbortSalvageOnTimeout(world: World): void { for (const u of friendlyUnits(world)) { interruptStripping(world,u.id); u.salvageId = null; u.salvageT = 0; } }
 
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
+  if (world.phase === "sortie") ensureMechLearningWorld(world);
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") { tickStripping(world,0); return; }
   tickBarricades(world,0);
@@ -512,7 +555,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
     w.cooldown = Math.max(0, w.cooldown - dt);
     const riding = wreckCarrierId(world, w.id) != null;
     if(barricadeWorking(world,w.id)){w.moveTarget=null;w.vel={x:0,y:0};continue;}
-    const intent = decideWingman(world, w, dt);
+    trackLearningCargoHeld(world, w);
+    const intent = wingmanIntent(world, w, dt);
     const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.moveSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed /* 項目4-1: load 0 is 120 for wingmen too (2026-10-07 7:36 神宮) */);
     const assembly = boardingAssemblyTarget(world, w);
     w.moveTarget = timedOut || riding ? null : assembly ?? lineClearTarget(world,w) ?? cruise.target;

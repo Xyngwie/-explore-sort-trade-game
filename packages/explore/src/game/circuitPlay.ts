@@ -639,10 +639,18 @@ export function noteCircuitExtract(world: World, captainIn: boolean): void {
   }
 }
 
+let mechLearningHubSideHook: ((world: World, hub: HubSnapshot) => HubSnapshot) | null = null;
+
+export function registerMechLearningHubSide(
+  fn: (world: World, hub: HubSnapshot) => HubSnapshot,
+): void {
+  mechLearningHubSideHook = fn;
+}
+
 export function applyCircuitHubSide(world: World, hub: HubSnapshot): HubSnapshot {
   const p = playOf(world);
   if (!p) return hub;
-  let next = hub;
+  let next = mechLearningHubSideHook ? mechLearningHubSideHook(world, hub) : hub;
   if (p.cooldownSec > 0) next = { ...next, airSupportCooldownSec: p.cooldownSec };
   else if (next.airSupportCooldownSec) {
     const { airSupportCooldownSec: _drop, ...rest } = next;
@@ -1563,6 +1571,20 @@ function dropContainerStack(world: World, unit: Unit): void {
   const spawned = spawnContainersAt(world, unit.pos, n, { discovered: true, idPrefix: "purge" });
   const glow = world.balance.deathDropGlowSec;
   for (const c of spawned) c.glowT = glow;
+}
+
+/** AUTONOMOUS_LEARNING_V0: drop this unit's containers and carried wrecks only (not shields). */
+export function dropLearningCargoForUnit(world: World, unit: Unit): void {
+  dropContainerStack(world, unit);
+  const p = playOf(world);
+  const ids = p?.carry?.[unit.id] ?? [];
+  if (p && ids.length > 0) {
+    for (const wreckId of ids) {
+      pickupById(world, wreckId)?.move(unit.pos);
+    }
+    delete p.carry[unit.id];
+  }
+  unit.droppedThisSortie = true;
 }
 
 

@@ -32,6 +32,9 @@ import {
   loadHubSaveFromLocalStorage,
   loadHubSaveWithStatus,
   normalizeHubSnapshot,
+  normalizeMechLearning,
+  settleMechLearningOnHub,
+  copyMechLearningForInstance,
   parseHubSave,
   parseMechCircuitsCompact,
   parseTradeToExploreSearch,
@@ -525,6 +528,67 @@ const v2Text = JSON.stringify(v2Save);
   };
   assert.equal(clueHash(sized), 3867672244, "U17 sized true clues");
   assert.equal(circuitEffectValue({ circuitBoard: sized, locked: true }), 59, "U17 sized true effect");
+}
+
+// mechLearning (AUTONOMOUS_LEARNING_V0)
+{
+  const empty = normalizeMechLearning(undefined);
+  assert.deepEqual(empty, { byMech: {}, settledSortieIds: [] });
+  const hub = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    mechLearning: {
+      byMech: {
+        m1: [
+          {
+            ledger: "survival",
+            action: "hold",
+            subject: "none",
+            distance: "near",
+            circle: "inside",
+            hp: "high",
+            cargo: "none",
+            tries: 1,
+          },
+          { ledger: "bad", action: "hold", subject: "none", distance: "near", circle: "inside", hp: "high", cargo: "none" },
+        ],
+      },
+      settledSortieIds: ["sortie-a"],
+    },
+  });
+  assert.equal(hub.mechLearning!.byMech.m1!.length, 1, "bad cells dropped");
+  const work = { m1: [{ ...hub.mechLearning!.byMech.m1![0]!, tries: 2 }] };
+  const once = settleMechLearningOnHub(hub, work, "sortie-b");
+  assert.equal(once.mechLearning!.byMech.m1![0]!.tries, 2);
+  assert.ok(once.mechLearning!.settledSortieIds.includes("sortie-b"));
+  const twice = settleMechLearningOnHub(once, { m1: [{ ...work.m1[0]!, tries: 9 }] }, "sortie-b");
+  assert.equal(twice.mechLearning!.byMech.m1![0]!.tries, 2, "duplicate sortieId skipped");
+  const copied = copyMechLearningForInstance(hub.mechLearning, "m1");
+  assert.equal(copied[0]!.tries, 1);
+  assert.equal(copyMechLearningForInstance(hub.mechLearning, "missing").length, 0);
+  const dodgeHub = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    mechLearning: {
+      byMech: {
+        m1: [
+          {
+            ledger: "combat",
+            action: "fight",
+            subject: "normal",
+            distance: "near",
+            circle: "inside",
+            hp: "high",
+            cargo: "none",
+            dodged: 2,
+            struck: 1,
+          },
+        ],
+      },
+      settledSortieIds: [],
+    },
+  });
+  const dodgeCell = dodgeHub.mechLearning!.byMech.m1![0]!;
+  assert.equal(dodgeCell.dodged, 2);
+  assert.equal(dodgeCell.struck, 1);
 }
 
 console.log("shared hub-save-v3 selftest: ok");

@@ -5,10 +5,14 @@ import {
   applyDurabilityBufferToWear,
   buildExploreToHubWearUrl,
   buildExploreToSortUrl,
+  copyMechLearningForInstance,
   createExpeditionState,
   createExploreSortieOutcome,
   createOwnedMech,
+  loadHubSaveFromLocalStorage,
+  normalizeHubSnapshot,
   resolveModuleBaseUrl,
+  settleMechLearningOnHub,
   statusFromDurability,
   stockFromContainers,
   toExploreToHubWearPayload,
@@ -17,7 +21,16 @@ import {
   type SortieReturnKind,
   type LostMechReturnState,
   type ExploreToHubWearPayload,
+  type HubSnapshot,
+  type MechLearningCell,
 } from "@estg/shared";
+import { buildLearningStage } from "./brain";
+import {
+  highestCargoSubjectForUnit,
+  isLearningWingman,
+  noteLearningEvent,
+  readLearningAction,
+} from "./learning";
 import type { World } from "./types";
 import { strandedNotRecovered } from "./lostMechs";
 import { isAliveForcedRescue } from "./rescue";
@@ -249,6 +262,107 @@ function abandonedFromWorld(world: World): string[] {
  * (`hubDirectSave.ts`) and also puts it in the 格納庫 return URL, which trade
  * still reads (applied once by sortieId; skipped when already saved).
  */
+export function ensureMechLearningWorld(world: World): void {
+  if (world.mechLearningReady) return;
+  world.mechLearningReady = true;
+  world.mechLearningWork ??= {};
+  const loaded = loadHubSaveFromLocalStorage();
+  const hub = loaded?.hub ? normalizeHubSnapshot(loaded.hub) : null;
+  for (const w of world.wingmen) {
+    const id = w.instanceId?.trim() ?? "";
+    if (!id) continue;
+    world.mechLearningWork[id] =
+      hub != null
+        ? copyMechLearningForInstance(hub.mechLearning, id)
+        : (world.mechLearningWork[id] ?? []);
+    w.learningDecisionCount = w.learningDecisionCount ?? 0;
+    w.learningAction = w.learningAction ?? "hold";
+    w.learningDecisionAt = w.learningDecisionAt ?? world.elapsed;
+    w.droppedThisSortie = w.droppedThisSortie ?? false;
+  }
+}
+
+function mechCells(world: World, unit: import("./types").Unit): MechLearningCell[] {
+  const id = unit.instanceId?.trim() ?? "";
+  if (!id) return [];
+  world.mechLearningWork ??= {};
+  if (!world.mechLearningWork[id]) world.mechLearningWork[id] = [];
+  return world.mechLearningWork[id]!;
+}
+
+function setMechCells(world: World, unit: import("./types").Unit, cells: MechLearningCell[]): void {
+  const id = unit.instanceId?.trim() ?? "";
+  if (!id) return;
+  world.mechLearningWork ??= {};
+  world.mechLearningWork[id] = cells;
+}
+
+export function noteLearningForUnit(
+  world: World,
+  unit: import("./types").Unit,
+  event: Parameters<typeof noteLearningEvent>[3],
+): void {
+  if (!isLearningWingman(unit)) return;
+  const stage = buildLearningStage(world, unit);
+  const action = readLearningAction(unit);
+  setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, event));
+}
+
+/** In-progress container salvage aborted while `carry` is selected (AUTONOMOUS_LEARNING_V0). */
+export function noteLearningContainerSalvageAbort(world: World, unit: import("./types").Unit): void {
+  if (!(unit.salvageId != null || unit.salvageT > 0)) return;
+  if (!isLearningWingman(unit)) return;
+  if (readLearningAction(unit) !== "carry") return;
+  noteLearningForUnit(world, unit, { kind: "quizFailure", subject: "container" });
+}
+
+export function trackLearningCargoHeld(world: World, unit: import("./types").Unit): void {
+  if (!isLearningWingman(unit)) return;
+  const subj = highestCargoSubjectForUnit(world, unit);
+  if (subj === "container" || subj === "circuit" || subj === "wreck") {
+    unit.learningHeldSubjects ??= {};
+    unit.learningHeldSubjects[subj] = true;
+  }
+}
+
+export function finalizeMechLearningSortie(world: World): void {
+  if (world.mechLearningFinalized) return;
+  world.mechLearningFinalized = true;
+  const leftIds = new Set((world.leftBehind ?? []).map((e) => e.id));
+  for (const unit of world.wingmen) {
+    if (!isLearningWingman(unit)) continue;
+    const stage = buildLearningStage(world, unit);
+    const action = unit.learningAction ?? "hold";
+    if (!unit.alive) {
+      setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, { kind: "died" }));
+      continue;
+    }
+    if (leftIds.has(unit.id)) {
+      setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, { kind: "leftBehind" }));
+    } else if (world.extracted) {
+      setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, { kind: "survived" }));
+    }
+    const held = unit.learningHeldSubjects ?? {};
+    for (const subject of ["container", "circuit", "wreck"] as const) {
+      if (!held[subject]) continue;
+      const still = highestCargoSubjectForUnit(world, unit) === subject;
+      const inside = world.extracted && !leftIds.has(unit.id);
+      if (inside && still) {
+        setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, { kind: "broughtHome", subject }));
+      } else {
+        setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, { kind: "abandoned", subject }));
+      }
+    }
+  }
+}
+
+export function applyMechLearningHubSide(world: World, hub: HubSnapshot): HubSnapshot {
+  const kind = returnKindFromWorld(world);
+  const sortieId = sortieIdForWorld(world, kind);
+  finalizeMechLearningSortie(world);
+  return settleMechLearningOnHub(hub, world.mechLearningWork ?? {}, sortieId);
+}
+
 export function exploreReturnPayload(world: World): ExploreToHubWearPayload | null {
   const outcome = buildSortieOutcome(world);
   if (!outcome) return null;
@@ -297,3 +411,6 @@ export {
   recoveredCircuitResultLines,
   recoveredCircuitResultHtml,
 } from "./circuitDrops";
+
+import { registerMechLearningHubSide } from "./circuitPlay";
+registerMechLearningHubSide(applyMechLearningHubSide);

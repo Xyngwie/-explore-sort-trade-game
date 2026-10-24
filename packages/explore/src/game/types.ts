@@ -17,15 +17,26 @@ export type Phase = "briefing" | "sortie" | "result";
 export type FailReason = "timeout" | "leader_down" | "extract_missed" | null;
 export type UnitKind = "leader" | "wingman" | "enemy";
 import type { EnemyIdentity } from "./enemyIdentity";
+export type LearningAction = import("./learning").LearningAction;
+
 export type Unit = {
   id: string; kind: UnitKind; name: string; pos: Vec2; vel: Vec2; heading: number; moveHeading?: number | null; aimWant?: number | null; hp: number; maxHp: number; radius: number; alive: boolean; stance: Stance; waypoint: Vec2 | null; moveTarget: Vec2 | null; /** Explicit captain click input, distinct from resolved AI targets; optional in old checkpoints. */ playerMoveTarget?: Vec2 | null; cooldown: number; patrolAngle: number; salvageId: string | null; salvageT: number; salvagedCount: number; capacity: number; instanceId: string | null;
+  /** Runtime-only wingman learning (AUTONOMOUS_LEARNING_V0). */
+  learningAction?: LearningAction;
+  droppedThisSortie?: boolean;
+  learningDecisionCount?: number;
+  learningDecisionAt?: number;
+  /** Subject keys held at least once this sortie (transport settlement). */
+  learningHeldSubjects?: Partial<Record<"container" | "circuit" | "wreck", true>>;
+  learningFightEnemyId?: string | null;
+  learningDropPending?: boolean;
   /** Enemy PR1: model / durability / hidden false-board circuits (enemies only; optional for old checkpoints). */ enemyIdentity?: EnemyIdentity; enemyState?: import("./enemyBehavior").EnemyState;
   inCover: boolean; coverEscapeT?: number; coverId?: string | null; quirk: WingmanQuirk | null; hitWarnT: number; engageWarnT: number;
   /** Player-issued individual stance; optional for old checkpoints, cleared by the next order or completed recovery. */ individualOrder?: boolean;
   /** C20-b: holding in place after an order it could not follow ("stop"); cleared by the next order. */ holdOrder?: boolean; /** C20-b: seconds left of the 「？」 above the wingman. */ questionT?: number;
 };
 export type Container = { id: string; pos: Vec2; taken: boolean; discovered: boolean; glowT: number; };
-export type Bullet = { alive: boolean; pos: Vec2; vel: Vec2; ttl: number; damage: number; fromEnemy: boolean; ownerId: string; homingId?: string; bend?: number; emp?: boolean; empSlow?: number; /** Piercing round: fraction of post-mitigation damage that bypasses to armor (0–0.5). */ pierce?: number; };
+export type Bullet = { alive: boolean; pos: Vec2; vel: Vec2; ttl: number; damage: number; fromEnemy: boolean; ownerId: string; /** Enemy shot target unit id at spawn (runtime only; AUTONOMOUS_LEARNING_V0). */ aimUnitId?: string; /** True when aimUnitId wingman was hit by this bullet (runtime only). */ aimUnitHit?: boolean; homingId?: string; bend?: number; emp?: boolean; empSlow?: number; /** Piercing round: fraction of post-mitigation damage that bypasses to armor (0–0.5). */ pierce?: number; };
 export type LogLine = { t: number; text: string; kind: "tactical" | "battle" };
 export type BoardingState = { center: Vec2; radius: number; requestedAt: number; cargoArrived: boolean; };
 export type ExtractPoint = { pos: Vec2; radius: number };
@@ -61,5 +72,10 @@ export type World = { barricades?: import("./barricades").BarricadeState; shield
   /** 項目5-2: there was cargo (salvage, carried containers, or a camp stash) when the rescue started. */
   rescueLostCargo?: boolean;
   /** 項目5-2: a camp site was on the field when the rescue started. */
-  rescueLostCamp?: boolean; };
+  rescueLostCamp?: boolean;
+  /** Working mech learning cells keyed by OwnedMech.instanceId (runtime only). */
+  mechLearningWork?: Record<string, import("@estg/shared").MechLearningCell[]>;
+  mechLearningReady?: boolean;
+  mechLearningFinalized?: boolean;
+};
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };
