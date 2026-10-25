@@ -7,7 +7,7 @@
 - What: `normal` の命中 +1、外れ −1 を暫定のまま残す
 - Why: 神宮が確認した（2026-10-26）
 - Scope: 文書のみ。記録の `SPEC_DECISION` は `in` 空。点数の実装は v0 に入っている。表の数は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の点数表に反映。Issue と Slack の記録はこの節の直後
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の点数表に反映。https://github.com/Xyngwie/-explore-sort-trade-game/issues/326#issuecomment-6401533811
 
 ## 風紀委員 / 小テストの点数は暫定のまま（2026-10-26）
 - Who: inspector（風紀委員）
