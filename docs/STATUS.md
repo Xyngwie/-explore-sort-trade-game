@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
+- Who: inspector（風紀委員）
+- What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
+- Why: 神宮が、決定仕様を Slack と Issue に投稿するよう指示した
+- Scope: 文書と Issue コメント 6394299212。機能コードは変えていない
+- Status: https://github.com/Xyngwie/-explore-sort-trade-game/issues/326
+
 ## 風紀委員 / 生還・死亡・置き去りは暫定のまま（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 生還 +100、死亡 −100、置き去り −80 を暫定のまま残す
