@@ -25,6 +25,7 @@ import {
   mulberry32,
   previewBypassVsAwakenedEffect,
   resolveTrueBoardClues,
+  resolveCluesForCircuitBoard,
   FLAWED_HAZARD_WEIGHTS as SHARED_FLAWED_HAZARD_WEIGHTS,
   type CircuitBoardState,
   type CircuitEffectBreakdown,
@@ -258,6 +259,14 @@ export function generatePuzzle(
       rarity: "perfect_rare",
       hazard: "none",
     };
+  }
+
+  // 1x1 uses the existing shared fixed/legacy clues. Do not re-roll a
+  // crafted incomplete board into a differently sized P board on Restore.
+  if (cols === 1 && rows === 1) {
+    return { cols, rows, puzzleId: puzzleSeed,
+      clues: resolveCluesForCircuitBoard({cols, rows, puzzleId: puzzleSeed}).map(row=>[...row]),
+      injectedTrue: false, rarity: "flawed_majority", hazard: "contradiction" };
   }
 
   const useInject =

@@ -1505,6 +1505,14 @@ export function repairTyped(
   return persistHangar(next);
 }
 
+/** Owner-approved wreck-only sale. Live mechs and unrecovered lostMechs are excluded. */
+export const HANGAR_WRECK_SELL_CREDITS = 400;
+export function wreckSaleConfirmText(state: HangarState, instanceId: string): string | null {
+  const mech = state.hub.fleet.find(m=>m.instanceId===instanceId);
+  if (!mech || !isHangarWreck(mech)) return null;
+  return `残骸を売却しますか？\n${mech.catalogId}（${mech.instanceId}）\n売値 ${HANGAR_WRECK_SELL_CREDITS}c\n装着回路は外して倉庫に残します。回路は売却しません。`;
+}
+
 export function scrapMech(
   state: HangarState,
   instanceId: string,

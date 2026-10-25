@@ -504,3 +504,14 @@ API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_
 資金・回路・盾・機体の編集は既存のHubSave/チェックポイント形へ保存する。HubSaveと出撃状態の保存に失敗したときは編集前へ戻し、通常領域で続行しない。HUBで明示的に回路を編集したときだけ、DEBUG_FIXTURE.metaのpendingCircuitSyncで次のExploreへ同期を依頼する。通常の再読込だけで現地の剥離/所有状態を上書きしない。
 
 ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・生のURLクエリを含めない。旧DEBUG_FIXTURE出力も対象キーと編集者名を制限する。通常の保存データ自体から署名を消す変更ではない。詳しくは [ALPHA_LAB.md](ALPHA_LAB.md) を参照。
+
+## 追加契約：1×1作成と格納庫残骸売却
+
+神宮直接指示のTASK_ASSIGNMENTが旧「P1×1は初回発見の一枚のみ」を更新する。保存版・トップレベルキーの追加はない。
+
+- 作成した1×1も通常の`circuits[]`に、固有circuitId、origin crafted、restoreState unrestored、equippedTo nullとして保存する。
+- 不完全は既存数字0の盤ID、P1×1は既存数字4の専用盤ID。同じ盤IDでも別circuitIdなら別個体として保存する。
+- 作成P1×1の解放はfirstInvadeClearだけを使う。初回確定付与の冪等性は既存firstInvadeClear契約を維持し、作成数とは独立する。
+- 売却はfleetの大破機のみ。400c加算・削除・装着回路の倉庫化・参照整理を一つのスナップショットで保存する。lostMechsは売らない。保存失敗は元状態を維持する。
+- 回路はequippedTo以外の性能・修復・署名等を保つ。売却後に出撃選択/前回出撃の機体IDが残らないよう整理する。
+- 携行弾薬・バッテリーの売却時扱いはQ1回答待ち。実装確定時に追記する。格納庫OwnedMechには探索中の積載物は保存しない。
