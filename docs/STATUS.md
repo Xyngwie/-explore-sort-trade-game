@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 決定は次の質問の前に記録する（2026-10-26）
+- Who: inspector（風紀委員）
+- What: 神宮が決定を確認するたび `docs/` に書き、次の質問の前に、まだ無い分を Issue と Slack へ記録する。記録の `SPEC_DECISION` は `in` 空。`TASK_ASSIGNMENT` は出さない
+- Why: 質問が続くと決定を忘れる、と神宮が言った（2026-10-26）
+- Scope: `docs/AGENT_CANON.md`、`docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/automations/README.md`。機能コードは変えていない
+- Status: この節
+
 ## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
