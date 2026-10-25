@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 持ち帰り失敗の点は暫定のまま（2026-10-25）
+- Who: lead（実装隊長）
+- What: 風紀委員の `SPEC_DECISION`（Issue #326・持ち帰り失敗 `abandoned` の点 0 を暫定のまま）を照合した。`status` PASS、`unresolved` 空、`in` 空
+- Why: 神宮確認（2026-10-26）を正本 `docs/AUTONOMOUS_LEARNING_V0.md` に反映済み。実装範囲なし
+- Scope: 記録のみ。`TASK_ASSIGNMENT` は出していない。点数表・v0 点数・機能コードは変えない
+- Status: 待機。次は別の `SPEC_DECISION` または既存 `TASK_ASSIGNMENT` への `WORK_REPORT` まで実装命令なし
+
 ## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
