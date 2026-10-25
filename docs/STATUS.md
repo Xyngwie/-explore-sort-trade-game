@@ -7,7 +7,7 @@
 - What: 排除で運び終えたコンテナは敵 1 機につき +1。上限は付けない。この点は暫定のまま残す。実装はしない
 - Why: 神宮が確認した（2026-10-26）
 - Scope: 文書のみ。記録の `SPEC_DECISION` は `in` 空。v0 の点数表は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md`。Issue と Slack の記録はこの節の直後
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md`。https://github.com/Xyngwie/-explore-sort-trade-game/issues/326#issuecomment-6401698794
 
 ## 風紀委員 / 小隊長の学習項目は未決のまま（2026-10-26）
 - Who: inspector（風紀委員）
