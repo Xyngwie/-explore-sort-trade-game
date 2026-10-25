@@ -2,6 +2,20 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / Slack の壁打ちを指示の前に読む（2026-10-25）
+- Who: inspector（風紀委員）
+- What: 風紀委員は仕様の判断と `SPEC_DECISION` の前に `#webアプリ開発` を読む。指示を出すとき、神宮との会話を省略せずそこに書く。起動口は Issue コメントのまま
+- Why: 神宮が、壁打ちの文脈が風紀委員の Automation に届いていないと指摘した（2026-10-25）
+- Scope: `docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/AGENT_CANON.md`、`docs/automations/README.md`。機能コードは変えていない
+- Status: 正本は main の上記。Automation 画面に貼ってある Instructions は、このファイルを貼り直すまで古いまま。会話の写しの先頭は [#webアプリ開発 のスレッド](https://w1791055196-mgc673700.slack.com/archives/C0C6MHPFB1A/p1792893699150189)
+
+## 風紀委員 / 敵評価の平均は 10 出撃の合計を 10 で割る（2026-10-25）
+- Who: inspector（風紀委員）
+- What: 直近 10 出撃について、各出撃で持ち帰った基本報酬 60 の合計を 10 で割る。該当が無い出撃は 0。分類の境界は未決
+- Why: 神宮が確認した（2026-10-25）
+- Scope: 文書のみ。`SPEC_DECISION` は出していない
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：敵の基本報酬を平均する幅」に反映
+
 ## 風紀委員 / 1×1 完全の自律は装備した 1 機（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 初クリアの 1×1 完全 1 枚で同時に自律するのは、それを装備した 1 機だけ
