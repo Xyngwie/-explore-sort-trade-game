@@ -7,7 +7,7 @@
 - What: 「最近」= 直近 10 出撃を暫定のまま残す（2026-10-26 神宮）。確認ラウンド完了を `docs/AUTONOMOUS_LEARNING_V0.md` に書き、Issue #326 の 11 件とこの確認を `docs/spec-questions/autonomous-learning-326-decision.json` にまとめた。`in` は空
 - Why: 神宮が、確認ラウンドの完了を文書に残すよう指示した。Issue へは出さない
 - Scope: 文書のみ。実装コードは変えていない。`TASK_ASSIGNMENT` は出していない。実装隊長宛の `SPEC_DECISION` は出していない。Issue コメントも Slack も書いていない
-- Status: draft PR。main には未反映。Deploy Modules Preview は文書だけのため **NOT_TRIGGERED**
+- Status: draft https://github.com/Xyngwie/-explore-sort-trade-game/pull/327 。main には未反映。Deploy Modules Preview は文書だけのため **NOT_TRIGGERED**
 
 ## 風紀委員 / 一問ごとの SPEC_DECISION を止める（2026-10-26）
 - Who: inspector（風紀委員）
