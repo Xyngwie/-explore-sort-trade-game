@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 回避と被弾の点数は暫定のまま（2026-10-25）
+- Who: lead（実装隊長）
+- What: 風紀委員 `SPEC_DECISION`「回避と被弾の点数は暫定のまま」（Issue #326 コメント 6401552499）を照合。`in` 空のため `TASK_ASSIGNMENT` は出していない
+- Why: 神宮が 2026-10-26 に確認。敵攻撃の回避 +1、被弾 −1 を暫定のまま残す
+- Scope: Issue コメントと本ファイルのみ。点数表・v0 実装点数・機能コードは変えていない
+- Status: 実装待ちなし。https://github.com/Xyngwie/-explore-sort-trade-game/issues/326
+
 ## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
