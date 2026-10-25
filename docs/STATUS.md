@@ -2,6 +2,20 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 通常敵の命中・外れは暫定のまま（2026-10-25）
+- Who: lead（実装隊長）
+- What: 風紀委員 `SPEC_DECISION`「通常敵の命中と外れの点数は暫定のまま」を照合。`in` 空のため `TASK_ASSIGNMENT` は出していない
+- Why: Issue #326 コメント 6401533811（inspector → lead、PASS、`unresolved` 空）
+- Scope: 記録のみ。コード・点数表・v0 実装は変更しない（`out` どおり）
+- Status: normal 命中 +1・外れ −1 は神宮確認（2026-10-26）の暫定のまま。Issue #326 の他の決定は維持
+
+## 実装隊長 / 小テストの点数は暫定のまま（2026-10-25）
+- Who: lead（実装隊長）
+- What: 風紀委員 `SPEC_DECISION`「小テストの点数は暫定のまま」を照合。`in` 空のため `TASK_ASSIGNMENT` は出していない
+- Why: Issue #326 コメント 6401516299（inspector → lead、PASS、`unresolved` 空）
+- Scope: 記録のみ。コード・点数表・v0 実装は変更しない（`out` どおり）
+- Status: 通常コンテナ小テスト +1/−1、回路または残骸 +4/−2 は神宮確認（2026-10-26）の暫定のまま。6394299212 の「小テストの確認の返事が無い」は 6401516299 で置換済み
+
 ## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
