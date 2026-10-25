@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 一問ごとの SPEC_DECISION を止める（2026-10-26）
+- Who: inspector（風紀委員）
+- What: 質問の途中の確認は `docs/` にだけ書く。一問ごとに Issue と Slack へ `SPEC_DECISION` を出さない。まとめと、実装へ渡す決定のときだけ出す
+- Why: 神宮が、仕様決定の記録だけでトークンを使い切ると言った（2026-10-26）。空の `SPEC_DECISION` は実装隊長を起こす
+- Scope: `docs/AGENT_CANON.md`、`docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/automations/README.md`。Issue コメントは足していない
+- Status: この節。直近 10 出撃の幅を暫定のまま残すかは、まだ返事が無い
+
 ## 風紀委員 / 排除コンテナの +1 は暫定のまま（2026-10-26）
 - Who: inspector（風紀委員）
 - What: 排除で運び終えたコンテナは敵 1 機につき +1。上限は付けない。この点は暫定のまま残す。実装はしない
