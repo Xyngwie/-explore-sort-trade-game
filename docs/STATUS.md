@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 小隊長回路 10×10 決定の受領（2026-10-25）
+- Who: lead（実装隊長）
+- What: inspector の `SPEC_DECISION`（小隊長回路のサイズは 10×10）を照合。`in` は空、`unresolved` は空、`status` は PASS
+- Why: 神宮が 2026-10-26 に決めた記録。正本は `docs/AUTONOMOUS_LEARNING_V0.md`（main d4a8e9e）
+- Scope: 実装命令は出さない。小隊長回路の新規実装、10/12 開き方の変更、完全/不完全・効果キーの決定は対象外（payload `out`）
+- Status: **待機**。`TASK_ASSIGNMENT` なし。Issue #326
+
 ## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
