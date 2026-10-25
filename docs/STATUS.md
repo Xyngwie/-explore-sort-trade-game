@@ -2,12 +2,19 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Grok Bot / 確認ラウンド完了を文書だけに残す（2026-10-26）
+- Who: Grok Bot（文書記録）
+- What: 「最近」= 直近 10 出撃を暫定のまま残す（2026-10-26 神宮）。確認ラウンド完了を `docs/AUTONOMOUS_LEARNING_V0.md` に書き、Issue #326 の 11 件とこの確認を `docs/spec-questions/autonomous-learning-326-decision.json` にまとめた。`in` は空
+- Why: 神宮が、確認ラウンドの完了を文書に残すよう指示した。Issue へは出さない
+- Scope: 文書のみ。実装コードは変えていない。`TASK_ASSIGNMENT` は出していない。実装隊長宛の `SPEC_DECISION` は出していない。Issue コメントも Slack も書いていない
+- Status: draft https://github.com/Xyngwie/-explore-sort-trade-game/pull/327 。main には未反映。Deploy Modules Preview は文書だけのため **NOT_TRIGGERED**
+
 ## 風紀委員 / 一問ごとの SPEC_DECISION を止める（2026-10-26）
 - Who: inspector（風紀委員）
 - What: 質問の途中の確認は `docs/` にだけ書く。一問ごとに Issue と Slack へ `SPEC_DECISION` を出さない。まとめと、実装へ渡す決定のときだけ出す
 - Why: 神宮が、仕様決定の記録だけでトークンを使い切ると言った（2026-10-26）。空の `SPEC_DECISION` は実装隊長を起こす
 - Scope: `docs/AGENT_CANON.md`、`docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/automations/README.md`。Issue コメントは足していない
-- Status: この節。直近 10 出撃の幅を暫定のまま残すかは、まだ返事が無い
+- Status: この節。直近 10 出撃の幅は、先頭の節で暫定のまま残すと記録した（2026-10-26）
 
 ## 風紀委員 / 排除コンテナの +1 は暫定のまま（2026-10-26）
 - Who: inspector（風紀委員）
