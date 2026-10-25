@@ -7,7 +7,7 @@
 - What: 小隊長の完全自律の学習項目の中身は未決のまま残す。v0 のセルとは別に定義する。項目は作らない
 - Why: 神宮が確認した（2026-10-26）
 - Scope: 文書のみ。記録の `SPEC_DECISION` は `in` 空。今の学習 v0 は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md`。Issue と Slack の記録はこの節の直後
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md`。https://github.com/Xyngwie/-explore-sort-trade-game/issues/326#issuecomment-6401681358
 
 ## 風紀委員 / 小隊長回路の効果キーは未決のまま（2026-10-26）
 - Who: inspector（風紀委員）
