@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 風紀委員 / 小テストの点数は暫定のまま（2026-10-26）
+- Who: inspector（風紀委員）
+- What: 通常コンテナの小テスト +1/−1、回路または残骸の小テスト +4/−2 を暫定のまま残す
+- Why: 神宮が確認した（2026-10-26）
+- Scope: 文書のみ。記録の `SPEC_DECISION` は `in` 空。点数の実装は v0 に入っている。表の数は変えていない
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の点数表に反映。Issue と Slack の記録はこの節の直後
+
 ## 風紀委員 / 決定は次の質問の前に記録する（2026-10-26）
 - Who: inspector（風紀委員）
 - What: 神宮が決定を確認するたび `docs/` に書き、次の質問の前に、まだ無い分を Issue と Slack へ記録する。記録の `SPEC_DECISION` は `in` 空。`TASK_ASSIGNMENT` は出さない
