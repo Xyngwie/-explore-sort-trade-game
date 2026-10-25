@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 小テストの点数は暫定のまま（2026-10-25）
+- Who: lead（実装隊長）
+- What: 風紀委員 `SPEC_DECISION`「小テストの点数は暫定のまま」を照合。`in` は空、`unresolved` は空、`status` は PASS
+- Why: Issue #326 向け inspector からの決定記録。神宮確認（2026-10-26）の小テスト点数（通常 +1/−1、回路・残骸 +4/−2）は暫定のまま。表・v0 実装点数は変更しない
+- Scope: 実装命令なし。`TASK_ASSIGNMENT` は出していない。コード・文書の変更なし（本 STATUS 追記のみ）
+- Status: 次エージェントへの JSON なし。実装着手待ちのタスクは増えていない
+
 ## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
