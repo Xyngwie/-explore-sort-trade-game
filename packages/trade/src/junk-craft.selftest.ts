@@ -339,6 +339,7 @@ console.log("junk-craft S1 true-board roll ok");
  assert(pre.ok);assert.equal(pre.record!.circuitBoard.cols,1);assert.equal(pre.hub.credits,94);assert.equal(pre.hub.inventory.junk,8);
  assert.notEqual(pre.record!.circuitBoard.puzzleId, TRUE_ONE_BY_ONE_PUZZLE_ID);
  assert.equal(resolveSizedTruePuzzle(pre.record!.circuitBoard.puzzleId),null);
+ const inferred=craftJunkCircuit({...base,perfectMaxSize:20,invadeRank:{current:5,highestCleared:4}},1,{circuitId:'no-inferred-clear',trueBoardRate:1,rng:()=>0});assert.notEqual(inferred.record!.circuitBoard.puzzleId,TRUE_ONE_BY_ONE_PUZZLE_ID);
  for(const patch of [{credits:5},{inventory:{junk:1}}]){
   const h={...base,...patch};const r=craftJunkCircuit(h,1,{circuitId:'short'});assert(!r.ok);assert.equal(r.hub,h);
  }
@@ -368,6 +369,7 @@ console.log("junk-craft S1 true-board roll ok");
  hub=upsertCircuitIntoHub(hub,{circuitId:p.circuitId,circuitBoard:{...p.circuitBoard,edgeState:encodeEdgeState([1,1,1,1]),outcome:'fully_awakened',perfect:true,locked:true},outcome:'fully_awakened'});
  assert.equal(classifyCircuit(hub.circuits.find(c=>c.circuitId===p.circuitId)!).oneByOne,'true');
  const fleetCount=hub.fleet.length;hub=equipCircuit(hub,p.circuitId,hub.fleet[0]!.instanceId).hub;assert.equal(hub.circuits.find(c=>c.circuitId===p.circuitId)!.equippedTo,hub.fleet[0]!.instanceId);assert.equal(hub.fleet.length,fleetCount);
+ hub=deserializeHubSave(serializeHubSave(createHubSave(hub)))!.hub;assert.equal(hub.circuits.find(c=>c.circuitId===p.circuitId)!.equippedTo,hub.fleet[0]!.instanceId);
  let state={...createInitialHangar(null),hub};const credits=state.hub.credits;state=sellCircuit(state,p.circuitId);assert(state.hub.credits>credits);assert(!state.hub.circuits.some(c=>c.circuitId===p.circuitId));
  // Two junk cost 12c on the existing resource exchange; white 1x1 then sells for at least 25c.
  const starting=100;const r=craftJunkCircuit(hubWith({credits:starting-12,inventory:{junk:2}}),1,{circuitId:'economy'});
