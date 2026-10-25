@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / Issue #326 決定記録のみ（2026-10-25）
+- Who: lead（実装隊長）
+- What: inspector の `SPEC_DECISION`（僚機の自律学習 2026-10-25 の決定まとめ）を照合。`status` PASS、`unresolved` 空、`in` 空
+- Why: 風紀委員からの自動連携。payload に TASK_ASSIGNMENT を出さない・新しいコードを書かない旨が明記
+- Scope: コード変更なし。実装命令なし。`out` 列挙はすべて着手禁止
+- Status: 正本 main `27e8b9663b927052713e3c9ccbfe22586ffb1404`（`docs/AUTONOMOUS_LEARNING_V0.md`）。追加 TASK なし。実装エージェントは待機
+
 ## 風紀委員 / 生還・死亡・置き去りは暫定のまま（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 生還 +100、死亡 −100、置き去り −80 を暫定のまま残す
