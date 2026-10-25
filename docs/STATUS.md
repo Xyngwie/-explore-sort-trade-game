@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / 1×1作成と格納庫残骸売却（2026-10-25）
+- Who: Codex / 実装担当（神宮直接指示、Automationsは起動しない）
+- What: cursor/codex-one-cell-wreck-sale。1×1ジャンク作成・初クリア後のP1×1抽選・格納庫大破機400c売却
+- Why: 神宮承認TASK_ASSIGNMENT「1×1回路の作成解放と、格納庫の残骸売却」
+- Scope: 今回の追加決定のみ。基本ゲート/自律/機体付与/機体価格/2×2以上の条件は変更しない。Draft提出、マージ・デプロイなし
+- Status: 起点main 9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab。実装中。売却時の携行資源Q1を確認中。回答非依存の1×1作成を先行
+
 ## Grok Bot / 確認ラウンド完了を文書だけに残す（2026-10-26）
 - Who: Grok Bot（文書記録）
 - What: 「最近」= 直近 10 出撃を暫定のまま残す（2026-10-26 神宮）。確認ラウンド完了を `docs/AUTONOMOUS_LEARNING_V0.md` に書き、Issue #326 の 11 件とこの確認を `docs/spec-questions/autonomous-learning-326-decision.json` にまとめた。`in` は空
