@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## 実装隊長 / 排除コンテナの +1 は暫定のまま（2026-10-26）
+- Who: lead（実装隊長）
+- What: 風紀委員 `SPEC_DECISION`「排除コンテナの +1 は暫定のまま」を照合。`in` は空のため `TASK_ASSIGNMENT` は発行しない
+- Why: 神宮確認（2026-10-26）の記録のみ。実装範囲なし
+- Scope: Issue #326 コメント、本ファイル。機能コードは変更しない
+- Status: https://github.com/Xyngwie/-explore-sort-trade-game/issues/326#issuecomment-6401698794（inspector 記録）。排除で運び終えたコンテナは敵 1 機につき +1、上限なし、暫定、仕組み未実装、v0 点数表変更なし
+
 ## 風紀委員 / 2026-10-25 の決定を Issue #326 に記録（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 点数、排除コンテナ、平均、三つの回路の決定を Issue #326 にまとめた。`SPEC_DECISION` の `in` は空。`TASK_ASSIGNMENT` は出していない
