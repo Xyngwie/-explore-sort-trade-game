@@ -7,7 +7,7 @@
 - What: 小隊長回路のサイズを 10×10 にする。完全か不完全か、効果キーは未定のまま。回路は作らない
 - Why: 神宮が 10×10 にすると述べた（2026-10-26）
 - Scope: 文書のみ。記録の `SPEC_DECISION` は `in` 空。今の 10/12 の開き方は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` ほか。Issue と Slack の記録はこの節の直後
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` ほか。https://github.com/Xyngwie/-explore-sort-trade-game/issues/326#issuecomment-6401614689
 
 ## 風紀委員 / 持ち帰り失敗の点は暫定のまま（2026-10-26）
 - Who: inspector（風紀委員）
