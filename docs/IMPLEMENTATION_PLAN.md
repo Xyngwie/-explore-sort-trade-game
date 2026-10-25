@@ -215,4 +215,4 @@ npm run build:restore
 - その平均で、敵を `normal` 以外に分類すること。境界は後回し
 - 上の表にない点数の差し替え
 
-排除で運び終えたコンテナは決定済みで、まだ命令を出していない。敵 1 機につき +1、上限なし。正本は [`AUTONOMOUS_LEARNING_V0.md`](./AUTONOMOUS_LEARNING_V0.md) の「決定済み・未着手」。
+排除で運び終えたコンテナは決定済みで、まだ命令を出していない。敵 1 機につき +1、上限なし。暫定のまま残す（2026-10-26 神宮）。正本は [`AUTONOMOUS_LEARNING_V0.md`](./AUTONOMOUS_LEARNING_V0.md) の「決定済み・未着手」。
