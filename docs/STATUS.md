@@ -7,7 +7,7 @@
 - What: 小隊長回路の効果キーは未決のまま残す。サイズ 10×10 と、完全・不完全が未定であることは維持。回路は作らない
 - Why: 神宮が確認した（2026-10-26）
 - Scope: 文書のみ。記録の `SPEC_DECISION` は `in` 空。今の 10/12 の開き方は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md`。Issue と Slack の記録はこの節の直後
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md`。https://github.com/Xyngwie/-explore-sort-trade-game/issues/326#issuecomment-6401662039
 
 ## 風紀委員 / 小隊長回路の完全・不完全は未定のまま（2026-10-26）
 - Who: inspector（風紀委員）
