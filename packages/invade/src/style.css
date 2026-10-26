@@ -389,3 +389,7 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
 .danger-swatch.wreck .chip { background: #21262d; border-color: #2a313c; }
 .danger-swatch.wreck .chip::after { bottom: -2px; right: -2px; width: 7px; height: 7px; }
 
+
+#board-viewport { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; margin-top: .75rem; touch-action: none; overscroll-behavior: contain; user-select: none; background: #10141b; }
+#board-viewport .front-ms { width: 100%; margin: 0; transform-origin: 0 0; }
+#board-viewport .cell { touch-action: none; }

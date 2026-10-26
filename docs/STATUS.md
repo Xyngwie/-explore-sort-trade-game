@@ -9,6 +9,15 @@
 - Scope: 今回の追加決定のみ。基本ゲート/自律/機体付与/機体価格/2×2以上の条件は変更しない。Draft提出、マージ・デプロイなし
 - Status: 起点main 9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab。Draft #328。1×1作成・Restore・保存/装備/売却とP抽選を実装。全workspaceテスト/型検査・全5ビルド、390x844作成/修復/売却/+7c経済/P複数生成をPASS。CORRECTIONを受領。400c売却/回路倉庫化/一回保存/重複拒否/資源付与なしを実装。Trade追加テストと390px確認/取消/実行/再読込PASS。新しい味方大破時の弾薬/電力ドロップと残量0を追加。実射撃/活動量切れ/途中再開/搭載解放と実15秒帰還→売却/解体の資源重複なしをテストPASS。新規敵残骸回収時に活動量300が復活する経路も0へ修正。旧残骸への資源移行は追加しない。神宮回答で装甲は残HP等価に確定し、HP67/120→67個の現地ドロップ/表示/途中保存を実装。装甲の回収先・効果ARMOR_Q2を確認中。マージ/デプロイなし、物理実機/公開版NOT_RUN。最終HEAD/CIはPR本文
 
+## Codex / Invade入力統一
+
+追記：#329は074ec5aでmainへマージ済み。同コミットの公開デプロイ成功を確認。以下は提出時の履歴。
+- Who: Codex / 神宮直接指示の実装担当（Automationsを起動しない）
+- What: cursor/codex-invade-input。マウス左右/同時押し、中ドラッグ、ホイール、タッチ反転/長押し/スイープ/ピンチ/ダブルタップ
+- Why: TASK_ASSIGNMENT「Invadeのマウス・スマホ操作の統一」
+- Scope: 入力・表示変換・説明とテストのみ。#328回路/残骸とは分離。ゲーム条件・報酬・強制戦闘は維持。マージ・デプロイ禁止
+- Status: 起点main 9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab。Draft #329。入力状態/周囲開放/ビュー変換と説明を実装。Invade型検査/既存追加テスト/本番ビルド・全workspaceテストPASS。1280x900/390x844で実マウス左右/左右先順/中ドラッグ/ホイール、CDPタッチ反転/長押し離し/パン/ピンチ/ダブル/取消/変換後当たり判定をPASS。詳細verification/invade-input.json、定数INVADE_V0.md末尾、最終HEAD/CIはPR本文。物理スマートフォン/公開版NOT_RUN。マージ・デプロイなし、監査待ち
+
 ## Grok Bot / 確認ラウンド完了を文書だけに残す（2026-10-26）
 - Who: Grok Bot（文書記録）
 - What: 「最近」= 直近 10 出撃を暫定のまま残す（2026-10-26 神宮）。確認ラウンド完了を `docs/AUTONOMOUS_LEARNING_V0.md` に書き、Issue #326 の 11 件とこの確認を `docs/spec-questions/autonomous-learning-326-decision.json` にまとめた。`in` は空

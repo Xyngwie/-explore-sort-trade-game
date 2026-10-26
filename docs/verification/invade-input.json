@@ -1,0 +1,61 @@
+{
+  "method": "local production bundle, seeded persisted front board, actual mouse and CDP touch input",
+  "results": [
+    {
+      "viewport": "1280x900",
+      "scenario": "mouse left/right/long hold, both chord orders and flag counts/wrong flag forced combat, wheel/middle pan transformed hit",
+      "status": "PASS"
+    },
+    {
+      "viewport": "1280x900",
+      "scenario": "native touch default/reversed set/unset/open, invariant number chord, release-only hold, hold-pan, cancel, pinch, double tap suppression, transformed hit, reload default",
+      "status": "PASS"
+    },
+    {
+      "viewport": "390x844",
+      "scenario": "mouse left/right/long hold, both chord orders and flag counts/wrong flag forced combat, wheel/middle pan transformed hit",
+      "status": "PASS"
+    },
+    {
+      "viewport": "390x844",
+      "scenario": "native touch default/reversed set/unset/open, invariant number chord, release-only hold, hold-pan, cancel, pinch, double tap suppression, transformed hit, reload default",
+      "status": "PASS"
+    }
+  ],
+  "physicalSmartphone": "NOT_RUN",
+  "publicVersion": "NOT_RUN",
+  "type": "INVADE_INPUT_VERIFICATION",
+  "base": "9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab",
+  "local": {
+    "invadeTypecheck": "PASS",
+    "invadeTests": "PASS",
+    "invadeProductionBuild": "PASS",
+    "workspaceTests": "PASS"
+  },
+  "constants": {
+    "holdMs": 480,
+    "movePx": 8,
+    "doubleTapMs": 280,
+    "doubleTapPx": 24,
+    "minScale": 0.65,
+    "maxScale": 4,
+    "initialScale": 1,
+    "doubleTapBelow": 1.6,
+    "doubleTapFactor": 2,
+    "wheelSensitivity": 0.0015,
+    "visibleMarginPx": 40
+  },
+  "limitations": [
+    "Chromium mobile viewport / native CDP touch streams are emulation, not physical smartphone",
+    "No manual play on public deployed version",
+    "Local production bundles were built before final documentation commit; final head CI is linked in PR"
+  ],
+  "scopePreserved": [
+    "mine placement/digits/scouting/win/rewards",
+    "existing forced combat and handoff",
+    "no mode persistence or new save fields",
+    "no #328 crafting/wreck-sale work"
+  ],
+  "merge": "NOT_RUN",
+  "deploy": "NOT_TRIGGERED"
+}

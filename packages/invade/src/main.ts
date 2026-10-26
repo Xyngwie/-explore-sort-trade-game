@@ -1,3 +1,5 @@
+import { bindBoardInput, type BoardAction, type Coord } from "./boardInput";
+import { chordCells } from "./chord";
 import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
 import {
@@ -50,9 +52,7 @@ import {
   mineCellStatusJa,
 } from "./front-feel";
 import {
-  FLAG_LONG_PRESS_MS,
   buildFlagOpsGuideHtml,
-  shouldArmFlagLongPress,
 } from "./touchFlag";
 import {
   clearPersistedFrontProgress,
@@ -115,7 +115,7 @@ let dropsByCell: Map<string, string[]> = initialSession.dropsByCell;
 /** 項目5-1b③: wrecks on this board per cell (HubSave.lostMechs kind "wreck"; display only). */
 let wrecksByCell: Map<string, string[]> = initialSession.wrecksByCell;
 /** Flag-mode: next cell click toggles flag instead of open. */
-let flagMode = false;
+let reversedTouch = false;
 /** History trap armed for current forced-combat lock. */
 let forcedLockHistoryArmed = false;
 
@@ -222,9 +222,9 @@ function moveToRank(rank:number, retreat:boolean):void {
   board=session.board; selected=session.focus; lastSavedStatus=board.status;
   firstClearOnThisBoard=firstClearDiscoveredOnBoard(readStoredHub(),board.seed);
   lostByCell=session.lostByCell;dropsByCell=session.dropsByCell;wrecksByCell=session.wrecksByCell;
-  skipped=false;flagMode=false;forcedLockHistoryArmed=false;
+  skipped=false;reversedTouch=false;forcedLockHistoryArmed=false;
   rankListPage=Math.floor(rank/RANK_PAGE_SIZE);
-  lastBoardLog=`${rank}段の盤を開始`;render();
+  boardInput.reset();lastBoardLog=`${rank}段の盤を開始`;render();
 }
 
 /** Single under-grid CTA cluster: 探索へ (+ engage chip) · 格納庫へ. */
@@ -596,7 +596,7 @@ function render(): void {
 
     <div class="card">
       <h2 class="card-title">前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）</h2>
-      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。未開マスの色＝危険帯。空白＝探索済。✕＝未解決接触、済＝解決済・再出撃可。タップ／左クリック＝開く · 長押し／右クリック／旗モード＝旗。開いたセル＝ルート焦点。</p>
+      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。未開マスの色＝危険帯。空白＝探索済。✕＝未解決接触、済＝解決済・再出撃可。マウスは左クリックで開く・右クリックで旗。タッチは下の操作割当を確認してください。数字の周囲開放は旗数一致時のみ。</p>
       <table>
         <tr><td>状態</td><td>${escapeHtml(statusJa())}</td></tr>
         <tr><td>敵（地雷）</td><td>${board.mineCount}</td></tr>
@@ -621,15 +621,15 @@ function render(): void {
       ${progressFeelHtml()}
       ${dangerLegendHtml()}
       ${rankPanelHtml()}
-      <div class="grid front-ms${forcedLockActive() ? " locked" : ""}" style="--cols:${cols}">${cellsHtml.join("")}</div>
+      <div id="board-viewport" aria-label="前線盤面"><div class="grid front-ms${forcedLockActive() ? " locked" : ""}" style="--cols:${cols}">${cellsHtml.join("")}</div></div>
       ${cellSortieBarHtml(selected)}
       <div class="actions">
-        <button type="button" class="btn ${flagMode ? "secondary" : ""}" id="btn-flag-mode" ${forcedLockActive() ? "disabled" : ""}>${flagMode ? "旗モード ON" : "旗モード"}</button>
+        <button type="button" class="btn secondary" id="btn-touch-mode" aria-pressed="${reversedTouch}" ${forcedLockActive() ? "disabled" : ""}>タッチ操作を反転：${reversedTouch ? "ON（タップで開く）" : "OFF（タップで旗）"}</button>
         <button type="button" class="btn ghost" id="btn-regen" title="保存済みの開いたマス・旗・シードを破棄して新しい盤にします" ${forcedLockActive() ? "disabled" : ""}>盤を再生成（進捗リセット）</button>
         <button type="button" class="btn ghost" id="btn-clear" ${selected == null || forcedLockActive() ? "disabled" : ""}>焦点クリア</button>
         <button type="button" class="btn ghost" id="btn-skip" ${forcedLockActive() ? "disabled" : ""}>スキップ（quick-battle・ナビなし）</button>
       </div>
-      ${buildFlagOpsGuideHtml(flagMode)}
+      ${buildFlagOpsGuideHtml(reversedTouch)}
       <p class="muted" style="margin-top:0.5rem">開いたマス・旗・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。「盤を再生成」は確認のうえ進捗を消します。</p>
       <p class="ok" style="margin-top:0.5rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
     </div>
@@ -643,15 +643,10 @@ function render(): void {
     armForcedLockIfNeeded();
   bindForcedHandoffLinks(root);
 
-root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
-    if (forcedLockActive()) return;
-    flagMode = !flagMode;
-    lastBoardLog = flagMode
-      ? "旗モード ON — セルクリックで旗トグル"
-      : "旗モード OFF — クリックで開く";
-    render();
+  root.querySelector("#btn-touch-mode")?.addEventListener("click",()=>{
+    if(forcedLockActive())return;
+    boardInput.cancel();reversedTouch=!reversedTouch;render();
   });
-
   root.querySelector("#rank-page-prev")?.addEventListener("click",()=>{rankListPage=Math.max(0,rankListPage-1);render();});
   root.querySelector("#rank-page-next")?.addEventListener("click",()=>{rankListPage++;render();});
   root.querySelector("#btn-rank-start")?.addEventListener("click",()=>moveToRank(Number(root.querySelector<HTMLSelectElement>("#rank-select")?.value),false));
@@ -664,6 +659,7 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     if (!ok) return;
     clearPersistedFrontProgress();
     const session = regenerateFrontSession();
+    boardInput.reset();
     board = session.board;
     selected = session.focus;
     lastSavedStatus = board.status;
@@ -672,7 +668,7 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     dropsByCell = session.dropsByCell;
     wrecksByCell = session.wrecksByCell;
     skipped = false;
-    flagMode = false;
+    reversedTouch = false;
     forcedLockHistoryArmed = false;
     lastBoardLog = `盤再生成（進捗リセット）— 敵 ${board.mineCount} · HQ 開放 · seed ${board.seed ?? "—"}`;
     render();
@@ -691,175 +687,41 @@ root.querySelector("#btn-flag-mode")?.addEventListener("click", () => {
     if (forcedLockActive()) return;
     selected = null;
     skipped = true;
-    flagMode = false;
+    reversedTouch = false;
     lastBoardLog = "quick-battle スキップ（ナビなし）";
     saveFrontProgress();
     render();
   });
 
-  root.querySelectorAll<HTMLButtonElement>("button.cell:not(.blocked)").forEach((btn) => {
-    const sx = Number(btn.dataset.sx);
-    const sy = Number(btn.dataset.sy);
-    if (!Number.isFinite(sx) || !Number.isFinite(sy)) return;
-
-    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-    let longPressFired = false;
-
-    const clearLongPress = () => {
-      if (longPressTimer != null) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    };
-
-    const applyFlagAt = () => {
-      const cell = getCell(board, sx, sy);
-      if (!cell || cell.blocked || cell.open) return;
-      const r = toggleFlag(board, sx, sy);
-      if (r.ok) {
-        selected = { sx, sy };
-        skipped = false;
-        lastBoardLog = r.flagged
-          ? `旗立て (${sx},${sy}) · 長押し`
-          : `旗解除 (${sx},${sy}) · 長押し`;
-        saveFrontProgress();
-      }
-      render();
-    };
-
-    btn.addEventListener("pointerdown", (ev) => {
-      if (forcedLockActive()) return;
-      if (!shouldArmFlagLongPress(ev)) return;
-      longPressFired = false;
-      clearLongPress();
-      longPressTimer = setTimeout(() => {
-        longPressTimer = null;
-        longPressFired = true;
-        applyFlagAt();
-      }, FLAG_LONG_PRESS_MS);
-    });
-    const cancelLongPress = () => clearLongPress();
-    btn.addEventListener("pointerup", cancelLongPress);
-    btn.addEventListener("pointercancel", cancelLongPress);
-    btn.addEventListener("pointerleave", cancelLongPress);
-
-    const onPrimary = () => {
-      if (longPressFired) {
-        longPressFired = false;
-        return;
-      }
-      const cell = getCell(board, sx, sy);
-      if (!cell || cell.blocked) return;
-      if (forcedLockActive()) {
-        if (cell.open && cell.mine) {
-          selected = { sx, sy };
-          skipped = false;
-          const n = forcedEngageTargets(board, sx, sy).length;
-          lastBoardLog = `強制出撃対象 (${sx},${sy}) · 敵 ${n} マス（当該＋隣接）`;
-          saveFrontProgress();
-          render();
-        }
-        return;
-      }
-
-      // Already open → set route focus only (mine → forced engage UI)
-      if (cell.open && !cell.mine) {
-        selected = { sx, sy };
-        skipped = false;
-        lastBoardLog = `ルート焦点 (${sx},${sy})`;
-        saveFrontProgress();
-        render();
-        return;
-      }
-
-      if (cell.open && cell.mine) {
-        selected = { sx, sy };
-        skipped = false;
-        const n = forcedEngageTargets(board, sx, sy).length;
-        lastBoardLog = `強制出撃対象 (${sx},${sy}) · 敵 ${n} マス（当該＋隣接）`;
-        saveFrontProgress();
-        render();
-        return;
-      }
-
-      // Flagged closed cell: flag-mode toggles; otherwise select for voluntary raid
-      if (cell.flagged && !cell.open) {
-        if (flagMode) {
-          const r = toggleFlag(board, sx, sy);
-          if (r.ok) {
-            selected = { sx, sy };
-            skipped = false;
-            lastBoardLog = r.flagged
-              ? `旗立て (${sx},${sy})`
-              : `旗解除 (${sx},${sy})`;
-            saveFrontProgress();
-          }
-          render();
-          return;
-        }
-        selected = { sx, sy };
-        skipped = false;
-        lastBoardLog = `任意レイド対象 (${sx},${sy}) · engage=raid`;
-        saveFrontProgress();
-        render();
-        return;
-      }
-
-      if (flagMode) {
-        const r = toggleFlag(board, sx, sy);
-        if (r.ok) {
-          selected = { sx, sy };
-          skipped = false;
-          lastBoardLog = r.flagged
-            ? `旗立て (${sx},${sy})`
-            : `旗解除 (${sx},${sy})`;
-          saveFrontProgress();
-        }
-        render();
-        return;
-      }
-
-      const r = openCell(board, sx, sy);
-      if (!r.ok) {
-        if (r.reason === "flagged") {
-          lastBoardLog =
-            "旗付きセルは開けません（旗モードで解除／通常クリックで任意レイド選択）";
-        }
-        render();
-        return;
-      }
-      selected = { sx, sy };
-      skipped = false;
-      if (board.hitMine && getCell(board, sx, sy)?.mine) {
-        const n = forcedEngageTargets(board, sx, sy).length;
-        lastBoardLog = `敵接触 (${sx},${sy}) → scoutHazard · 強制出撃 敵 ${n} マス`;
-      } else if (board.status === "won") {
-        lastBoardLog = `掃討完了 — 開放 ${r.opened} → sectorCleared`;
-      } else {
-        lastBoardLog = `開放 (${sx},${sy}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
-      }
-      saveFrontProgress();
-      render();
-    };
-
-    btn.addEventListener("click", onPrimary);
-
-    btn.addEventListener("contextmenu", (ev) => {
-      ev.preventDefault();
-      if (forcedLockActive()) return;
-      const cell = getCell(board, sx, sy);
-      if (!cell || cell.blocked) return;
-      const r = toggleFlag(board, sx, sy);
-      if (r.ok) {
-        selected = { sx, sy };
-        skipped = false;
-        lastBoardLog = r.flagged ? `旗立て (${sx},${sy})` : `旗解除 (${sx},${sy})`;
-        saveFrontProgress();
-      }
-      render();
-    });
-  });
+  boardInput.paint();
 }
+
+function applyBoardAction(action:BoardAction,{sx,sy}:Coord):void {
+  const cell=getCell(board,sx,sy);if(!cell||cell.blocked)return;
+  if(forcedLockActive()){
+    if(cell.open&&cell.mine){selected={sx,sy};skipped=false;saveFrontProgress();render();}
+    return;
+  }
+  const flag=action==='right' || (action==='tap'&&!reversedTouch) || (action==='hold'&&reversedTouch);
+  let chordHit:Coord|null=null;
+  if(cell.open){
+    if(!cell.mine && (action==='chord'||action==='tap')){
+      const r=chordCells(board,sx,sy);chordHit=r.hit;
+      lastBoardLog=`周囲開放 (${sx},${sy}) ×${r.opened}`;
+    } else lastBoardLog=`ルート焦点 (${sx},${sy})`;
+  } else if(action==='chord')return;
+  else if(flag){const r=toggleFlag(board,sx,sy);if(!r.ok)return;lastBoardLog=r.flagged?`旗立て (${sx},${sy})`:`旗解除 (${sx},${sy})`;}
+  else {
+    const r=openCell(board,sx,sy);
+    if(!r.ok){if(r.reason==='flagged'){selected={sx,sy};skipped=false;lastBoardLog=`旗付きマス (${sx},${sy}) は開けません`;saveFrontProgress();render();}return;}
+    lastBoardLog=`開放 (${sx},${sy}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
+  }
+  selected=chordHit??{sx,sy};skipped=false;
+  if(board.hitMine){lastBoardLog=`敵接触 (${selected.sx},${selected.sy}) → scoutHazard · 強制出撃 敵 ${forcedEngageTargets(board,selected.sx,selected.sy).length} マス`;}
+  else if(board.status==='won')lastBoardLog='掃討完了 → sectorCleared';
+  saveFrontProgress();render();
+}
+const boardInput=bindBoardInput(root,applyBoardAction);
 
 render();
 
