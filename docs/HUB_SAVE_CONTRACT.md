@@ -516,4 +516,5 @@ ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・�
 - 回路はequippedTo以外の性能・修復・署名等を保つ。売却後に出撃選択/前回出撃の機体IDが残らないよう整理する。
 - CORRECTIONにより売却時の携行資源返却は撤回。売却は400cのみで、弾薬/電力/装甲の追加付与はない。格納庫OwnedMechには探索中の積載物を保存しない。
 - 新しい味方大破は既存World.enemySuppliesのammo/power形式へ現地ドロップし、World.currentAmmoとmechBattery.activityを0にする。Unit.wreckSuppliesDroppedは新しい大破を処理した印としてcheckpointに保存し、再開時の重複を防ぐ。敵の既存deathHandled方式は変更しない。既に死んでいる旧checkpoint/格納庫残骸に対する追加の資源消去・返却移行はしない。明示的な売却では資源を追加付与しない。
+- 新規に回収した敵残骸も、直接の取得と帰還報告の両経路で携行弾薬0/活動量0として作る。既にfleetにある旧残骸を再初期化しない。
 - 活動量切れの装甲換算は神宮確認待ち。装甲パーツを格納庫へ直接自動加算する実装は行わない。

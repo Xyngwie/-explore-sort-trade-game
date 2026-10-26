@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { INITIAL_HUB,normalizeHubSnapshot,applyExploreReturnToHub } from '@estg/shared';
+import { INITIAL_HUB,normalizeHubSnapshot,applyExploreReturnToHub,createOwnedMech,saveHubSaveToLocalStorage } from '@estg/shared';
 import { acquireEnemyWrecks,enemyWreckReturns } from './game/enemyRecovery';
 import {bootstrapFromSearch,createWorld,startSortie} from './game/world';
 import {attachCircuitPlay,startWreckPickup,stepCircuitPlay} from './game/circuitPlay';
@@ -7,8 +7,10 @@ import {wreckCarrierId} from './game/carry';
 import {expireEmptyBatteries} from './game/power';
 import {dropFriendlyWreckSupplies} from './game/wreckSupplies';
 import {handleEnemyDeaths,collectSupplies,initializeEnemy} from './game/enemyBehavior';
-import {tickWorld} from './game/sim';
+import {tickWorld,requestExtract} from './game/sim';
 import {worldFromCheckpointBody,snapshotSortieWorld} from './game/checkpoint';
+import {createInitialHangar,sellHangarWreck,scrapMech} from '../../trade/src/hangar';
+import {exploreReturnPayload} from './game/outcome';
 import {IDENTITY_ABILITY_SCALE} from './game/releaseAbility';
 const idle={move:{x:0,y:0},clickMove:null,fire:false,interact:false};
 function world(){const w=createWorld(bootstrapFromSearch('?deployableMechs=2&deployedInstanceIds=a,b&mechBattery=a:300:300;b:300:100.5&mechCurrentAmmo=a:0;b:7'));startSortie(w);attachCircuitPlay(w,null,true);w.enemies=[];w.containers=[];w.coverObjects=[];w.leader.pos={x:400,y:400};w.wingmen[0]!.pos={x:900,y:900};for(const u of [w.leader,...w.wingmen])w.circuitPlay!.ability[u.id]={...IDENTITY_ABILITY_SCALE};return w;}
@@ -36,3 +38,11 @@ function world(){const w=createWorld(bootstrapFromSearch('?deployableMechs=2&dep
 console.log('Friendly wreck supplies: actual combat and empty-power transitions, canonical zero, pickup, repeated frame/checkpoint once; no legacy dead migration; enemy behavior preserved PASS');
 
 {const w=world(),passenger=w.wingmen[0]!;passenger.pos={...w.leader.pos};assert.equal(startWreckPickup(w,w.leader,passenger.id),'started');stepCircuitPlay(w,8);assert.equal(wreckCarrierId(w,passenger.id),w.leader.id);w.currentAmmo.a=5;w.mechBattery.a!.activity=0;expireEmptyBatteries(w);assert.equal(wreckCarrierId(w,passenger.id),null);assert(passenger.alive);assert.equal(w.currentAmmo.a,0);assert.equal(w.currentAmmo.b,7);assert.equal(w.mechBattery.b!.activity,100.5);assert.equal(w.enemySupplies!.reduce((n,d)=>n+d.ammo,0),5);const saved=worldFromCheckpointBody(snapshotSortieWorld(w))!;expireEmptyBatteries(saved);assert.equal(saved.enemySupplies!.reduce((n,d)=>n+d.ammo,0),5);}
+
+// End-to-end resource accounting: field pickup -> real return payload -> sale / ordinary scrap.
+{const w=world(),u=w.wingmen[0]!;u.hp=1;u.holdOrder=true;w.mechBattery.a!.activity=100;
+w.bullets=[{alive:true,pos:{x:870,y:900},vel:{x:400,y:0},ttl:1,damage:1000,fromEnemy:true,ownerId:'enemy-source'}];tickWorld(w,.1,idle);w.leader.pos={...u.pos};collectSupplies(w);assert.equal(w.currentAmmo.a,7);assert.equal(w.mechBattery.a!.activity,200.5);assert.equal(w.enemySupplies!.length,0);
+assert(requestExtract(w));for(let i=0;i<151&&w.phase==='sortie';i++)tickWorld(w,.1,idle);assert(w.extracted);const base=normalizeHubSnapshot({...INITIAL_HUB,credits:1000,inventory:{ammo:0,power:0,armor:0},fleet:[createOwnedMech('mech_gen1',{instanceId:'a',currentAmmo:0}),createOwnedMech('mech_gen1',{instanceId:'b',currentAmmo:7})],circuits:[],ammoBatteryRepaired:true,starterCircuitGranted:true});
+const returned=applyExploreReturnToHub(base,exploreReturnPayload(w)!).hub;assert.equal(returned.fleet.find(m=>m.instanceId==='b')!.currentAmmo,0);assert.equal(returned.fleet.find(m=>m.instanceId==='b')!.battery.activity,0);
+const values=new Map<string,string>(),store={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v),removeItem:(k:string)=>values.delete(k)};assert(saveHubSaveToLocalStorage(returned,store));const state=createInitialHangar(store),sold=sellHangarWreck(state,'b',store);assert.deepEqual(sold.hub.inventory,returned.inventory);assert.equal(sold.hub.fleet[0]!.currentAmmo,7);assert.equal(sold.hub.fleet[0]!.battery.activity,200.5);
+const scrapped=scrapMech(state,'b');assert.equal(scrapped.hub.inventory.ammo??0,returned.inventory.ammo??0);assert.equal(scrapped.hub.inventory.power??0,returned.inventory.power??0,'ordinary scrap cannot return already-dropped power');}

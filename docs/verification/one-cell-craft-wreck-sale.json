@@ -21,13 +21,60 @@
   "publicVersion": "NOT_RUN",
   "type": "PARTIAL_VERIFICATION",
   "base": "9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab",
-  "scope": "1x1 craft and Restore; wreck sale is waiting for Q1",
+  "scope": "CORRECTION: wreck sale and new death ammo/power drops complete; armor conversion pending",
   "localBundles": "Production URL routes fulfilled from local HTTP bundles. Not a public-version test.",
   "workspaceTests": "PASS",
   "typecheck": "PASS",
   "fiveBuilds": "PASS",
-  "wreckSale": "NOT_RUN",
-  "pendingQuestion": "Q1: residual ammo and battery on sale",
+  "wreckSale": "PASS",
+  "pendingQuestion": "ARMOR_Q1: HP-to-armor conversion and rounding, docs/spec-questions/wreck-expiry-armor.json",
   "merge": "NOT_RUN",
-  "deploy": "NOT_TRIGGERED"
+  "deploy": "NOT_TRIGGERED",
+  "armorDrop": "NOT_RUN (not implemented pending owner decision)",
+  "saleBrowser": {
+    "viewport": [
+      390,
+      844
+    ],
+    "results": [
+      {
+        "scenario": "390x844 real Japanese confirmation cancel/accept, +400 once, exact circuits retained, no supply grant, reload, live mech exclusion and no overflow",
+        "status": "PASS"
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  },
+  "oneCellRegression": {
+    "viewport": [
+      390,
+      844
+    ],
+    "results": [
+      {
+        "scenario": "real UI buys two junk for 12c, crafts 1x1 for 6c, sells white for 25c: +7c",
+        "status": "PASS"
+      },
+      {
+        "scenario": "pre-clear forced rate cannot create P; false 1x1 real Restore handoff and Bypass return",
+        "status": "PASS"
+      },
+      {
+        "scenario": "after clear: two P1x1 created with controlled existing rate, actual Perfect Restore, reload and 390px layout",
+        "status": "PASS"
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  },
+  "dropTests": [
+    "actual lethal projectile drops ammo/power and zeros corpse",
+    "empty-power transition drops ammo, repeated frames/checkpoint resume do not duplicate",
+    "living passenger dismount retains own ammo/power",
+    "actual pickup -> 15-second boarding return -> 400c sale/normal scrap without duplicate resources",
+    "legacy already-dead checkpoint resources remain unchanged",
+    "new recovered enemy wreck has zero battery through both direct and shared return paths"
+  ],
+  "oldDataPolicy": "No added resource erasure/refund/drop migration for old dead checkpoints or hangar wrecks. Explicit sale has no resource refund.",
+  "correctionBase": "e4ebe2062ed8d25fde41c92ed21923c73f7c46e6"
 }
