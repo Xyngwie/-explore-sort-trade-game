@@ -1,34 +1,7 @@
-/**
- * Touch-friendly flag plant helpers for Invade minesweeper board.
- * PC right-click remains; touch uses long-press and/or flag-mode toggle.
- */
-
-/** Hold duration (ms) before a closed cell toggles flag on touch/pen/mouse. */
-export const FLAG_LONG_PRESS_MS = 480;
-
-/** Short JA operation guide under the board actions. */
-export function buildFlagOpsGuideHtml(flagMode: boolean): string {
-  const modeNote = flagMode
-    ? "旗モード ON — タップで旗トグル（開かない）"
-    : "旗モード OFF — タップで開く／焦点";
-  return `<div class="flag-ops-guide" role="note" aria-label="旗の操作ガイド">
-    <p class="flag-ops-title">旗の立て方</p>
-    <ul class="flag-ops-list">
-      <li><strong>長押し</strong>（約0.5秒）— タッチ／ペン／マウスで旗トグル</li>
-      <li><strong>旗モード</strong>ボタン — ${modeNote}</li>
-      <li><strong>右クリック</strong> — PC でも旗トグル可</li>
-    </ul>
-  </div>`;
-}
-
-/**
- * Decide whether a pointer should arm long-press flag.
- * Primary button only; ignore secondary (context menu handles that).
- */
-export function shouldArmFlagLongPress(ev: {
-  button: number;
-  pointerType?: string;
-}): boolean {
-  if (ev.button !== 0) return false;
-  return true;
+import { BOARD_INPUT } from './boardInput';
+/** Release-based touch actions. Mouse never uses long-press flagging. */
+export const FLAG_LONG_PRESS_MS=BOARD_INPUT.holdMs;
+export function shouldArmFlagLongPress(e:{button:number;pointerType?:string}):boolean {return e.button===0 && (e.pointerType==='touch'||e.pointerType==='pen');}
+export function buildFlagOpsGuideHtml(reversed:boolean):string {
+ return `<div class="flag-ops-guide" role="note" aria-label="盤面の操作ガイド"><p><strong>タッチ：${reversed?'タップで開く／長押しして離すと旗':'タップで旗／長押しして離すと開く'}</strong>（未開放マスのみ）</p><p>長押しは約${BOARD_INPUT.holdMs/1000}秒。押している間は操作せず、スイープすると盤面移動。ピンチでズーム。広く見ている時のダブルタップでその位置を拡大。</p><p>開いた数字をタップ：周囲の旗数が一致した時だけ周囲開放。反転の影響なし。誤った旗では敵に接触し得ます。</p><p>マウス：左クリックで開く／右クリックで旗。数字で左右同時押しは旗数一致時のみ周囲開放。中ボタンドラッグで移動、ホイールでズーム。マウス長押しで旗は立ちません。</p></div>`;
 }
