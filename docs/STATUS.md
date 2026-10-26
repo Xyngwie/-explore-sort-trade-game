@@ -7,7 +7,7 @@
 - What: cursor/codex-invade-input。マウス左右/同時押し、中ドラッグ、ホイール、タッチ反転/長押し/スイープ/ピンチ/ダブルタップ
 - Why: TASK_ASSIGNMENT「Invadeのマウス・スマホ操作の統一」
 - Scope: 入力・表示変換・説明とテストのみ。#328回路/残骸とは分離。ゲーム条件・報酬・強制戦闘は維持。マージ・デプロイ禁止
-- Status: 起点main 9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab。実装中、Draft提出予定
+- Status: 起点main 9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab。Draft #329。入力状態/周囲開放/ビュー変換と説明を実装。Invade型検査/既存追加テスト/本番ビルド・全workspaceテストPASS。1280x900/390x844で実マウス左右/左右先順/中ドラッグ/ホイール、CDPタッチ反転/長押し離し/パン/ピンチ/ダブル/取消/変換後当たり判定をPASS。詳細verification/invade-input.json、定数INVADE_V0.md末尾、最終HEAD/CIはPR本文。物理スマートフォン/公開版NOT_RUN。マージ・デプロイなし、監査待ち
 
 ## Grok Bot / 確認ラウンド完了を文書だけに残す（2026-10-26）
 - Who: Grok Bot（文書記録）
