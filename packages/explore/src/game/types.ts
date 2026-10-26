@@ -22,6 +22,8 @@ export type LearningAction = import("./learning").LearningAction;
 export type Unit = {
   id: string; kind: UnitKind; name: string; pos: Vec2; vel: Vec2; heading: number; moveHeading?: number | null; aimWant?: number | null; hp: number; maxHp: number; radius: number; alive: boolean; stance: Stance; waypoint: Vec2 | null; moveTarget: Vec2 | null; /** Explicit captain click input, distinct from resolved AI targets; optional in old checkpoints. */ playerMoveTarget?: Vec2 | null; cooldown: number; patrolAngle: number; salvageId: string | null; salvageT: number; salvagedCount: number; capacity: number; instanceId: string | null;
   /** Runtime-only wingman learning (AUTONOMOUS_LEARNING_V0). */
+  /** Set only on a new observed death; checkpointed, no legacy dead-unit migration. */
+  wreckSuppliesDropped?: true;
   learningAction?: LearningAction;
   droppedThisSortie?: boolean;
   learningDecisionCount?: number;

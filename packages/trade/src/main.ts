@@ -50,6 +50,8 @@ import {
   repairCost,
   resetHangar,
   scrapMech,
+  sellHangarWreck,
+  wreckSaleConfirmText,
   selectAllDeployable,
   selectCircuit,
   setCraftSignature,
@@ -215,6 +217,7 @@ function fleetCards(s: HangarState): string {
         <p class="muted">活動量 ${Number(m.battery.activity.toFixed(2))}/${m.battery.capacity}</p>
         <div class="row">
           ${moneyAct}
+          ${reviveMechCost(m) ? `<button type="button" class="secondary fleet-act" data-act="sell-wreck" data-id="${escapeHtml(m.instanceId)}">残骸売却 400c</button>` : ""}
           <button type="button" class="secondary fleet-act" data-act="charge" data-id="${escapeHtml(m.instanceId)}" ${m.battery.activity >= m.battery.capacity ? "disabled" : ""}>充電</button>
           <button type="button" class="secondary fleet-act" data-act="scrap" data-id="${escapeHtml(m.instanceId)}">解体</button>
         </div>
@@ -779,6 +782,11 @@ function render() {
           : "";
         if (!window.confirm(`回路を売却しますか？\n${id}\n仮 +${price}c${confirmExtra}${unequipLine}`)) return;
         state = sellCircuit(state, id);
+      }
+      else if (act === "sell-wreck") {
+        const text=wreckSaleConfirmText(state,id);
+        if(!text || !window.confirm(text))return;
+        state=sellHangarWreck(state,id);
       }
       else if (act === "scrap") {
         if (moneyClickRecent()) return;

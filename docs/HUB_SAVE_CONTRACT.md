@@ -514,4 +514,6 @@ ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・�
 - 作成P1×1の解放はfirstInvadeClearだけを使う。初回確定付与の冪等性は既存firstInvadeClear契約を維持し、作成数とは独立する。
 - 売却はfleetの大破機のみ。400c加算・削除・装着回路の倉庫化・参照整理を一つのスナップショットで保存する。lostMechsは売らない。保存失敗は元状態を維持する。
 - 回路はequippedTo以外の性能・修復・署名等を保つ。売却後に出撃選択/前回出撃の機体IDが残らないよう整理する。
-- 携行弾薬・バッテリーの売却時扱いはQ1回答待ち。実装確定時に追記する。格納庫OwnedMechには探索中の積載物は保存しない。
+- CORRECTIONにより売却時の携行資源返却は撤回。売却は400cのみで、弾薬/電力/装甲の追加付与はない。格納庫OwnedMechには探索中の積載物を保存しない。
+- 新しい味方大破は既存World.enemySuppliesのammo/power形式へ現地ドロップし、World.currentAmmoとmechBattery.activityを0にする。Unit.wreckSuppliesDroppedは新しい大破を処理した印としてcheckpointに保存し、再開時の重複を防ぐ。敵の既存deathHandled方式は変更しない。既に死んでいる旧checkpoint/格納庫残骸に対する追加の資源消去・返却移行はしない。明示的な売却では資源を追加付与しない。
+- 活動量切れの装甲換算は神宮確認待ち。装甲パーツを格納庫へ直接自動加算する実装は行わない。

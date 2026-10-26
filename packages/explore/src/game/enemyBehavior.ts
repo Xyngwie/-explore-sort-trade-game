@@ -330,6 +330,7 @@ export function handleEnemyDeaths(world: World): void {
     world.enemySupplies.push(...splitSupplyDrops(`supply-${e.id}`, e.pos, s.ammo, s.activity));
     s.ammo = 0;
     s.activity = 0;
+    if(e.id in world.currentAmmo)world.currentAmmo[e.id]=0; // circuit-weapon mirror, not a second supply store
     for (let i = 0; i < s.cargo; i++)
       world.containers.push({
         id: `cargo-${e.id}-${i}`,

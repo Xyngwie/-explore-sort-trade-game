@@ -1,5 +1,6 @@
 import {
   createOwnedMech,
+  MECH_BATTERY_DEFAULT_CAPACITY,
   createEmptyCircuitBoard,
   edgeCount,
   encodeEdgeState,
@@ -24,6 +25,7 @@ export function acquireEnemyWrecks(
       durability: 0,
       status: "destroyed" as const,
       currentAmmo: 0,
+      battery: { capacity: MECH_BATTERY_DEFAULT_CAPACITY, activity: 0 },
     };
     const circuits: HubCircuitRecord[] = (e.enemyIdentity?.circuits ?? []).map(
       (c) => {

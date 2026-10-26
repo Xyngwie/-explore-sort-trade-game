@@ -51,6 +51,7 @@ import { squadEquipmentError, chargeMechPower,
   isCircuitLocked,
   spendUnopenedContainers,
   loadHubSaveFromLocalStorage,
+  loadHubSaveWithStatus,
   normalizeHubSnapshot,
   parseExploreToHubWearSearch,
   parseInvadeToTradeSearch,
@@ -1510,7 +1511,33 @@ export const HANGAR_WRECK_SELL_CREDITS = 400;
 export function wreckSaleConfirmText(state: HangarState, instanceId: string): string | null {
   const mech = state.hub.fleet.find(m=>m.instanceId===instanceId);
   if (!mech || !isHangarWreck(mech)) return null;
-  return `残骸を売却しますか？\n${mech.catalogId}（${mech.instanceId}）\n売値 ${HANGAR_WRECK_SELL_CREDITS}c\n装着回路は外して倉庫に残します。回路は売却しません。`;
+  return `残骸を売却しますか？\n${mech.catalogId}（${mech.instanceId}）\n売値 ${HANGAR_WRECK_SELL_CREDITS}c\n装着回路は外して倉庫に残します。回路は売却しません。\n弾薬・電力・装甲の追加返却はありません。`;
+}
+
+/** Commit the wreck, money and detached circuits as one HubSave write. */
+export function sellHangarWreck(
+  state: HangarState, instanceId: string,
+  storage?: Pick<Storage,"getItem"|"setItem"|"removeItem"> | null,
+): HangarState {
+  const loaded=loadHubSaveWithStatus(storage??undefined);
+  if(loaded.status!=="ok" && loaded.status!=="migrated" && loaded.status!=="empty")
+    return {...state,notice:"セーブを安全に更新できません。残骸は売却していません。再読込してください。"};
+  const current=loaded.save?.hub??state.hub;
+  const mech=current.fleet.find(m=>m.instanceId===instanceId);
+  if(!mech || !isHangarWreck(mech))return {...state,hub:current,selectedDeployIds:selectionAfter(current,state.selectedDeployIds),lastDeployedIds:state.lastDeployedIds.filter(id=>id!==instanceId || current.fleet.some(m=>m.instanceId===id) || current.lostMechs.some(m=>m.instanceId===id)),notice:"売却できる格納庫の残骸がありません。"};
+  const hub=normalizeHubSnapshot({...current,
+    fleet:current.fleet.filter(m=>m.instanceId!==instanceId),
+    circuits:current.circuits.map(c=>c.equippedTo===instanceId?{...c,equippedTo:null}:c),
+    credits:current.credits+HANGAR_WRECK_SELL_CREDITS,
+    ...(current.sortieSelection?{sortieSelection:current.sortieSelection.filter(id=>id!==instanceId)}:{}),
+  });
+  if(!saveHubSaveToLocalStorage(hub,storage??undefined))
+    return {...state,notice:"残骸売却を保存できませんでした。機体・回路・所持金は変更していません。再読込してください。"};
+  return {...state,hub,selectedDeployIds:selectionAfter(hub,state.selectedDeployIds),
+    lastDeployedIds:state.lastDeployedIds.filter(id=>id!==instanceId),
+    log:pushLog(state.log,`残骸売却 ${instanceId} → +400c（装着回路は倉庫へ）`),
+    notice:"残骸売却 +400c。装着回路は倉庫に残しました。",
+  };
 }
 
 export function scrapMech(

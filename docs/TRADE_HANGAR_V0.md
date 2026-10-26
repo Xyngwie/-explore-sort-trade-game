@@ -208,3 +208,7 @@ npm run dev:explore # :5173（任意・実 URL 往復）
 | `packages/trade/src/main.ts` | ハンガー UI（「次の出撃」パネル · シード読込含む） |
 | `packages/trade/src/hangar.ts` | 状態遷移・永続化・ハンドオフ取込・`loadPlaytestSeed` · `buildNextSortieReadiness` |
 | `packages/shared/src/hub-save.ts` | `inventory` / `circuits` / `importYieldBagIntoHub` / `upsertCircuitIntoHub` |
+
+## PR #328：格納庫残骸の400c売却
+
+大破機カードだけに「残骸売却 400c」を表示する。確認には機体、400c、装着回路を倉庫に残すこと、資源追加返却なしを示す。残骸削除・400c・回路取り外し・出撃選択の整理を一つのHubSave更新で行う。古い画面状態からの二重操作でも最新保存を再確認する。保存拒否時は成功として扱わない。通常の解体とは別操作で、その資源規則は変更しない。
