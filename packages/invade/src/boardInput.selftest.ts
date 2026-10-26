@@ -31,3 +31,5 @@ b=board();getCell(b,0,-1)!.flagged=true;const r=chordCells(b,0,0);assert.deepEqu
 console.log('Invade input: both chord button orders, release holds, tap delay, cancel/pinch/pan/double; exact flag counts and first-mine stop PASS');
 
 new BoardGesture({hit:()=>null,action:()=>{},pan:()=>{},zoom:()=>{},zoomedOut:()=>false}).cancel(); // default real clock must initialize without a shadowed default parameter
+
+reset();g.down(e('touch'));g.up(e('touch',0));now=100;g.down(e('touch',1,0,1,100,10));g.up(e('touch',0,0,1,100,10));flush();assert.deepEqual(actions,['tap','tap'],'two separate locations must not lose the first delayed tap');

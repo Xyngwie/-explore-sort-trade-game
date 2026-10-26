@@ -16,7 +16,7 @@ const same=(a:Coord|null,b:Coord|null)=>a!=null&&b!=null&&a.sx===b.sx&&a.sy===b.
 export class BoardGesture {
   private mouse: {start:Point;last:Point;cell:Coord|null;buttons:number;chord:boolean;pan:boolean;moved:boolean}|null=null;
   private touches=new Map<number,Point>();
-  private touch: {start:Point;last:Point;cell:Coord|null;at:number;pan:boolean;cancelled:boolean;double:boolean}|null=null;
+  private touch: {start:Point;last:Point;cell:Coord|null;at:number;pan:boolean;cancelled:boolean;double:boolean;previous:Coord|null}|null=null;
   private multi=false;
   private pinch: {center:Point;distance:number}|null=null;
   private pending: {p:Point;cell:Coord;at:number;timer:unknown}|null=null;
@@ -33,8 +33,9 @@ export class BoardGesture {
     this.touches.set(e.id,e);
     if(this.touches.size>1){this.clearPending();this.multi=true;this.touch=null;this.pinch=this.pinchNow();return;}
     const double=this.pending!=null && this.clock.now()-this.pending.at<=BOARD_INPUT.doubleTapMs && distance(e,this.pending.p)<=BOARD_INPUT.doubleTapPx && this.h.zoomedOut();
+    const previous=!double ? this.pending?.cell??null : null;
     this.clearPending();
-    this.touch={start:e,last:e,cell:this.h.hit(e),at:this.clock.now(),pan:false,cancelled:false,double};
+    this.touch={start:e,last:e,cell:this.h.hit(e),at:this.clock.now(),pan:false,cancelled:false,double,previous};
   }
   private mouseButtons(e:PointerSample):void {
     const m=this.mouse;if(!m)return;
@@ -69,7 +70,7 @@ export class BoardGesture {
       const m=this.mouse;if(!m)return;this.mouseButtons(e);
       if(e.buttons!==0)return;
       this.mouse=null;
-      if(!m.pan && !m.moved && same(m.cell,this.h.hit(e)))this.h.action(m.chord?'chord':(m.buttons&2)?'right':'left',m.cell!);
+      if(!m.pan && !m.moved && distance(e,m.start)<=BOARD_INPUT.movePx && same(m.cell,this.h.hit(e)))this.h.action(m.chord?'chord':(m.buttons&2)?'right':'left',m.cell!);
       return;
     }
     if(!this.touches.has(e.id))return;
@@ -77,6 +78,7 @@ export class BoardGesture {
     if(this.multi){if(!this.touches.size){this.multi=false;this.pinch=null;}return;}
     const t=this.touch;this.touch=null;
     if(!t || t.pan || t.cancelled || distance(e,t.start)>BOARD_INPUT.movePx || !same(t.cell,this.h.hit(e)))return;
+    if(t.previous)this.h.action('tap',t.previous);
     if(this.clock.now()-t.at>=BOARD_INPUT.holdMs){this.h.action('hold',t.cell!);return;}
     if(t.double){this.h.zoom(BOARD_INPUT.doubleTapFactor,e);return;}
     if(!this.h.zoomedOut()){this.h.action('tap',t.cell!);return;}
@@ -118,9 +120,14 @@ export function bindBoardInput(root:HTMLElement, action:(a:BoardAction,c:Coord)=
   const overViewport=(e:MouseEvent)=>{const r=viewport()?.getBoundingClientRect();return r!=null&&e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom;};
   root.addEventListener('contextmenu',e=>{if(inside(e)||overViewport(e))e.preventDefault();});
   root.addEventListener('auxclick',e=>{if(inside(e)||overViewport(e))e.preventDefault();});
-  root.addEventListener('click',e=>{
-    if(!inside(e))return;e.preventDefault();e.stopPropagation();
-    if(e.detail===0 && !('pointerType' in e && (e as PointerEvent).pointerType) && e.target instanceof HTMLElement){const c=e.target.closest<HTMLElement>('button.cell');if(c && !c.hasAttribute('disabled'))action('left',{sx:Number(c.dataset.sx),sy:Number(c.dataset.sy)});}
+  // Pointer actions commit on release. Ignore all compatibility clicks,
+  // including detail=0 variants; keyboard activation has its own explicit path.
+  root.addEventListener('click',e=>{if(inside(e)){e.preventDefault();e.stopPropagation();}});
+  root.addEventListener('keydown',e=>{
+    if(!inside(e)||(e.key!=='Enter'&&e.key!==' '))return;
+    e.preventDefault();if(e.repeat)return;
+    const c=(e.target as HTMLElement).closest<HTMLElement>('button.cell');
+    if(c&&!c.hasAttribute('disabled')){gesture.cancel();action('left',{sx:Number(c.dataset.sx),sy:Number(c.dataset.sy)});}
   });
   root.addEventListener('wheel',e=>{if(!inside(e))return;e.preventDefault();gesture.cancel();zoom(Math.exp(-e.deltaY*BOARD_INPUT.wheelSensitivity),{x:e.clientX,y:e.clientY});},{passive:false});
   window.addEventListener('resize',()=>{gesture.cancel();paint();});
