@@ -24,6 +24,8 @@ function shieldWorld(hp = 50) {
   world.shieldState = { identities, equipped: { [world.leader.id]: { kind: "shield", key: "shield" } }, ground: {} };
   world.leader.heading = 0;
   world.leader.pos = { x: 300, y: 300 };
+  // Isolate the shot lane from randomly spawned units: first contact must be the test target.
+  for (const unit of [...world.wingmen, ...world.enemies]) unit.pos = { x: 1000, y: 1000 };
   attachCircuitPlay(world, null, false);
   return world;
 }
