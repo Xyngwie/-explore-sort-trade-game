@@ -1,4 +1,5 @@
 import { obstacleMove, updateCoverMovement } from "./coverMovement";
+import { equippedShield } from "./shields";
 import { showCombatFeedback } from "./combatFeedback";
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
 import { canSee } from "./vision";
@@ -344,10 +345,19 @@ export function handleEnemyDeaths(world: World): void {
 }
 export function collectSupplies(world: World): void {
   for (const d of world.enemySupplies ?? []) {
-    if(d.kind === "armor")continue; // collection awaits the owner decision; do not turn parts into HP
     for (const u of [world.leader, ...world.wingmen, ...world.enemies]) {
       if (!u.alive || dist(u.pos, d.pos) > world.balance.interactRadius)
         continue;
+      if (d.kind === "armor") {
+        const entry = equippedShield(world, u), amount = d.armor ?? 0;
+        if (!entry || !Number.isFinite(amount) || amount <= 0) continue;
+        const hp = entry.shield.hp + amount;
+        if (!Number.isFinite(hp)) continue;
+        entry.shield.hp = hp;
+        entry.shield.maxHp = Math.max(entry.shield.maxHp, hp);
+        d.armor = 0;
+        continue;
+      }
       if (u.kind === "enemy") {
         const s = u.enemyState!;
         const a = Math.min(d.ammo, s.ammoCap - s.ammo),

@@ -517,4 +517,4 @@ ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・�
 - CORRECTIONにより売却時の携行資源返却は撤回。売却は400cのみで、弾薬/電力/装甲の追加付与はない。格納庫OwnedMechには探索中の積載物を保存しない。
 - 新しい味方大破は既存World.enemySuppliesのammo/power形式へ現地ドロップし、World.currentAmmoとmechBattery.activityを0にする。Unit.wreckSuppliesDroppedは新しい大破を処理した印としてcheckpointに保存し、再開時の重複を防ぐ。敵の既存deathHandled方式は変更しない。既に死んでいる旧checkpoint/格納庫残骸に対する追加の資源消去・返却移行はしない。明示的な売却では資源を追加付与しない。
 - 新規に回収した敵残骸も、直接の取得と帰還報告の両経路で携行弾薬0/活動量0として作る。既にfleetにある旧残骸を再初期化しない。
-- 装甲換算は神宮確定：活動量切れ直前の残HPと等価（HP67/120なら67個）。既存整数資源compactYieldBagで切り捨て、保存耐久/最大HPへ換算しない。SupplyDrop.kind="armor"、armor個数を既存World.enemySuppliesへ保存し、ammo/powerは0。回収先はARMOR_Q2確認中のため、消去/HP回復/格納庫加算を推測しない。
+- 装甲換算は神宮確定：活動量切れ直前の残HPと等価（HP67/120なら67個）。既存整数資源compactYieldBagで切り捨て、保存耐久/最大HPへ換算しない。SupplyDrop.kind="armor"、armor個数を既存World.enemySuppliesへ保存し、ammo/powerは0。接近回収は装備盾のHPに全量加算し、最大HPをmax(既存最大HP,加算後HP)とする（20/50+67→87/87）。本体HP・格納庫在庫を増やさず、装備盾がなければ消費しない。盾ID/所有先は維持し、通常のcheckpoint/盾保存へ反映する。

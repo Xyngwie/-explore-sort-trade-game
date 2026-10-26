@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { INITIAL_HUB,normalizeHubSnapshot,applyExploreReturnToHub,createOwnedMech,saveHubSaveToLocalStorage } from '@estg/shared';
+import { emptyFieldObjectIdentities,registerWreckIdentity,shieldIdentityFromWreck,INITIAL_HUB,normalizeHubSnapshot,applyExploreReturnToHub,createOwnedMech,saveHubSaveToLocalStorage } from '@estg/shared';
 import { acquireEnemyWrecks,enemyWreckReturns } from './game/enemyRecovery';
 import {bootstrapFromSearch,createWorld,startSortie} from './game/world';
 import {attachCircuitPlay,startWreckPickup,stepCircuitPlay} from './game/circuitPlay';
@@ -57,3 +57,21 @@ for(const [hp,maxHp,expected] of [[25,50,25],[67,120,67],[17.25,40,17]] as const
 console.log('Empty battery armor: HP25->25, HP67/120->67, existing integer parts rounding, position, frame/checkpoint once; combat none PASS');
 
 {const w=world(),passenger=w.wingmen[0]!;passenger.pos={...w.leader.pos};assert.equal(startWreckPickup(w,w.leader,passenger.id),'started');stepCircuitPlay(w,8);passenger.hp=67;passenger.maxHp=120;w.mechBattery.b!.activity=0;const at={...passenger.pos};expireEmptyBatteries(w);assert(!passenger.alive);assert(w.leader.alive);const d=w.enemySupplies!.find(d=>d.kind==='armor')!;assert.equal(d.armor,67);assert.deepEqual(d.pos,at);const resumed=worldFromCheckpointBody(snapshotSortieWorld(w))!;expireEmptyBatteries(resumed);assert.equal(resumed.enemySupplies!.filter(d=>d.kind==='armor').length,1,'carried depleted passenger does not drop twice after resume');}
+
+// Owner Q2/Q3=B: armor feeds the equipped bonus shield without healing the hull.
+for (const target of ['leader','wingman','enemy'] as const) {
+ const w=world(), u=target==='leader'?w.leader:target==='wingman'?w.wingmen[0]!:{...structuredClone(w.wingmen[0]!),id:'enemy-armor',kind:'enemy' as const,instanceId:null};
+ if(target==='enemy'){initializeEnemy(u);w.enemies=[u];}
+ const identities=shieldIdentityFromWreck(registerWreckIdentity(emptyFieldObjectIdentities(),'armor-source'),'armor-source','armor-shield',{hp:20,maxHp:50});
+ w.shieldState={identities,equipped:{[u.id]:{kind:'shield',key:'armor-shield'}},ground:{}};
+ const hull=u.hp;
+ w.enemySupplies=[{id:'armor-pickup',pos:{...u.pos},ammo:0,power:0,armor:67,kind:'armor'}];
+ collectSupplies(w);
+ assert.equal(identities.shields['armor-shield']!.hp,87);assert.equal(identities.shields['armor-shield']!.maxHp,87);assert.equal(u.hp,hull);assert.equal(w.enemySupplies.length,0);
+ const restored=worldFromCheckpointBody(snapshotSortieWorld(w))!;collectSupplies(restored);
+ assert.equal(restored.shieldState!.identities.shields['armor-shield']!.hp,87);assert.equal(restored.shieldState!.identities.shields['armor-shield']!.maxHp,87);
+ restored.enemySupplies=[{id:'fractional',pos:{...u.pos},ammo:0,power:0,armor:.5,kind:'armor'}];collectSupplies(restored);
+ assert.equal(restored.shieldState!.identities.shields['armor-shield']!.hp,87.5);
+}
+{const w=world();w.enemySupplies=[{id:'no-shield',pos:{...w.leader.pos},ammo:0,power:0,armor:67,kind:'armor'}];const hp=w.leader.hp;collectSupplies(w);assert.equal(w.leader.hp,hp);assert.equal(w.enemySupplies[0]!.armor,67,'no equipped shield: leave parts on ground');}
+console.log('Armor pickup: equipped shield 20/50 +67 ->87/87; no hull healing; enemy/wingman/leader, fractional HP and reload PASS');

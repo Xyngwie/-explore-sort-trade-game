@@ -1,17 +1,24 @@
 {
-  "type": "SPEC_QUESTION",
+  "type": "SPEC_DECISION",
   "sender": "codex",
   "recipient": "owner",
   "target": "PR #328",
   "id": "ARMOR_Q2",
-  "status": "WAITING_FOR_OWNER",
+  "status": "APPROVED",
   "question": "地面に落ちた装甲パーツの回収先・効果",
   "evidence": [
     "現行ammo/power地面ドロップは接近で機体へ直接補給される",
     "現地装甲パーツの回収・帰還在庫加算の既存経路はない",
     "神宮は装甲ドロップ量を残HP等価と確定。回収の効果は今回未指定"
   ],
-  "options": {
+  "answer": {
+    "ARMOR_Q2": "盾へ加算。本体装甲は回復しない",
+    "ARMOR_Q3": "B",
+    "rule": "接近時、装備盾の現在HPに全量加算。最大HPはmax(既存最大HP,加算後HP)。20/50+67→87/87。装備盾がなければ消費せず地面に残す。",
+    "ownerQuote": "B　盾はボーナスアーマーなので気軽に増やしてよい"
+  },
+  "currentImplementation": "装備盾への上限なし加算。本体HP/格納庫在庫は変化させない。",
+  "optionsHistorical": {
     "A": {
       "recommended": true,
       "rule": "接近回収して帰還時に装甲パーツ在庫へ。戦場ではHPを回復しない"
@@ -22,7 +29,5 @@
     "C": {
       "rule": "今回は地面への生成・表示・途中保存まで。回収は後続へ分離"
     }
-  },
-  "answer": null,
-  "currentImplementation": "残HP等価の整数装甲を地面へ生成・表示・途中保存し、勝手に削除/回復/格納庫加算しない"
+  }
 }

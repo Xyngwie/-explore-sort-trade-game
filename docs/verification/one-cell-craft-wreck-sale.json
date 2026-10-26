@@ -77,7 +77,7 @@
   ],
   "oldDataPolicy": "No added resource erasure/refund/drop migration for old dead checkpoints or hangar wrecks. Explicit sale has no resource refund.",
   "correctionBase": "e4ebe2062ed8d25fde41c92ed21923c73f7c46e6",
-  "armorCollection": "NOT_RUN (owner decision pending)",
+  "armorCollection": "PASS: equipped shield20/50 +67 ->87/87; no hull healing; no equipped shield retains ground parts; fractional/reload/leader/wingman/enemy",
   "armorDecision": {
     "rule": "remaining HP, no maxHP/durability scaling",
     "examples": {
@@ -94,6 +94,10 @@
     "results": [
       {
         "scenario": "390x844 real simulation HP67/120 power depletion, 67 ground armor, zero resources, persisted reload once",
+        "status": "PASS"
+      },
+      {
+        "scenario": "390x844 resume real simulation: shield20/50 +67 ->87/87, hull67 unchanged, checkpoint reload, parts consumed once",
         "status": "PASS"
       }
     ],
