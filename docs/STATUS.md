@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / Invade入力統一
+- Who: Codex / 神宮直接指示の実装担当（Automationsを起動しない）
+- What: cursor/codex-invade-input。マウス左右/同時押し、中ドラッグ、ホイール、タッチ反転/長押し/スイープ/ピンチ/ダブルタップ
+- Why: TASK_ASSIGNMENT「Invadeのマウス・スマホ操作の統一」
+- Scope: 入力・表示変換・説明とテストのみ。#328回路/残骸とは分離。ゲーム条件・報酬・強制戦闘は維持。マージ・デプロイ禁止
+- Status: 起点main 9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab。実装中、Draft提出予定
+
 ## Grok Bot / 確認ラウンド完了を文書だけに残す（2026-10-26）
 - Who: Grok Bot（文書記録）
 - What: 「最近」= 直近 10 出撃を暫定のまま残す（2026-10-26 神宮）。確認ラウンド完了を `docs/AUTONOMOUS_LEARNING_V0.md` に書き、Issue #326 の 11 件とこの確認を `docs/spec-questions/autonomous-learning-326-decision.json` にまとめた。`in` は空
