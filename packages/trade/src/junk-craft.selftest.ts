@@ -1,7 +1,14 @@
 /** Impl B: junk craft size / cost / cap, perfectMaxSize import hook + backfill. */
 import assert from "node:assert/strict";
+import { bootstrapFromSearch } from "../../restore/src/session";
+import { classifyPlayResult } from "../../restore/src/puzzle";
 import {
   HUB_SAVE_STORAGE_KEY,
+  TRUE_ONE_BY_ONE_PUZZLE_ID,
+  buildTradeToRestoreUrl,
+  classifyCircuit,
+  createOwnedMech,
+  recordFirstInvadeClear,
   INITIAL_HUB,
   buildRestoreToTradeUrl,
   buildSizedTruePuzzleIdV2,
@@ -83,11 +90,11 @@ assert.equal(junkCraftMaxSide(hubWith({ perfectMaxSize: 20 })), 20);
 {
   const rich = hubWith({ perfectMaxSize: 5, credits: 1_000_000, inventory: { junk: 1000 } });
   const capped = junkCraftOptions(rich);
-  assert.deepEqual(capped.map((o) => o.side), [2, 3, 4, 5, 6]);
+  assert.deepEqual(capped.map((o) => o.side), [1, 2, 3, 4, 5, 6]);
   assert.ok(capped.every((o) => o.enabled));
   const all = junkCraftOptions(rich, 20);
-  assert.equal(all.length, 19);
-  assert.deepEqual(all.filter((o) => o.enabled).map((o) => o.side), [2, 3, 4, 5, 6]);
+  assert.equal(all.length, 20);
+  assert.deepEqual(all.filter((o) => o.enabled).map((o) => o.side), [1, 2, 3, 4, 5, 6]);
   assert.ok(all.filter((o) => o.side > 6).every((o) => o.reason === "over_cap" && !o.withinCap));
   // Costs from the shared single source: 2N junk + round(4×1.5^N) c.
   const byside = new Map(all.map((o) => [o.side, o]));
@@ -149,7 +156,7 @@ assert.equal(junkCraftMaxSide(hubWith({ perfectMaxSize: 20 })), 20);
   for (const [side, reason] of [
     [4, "no_junk"],
     [5, "over_cap"],
-    [1, "bad_size"],
+    [0, "bad_size"],
     [21, "bad_size"],
     [2.5, "bad_size"],
   ] as const) {
@@ -324,3 +331,48 @@ console.log("trade junk-craft selftest: ok");
   assert.equal(legacy.record!.circuitBoard.puzzleId, "s1_legacy", "no rate given → as before");
 }
 console.log("junk-craft S1 true-board roll ok");
+
+// Owner decision: 1x1 costs two junk / 6c; only firstInvadeClear unlocks its P draw.
+{
+ const base=hubWith({credits:100,inventory:{junk:10}});
+ const pre=craftJunkCircuit(base,1,{circuitId:'craft-small-false',trueBoardRate:1,rng:()=>0});
+ assert(pre.ok);assert.equal(pre.record!.circuitBoard.cols,1);assert.equal(pre.hub.credits,94);assert.equal(pre.hub.inventory.junk,8);
+ assert.notEqual(pre.record!.circuitBoard.puzzleId, TRUE_ONE_BY_ONE_PUZZLE_ID);
+ assert.equal(resolveSizedTruePuzzle(pre.record!.circuitBoard.puzzleId),null);
+ const inferred=craftJunkCircuit({...base,perfectMaxSize:20,invadeRank:{current:5,highestCleared:4}},1,{circuitId:'no-inferred-clear',trueBoardRate:1,rng:()=>0});assert.notEqual(inferred.record!.circuitBoard.puzzleId,TRUE_ONE_BY_ONE_PUZZLE_ID);
+ for(const patch of [{credits:5},{inventory:{junk:1}}]){
+  const h={...base,...patch};const r=craftJunkCircuit(h,1,{circuitId:'short'});assert(!r.ok);assert.equal(r.hub,h);
+ }
+ let cleared={...base,firstInvadeClear:{boardSeed:1}};
+ for(let i=0;i<3;i++){
+  const r=craftJunkCircuit(cleared,1,{circuitId:'craft-P-'+i,trueBoardRate:1,rng:()=>0});assert(r.ok);
+  assert.equal(r.record!.circuitBoard.puzzleId,TRUE_ONE_BY_ONE_PUZZLE_ID);cleared=r.hub as typeof cleared;
+ }
+ assert.equal(cleared.circuits.filter(c=>c.circuitId.startsWith('craft-P-')).length,3);
+ assert.equal(deserializeHubSave(serializeHubSave(createHubSave(cleared)))!.hub.circuits.filter(c=>c.circuitId.startsWith('craft-P-')).length,3);
+}
+
+// The actual Restore handoff keeps 1x1 geometry and never rerolls a false board.
+{
+ let hub=hubWith({credits:100,inventory:{junk:10},fleet:[createOwnedMech("mech_gen1",{instanceId:"flow-wing",currentAmmo:0})]});
+ const falseRec=craftJunkCircuit(hub,1,{circuitId:'false-flow',trueBoardRate:1,rng:()=>0}).record!;
+ const session=bootstrapFromSearch(new URL(buildTradeToRestoreUrl(falseRec)).search,{injectRate:1});
+ assert.deepEqual(session.puzzle.clues,[[0]]);assert.equal(session.puzzle.cols,1);
+ const outcome=classifyPlayResult(session.puzzle.clues,[1,1,1,1],1,1);assert.equal(outcome.outcome,'bypass');
+ const falseRestored={...falseRec,restoreState:'bypass' as const,circuitBoard:{...falseRec.circuitBoard,edgeState:encodeEdgeState([1,1,1,1]),outcome:'bypass' as const}};
+ assert.equal(classifyCircuit(falseRestored).oneByOne,'false');
+ const once=recordFirstInvadeClear(hub,42);assert(once.discovered);assert(!recordFirstInvadeClear(once.hub,42).discovered);
+ hub=craftJunkCircuit(once.hub,1,{circuitId:'true-flow',trueBoardRate:1,rng:()=>0}).hub;
+ const p=hub.circuits.find(c=>c.circuitId==='true-flow')!;
+ const ps=bootstrapFromSearch(new URL(buildTradeToRestoreUrl(p)).search);assert.deepEqual(ps.puzzle.clues,[[4]]);
+ const done=classifyPlayResult(ps.puzzle.clues,[1,1,1,1],1,1);assert.equal(done.outcome,'fully_awakened');
+ hub=upsertCircuitIntoHub(hub,{circuitId:p.circuitId,circuitBoard:{...p.circuitBoard,edgeState:encodeEdgeState([1,1,1,1]),outcome:'fully_awakened',perfect:true,locked:true},outcome:'fully_awakened'});
+ assert.equal(classifyCircuit(hub.circuits.find(c=>c.circuitId===p.circuitId)!).oneByOne,'true');
+ const fleetCount=hub.fleet.length;hub=equipCircuit(hub,p.circuitId,hub.fleet[0]!.instanceId).hub;assert.equal(hub.circuits.find(c=>c.circuitId===p.circuitId)!.equippedTo,hub.fleet[0]!.instanceId);assert.equal(hub.fleet.length,fleetCount);
+ hub=deserializeHubSave(serializeHubSave(createHubSave(hub)))!.hub;assert.equal(hub.circuits.find(c=>c.circuitId===p.circuitId)!.equippedTo,hub.fleet[0]!.instanceId);
+ let state={...createInitialHangar(null),hub};const credits=state.hub.credits;state=sellCircuit(state,p.circuitId);assert(state.hub.credits>credits);assert(!state.hub.circuits.some(c=>c.circuitId===p.circuitId));
+ // Two junk cost 12c on the existing resource exchange; white 1x1 then sells for at least 25c.
+ const starting=100;const r=craftJunkCircuit(hubWith({credits:starting-12,inventory:{junk:2}}),1,{circuitId:'economy'});
+ const sold=sellCircuit({...createInitialHangar(null),hub:r.hub},'economy');assert.equal(sold.hub.credits-starting,7);
+ console.log('1x1: 2 junk/6c, pre-clear no P, repeat P draws, Restore, equip, sell, first-clear once, +7c economy PASS');
+}

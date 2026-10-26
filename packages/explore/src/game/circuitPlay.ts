@@ -1,3 +1,4 @@
+import { dropFriendlyWreckSupplies } from "./wreckSupplies";
 import { canBuildBarricade, startBarricade, barricadeWorking, interruptBarricade } from "./barricades";
 import { cancelShieldPickup, dropAllOwnedShields, shieldItem } from "./shieldOperations";
 import { activeStripping, interruptStripping, wreckWasStripped } from "./strippingRuntime";
@@ -1151,7 +1152,7 @@ export function circuitTryWeapon(world: World, from: Unit, target: Unit): boolea
     const incomingAngle = Math.atan2(from.pos.y - target.pos.y, from.pos.x - target.pos.x);
     if (!absorbShieldHit(world, target, incomingAngle, damage, "melee")) target.hp -= damage;
     noteDamageBreaksSuppress(world, target);
-    if (target.hp <= 0) { target.hp = 0; target.alive = false; }
+    if (target.hp <= 0) { if(target.kind!=="enemy")dropFriendlyWreckSupplies(world,target); target.hp = 0; target.alive = false; }
     from.cooldown = world.balance.fireCooldown;
     return true;
   }

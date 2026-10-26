@@ -1,0 +1,32 @@
+/** Public alpha lab: production bundles, real controls, isolated browser data. */
+const assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright-core');
+const project='/-explore-sort-trade-game/',repo=path.resolve(__dirname,'..');
+(async()=>{
+ const server=http.createServer((req,res)=>{let p=decodeURIComponent(new URL(req.url,'http://preview').pathname);if(!p.startsWith(project)){res.writeHead(404).end();return;}p=p.slice(project.length);let module='trade';for(const m of ['explore','sort','invade','restore'])if(p.startsWith(m+'/')){module=m;p=p.slice(m.length+1);break;}const root=path.join(repo,'packages',module,'dist'),file=path.resolve(root,p||'index.html');if(!file.startsWith(root+'/')||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'application/octet-stream');fs.createReadStream(file).pipe(res);});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const localBase=`http://127.0.0.1:${server.address().port}${project}`,base=`https://xyngwie.github.io${project}`;
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});const results=[];
+ try{
+  const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,acceptDownloads:true});
+  // Serve local production bundles at the production URL shape; no public network writes.
+  await ctx.route(base+'**',async route=>{const u=new URL(route.request().url());const response=await ctx.request.get(localBase+u.pathname.slice(project.length)+u.search);await route.fulfill({response});});
+  const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());
+  await p.goto(base+'?perfectRate=1');await p.locator('#btn-seed').click();
+  await p.evaluate(()=>{const s=JSON.parse(localStorage.getItem('wreckline.hubSave.v3'));s.hub.credits=100;s.hub.inventory.junk=0;delete s.hub.firstInvadeClear;localStorage.setItem('wreckline.hubSave.v3',JSON.stringify(s));});await p.reload();
+  const hub=()=>p.evaluate(()=>JSON.parse(localStorage.getItem('wreckline.hubSave.v3')).hub);
+  for(let i=0;i<2;i++)await p.locator('[data-four-resource-action=buy][data-four-resource-id=junk]').click();assert.equal((await hub()).credits,88);assert.equal((await hub()).inventory.junk,2);
+  await p.locator('#junk-circuit-craft-size').selectOption('1');assert((await p.locator('#junk-circuit-craft-size option:checked').innerText()).includes('ジャンク2・6c'));
+  await p.locator('[data-junk-circuit-craft]').click();await p.waitForFunction(()=>JSON.parse(localStorage.getItem('wreckline.hubSave.v3')).hub.credits===82);await p.locator('[data-junk-circuit-craft]').waitFor();
+  let h=await hub(),id=h.circuits[0].circuitId;assert.equal(h.circuits[0].circuitBoard.cols,1);assert.equal(h.circuits[0].restoreState,'unrestored');assert.equal(h.inventory.junk??0,0);
+  await p.locator(`[data-act=sell-circuit][data-id="${id}"]`).click();assert.equal((await hub()).credits,107);results.push({scenario:'real UI buys two junk for 12c, crafts 1x1 for 6c, sells white for 25c: +7c',status:'PASS'});
+  await p.evaluate(()=>{const s=JSON.parse(localStorage.getItem('wreckline.hubSave.v3'));s.hub.inventory.junk=20;s.hub.credits=1000;localStorage.setItem('wreckline.hubSave.v3',JSON.stringify(s));});await p.reload();await p.locator('#junk-circuit-craft-size').selectOption('1');await p.locator('[data-junk-circuit-craft]').click();await p.waitForFunction(()=>JSON.parse(localStorage.getItem('wreckline.hubSave.v3')).hub.credits===994);h=await hub();id=h.circuits[0].circuitId;
+  await p.locator(`[data-circuit-open="${id}"]`).click();await p.locator('[data-edge="0"]').waitFor().catch(async e=>{console.error(p.url(),(await p.locator('body').innerText()).slice(0,1800));await p.screenshot({path:'/tmp/onecell-restore-failure.png'});throw e;});assert.equal(await p.locator('[data-edge]').count(),4);
+  for(let i=0;i<4;i++)await p.locator(`[data-edge="${i}"]`).click();await p.locator('#btn-commit-bypass').click();await p.locator('#link-return-trade').click();await p.locator('[data-junk-circuit-craft]').waitFor();assert.equal((await hub()).circuits.find(c=>c.circuitId===id).restoreState,'bypass');results.push({scenario:'pre-clear forced rate cannot create P; false 1x1 real Restore handoff and Bypass return',status:'PASS'});
+  await p.evaluate(()=>{const s=JSON.parse(localStorage.getItem('wreckline.hubSave.v3'));s.hub.firstInvadeClear={boardSeed:42};localStorage.setItem('wreckline.hubSave.v3',JSON.stringify(s));});await p.goto(base+'?perfectRate=1');
+  const ids=[];for(let i=0;i<2;i++){await p.locator('#junk-circuit-craft-size').selectOption('1');const before=(await hub()).credits;await p.locator('[data-junk-circuit-craft]').click();await p.waitForFunction(n=>JSON.parse(localStorage.getItem('wreckline.hubSave.v3')).hub.credits===n,before-6);await p.locator('[data-junk-circuit-craft]').waitFor();ids.push((await hub()).circuits[0].circuitId);}
+  h=await hub();assert.notEqual(ids[0],ids[1]);assert.equal(h.circuits.find(c=>c.circuitId===ids[0]).circuitBoard.puzzleId,h.circuits.find(c=>c.circuitId===ids[1]).circuitBoard.puzzleId);
+  await p.locator(`[data-circuit-open="${ids[1]}"]`).click();for(let i=0;i<4;i++)await p.locator(`[data-edge="${i}"]`).click();await p.locator('#btn-commit-awaken').click();await p.locator('#link-return-trade').click();await p.locator('[data-junk-circuit-craft]').waitFor();await p.reload();assert.equal((await hub()).circuits.find(c=>c.circuitId===ids[1]).restoreState,'fully_awakened');
+  assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);await p.screenshot({path:'/tmp/one-cell-craft-mobile.png',fullPage:true});results.push({scenario:'after clear: two P1x1 created with controlled existing rate, actual Perfect Restore, reload and 390px layout',status:'PASS'});
+  console.log(JSON.stringify({viewport:[390,844],results,physicalDevice:'NOT_RUN',publicVersion:'NOT_RUN'},null,2));await ctx.close();
+ }finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
+})().catch(e=>{console.error(e);process.exitCode=1;});

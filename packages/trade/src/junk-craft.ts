@@ -3,7 +3,7 @@
  * §7.2 / STATUS item 14). Pure functions — the DOM lives in
  * junk-circuit-craft-ui.ts.
  *
- * - Size: square N×N, 2 ≤ N ≤ craftMaxSize(hub) = min(perfectMaxSize + 1, 20)
+ * - Size: square N×N, 1 ≤ N ≤ craftMaxSize(hub) = min(perfectMaxSize + 1, 20)
  *   (at least 2).
  * - Cost: circuitCraftJunkCost(N) junk (2N) + circuitCraftCreditCost(N) credits
  *   (round(4 × 1.5^N)) — shared single source (circuit-craft-cost.ts).
@@ -12,6 +12,9 @@
  */
 import {
   HUB_LIMITS,
+  TRUE_ONE_BY_ONE_PUZZLE_ID,
+  isFirstInvadeCleared,
+  makeFalseOneByOne,
   buildSizedTruePuzzleIdV2,
   circuitCraftCreditCost,
   circuitCraftJunkCost,
@@ -24,7 +27,7 @@ import {
   type HubSnapshot,
 } from "@estg/shared";
 
-export const JUNK_CRAFT_MIN_SIDE = 2;
+export const JUNK_CRAFT_MIN_SIDE = 1;
 
 /** Crafts costing at least this many credits ask for confirmation (8×8 = 103c and up). */
 export const JUNK_CRAFT_CONFIRM_MIN_CREDITS = 100;
@@ -55,7 +58,7 @@ export type JunkCraftOption = {
   side: number;
   junk: number;
   credits: number;
-  /** Within 2..craftMaxSize. */
+  /** Within 1..craftMaxSize. */
   withinCap: boolean;
   affordable: boolean;
   enabled: boolean;
@@ -76,7 +79,7 @@ function blockReason(
 }
 
 /**
- * Picker rows for 2..`upTo` (default: the cap, so sizes above the cap are not
+ * Picker rows for 1..`upTo` (default: the cap, so sizes above the cap are not
  * listed; pass 20 to list every size with over-cap rows disabled).
  */
 export function junkCraftOptions(
@@ -141,13 +144,14 @@ export function craftJunkCircuit(
   // Unrestored white board: no board.outcome (normalize keeps it empty).
   // A hit stamps a sized true-board id (same as Restore's injection), still unrestored.
   const isTrue =
+    (side !== 1 || isFirstInvadeCleared(hub)) &&
     opts.trueBoardRate != null &&
     opts.trueBoardRate > 0 &&
     rollPerfectCircuit(opts.rng ?? (() => Math.random()), { rate: opts.trueBoardRate });
   const board = createEmptyCircuitBoard(
     side,
     side,
-    isTrue ? buildSizedTruePuzzleIdV2(opts.circuitId, side, side) : opts.circuitId,
+    isTrue ? (side === 1 ? TRUE_ONE_BY_ONE_PUZZLE_ID : buildSizedTruePuzzleIdV2(opts.circuitId, side, side)) : (side === 1 ? makeFalseOneByOne(opts.circuitId).circuitBoard.puzzleId : opts.circuitId),
   );
   const record: HubCircuitRecord = {
     circuitId: opts.circuitId,

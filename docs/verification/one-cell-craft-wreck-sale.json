@@ -1,0 +1,107 @@
+{
+  "viewport": [
+    390,
+    844
+  ],
+  "results": [
+    {
+      "scenario": "real UI buys two junk for 12c, crafts 1x1 for 6c, sells white for 25c: +7c",
+      "status": "PASS"
+    },
+    {
+      "scenario": "pre-clear forced rate cannot create P; false 1x1 real Restore handoff and Bypass return",
+      "status": "PASS"
+    },
+    {
+      "scenario": "after clear: two P1x1 created with controlled existing rate, actual Perfect Restore, reload and 390px layout",
+      "status": "PASS"
+    }
+  ],
+  "physicalDevice": "NOT_RUN",
+  "publicVersion": "NOT_RUN",
+  "type": "IMPLEMENTATION_VERIFICATION",
+  "base": "9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab",
+  "scope": "CORRECTION: wreck sale, ammo/power and remaining-HP-equivalent armor drops; uncapped equipped-shield pickup, no hull healing",
+  "localBundles": "Production URL routes fulfilled from local HTTP bundles. Not a public-version test.",
+  "workspaceTests": "PASS",
+  "typecheck": "PASS",
+  "fiveBuilds": "PASS",
+  "wreckSale": "PASS",
+  "pendingQuestion": null,
+  "merge": "NOT_RUN",
+  "deploy": "NOT_TRIGGERED",
+  "armorDrop": "PASS",
+  "saleBrowser": {
+    "viewport": [
+      390,
+      844
+    ],
+    "results": [
+      {
+        "scenario": "390x844 real Japanese confirmation cancel/accept, +400 once, exact circuits retained, no supply grant, reload, live mech exclusion and no overflow",
+        "status": "PASS"
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  },
+  "oneCellRegression": {
+    "viewport": [
+      390,
+      844
+    ],
+    "results": [
+      {
+        "scenario": "real UI buys two junk for 12c, crafts 1x1 for 6c, sells white for 25c: +7c",
+        "status": "PASS"
+      },
+      {
+        "scenario": "pre-clear forced rate cannot create P; false 1x1 real Restore handoff and Bypass return",
+        "status": "PASS"
+      },
+      {
+        "scenario": "after clear: two P1x1 created with controlled existing rate, actual Perfect Restore, reload and 390px layout",
+        "status": "PASS"
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  },
+  "dropTests": [
+    "actual lethal projectile drops ammo/power and zeros corpse",
+    "empty-power transition drops ammo, repeated frames/checkpoint resume do not duplicate",
+    "living passenger dismount retains own ammo/power",
+    "actual pickup -> 15-second boarding return -> 400c sale/normal scrap without duplicate resources",
+    "legacy already-dead checkpoint resources remain unchanged",
+    "new recovered enemy wreck has zero battery through both direct and shared return paths"
+  ],
+  "oldDataPolicy": "No added resource erasure/refund/drop migration for old dead checkpoints or hangar wrecks. Explicit sale has no resource refund.",
+  "correctionBase": "e4ebe2062ed8d25fde41c92ed21923c73f7c46e6",
+  "armorCollection": "PASS: equipped shield20/50 +67 ->87/87; no hull healing; no equipped shield retains ground parts; fractional/reload/leader/wingman/enemy",
+  "armorDecision": {
+    "rule": "remaining HP, no maxHP/durability scaling",
+    "examples": {
+      "25/50": 25,
+      "67/120": 67
+    },
+    "integerParts": "existing compactYieldBag normalization"
+  },
+  "armorBrowser": {
+    "viewport": [
+      390,
+      844
+    ],
+    "results": [
+      {
+        "scenario": "390x844 real simulation HP67/120 power depletion, 67 ground armor, zero resources, persisted reload once",
+        "status": "PASS"
+      },
+      {
+        "scenario": "390x844 resume real simulation: shield20/50 +67 ->87/87, hull67 unchanged, checkpoint reload, parts consumed once",
+        "status": "PASS"
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  }
+}

@@ -47,6 +47,7 @@
     "src/barricades.selftest.ts",
     "src/debug/**/*.selftest.ts",
     "src/mapTargets.selftest.ts",
-    "src/learning.selftest.ts"
+    "src/learning.selftest.ts",
+    "src/wreckSupplies.selftest.ts"
   ]
 }

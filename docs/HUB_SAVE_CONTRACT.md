@@ -504,3 +504,17 @@ API・形式・修復条件・今回未接続のゲーム処理は[FIELD_OBJECT_
 資金・回路・盾・機体の編集は既存のHubSave/チェックポイント形へ保存する。HubSaveと出撃状態の保存に失敗したときは編集前へ戻し、通常領域で続行しない。HUBで明示的に回路を編集したときだけ、DEBUG_FIXTURE.metaのpendingCircuitSyncで次のExploreへ同期を依頼する。通常の再読込だけで現地の剥離/所有状態を上書きしない。
 
 ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・生のURLクエリを含めない。旧DEBUG_FIXTURE出力も対象キーと編集者名を制限する。通常の保存データ自体から署名を消す変更ではない。詳しくは [ALPHA_LAB.md](ALPHA_LAB.md) を参照。
+
+## 追加契約：1×1作成と格納庫残骸売却
+
+神宮直接指示のTASK_ASSIGNMENTが旧「P1×1は初回発見の一枚のみ」を更新する。保存版・トップレベルキーの追加はない。
+
+- 作成した1×1も通常の`circuits[]`に、固有circuitId、origin crafted、restoreState unrestored、equippedTo nullとして保存する。
+- 不完全は既存数字0の盤ID、P1×1は既存数字4の専用盤ID。同じ盤IDでも別circuitIdなら別個体として保存する。
+- 作成P1×1の解放はfirstInvadeClearだけを使う。初回確定付与の冪等性は既存firstInvadeClear契約を維持し、作成数とは独立する。
+- 売却はfleetの大破機のみ。400c加算・削除・装着回路の倉庫化・参照整理を一つのスナップショットで保存する。lostMechsは売らない。保存失敗は元状態を維持する。
+- 回路はequippedTo以外の性能・修復・署名等を保つ。売却後に出撃選択/前回出撃の機体IDが残らないよう整理する。
+- CORRECTIONにより売却時の携行資源返却は撤回。売却は400cのみで、弾薬/電力/装甲の追加付与はない。格納庫OwnedMechには探索中の積載物を保存しない。
+- 新しい味方大破は既存World.enemySuppliesのammo/power形式へ現地ドロップし、World.currentAmmoとmechBattery.activityを0にする。Unit.wreckSuppliesDroppedは新しい大破を処理した印としてcheckpointに保存し、再開時の重複を防ぐ。敵の既存deathHandled方式は変更しない。既に死んでいる旧checkpoint/格納庫残骸に対する追加の資源消去・返却移行はしない。明示的な売却では資源を追加付与しない。
+- 新規に回収した敵残骸も、直接の取得と帰還報告の両経路で携行弾薬0/活動量0として作る。既にfleetにある旧残骸を再初期化しない。
+- 装甲換算は神宮確定：活動量切れ直前の残HPと等価（HP67/120なら67個）。既存整数資源compactYieldBagで切り捨て、保存耐久/最大HPへ換算しない。SupplyDrop.kind="armor"、armor個数を既存World.enemySuppliesへ保存し、ammo/powerは0。接近回収は装備盾のHPに全量加算し、最大HPをmax(既存最大HP,加算後HP)とする（20/50+67→87/87）。本体HP・格納庫在庫を増やさず、装備盾がなければ消費しない。盾ID/所有先は維持し、通常のcheckpoint/盾保存へ反映する。

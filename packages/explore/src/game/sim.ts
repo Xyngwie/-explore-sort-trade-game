@@ -1,3 +1,4 @@
+import { dropFriendlyWreckSupplies } from "./wreckSupplies";
 import { barricadeWorking, interruptBarricade, tickBarricades, damageBarricade } from "./barricades";
 import { settleReturnedShields } from "./shieldReturn";
 import { tickShieldOperations } from "./shieldOperations";
@@ -252,6 +253,7 @@ export function updateBullets(world: World, dt: number): void {
         noteLearningForUnit(world, shooter, { kind: "hit", subject: "normal" });
       }
       if(t.hp<=0){
+        if(t.kind!=="enemy")dropFriendlyWreckSupplies(world,t);
         t.alive=false;
         reportBattle(world,friendly ? `${shooter?.name??b.ownerId} の誤射で ${t.name} 大破` : `${b.fromEnemy?"敵":shooter?.name??"分隊"} が ${t.name} を撃破`,t.pos);
         if(t.kind==="enemy"){
@@ -464,6 +466,9 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   if (world.phase === "sortie") ensureMechLearningWorld(world);
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") { tickStripping(world,0); return; }
+  const livingBeforeTick=friendlyUnits(world).filter(u=>u.alive);
+  for(const u of livingBeforeTick)delete u.wreckSuppliesDropped;
+  const dropNewDeaths=()=>{for(const u of livingBeforeTick)if(!u.alive)dropFriendlyWreckSupplies(world,u);};
   tickBarricades(world,0);
   if(input.move.x || input.move.y || input.clickMove || input.interact)interruptBarricade(world,world.leader.id);
   if(input.move.x || input.move.y){const carrier=captainRescuer(world);if(carrier)interruptBarricade(world,carrier.id);}
@@ -495,6 +500,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   }
   for(const u of [world.leader,...world.wingmen]){const at=workingPositions.get(u.id);if(at){u.pos=at;u.vel={x:0,y:0};}}
   expireEmptyBatteries(world);
+  dropNewDeaths();
   const timedOut = isOperationTimedOut(world);
   const waitingBoarding = timedOut && world.boarding != null;
   const leader = world.leader;
@@ -589,7 +595,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   }
   placeCarried(world);
   spawnRecall(world);
-  updateEnemies(world, dt); updateBullets(world, dt); handleEnemyDeaths(world); collectSupplies(world); revealVision(world);
+  updateEnemies(world, dt); updateBullets(world, dt); dropNewDeaths(); handleEnemyDeaths(world); collectSupplies(world); revealVision(world);
   // 項目4-1 C6: a destroyed carrier drops its containers on the spot (wrecks: circuitPlay placeCarried).
   for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);

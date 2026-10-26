@@ -1,4 +1,4 @@
-import { createOwnedMech } from "./mech-fleet";
+import { createOwnedMech, MECH_BATTERY_DEFAULT_CAPACITY } from "./mech-fleet";
 import {
   normalizeHubSnapshot,
   type HubCircuitRecord,
@@ -57,11 +57,11 @@ export function applyEnemyWrecks(
       ...next,
       fleet: [
         ...next.fleet,
-        createOwnedMech("mech_gen1", {
+        { ...createOwnedMech("mech_gen1", {
           instanceId: row.instanceId,
           durability: 0,
           currentAmmo: 0,
-        }),
+        }), battery: { capacity: MECH_BATTERY_DEFAULT_CAPACITY, activity: 0 } },
       ],
       circuits: [
         ...next.circuits,

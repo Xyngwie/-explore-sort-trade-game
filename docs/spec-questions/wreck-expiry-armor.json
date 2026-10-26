@@ -1,0 +1,54 @@
+{
+  "type": "SPEC_DECISION",
+  "sender": "codex",
+  "recipient": "owner",
+  "target": "PR #328 CORRECTION",
+  "id": "ARMOR_Q1",
+  "status": "APPROVED",
+  "question": "活動量切れの残りHPを、現地に落とす装甲パーツへどう換算するか",
+  "evidence": [
+    "game/outcome.ts: return wear is flat returnKind wear, downed durability is zero, no HP ratio conversion",
+    "trade/hangar.ts repairCost: missing durability armor, not combat HP",
+    "World.deployedDurability stores starting current durability; saved durabilityMax exists on OwnedMech",
+    "Unit.maxHp includes circuit adjustments and differs from saved durabilityMax"
+  ],
+  "example": {
+    "remainingHp": 25,
+    "circuitAdjustedMaxHp": 50,
+    "savedDurabilityMax": 100
+  },
+  "options": {
+    "A": {
+      "recommended": false,
+      "rule": "floor(remainingHp / circuitAdjustedMaxHp * savedDurabilityMax)",
+      "exampleParts": 50
+    },
+    "B": {
+      "rule": "floor(remainingHp)",
+      "exampleParts": 25
+    },
+    "C": {
+      "rule": "神宮が別の換算式と端数処理を指定"
+    }
+  },
+  "answer": {
+    "choice": "B",
+    "approvedBy": "神宮",
+    "rule": "残HPと等価。保存耐久や最大HP比へ換算しない。装甲パーツの整数化は既存compactYieldBagを使用。",
+    "examples": [
+      {
+        "hp": 25,
+        "maxHp": 50,
+        "armor": 25
+      },
+      {
+        "hp": 67,
+        "maxHp": 120,
+        "armor": 67
+      }
+    ],
+    "ownerQuote": "残HPと等価でよし。\nその例なら装甲パーツ25\nHP67/120から電源切れなら装甲パーツ67をドロップ。"
+  },
+  "blocked": null,
+  "legacy": "既存残骸の資源を消去/返却する移行を追加しない"
+}

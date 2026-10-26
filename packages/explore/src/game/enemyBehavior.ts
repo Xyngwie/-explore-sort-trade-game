@@ -1,4 +1,5 @@
 import { obstacleMove, updateCoverMovement } from "./coverMovement";
+import { equippedShield } from "./shields";
 import { showCombatFeedback } from "./combatFeedback";
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
 import { canSee } from "./vision";
@@ -26,7 +27,7 @@ export type EnemyState = {
   deathHandled: boolean;
   recovered: boolean;
 };
-export type SupplyDrop = { id: string; pos: Vec2; ammo: number; power: number; /** 10/17: split drops carry one resource each (absent = old combined drop). */ kind?: "ammo" | "power" };
+export type SupplyDrop = { id: string; pos: Vec2; ammo: number; power: number; /** 10/17: split drops carry one resource each (absent = old combined drop). */ kind?: "ammo" | "power" | "armor"; armor?: number };
 
 /** Half the gap between a split ammo drop and its power drop (world units). */
 export const SUPPLY_SPLIT_HALF_GAP = 6;
@@ -330,6 +331,7 @@ export function handleEnemyDeaths(world: World): void {
     world.enemySupplies.push(...splitSupplyDrops(`supply-${e.id}`, e.pos, s.ammo, s.activity));
     s.ammo = 0;
     s.activity = 0;
+    if(e.id in world.currentAmmo)world.currentAmmo[e.id]=0; // circuit-weapon mirror, not a second supply store
     for (let i = 0; i < s.cargo; i++)
       world.containers.push({
         id: `cargo-${e.id}-${i}`,
@@ -342,10 +344,20 @@ export function handleEnemyDeaths(world: World): void {
   }
 }
 export function collectSupplies(world: World): void {
-  for (const d of world.enemySupplies ?? [])
+  for (const d of world.enemySupplies ?? []) {
     for (const u of [world.leader, ...world.wingmen, ...world.enemies]) {
       if (!u.alive || dist(u.pos, d.pos) > world.balance.interactRadius)
         continue;
+      if (d.kind === "armor") {
+        const entry = equippedShield(world, u), amount = d.armor ?? 0;
+        if (!entry || !Number.isFinite(amount) || amount <= 0) continue;
+        const hp = entry.shield.hp + amount;
+        if (!Number.isFinite(hp)) continue;
+        entry.shield.hp = hp;
+        entry.shield.maxHp = Math.max(entry.shield.maxHp, hp);
+        d.armor = 0;
+        continue;
+      }
       if (u.kind === "enemy") {
         const s = u.enemyState!;
         const a = Math.min(d.ammo, s.ammoCap - s.ammo),
@@ -374,8 +386,9 @@ export function collectSupplies(world: World): void {
         }
       }
     }
+  }
   world.enemySupplies = (world.enemySupplies ?? []).filter(
-    (d) => d.ammo > 0.00001 || d.power > 0.00001,
+    (d) => d.ammo > 0.00001 || d.power > 0.00001 || (d.armor ?? 0) > 0,
   );
 }
 /** Schedule once at first recall, not each frame or after reload. */

@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "selftest": "tsx src/hangar.selftest.ts && tsx src/junk-craft.selftest.ts && tsx src/legacy-retire.selftest.ts && tsx src/circuit-purchase.selftest.ts && tsx src/mech-power.selftest.ts && tsx src/res-signs.selftest.ts",
+    "selftest": "tsx src/hangar.selftest.ts && tsx src/junk-craft.selftest.ts && tsx src/legacy-retire.selftest.ts && tsx src/circuit-purchase.selftest.ts && tsx src/mech-power.selftest.ts && tsx src/res-signs.selftest.ts && tsx src/wreck-sale.selftest.ts",
     "test": "npm run typecheck && npm run selftest"
   },
   "dependencies": {

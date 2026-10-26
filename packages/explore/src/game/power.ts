@@ -1,3 +1,4 @@
+import { dropFriendlyWreckSupplies } from "./wreckSupplies";
 /** Movement costs one effective activity point per second, independent of load. */
 import { effectiveBatteryCapacity, placeCarried } from "./circuitPlay";
 import { wreckCarrierId } from "./carry";
@@ -34,7 +35,9 @@ export function expireEmptyBatteries(world: World): void {
   for (const u of [world.leader, ...world.wingmen]) {
     const b = u.instanceId ? world.mechBattery[u.instanceId] : null;
     if (!u.alive || !b || b.activity > 1e-8) continue;
-    b.activity = 0; u.alive = false; u.hp = 0;
+    b.activity = 0;
+    dropFriendlyWreckSupplies(world,u,u.hp);
+    u.alive = false; u.hp = 0;
     u.vel = { x: 0, y: 0 }; u.moveTarget = null; u.salvageId = null; u.salvageT = 0;
     pushLog(world, `${u.name}：活動量が尽きて残骸化。`);
     changed = true;
