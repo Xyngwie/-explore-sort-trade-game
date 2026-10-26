@@ -11,6 +11,7 @@ export const COLORS = {
   wreck: "#8a9099", // grey
   ownWreckOutline: "#7eb6ff",
   ammoDrop: "#f85149", // ammo = red, same as SORT's ammo border (神宮 10/17)
+  armorDrop: "#58a6ff", // same established blue as SORT armor
   powerDrop: "#d4a72c", // power = yellow, same as SORT's power border (神宮 10/17; SORT armor is blue)
   circuitDrop: "#e6e9ee", // whitish
   container: "#a39a8c", // warm grey (10/17): apart from the cool wreck grey and the whitish circuit square

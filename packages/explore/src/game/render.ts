@@ -310,12 +310,13 @@ export function renderWorld(
   const liveSupplyIds = new Set((world.enemySupplies ?? []).map((d) => d.id));
   for (const g of Object.values(squadIntel(world).ghosts)) {
     if (g.kind !== "supply" || liveSupplyIds.has(g.id) || squadSees(world, g.pos)) continue;
-    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx, g.id.endsWith('-power') ? COLORS.powerDrop : COLORS.ammoDrop); ctx.restore();
+    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx, g.id.endsWith('-armor') ? COLORS.armorDrop : g.id.endsWith('-power') ? COLORS.powerDrop : COLORS.ammoDrop); ctx.restore();
   }
   for (const d of world.enemySupplies ?? []) {
     const v = seenOrGhost("supply", d.id, d.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, d.kind === 'power' ? COLORS.powerDrop : COLORS.ammoDrop);
+    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, d.kind === 'armor' ? COLORS.armorDrop : d.kind === 'power' ? COLORS.powerDrop : COLORS.ammoDrop);
+    if(d.kind === "armor") { ctx.fillStyle=COLORS.armorDrop;ctx.font="11px sans-serif";ctx.fillText(`装甲パーツ ${d.armor??0}`,tx(v.pos.x),ty(v.pos.y)-10); }
     ctx.restore();
   }
   // Same visible groups drive map labels and the pickup candidate panel.

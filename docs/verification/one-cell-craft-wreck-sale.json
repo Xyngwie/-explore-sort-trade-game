@@ -21,16 +21,16 @@
   "publicVersion": "NOT_RUN",
   "type": "PARTIAL_VERIFICATION",
   "base": "9e558aa6c6de6c2972ac8f5d80a56d5a3dc3e2ab",
-  "scope": "CORRECTION: wreck sale and new death ammo/power drops complete; armor conversion pending",
+  "scope": "CORRECTION: wreck sale, ammo/power and remaining-HP-equivalent ground armor implemented; armor collection policy pending",
   "localBundles": "Production URL routes fulfilled from local HTTP bundles. Not a public-version test.",
   "workspaceTests": "PASS",
   "typecheck": "PASS",
   "fiveBuilds": "PASS",
   "wreckSale": "PASS",
-  "pendingQuestion": "ARMOR_Q1: HP-to-armor conversion and rounding, docs/spec-questions/wreck-expiry-armor.json",
+  "pendingQuestion": "ARMOR_Q2: collection destination/effect, docs/spec-questions/wreck-armor-pickup.json",
   "merge": "NOT_RUN",
   "deploy": "NOT_TRIGGERED",
-  "armorDrop": "NOT_RUN (not implemented pending owner decision)",
+  "armorDrop": "PASS",
   "saleBrowser": {
     "viewport": [
       390,
@@ -76,5 +76,28 @@
     "new recovered enemy wreck has zero battery through both direct and shared return paths"
   ],
   "oldDataPolicy": "No added resource erasure/refund/drop migration for old dead checkpoints or hangar wrecks. Explicit sale has no resource refund.",
-  "correctionBase": "e4ebe2062ed8d25fde41c92ed21923c73f7c46e6"
+  "correctionBase": "e4ebe2062ed8d25fde41c92ed21923c73f7c46e6",
+  "armorCollection": "NOT_RUN (owner decision pending)",
+  "armorDecision": {
+    "rule": "remaining HP, no maxHP/durability scaling",
+    "examples": {
+      "25/50": 25,
+      "67/120": 67
+    },
+    "integerParts": "existing compactYieldBag normalization"
+  },
+  "armorBrowser": {
+    "viewport": [
+      390,
+      844
+    ],
+    "results": [
+      {
+        "scenario": "390x844 real simulation HP67/120 power depletion, 67 ground armor, zero resources, persisted reload once",
+        "status": "PASS"
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  }
 }

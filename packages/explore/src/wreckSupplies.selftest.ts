@@ -46,3 +46,14 @@ assert(requestExtract(w));for(let i=0;i<151&&w.phase==='sortie';i++)tickWorld(w,
 const returned=applyExploreReturnToHub(base,exploreReturnPayload(w)!).hub;assert.equal(returned.fleet.find(m=>m.instanceId==='b')!.currentAmmo,0);assert.equal(returned.fleet.find(m=>m.instanceId==='b')!.battery.activity,0);
 const values=new Map<string,string>(),store={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v),removeItem:(k:string)=>values.delete(k)};assert(saveHubSaveToLocalStorage(returned,store));const state=createInitialHangar(store),sold=sellHangarWreck(state,'b',store);assert.deepEqual(sold.hub.inventory,returned.inventory);assert.equal(sold.hub.fleet[0]!.currentAmmo,7);assert.equal(sold.hub.fleet[0]!.battery.activity,200.5);
 const scrapped=scrapMech(state,'b');assert.equal(scrapped.hub.inventory.ammo??0,returned.inventory.ammo??0);assert.equal(scrapped.hub.inventory.power??0,returned.inventory.power??0,'ordinary scrap cannot return already-dropped power');}
+
+// Owner: remaining HP itself, independent of max HP and saved durability.
+for(const [hp,maxHp,expected] of [[25,50,25],[67,120,67],[17.25,40,17]] as const){
+ const w=world(),u=w.wingmen[0]!;u.hp=hp;u.maxHp=maxHp;w.deployedDurability.b=20;w.mechBattery.b!.activity=0;
+ expireEmptyBatteries(w);const armor=w.enemySupplies!.filter(d=>d.kind==='armor');assert.equal(armor.length,1);assert.equal(armor[0]!.armor,expected);assert.deepEqual(armor[0]!.pos,u.pos);assert.equal(u.hp,0);
+ const reload=worldFromCheckpointBody(snapshotSortieWorld(w))!;expireEmptyBatteries(reload);collectSupplies(reload);assert.equal(reload.enemySupplies!.filter(d=>d.kind==='armor').length,1);assert.equal(reload.enemySupplies!.find(d=>d.kind==='armor')!.armor,expected);
+}
+{const w=world(),u=w.wingmen[0]!;u.hp=0;dropFriendlyWreckSupplies(w,u);assert(!w.enemySupplies!.some(d=>d.kind==='armor'),'ordinary combat adds no armor');}
+console.log('Empty battery armor: HP25->25, HP67/120->67, existing integer parts rounding, position, frame/checkpoint once; combat none PASS');
+
+{const w=world(),passenger=w.wingmen[0]!;passenger.pos={...w.leader.pos};assert.equal(startWreckPickup(w,w.leader,passenger.id),'started');stepCircuitPlay(w,8);passenger.hp=67;passenger.maxHp=120;w.mechBattery.b!.activity=0;const at={...passenger.pos};expireEmptyBatteries(w);assert(!passenger.alive);assert(w.leader.alive);const d=w.enemySupplies!.find(d=>d.kind==='armor')!;assert.equal(d.armor,67);assert.deepEqual(d.pos,at);const resumed=worldFromCheckpointBody(snapshotSortieWorld(w))!;expireEmptyBatteries(resumed);assert.equal(resumed.enemySupplies!.filter(d=>d.kind==='armor').length,1,'carried depleted passenger does not drop twice after resume');}
