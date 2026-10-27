@@ -7,7 +7,7 @@
 - What: codex/invade-recon-input。300ms予告・マス境界パン・拠点視点・偵察アイコン・Ctrlクリック
 - Why: TASK_ASSIGNMENT「Invade操作改善：300ms長押し予告・即時パン・偵察アイコン」
 - Scope: Invade入力/表示/文書/検証。ゲーム条件・保存形式・他モジュールは変更しない。Draft、マージ/デプロイ禁止
-- Status: 起点main 16ab1fdfaafd7808aafe1fe0f412ef56549849b6（公開デプロイ成功確認）。300ms予告/開始マス境界パン/拠点視点/Ctrl左/白スコープ・赤三角を実装。全workspaceテスト・Invade型検査/selftest/ビルドPASS。1280x900・390x844 Chromium入力列PASS、最終表示回帰を確認中。物理実機/公開版NOT_RUN。Draft、未マージ・未デプロイ
+- Status: 起点main 16ab1fdfaafd7808aafe1fe0f412ef56549849b6（公開デプロイ成功確認）。300ms予告/開始マス境界パン/拠点視点/Ctrl左/白スコープ・赤三角を実装。全workspaceテスト・Invade型検査/selftest/ビルドPASS。1280x900・390x844 Chromium入力列と最終表示/強制戦闘ロック中HQ復帰の回帰PASS。Draft #330、CIは最終HEADで確認。物理実機/公開版NOT_RUN。Draft、未マージ・未デプロイ
 
 ## Codex / 1×1作成と格納庫残骸売却（2026-10-25）
 - Who: Codex / 実装担当（神宮直接指示、Automationsは起動しない）
