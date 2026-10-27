@@ -39,22 +39,61 @@ const fixtures=JSON.parse(fs.readFileSync('/tmp/invade-input-fixtures.json'));
    for(const reversed of [false,true]){
     await load('plain');if(reversed){await p.locator('#btn-touch-mode').click();await p.locator('#board-viewport').scrollIntoViewIfNeeded();}
     q=await point(fixtures.safe);
-    const flag=async()=>{await touch('touchStart',[q]);if(reversed){await p.waitForTimeout(550);assert(!await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));}await touch('touchEnd',[]);await p.waitForTimeout(320);};
+    const flag=async()=>{await touch('touchStart',[q]);if(reversed){await p.waitForTimeout(350);assert.equal(await cell(fixtures.safe).getAttribute('data-hold-preview'),'mark');if(mobile)await p.screenshot({path:'/tmp/invade-preview-mark.png'});assert(!await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));}await touch('touchEnd',[]);await p.waitForTimeout(320);};
     await flag();assert(await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));
+    if(reversed){q=await point(fixtures.safe);await touch('touchStart',[q]);await p.waitForTimeout(350);assert.equal(await cell(fixtures.safe).getAttribute('data-hold-preview'),'unmark');await touch('touchCancel',[]);assert.equal(await cell(fixtures.safe).locator('.scope-reticle').evaluate(e=>getComputedStyle(e).opacity),'1');assert(await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));}
     // Same assignment clears the flag. Long hold must not act at its threshold.
-    q=await point(fixtures.safe);await touch('touchStart',[q]);if(reversed)await p.waitForTimeout(550);await touch('touchEnd',[]);await p.waitForTimeout(320);assert(!await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));
-    q=await point(fixtures.safe);const before=await snapshot();await touch('touchStart',[q]);if(!reversed){await p.waitForTimeout(550);assert.equal(await snapshot(),before);}await touch('touchEnd',[]);await p.waitForTimeout(320);assert(await cell(fixtures.safe).evaluate(e=>e.classList.contains('open')));
+    q=await point(fixtures.safe);await touch('touchStart',[q]);if(reversed){await p.waitForTimeout(350);assert.equal(await cell(fixtures.safe).getAttribute('data-hold-preview'),'unmark');assert.equal(await cell(fixtures.safe).locator('.scope-reticle').evaluate(e=>getComputedStyle(e).opacity),'0.5');}await touch('touchEnd',[]);await p.waitForTimeout(320);assert(!await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));
+    q=await point(fixtures.safe);const before=await snapshot();await touch('touchStart',[q]);if(!reversed){await p.waitForTimeout(350);assert.equal(await cell(fixtures.safe).getAttribute('data-hold-preview'),'open');if(mobile)await p.screenshot({path:'/tmp/invade-preview-open.png'});assert.equal(await cell(fixtures.safe).innerText(),'');assert.equal(await snapshot(),before);}await touch('touchEnd',[]);await p.waitForTimeout(320);assert(await cell(fixtures.safe).evaluate(e=>e.classList.contains('open')));
    }
    for(const reversed of [false,true])for(const kind of ['few','many','correct','wrong']){
     await load(kind);if(reversed){await p.locator('#btn-touch-mode').click();await p.locator('#board-viewport').scrollIntoViewIfNeeded();}q=await point(fixtures.center);const before=await snapshot();await touch('touchStart',[q]);await touch('touchEnd',[]);await p.waitForTimeout(320);if(kind==='few'||kind==='many')assert.equal(await snapshot(),before);if(kind==='correct'){assert.notEqual(await snapshot(),before);assert(!(await state()).hitMine);assert.deepEqual((await state()).flagged,JSON.parse(fixtures[kind]).hub.frontProgress.flagged);}if(kind==='wrong')assert((await state()).hitMine);
    }
-   await load('plain');q=await point(fixtures.safe);const stable=await snapshot();await touch('touchStart',[q]);await p.waitForTimeout(550);assert.equal(await snapshot(),stable);await touch('touchMove',[{x:q.x+30,y:q.y+20}]);await touch('touchEnd',[]);await p.waitForTimeout(320);assert.equal(await snapshot(),stable);assert.notEqual(await p.locator('#board-viewport').getAttribute('data-pan-x'),'0');
+   await load('plain');q=await point(fixtures.safe);const stable=await snapshot();await touch('touchStart',[q]);await p.waitForTimeout(550);assert.equal(await snapshot(),stable);await touch('touchMove',[{x:q.x+30,y:q.y+20}]);await touch('touchMove',[{x:q.x+45,y:q.y+30}]);await touch('touchEnd',[]);await p.waitForTimeout(320);assert.equal(await snapshot(),stable);assert.notEqual(await p.locator('#board-viewport').getAttribute('data-pan-x'),'0');
    q=await point(fixtures.safe);await touch('touchStart',[q]);await touch('touchCancel',[]);await p.waitForTimeout(550);assert.equal(await snapshot(),stable);
    // Pinch begins after a contact was held: it must cancel its pending hold release too.
    await load('plain');q=await point(fixtures.safe);const clean=await snapshot();await touch('touchStart',[{...q,id:1}]);await p.waitForTimeout(500);await touch('touchStart',[{...q,id:1},{x:q.x+25,y:q.y,id:2}]);await touch('touchMove',[{x:q.x-15,y:q.y,id:1},{x:q.x+50,y:q.y,id:2}]);await touch('touchEnd',[]);await p.waitForTimeout(320);assert.equal(await snapshot(),clean);assert(Number(await p.locator('#board-viewport').getAttribute('data-scale'))>1);
    await load('plain');q=await point(fixtures.safe);const noTap=await snapshot();for(let n=0;n<2;n++){await touch('touchStart',[q]);await touch('touchEnd',[]);await p.waitForTimeout(60);}await p.waitForTimeout(320);assert.equal(await snapshot(),noTap);assert.equal(Number(await p.locator('#board-viewport').getAttribute('data-scale')),2);
    // Hit the original cell at its new drawn position after zoom.
    q=await point(fixtures.safe);await touch('touchStart',[q]);await touch('touchEnd',[]);assert(await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));
+
+   // Ctrl-left and its compatibility events never open or double-toggle.
+   await load('plain');await cell(fixtures.safe).click({modifiers:['Control']});assert(await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));assert(!await cell(fixtures.safe).evaluate(e=>e.classList.contains('open')));
+   const ctrlState=await snapshot();await cell(fixtures.safe).evaluate(e=>{for(const name of ['contextmenu','click'])e.dispatchEvent(new MouseEvent(name,{ctrlKey:true,bubbles:true,cancelable:true}));});assert.equal(await snapshot(),ctrlState);
+   await cell(fixtures.safe).click({modifiers:['Control']});assert(!await cell(fixtures.safe).evaluate(e=>e.classList.contains('flagged')));
+   // Captured cell rectangle at a large zoom: >8px jitter still holds, outside pans immediately.
+   for(const scaleDelta of [-300,0,500])for(const held of [false,true]){
+    await load('plain');q=await point(fixtures.safe);await p.mouse.move(q.x,q.y);await p.mouse.wheel(0,-scaleDelta);await p.waitForTimeout(40);
+    q=await point(fixtures.safe);const before=await snapshot(),rect=await cell(fixtures.safe).boundingBox();
+    await touch('touchStart',[q]);if(held)await p.waitForTimeout(350);
+    const panBefore=await p.locator('#board-viewport').getAttribute('data-pan-x');
+    await touch('touchMove',[{x:rect.x+rect.width+2,y:q.y}]);assert.equal(await p.locator('#board-viewport').getAttribute('data-pan-x'),panBefore,'boundary crossing rebases without jump');
+    assert.equal(await p.locator('[data-hold-preview]').count(),0);await touch('touchMove',[{x:rect.x+rect.width+16,y:q.y+5}]);
+    await touch('touchMove',[q]);await touch('touchEnd',[]);await p.waitForTimeout(310);assert.equal(await snapshot(),before,'pan out and back must never act');
+   }
+   await load('plain');q=await point(fixtures.safe);await p.mouse.move(q.x,q.y);await p.mouse.wheel(0,-700);await p.waitForTimeout(50);q=await point(fixtures.safe);const jitterBefore=await snapshot();
+   await touch('touchStart',[q]);await touch('touchMove',[{x:q.x+9,y:q.y}]);await p.waitForTimeout(350);assert.equal(await cell(fixtures.safe).getAttribute('data-hold-preview'),'open');assert.equal(await snapshot(),jitterBefore);await touch('touchEnd',[]);assert(await cell(fixtures.safe).evaluate(e=>e.classList.contains('open')));
+   // No hidden information is leaked: a closed enemy produces the same empty flip preview.
+   await load('plain');q=await point(fixtures.mine);await touch('touchStart',[q]);await p.waitForTimeout(350);assert.equal(await cell(fixtures.mine).getAttribute('data-hold-preview'),'open');assert.equal(await cell(fixtures.mine).innerText(),'');assert.equal(await cell(fixtures.mine).locator('.enemy-icon').count(),0);await touch('touchCancel',[]);assert.equal(await p.locator('[data-hold-preview]').count(),0);
+   for(const cancel of ['blur','pointercancel','home','pinch']){
+    await load('plain');await p.locator('#btn-touch-mode').click();await p.locator('#board-viewport').scrollIntoViewIfNeeded();q=await point(fixtures.safe);const before=await snapshot();
+    await touch('touchStart',[q]);await p.waitForTimeout(350);assert.equal(await cell(fixtures.safe).getAttribute('data-hold-preview'),'mark');
+    if(cancel==='blur')await p.evaluate(()=>window.dispatchEvent(new Event('blur')));
+    else if(cancel==='pointercancel')await touch('touchCancel',[]);
+    else if(cancel==='home')await p.locator('#btn-home').evaluate(e=>e.click());
+    else await touch('touchStart',[{...q,id:0},{x:q.x+30,y:q.y,id:1}]);
+    assert.equal(await p.locator('[data-hold-preview]').count(),0);if(cancel!=='pointercancel')await touch('touchEnd',[]);await p.waitForTimeout(310);assert.equal(await snapshot(),before);
+   }
+   // Number contacts must also cancel chord on an immediate pan.
+   await load('correct');q=await point(fixtures.center);const numberBefore=await snapshot();await touch('touchStart',[q]);await touch('touchMove',[{x:q.x+30,y:q.y}]);await touch('touchMove',[{x:q.x+50,y:q.y}]);await touch('touchMove',[q]);await touch('touchEnd',[]);await p.waitForTimeout(310);assert.equal(await snapshot(),numberBefore);
+   // Home resets only view, centers HQ, and keeps progress and selection intact.
+   const homeBefore=await state();await p.mouse.move(q.x,q.y);await p.mouse.down({button:'middle'});await p.mouse.move(q.x+3000,q.y+3000);await p.mouse.up({button:'middle'});
+   const visible=await p.locator('.front-ms').boundingBox(),vp=await p.locator('#board-viewport').boundingBox();assert(visible.x<vp.x+vp.width&&visible.y<vp.y+vp.height&&visible.x+visible.width>vp.x&&visible.y+visible.height>vp.y);
+   await p.locator('#btn-home').click();await p.locator('#board-viewport').scrollIntoViewIfNeeded();assert.equal(Number(await p.locator('#board-viewport').getAttribute('data-scale')),1);assert.deepEqual(await state(),homeBefore);
+   const hq=await cell({sx:0,sy:0}).boundingBox(),view=await p.locator('#board-viewport').boundingBox();assert(Math.abs(hq.x+hq.width/2-view.x-view.width/2)<2);assert(Math.abs(hq.y+hq.height/2-view.y-view.height/2)<2);
+   await load('wrong');await mouseChord(['left','right']);const forcedBefore=await snapshot();await p.locator('#btn-home').click();assert.equal(await snapshot(),forcedBefore);assert(await p.locator('.cell.open.mine .enemy-icon').count()>0);assert.equal(await p.locator('.cell.closed .enemy-icon').count(),0);
+   assert((await p.locator('.flag-ops-guide').innerText()).includes('300ms'));assert(!(await p.locator('body').innerText()).includes('旗を立て'));
+   results.push({viewport:mobile?'390x844':'1280x900',scenario:'300ms open/mark/unmark previews; no hidden enemy; immediate boundary pan, jitter/zoom, blur/cancel/home/pinch cleanup; Ctrl-left; HQ center and immutable progress; recon symbols',status:'PASS'});
    await p.reload();assert.equal(await p.locator('#btn-touch-mode').getAttribute('aria-pressed'),'false');assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);await p.screenshot({path:`/tmp/invade-input-${mobile?'mobile':'desktop'}.png`,fullPage:true});
    results.push({viewport:mobile?'390x844':'1280x900',scenario:'native touch default/reversed set/unset/open, invariant number chord, release-only hold, hold-pan, cancel, pinch, double tap suppression, transformed hit, reload default',status:'PASS'});await ctx.close();
   }

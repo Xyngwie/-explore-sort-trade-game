@@ -1,0 +1,79 @@
+{
+  "type": "IMPLEMENTATION_VERIFICATION",
+  "feature": "invade-recon-input",
+  "base": "16ab1fdfaafd7808aafe1fe0f412ef56549849b6",
+  "authorization": "神宮直接指示 TASK_ASSIGNMENT 300ms長押し予告・即時パン・偵察アイコン",
+  "thresholds": {
+    "holdMs": 300,
+    "touchPanDeadZone": "captured transformed start-cell rectangle; rebase on crossing sample",
+    "mouseMovePx": 8,
+    "doubleTapMs": 280,
+    "doubleTapPx": 24,
+    "initialScale": 1,
+    "minScale": 0.65,
+    "maxScale": 4,
+    "doubleTapBelow": 1.6,
+    "doubleTapFactor": 2,
+    "wheelSensitivity": 0.0015,
+    "visibleMarginPx": 40
+  },
+  "tests": {
+    "workspace": "PASS",
+    "invadeTypecheck": "PASS",
+    "invadeSelftest": "PASS",
+    "invadeBuild": "PASS",
+    "exact299vs300": "PASS (controlled clock, preview only at300; no action until release)"
+  },
+  "browser": {
+    "method": "local production bundle, seeded persisted front board, actual mouse and CDP touch input",
+    "results": [
+      {
+        "viewport": "1280x900",
+        "scenario": "mouse left/right/long hold, both chord orders and flag counts/wrong flag forced combat, wheel/middle pan transformed hit",
+        "status": "PASS"
+      },
+      {
+        "viewport": "1280x900",
+        "scenario": "300ms open/mark/unmark previews; no hidden enemy; immediate boundary pan, jitter/zoom, blur/cancel/home/pinch cleanup; Ctrl-left; HQ center and immutable progress; recon symbols",
+        "status": "PASS"
+      },
+      {
+        "viewport": "1280x900",
+        "scenario": "native touch default/reversed set/unset/open, invariant number chord, release-only hold, hold-pan, cancel, pinch, double tap suppression, transformed hit, reload default",
+        "status": "PASS"
+      },
+      {
+        "viewport": "390x844",
+        "scenario": "mouse left/right/long hold, both chord orders and flag counts/wrong flag forced combat, wheel/middle pan transformed hit",
+        "status": "PASS"
+      },
+      {
+        "viewport": "390x844",
+        "scenario": "300ms open/mark/unmark previews; no hidden enemy; immediate boundary pan, jitter/zoom, blur/cancel/home/pinch cleanup; Ctrl-left; HQ center and immutable progress; recon symbols",
+        "status": "PASS"
+      },
+      {
+        "viewport": "390x844",
+        "scenario": "native touch default/reversed set/unset/open, invariant number chord, release-only hold, hold-pan, cancel, pinch, double tap suppression, transformed hit, reload default",
+        "status": "PASS"
+      }
+    ],
+    "physicalSmartphone": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  },
+  "physicalSmartphone": "NOT_RUN",
+  "publicVersion": "NOT_RUN",
+  "merge": "NOT_RUN",
+  "deploy": "NOT_TRIGGERED",
+  "knownLimitations": [
+    "No physical smartphone validation",
+    "Local production bundles and persisted fixtures; not public-site validation",
+    "Touch mode and viewport intentionally not persisted"
+  ],
+  "extraBrowser": {
+    "forcedCombatHome": "PASS: view reset without changing progress",
+    "previewScreenshots": "Inspected local 390x844 screenshots: open flip has no hidden contents; mark preview is translucent white reticle",
+    "focusLoss": "PASS: DOM blur cancellation",
+    "visibilityHandler": "Code implemented; actual tab background NOT_RUN"
+  }
+}
