@@ -49,6 +49,7 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .front-ms { gap: 1px; }
 .cell {
+  position: relative;
   aspect-ratio: 1;
   border-radius: 2px;
   border: 1px solid #2a313c;
@@ -393,3 +394,22 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
 #board-viewport { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; margin-top: .75rem; touch-action: none; overscroll-behavior: contain; user-select: none; background: #10141b; }
 #board-viewport .front-ms { width: 100%; margin: 0; transform-origin: 0 0; }
 #board-viewport .cell { touch-action: none; }
+
+/* Recon symbols and release-only hold previews. Children never change the cell box. */
+.scope-reticle { display:inline-block; position:relative; width:12px; height:12px; border:1px solid white; border-radius:50%; box-sizing:border-box; color:white; flex-shrink:0; }
+.scope-reticle::before,.scope-reticle::after { content:""; position:absolute; background:white; }
+.scope-reticle::before { width:16px; height:1px; left:-3px; top:4.5px; }
+.scope-reticle::after { height:16px; width:1px; top:-3px; left:4.5px; }
+.cell > .scope-reticle { display:none; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none; }
+.cell.flagged > .scope-reticle,.cell[data-hold-preview="mark"] > .scope-reticle { display:block; }
+.cell[data-hold-preview="mark"] > .scope-reticle,.cell[data-hold-preview="unmark"] > .scope-reticle { opacity:.5; }
+.enemy-icon { display:inline-block; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:11px solid #f85149; }
+.resolved-label { font-size:.45rem; margin-left:1px; }
+.cell-face { display:inline-block; pointer-events:none; }
+.cell[data-hold-preview="open"] .cell-face { animation:recon-panel-turn .3s ease-out forwards; }
+.cell[data-hold-preview="open"] { animation:recon-panel-light .3s ease-out forwards; }
+@keyframes recon-panel-turn { from {transform:perspective(80px) rotateY(0);} to {transform:perspective(80px) rotateY(180deg);} }
+@keyframes recon-panel-light { from {filter:brightness(1);} to {filter:brightness(1.55);} }
+.cell.flagged { color:white; }
+
+.cell.closed > .cell-face { position:absolute; inset:1px; background:inherit; border:1px solid rgba(255,255,255,.08); box-sizing:border-box; }
