@@ -1,3 +1,4 @@
+import {setPlayLogOperation} from '@estg/shared';
 import { bindBoardInput, type BoardAction, type Coord } from "./boardInput";
 import { chordCells } from "./chord";
 import { mountShieldDebugConsole } from "@estg/shared";
@@ -697,6 +698,7 @@ function render(): void {
 }
 
 function applyBoardAction(action:BoardAction,{sx,sy}:Coord):void {
+  setPlayLogOperation(`invade.${action}`,{sx,sy});
   const cell=getCell(board,sx,sy);if(!cell||cell.blocked)return;
   if(forcedLockActive()){
     if(cell.open&&cell.mine){selected={sx,sy};skipped=false;saveFrontProgress();render();}

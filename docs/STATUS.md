@@ -2,6 +2,13 @@
 
 作業を再開する側はまずこのファイル、開いている PR、`main` の最新デプロイ結果を読む。作業を止める側は止まる前にこのファイルを更新する。運用ルールは [`ORCHESTRATION.md`](./ORCHESTRATION.md) を参照。
 
+## Codex / 復元可能プレイログ（2026-10-27）
+- Who: Codex / 神宮直接指示、Automationsは起動しない
+- What: codex/reconstructable-play-log。新規ゲームからのIndexedDB正本・全履歴・JSON書出し・再試行
+- Why: TASK_ASSIGNMENT「新規ゲーム開始から復元可能なプレイログを記録・書き出しする」
+- Scope: 全モジュール保存接続と復元。既存セーブ移行/削除、完全戦闘リプレイ、ルール変更、マージ/デプロイなし
+- Status: 起点main16ab1fdfaafd7808aafe1fe0f412ef56549849b6。保存経路をPLAY_LOG_DESIGN.mdへ整理。全5起動前アダプター、IDB正本/全履歴の原子確定、候補保持/同一結果再試行、seq/gameId/CAS/操作ID、タブ別引渡し、出撃開始/精算、旧履歴選択JSONを実装。全workspaceテスト・型検査・全5ビルドPASS。PC/390x844で全5画面実操作、実保存関数で学習/置き去り/盾を含む復元一致、Quota/abort/キャッシュ不一致/2タブ/準備済み候補/不正履歴/再読込をPASS。1,001件実IDB・10,001件純復元を計測（verification/play-log.json）。物理実機/公開版NOT_RUN。Draft、最終HEADとCIはPR本文、未マージ/未デプロイ
+
 ## Codex / 1×1作成と格納庫残骸売却（2026-10-25）
 - Who: Codex / 実装担当（神宮直接指示、Automationsは起動しない）
 - What: cursor/codex-one-cell-wreck-sale。1×1ジャンク作成・初クリア後のP1×1抽選・格納庫大破機400c売却

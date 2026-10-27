@@ -1542,6 +1542,9 @@ export function loadHubSaveFromLocalStorage(
 /**
  * Writes a v3 save to the v3 key. Refuses (returns false) when the stored
  * v3-key save is from a newer build (read-only). Never touches the legacy key.
+ * In a recorded browser game the installed adapter stages this synchronous write;
+ * its boolean is candidate acceptance, not durable commit. The shared UI barrier
+ * releases success/navigation only after the atomic IndexedDB state+log commit.
  */
 export function saveHubSaveToLocalStorage(
   hub: HubSnapshot,

@@ -1,3 +1,4 @@
+import {playLogNavigate} from '@estg/shared';
 import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
 import {
@@ -716,7 +717,7 @@ function render() {
     const launched = launchSortFromUnopened(state, q);
     state = launched.state;
     if (launched.url) {
-      window.location.assign(launched.url);
+      playLogNavigate(launched.url);
       return;
     }
     render();
@@ -727,7 +728,7 @@ function render() {
     const launched = launchSortFromUnopened(state, stock);
     state = launched.state;
     if (launched.url) {
-      window.location.assign(launched.url);
+      playLogNavigate(launched.url);
       return;
     }
     render();

@@ -1,3 +1,4 @@
+import {playLogNavigate} from '@estg/shared';
 import { loadHubSaveFromLocalStorage, saveHubSaveToLocalStorage } from "@estg/shared";
 
 // HubSave v3: read/write through the shared contract (v3 key, legacy-key migration,
@@ -42,7 +43,7 @@ function addContainersToQuery(count: number): void {
   u.searchParams.set("salvagedContainers", String(containers + count));
   u.searchParams.set("totalStockPieces", String(stock + count * PIECES_PER_CONTAINER));
   if (!u.searchParams.has("isExtracted")) u.searchParams.set("isExtracted", "1");
-  window.location.assign(u.toString());
+  playLogNavigate(u.toString());
 }
 
 function installContainerButtons(): void {

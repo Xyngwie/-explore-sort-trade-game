@@ -1,3 +1,5 @@
+import {setPlayLogOperation} from '@estg/shared';
+import {playLogNavigate} from '@estg/shared';
 import {
   CIRCUIT_PURCHASE_PRICE,
   purchaseCircuit,
@@ -81,6 +83,7 @@ function buyCircuit(
       status.textContent = "セーブを読み込めませんでした。購入していません。";
     return;
   }
+  setPlayLogOperation('circuit.purchase');
   const result = purchaseCircuit(
     backfillPerfectMaxSize(normalizeHubSnapshot(loaded.hub)),
     {
@@ -98,7 +101,7 @@ function buyCircuit(
         "購入を保存できませんでした。画面を読み直して確認してください。";
     return;
   }
-  window.location.reload();
+  playLogNavigate(window.location.href);
 }
 
 function craftCircuit(side: number): void {
@@ -115,13 +118,14 @@ function craftCircuit(side: number): void {
       (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ??
       null,
   });
+  setPlayLogOperation('circuit.create',{side});
   const result = craftJunkCircuit(getHub(), side, {
     circuitId: makeCircuitId(),
     trueBoardRate,
   });
   if (!result.ok) return;
   saveHubSaveToLocalStorage(result.hub);
-  window.location.reload();
+  playLogNavigate(window.location.href);
 }
 
 function render(card: HTMLElement): void {

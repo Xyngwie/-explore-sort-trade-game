@@ -1,3 +1,5 @@
+import {setPlayLogOperation} from '@estg/shared';
+import {playLogNavigate} from '@estg/shared';
 import {
   INITIAL_HUB,
   RESOURCE_IDS,
@@ -63,6 +65,7 @@ function renderCard(card: HTMLElement): void {
       const action = button.dataset.fourResourceAction;
       if (!id || !RESOURCE_IDS.includes(id)) return;
 
+      setPlayLogOperation(`resource.${action}`,{id,quantity:1});
       const hubNow = getHub();
       const current = Math.max(0, Math.floor(hubNow.inventory?.[id] ?? 0));
       const inventory = { ...hubNow.inventory };
@@ -86,7 +89,7 @@ function renderCard(card: HTMLElement): void {
         });
       }
 
-      window.location.reload();
+      playLogNavigate(window.location.href);
     });
   });
 }

@@ -1,3 +1,4 @@
+import {setPlayLogOperation} from '@estg/shared';
 /**
  * Hangar state helpers for Module 3 stub UI.
  * Pure transitions + localStorage persistence via shared hub-save.
@@ -464,6 +465,7 @@ function commitHangarIngest(
   search: string,
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
+  setPlayLogOperation('handoff.ingest',{search});
   const saved = saveHubSaveToLocalStorage(next.hub, storage ?? undefined) === true;
   saveM45StashToLocalStorage(next, storage ?? undefined);
   const sort = parseSortToTradeSearch(search);
@@ -1721,6 +1723,7 @@ export function launchSortFromUnopened(
   qty = 1,
 ): { state: HangarState; url: string | null } {
   const n = Math.max(1, Math.floor(qty));
+  setPlayLogOperation('container.open',{quantity:n});
   const url = buildSortFromUnopenedUrl(state, n);
   if (!url) {
     const have = Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0));

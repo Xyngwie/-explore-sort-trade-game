@@ -1,3 +1,4 @@
+import {setPlayLogOperation} from '@estg/shared';
 import { dropFriendlyWreckSupplies } from "./wreckSupplies";
 import { canBuildBarricade, startBarricade, barricadeWorking, interruptBarricade } from "./barricades";
 import { cancelShieldPickup, dropAllOwnedShields, shieldItem } from "./shieldOperations";
@@ -622,6 +623,7 @@ function tryAirSupport(world: World, enemy: Unit): void {
   // (newer save elsewhere, storage error) means no strike and no cooldown.
   // Rescue fees (½ / ¾) read the wallet again at the moment of the rescue,
   // so they always see the balance after this charge (no stale balance).
+  setPlayLogOperation('explore.air_support',{targetId:enemy.id,cost:AIR_SUPPORT_COST});
   if (!saveHubSaveToLocalStorage(next)) return;
   p.cooldownSec = AIR_SUPPORT_COOLDOWN_SEC;
   enemy.hp = 0;

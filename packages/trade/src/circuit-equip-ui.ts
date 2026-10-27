@@ -1,3 +1,4 @@
+import {playLogNavigate} from '@estg/shared';
 /** HUB circuit equipment UI (Module 3).
  *
  * Keeps the interaction intentionally small: choose a circuit and a mech,
@@ -163,7 +164,7 @@ function render(): void {
     const line = ammoSwapLogLineJa(current, result.hub);
     if (line) console.info(line);
     saveHubSaveToLocalStorage(result.hub);
-    window.location.reload();
+    playLogNavigate(window.location.href);
   };
 
   card.querySelector<HTMLButtonElement>("[data-equip-action=\"equip\"]")?.addEventListener("click", () => action("equip"));

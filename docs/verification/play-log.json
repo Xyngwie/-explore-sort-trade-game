@@ -1,0 +1,338 @@
+{
+  "type": "IMPLEMENTATION_VERIFICATION",
+  "feature": "reconstructable-play-log",
+  "base": "16ab1fdfaafd7808aafe1fe0f412ef56549849b6",
+  "branch": "codex/reconstructable-play-log",
+  "recordedScope": [
+    "full HubSave assets/circuits/equipment/learning/progress/lost mechs/field identities",
+    "restore edges and Sort random start/result",
+    "module handoff guards, isolated per logical tab",
+    "sortie start and settlement, existing nonce/sortieId once-only contract"
+  ],
+  "excluded": [
+    "legacy mid-game synthesized history",
+    "debug fixture data mixed into normal history",
+    "battle event stream / complete replay",
+    "import/save overwrite UI",
+    "server/account/anti-tamper guarantees"
+  ],
+  "tests": {
+    "workspace": "PASS",
+    "typecheck": "PASS",
+    "fiveProductionBuilds": "PASS",
+    "pureReplay": {
+      "test": "play-log pure replay",
+      "status": "PASS",
+      "records": 10001,
+      "generatedMs": 1437,
+      "replayMs": 684,
+      "bytes": 3953836
+    }
+  },
+  "realSavePaths": {
+    "results": [
+      {
+        "viewport": "1280x900",
+        "operation": "seed",
+        "seqBefore": 0,
+        "seqAfter": 1
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "prepare",
+        "seqBefore": 1,
+        "seqAfter": 2
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "buy",
+        "seqBefore": 2,
+        "seqAfter": 3
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "containers",
+        "seqBefore": 3,
+        "seqAfter": 4
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "open",
+        "seqBefore": 4,
+        "seqAfter": 5
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "craft",
+        "seqBefore": 5,
+        "seqAfter": 6
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "repair",
+        "seqBefore": 6,
+        "seqAfter": 7
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "charge",
+        "seqBefore": 7,
+        "seqAfter": 8
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "restore",
+        "seqBefore": 8,
+        "seqAfter": 9
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "restoreComplete",
+        "seqBefore": 9,
+        "seqAfter": 10
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "progress",
+        "seqBefore": 10,
+        "seqAfter": 11
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "equip",
+        "seqBefore": 11,
+        "seqAfter": 12
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "unequip",
+        "seqBefore": 12,
+        "seqAfter": 13
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "sell",
+        "seqBefore": 13,
+        "seqAfter": 14
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "sortie",
+        "seqBefore": 14,
+        "seqAfter": 15
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "checkpoint",
+        "seqBefore": 15,
+        "seqAfter": 16
+      },
+      {
+        "viewport": "1280x900",
+        "operation": "settle",
+        "seqBefore": 16,
+        "seqAfter": 17
+      },
+      {
+        "viewport": "1280x900",
+        "scenario": "initial/full-state replay, transaction abort unchanged, reload/retry one result, coherent retained JSON export",
+        "status": "PASS"
+      },
+      {
+        "viewport": "390x844",
+        "operation": "seed",
+        "seqBefore": 0,
+        "seqAfter": 1
+      },
+      {
+        "viewport": "390x844",
+        "operation": "prepare",
+        "seqBefore": 1,
+        "seqAfter": 2
+      },
+      {
+        "viewport": "390x844",
+        "operation": "buy",
+        "seqBefore": 2,
+        "seqAfter": 3
+      },
+      {
+        "viewport": "390x844",
+        "operation": "containers",
+        "seqBefore": 3,
+        "seqAfter": 4
+      },
+      {
+        "viewport": "390x844",
+        "operation": "open",
+        "seqBefore": 4,
+        "seqAfter": 5
+      },
+      {
+        "viewport": "390x844",
+        "operation": "craft",
+        "seqBefore": 5,
+        "seqAfter": 6
+      },
+      {
+        "viewport": "390x844",
+        "operation": "repair",
+        "seqBefore": 6,
+        "seqAfter": 7
+      },
+      {
+        "viewport": "390x844",
+        "operation": "charge",
+        "seqBefore": 7,
+        "seqAfter": 8
+      },
+      {
+        "viewport": "390x844",
+        "operation": "restore",
+        "seqBefore": 8,
+        "seqAfter": 9
+      },
+      {
+        "viewport": "390x844",
+        "operation": "restoreComplete",
+        "seqBefore": 9,
+        "seqAfter": 10
+      },
+      {
+        "viewport": "390x844",
+        "operation": "progress",
+        "seqBefore": 10,
+        "seqAfter": 11
+      },
+      {
+        "viewport": "390x844",
+        "operation": "equip",
+        "seqBefore": 11,
+        "seqAfter": 12
+      },
+      {
+        "viewport": "390x844",
+        "operation": "unequip",
+        "seqBefore": 12,
+        "seqAfter": 13
+      },
+      {
+        "viewport": "390x844",
+        "operation": "sell",
+        "seqBefore": 13,
+        "seqAfter": 14
+      },
+      {
+        "viewport": "390x844",
+        "operation": "sortie",
+        "seqBefore": 14,
+        "seqAfter": 15
+      },
+      {
+        "viewport": "390x844",
+        "operation": "checkpoint",
+        "seqBefore": 15,
+        "seqAfter": 16
+      },
+      {
+        "viewport": "390x844",
+        "operation": "settle",
+        "seqBefore": 16,
+        "seqAfter": 17
+      },
+      {
+        "viewport": "390x844",
+        "scenario": "initial/full-state replay, transaction abort unchanged, reload/retry one result, coherent retained JSON export",
+        "status": "PASS"
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  },
+  "faultsAndGrowth": {
+    "method": "Chromium real IndexedDB; explicit fault injection; separate disposable contexts",
+    "results": [
+      {
+        "scenario": "Quota refusal before staging, unchanged confirmed state, persistent candidate survives reload, identical operation/result on retry",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Two tabs CAS at same head, one charge/reward/sequence, rejected candidate retained, explicit reload to committed state",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Prepared IDB owner survives interrupted commit and competing tab journal; reload recovers that exact operation first",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Per-tab canonical protocol namespace preserves source reservation on reload without copying it into another tab",
+        "status": "PASS"
+      },
+      {
+        "scenario": "IDB commit succeeds, localStorage mirror fails, reload recovers authoritative state without reapplying",
+        "status": "PASS"
+      },
+      {
+        "scenario": "IndexedDB denied, no silent fallback or premature save",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Existing save remains unchanged and unlogged; no synthesized history",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Existing inbound handoff without a game origin is not synthesized into a new genesis",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Corrupt record metadata blocks boot; no silent correction or unlogged continuation",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Real IDB append/export/replay growth without pruning",
+        "status": "PASS",
+        "records": 1001,
+        "writeMs": 2037,
+        "exportReplayMs": 43,
+        "jsonBytes": 467847,
+        "reloadAndVerifyMs": 257
+      }
+    ]
+  },
+  "productionUi": {
+    "method": "local production bundles at public URL shape, isolated browser profiles, no public writes",
+    "results": [
+      {
+        "viewport": "1280x900",
+        "scenario": "production HUB resource buy/craft -> real Restore wiring/Bypass -> HUB ingestion -> failed random circuit purchase/retry exactly once -> actual Sort opening/start/finish/return -> Invade mark -> Explore real start/checkpoint/reload -> retained coherent export replay -> new game and archived history export",
+        "status": "PASS",
+        "records": 17,
+        "coldBootMs": 298
+      },
+      {
+        "viewport": "390x844",
+        "scenario": "production HUB resource buy/craft -> real Restore wiring/Bypass -> HUB ingestion -> failed random circuit purchase/retry exactly once -> actual Sort opening/start/finish/return -> Invade mark -> Explore real start/checkpoint/reload -> retained coherent export replay -> new game and archived history export",
+        "status": "PASS",
+        "records": 17,
+        "coldBootMs": 203
+      }
+    ],
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN"
+  },
+  "performanceScope": "Cloud Chromium/Node; small recorded fixtures; concurrent tests/builds during measurements. Not physical smartphone timings.",
+  "ci": "Final HEAD result and URL are recorded in the Draft PR body/checks.",
+  "physicalDevice": "NOT_RUN",
+  "publicVersion": "NOT_RUN",
+  "merge": "PROHIBITED / NOT_RUN",
+  "deploy": "PROHIBITED / NOT_TRIGGERED",
+  "knownLimitations": [
+    "Requires IndexedDB; unavailable/corrupt history fails closed",
+    "Same-origin module storage; local separate dev ports do not share a game",
+    "Only last persisted sortie checkpoint resumes; no complete combat replay",
+    "Stale concurrent tabs retain rejected candidates and require explicit reload; no automatic merge",
+    "Capacity failure stops confirmation without trimming history"
+  ],
+  "specQuestions": [],
+  "uiNotes": "Recording panel and failure UI are sized to visualViewport; mobile copy/buttons fit without clipping; failure export contains only confirmed history."
+}
