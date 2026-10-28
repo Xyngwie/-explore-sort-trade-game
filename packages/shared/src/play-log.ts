@@ -77,7 +77,17 @@ export function canonical(value: unknown): string {
     if (s === undefined) throw new Error("invalid_json");
     return s;
   }
-  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+  if (Array.isArray(value)) {
+    // JSON export turns holes into null; reject them before hashing a different value.
+    for (let i = 0; i < value.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(value, i))
+        throw new Error("invalid_json");
+    }
+    return "[" + value.map(canonical).join(",") + "]";
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null)
+    throw new Error("invalid_json");
   return (
     "{" +
     Object.keys(value)

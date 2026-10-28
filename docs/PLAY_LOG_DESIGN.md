@@ -70,3 +70,7 @@ JSONをCLIで検証：`npx tsx scripts/verify-play-log-export.ts <JSONファイ�
 - 失敗・競合・件数増加・物理実機/公開版の実施区分は `docs/verification/play-log.json` とPR本文に記録する。
 
 タブ単位の引渡し予約は `session:<tabId>:<key>` として正本に分け、別タブへコピーしない。`wreckline.playLog.tab.v1` は再読込をまたぐ論理タブID。未確定操作の復旧はその操作が記録したタブ文脈を引き継ぎ、既に後続操作まで確定済みの古いack再試行では古い遷移を繰り返さず最新の格納庫状態へ戻す。
+
+### 監査前の入力検証補強
+
+正規化時に疎配列とDate・Map・Setなどの非JSONオブジェクトを拒否する。疎配列がJSON書き出しでnullへ変わることや、特殊オブジェクトが空オブジェクト等として記録されることを防ぐ。通常の配列・小数・nullプロトタイプの辞書はJSON往復一致を検証する。

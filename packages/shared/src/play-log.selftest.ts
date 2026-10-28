@@ -11,6 +11,11 @@ import {
   type PlayEntry,
   type PlayGame,
 } from "./play-log";
+// Reject values whose JSON export cannot preserve their canonical representation.
+for (const invalid of [new Array(2), [1, , 3], new Date(), new Map(), new Set()])
+  assert.throws(() => canonical(invalid), /invalid_json/);
+for (const valid of [[], [null, 1, { hp: 12.5 }], Object.create(null)])
+  assert.equal(canonical(JSON.parse(JSON.stringify(valid))), canonical(valid));
 const initial: PlayState = {
   files: {
     "local:hub": {
