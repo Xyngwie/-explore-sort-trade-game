@@ -12,6 +12,14 @@
 - Why: TASK_ASSIGNMENT「新規ゲーム開始から復元可能なプレイログを記録・書き出しする」
 - Scope: 全モジュール保存接続と復元。既存セーブ移行/削除、完全戦闘リプレイ、ルール変更、マージ/デプロイなし
 - Status: 起点main16ab1fdfaafd7808aafe1fe0f412ef56549849b6。保存経路をPLAY_LOG_DESIGN.mdへ整理。全5起動前アダプター、IDB正本/全履歴の原子確定、候補保持/同一結果再試行、seq/gameId/CAS/操作ID、タブ別引渡し、出撃開始/精算、旧履歴選択JSONを実装。全workspaceテスト・型検査・全5ビルドPASS。PC/390x844で全5画面実操作、実保存関数で学習/置き去り/盾を含む復元一致、Quota/abort/キャッシュ不一致/2タブ/準備済み候補/不正履歴/再読込をPASS。1,001件実IDB・10,001件純復元を計測（verification/play-log.json）。物理実機/公開版NOT_RUN。Draft、最終HEADとCIはPR本文、未マージ/未デプロイ
+## Codex / Invade偵察操作改善（2026-10-27）
+
+追記：#330はd9b597dでmainへマージ済み。以下は提出時の検証記録。#331へ最新mainを統合（コード競合なし）。
+- Who: Codex / 神宮直接指示。Automationsは起動しない
+- What: codex/invade-recon-input。300ms予告・マス境界パン・拠点視点・偵察アイコン・Ctrlクリック
+- Why: TASK_ASSIGNMENT「Invade操作改善：300ms長押し予告・即時パン・偵察アイコン」
+- Scope: Invade入力/表示/文書/検証。ゲーム条件・保存形式・他モジュールは変更しない。Draft、マージ/デプロイ禁止
+- Status: 起点main 16ab1fdfaafd7808aafe1fe0f412ef56549849b6（公開デプロイ成功確認）。300ms予告/開始マス境界パン/拠点視点/Ctrl左/白スコープ・赤三角を実装。全workspaceテスト・Invade型検査/selftest/ビルドPASS。1280x900・390x844 Chromium入力列と最終表示/強制戦闘ロック中HQ復帰の回帰PASS。Draft #330、CIは最終HEADで確認。物理実機/公開版NOT_RUN。Draft、未マージ・未デプロイ
 
 ## Codex / 1×1作成と格納庫残骸売却（2026-10-25）
 - Who: Codex / 実装担当（神宮直接指示、Automationsは起動しない）

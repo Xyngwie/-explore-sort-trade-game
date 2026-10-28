@@ -231,7 +231,7 @@ function moveToRank(rank:number, retreat:boolean):void {
 /** Single under-grid CTA cluster: 探索へ (+ engage chip) · 格納庫へ. */
 function cellSortieBarBaseHtml(sel: SectorSel | null): string {
   if (sel == null) {
-    return `<p class="muted cell-sortie-hint">セルを開く／旗すると、この直下から「${CTA_COPY.toExplore}」できます。</p>`;
+    return `<p class="muted cell-sortie-hint">セルを開く／マークすると、この直下から「${CTA_COPY.toExplore}」できます。</p>`;
   }
   const info = sectorDensityAt(sel.sx, sel.sy);
   if (info.blocked) {
@@ -290,7 +290,7 @@ function cellSortieBarBaseHtml(sel: SectorSel | null): string {
 
   if (toRaid != null) {
     return `<div class="cell-sortie-bar" role="status">
-      <p class="ok"><strong>このセルから出撃</strong>（旗 · engage=raid）</p>
+      <p class="ok"><strong>このセルから出撃</strong>（マーク · engage=raid）</p>
       <p class="muted mono">(${sel.sx},${sel.sy}) · enemyCells: ${escapeHtml(formatEnemyCells(raidTargets))}</p>
       <div class="actions cta-cluster">
         <span class="cta-chip" aria-label="${CTA_CHIP.raid}">${CTA_CHIP.raid}</span>
@@ -318,7 +318,7 @@ function cellSortieBarBaseHtml(sel: SectorSel | null): string {
       cell.open && !cell.mine && cell.adjacent === 0
         ? " · 探索済空白"
         : cell.flagged
-          ? " · 旗"
+          ? " · マーク"
           : "";
     return `<div class="cell-sortie-bar" role="status">
       <p class="ok"><strong>このセルから出撃</strong>（${sel.sx},${sel.sy}${blankHint}）</p>
@@ -330,7 +330,7 @@ function cellSortieBarBaseHtml(sel: SectorSel | null): string {
   }
 
   return `<div class="cell-sortie-bar" role="status">
-    <p class="muted">セル (${sel.sx},${sel.sy}) を開くか旗を立てると、ここから出撃できます。</p>
+    <p class="muted">セル (${sel.sx},${sel.sy}) を開くか敵位置をマークすると、ここから出撃できます。</p>
   </div>`;
 }
 
@@ -400,7 +400,7 @@ function handoffActionsHtml(sel: SectorSel | null): string {
       <p class="muted">${CTA_COPY.toHangar}／通常出撃／盤面操作はハンドオフまで禁止。</p>`;
   }
   if (sel == null) {
-    return `<p class="muted">セルを開く／旗／選択するとグリッド直下に「${CTA_COPY.toExplore}」と「${CTA_COPY.toHangar}」が出ます（invade→explore / invade→trade）。</p>`;
+    return `<p class="muted">セルを開く／マーク／選択するとグリッド直下に「${CTA_COPY.toExplore}」と「${CTA_COPY.toHangar}」が出ます（invade→explore / invade→trade）。</p>`;
   }
   const info = sectorDensityAt(sel.sx, sel.sy);
   if (info.blocked) {
@@ -419,7 +419,7 @@ function handoffActionsHtml(sel: SectorSel | null): string {
       ? raidEngageTarget(board, sel.sx, sel.sy)
       : [];
 
-  let engageNote = `<p class="muted" style="margin-top:0.5rem">地雷踏み → ${CTA_CHIP.forcedCombat}（隣接敵も巻込み）。旗を立ててそのセルを選択 → ${CTA_CHIP.raid}（当該のみ）。CTA はグリッド直下の単一クラスタのみ。</p>`;
+  let engageNote = `<p class="muted" style="margin-top:0.5rem">地雷踏み → ${CTA_CHIP.forcedCombat}（隣接敵も巻込み）。敵位置をマークしてそのセルを選択 → ${CTA_CHIP.raid}（当該のみ）。CTA はグリッド直下の単一クラスタのみ。</p>`;
   if (forcedTargets.length > 0 && cell && isPendingMineCell(cell, board)) {
     engageNote = `<p class="warn" style="margin-top:0.5rem"><strong>${CTA_CHIP.forcedCombat}</strong> · enemyCells: ${escapeHtml(formatEnemyCells(forcedTargets))}（ロック中 · CTA は直下）</p>`;
   } else if (forcedTargets.length > 0 && cell && isResolvedMineCell(cell, board)) {
@@ -472,7 +472,7 @@ function cellTitle(cell: ReturnType<typeof getCell>): string {
     if (cell.adjacent === 0) return `(${cell.sx},${cell.sy}) 探索済空白 · ${bandJa}`;
     return `(${cell.sx},${cell.sy}) 周囲敵 ${cell.adjacent} · ${bandJa}`;
   }
-  if (cell.flagged) return `(${cell.sx},${cell.sy}) 旗 · ${bandJa}`;
+  if (cell.flagged) return `(${cell.sx},${cell.sy}) 推定敵位置 · ${bandJa}`;
   const d = sectorDensityAt(cell.sx, cell.sy).distance;
   return `(${cell.sx},${cell.sy}) 未開 d=${d} · ${bandJa}（${dangerBandHintJa(band)}）`;
 }
@@ -487,15 +487,15 @@ function dangerLegendHtml(): string {
     .join("");
   return `<div class="danger-legend" role="group" aria-label="危険度凡例">
     <span class="danger-swatch blank"><span class="chip" aria-hidden="true"></span>探索済空白</span>
-    <span class="danger-swatch flag"><span class="chip" aria-hidden="true"></span>旗</span>
-    <span class="danger-swatch pending"><span class="chip" aria-hidden="true"></span>敵接触・未解決</span>
+    <span class="danger-swatch flag"><span class="scope-reticle" aria-hidden="true"></span>白スコープ＝推定敵位置</span>
+    <span class="danger-swatch pending"><span class="enemy-icon" aria-hidden="true"></span>赤三角＝確認された敵</span>
     <span class="danger-swatch resolved"><span class="chip" aria-hidden="true"></span>解決済・再出撃可</span>
     <span class="danger-swatch lost-mech"><span class="chip" aria-hidden="true"></span>置き去り機</span>
     <span class="danger-swatch wreck"><span class="chip" aria-hidden="true"></span>残骸</span>
     <span class="danger-swatch field-drop"><span class="chip" aria-hidden="true"></span>落とし物</span>
     ${swatches}
   </div>
-  <p class="muted" style="margin-top:0.35rem;font-size:0.72rem">未開マスの色は HQ からの距離帯（爆弾密度の手触り）。近傍薄 → 前線濃。</p>`;
+  <p class="muted" style="margin-top:0.35rem;font-size:0.72rem">未開マスの色は HQ からの距離帯（敵密度の手触り）。近傍薄 → 前線濃。</p>`;
 }
 
 function progressFeelHtml(): string {
@@ -507,7 +507,7 @@ function progressFeelHtml(): string {
     <div class="stats">
       <span>セーフ開放 <strong>${feel.openSafe}</strong>/${feel.playableSafe}（${pct}%）</span>
       <span>空白 <strong>${feel.blanksOpen}</strong></span>
-      <span>旗 <strong>${feel.flagged}</strong></span>
+      <span>マーク <strong>${feel.flagged}</strong></span>
       <span>残敵 <strong>${feel.minesRemaining}</strong>/${feel.mineCount}</span>
       <span>解決済接触 <strong>${board.hitMine ? 0 : feel.openedMines}</strong></span>
     </div>
@@ -554,7 +554,7 @@ function render(): void {
       // 項目5-1b③: the wreck dot is a child (the cell's ::before / ::after are the drop / left-behind dots).
       const wreckDot = wreckCount > 0 ? `<span class="wreck-dot" aria-hidden="true"></span>` : "";
       cellsHtml.push(
-        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostAttr}${dropAttr}${wreckAttr} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}>${escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}${wreckDot}</button>`,
+        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostAttr}${dropAttr}${wreckAttr} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}><span class="cell-face" aria-hidden="true">${c.flagged&&!c.open?'':c.open&&c.mine?`<span class="enemy-icon"></span>${board.hitMine?'':'<span class="resolved-label">済</span>'}`:escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</span><span class="scope-reticle" aria-hidden="true"></span>${wreckDot}</button>`,
       );
     }
   }
@@ -581,7 +581,7 @@ function render(): void {
   root.innerHTML = `
     <p class="pill">MODULE 4 · INVADE / FRONT · FRONT = MINESWEEPER</p>
     <h1>戦線マップ</h1>
-    <p class="muted">HQ 中心の前線格子<strong>そのもの</strong>がマインスイーパ。空白＝探索済 · 数字＝周囲の敵感知 · ✕＝敵（→ Module 1）· 壁 d≥${SECTOR_WALL_DISTANCE}。</p>
+    <p class="muted">HQ 中心の前線格子<strong>そのもの</strong>がマインスイーパ。空白＝探索済 · 数字＝周囲の敵感知 · 赤三角＝確認された敵（→ Explore）· 壁 d≥${SECTOR_WALL_DISTANCE}。</p>
 
     <div class="card">
       <h2 class="card-title">到着（trade→invade）</h2>
@@ -597,12 +597,12 @@ function render(): void {
 
     <div class="card">
       <h2 class="card-title">前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）</h2>
-      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。未開マスの色＝危険帯。空白＝探索済。✕＝未解決接触、済＝解決済・再出撃可。マウスは左クリックで開く・右クリックで旗。タッチは下の操作割当を確認してください。数字の周囲開放は旗数一致時のみ。</p>
+      <p class="muted">P(敵) は HQ からの Chebyshev d で上昇（近傍薄・前線濃）。未開マスの色＝危険帯。空白＝探索済。赤三角＝確認された敵（未解決接触）、済＝解決済・再出撃可。マウスは左クリックで開く・右クリック/Ctrl＋左クリックでマーク。タッチは下の操作割当を確認してください。数字の周囲開放はマーク数一致時のみ。</p>
       <table>
         <tr><td>状態</td><td>${escapeHtml(statusJa())}</td></tr>
         <tr><td>敵（地雷）</td><td>${board.mineCount}</td></tr>
         <tr><td>残敵（概算）</td><td>${minesRemaining(board)}</td></tr>
-        <tr><td>旗</td><td>${countFlagged(board)}</td></tr>
+        <tr><td>推定敵位置</td><td>${countFlagged(board)}</td></tr>
         <tr><td>ルート焦点</td><td>${
           selected
             ? `(${selected.sx}, ${selected.sy})`
@@ -625,13 +625,14 @@ function render(): void {
       <div id="board-viewport" aria-label="前線盤面"><div class="grid front-ms${forcedLockActive() ? " locked" : ""}" style="--cols:${cols}">${cellsHtml.join("")}</div></div>
       ${cellSortieBarHtml(selected)}
       <div class="actions">
-        <button type="button" class="btn secondary" id="btn-touch-mode" aria-pressed="${reversedTouch}" ${forcedLockActive() ? "disabled" : ""}>タッチ操作を反転：${reversedTouch ? "ON（タップで開く）" : "OFF（タップで旗）"}</button>
-        <button type="button" class="btn ghost" id="btn-regen" title="保存済みの開いたマス・旗・シードを破棄して新しい盤にします" ${forcedLockActive() ? "disabled" : ""}>盤を再生成（進捗リセット）</button>
+        <button type="button" class="btn secondary" id="btn-home">拠点へ</button>
+        <button type="button" class="btn secondary" id="btn-touch-mode" aria-pressed="${reversedTouch}" ${forcedLockActive() ? "disabled" : ""}>タッチ操作を反転：${reversedTouch ? "ON（タップで開く）" : "OFF（タップでマーク）"}</button>
+        <button type="button" class="btn ghost" id="btn-regen" title="保存済みの開いたマス・マーク・シードを破棄して新しい盤にします" ${forcedLockActive() ? "disabled" : ""}>盤を再生成（進捗リセット）</button>
         <button type="button" class="btn ghost" id="btn-clear" ${selected == null || forcedLockActive() ? "disabled" : ""}>焦点クリア</button>
         <button type="button" class="btn ghost" id="btn-skip" ${forcedLockActive() ? "disabled" : ""}>スキップ（quick-battle・ナビなし）</button>
       </div>
       ${buildFlagOpsGuideHtml(reversedTouch)}
-      <p class="muted" style="margin-top:0.5rem">開いたマス・旗・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。「盤を再生成」は確認のうえ進捗を消します。</p>
+      <p class="muted" style="margin-top:0.5rem">開いたマス・マーク・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。「盤を再生成」は確認のうえ進捗を消します。</p>
       <p class="ok" style="margin-top:0.5rem">報酬はインテルのみ。コンテナ／YieldBag は払わない。</p>
     </div>
 
@@ -655,7 +656,7 @@ function render(): void {
   root.querySelector("#btn-regen")?.addEventListener("click", () => {
     if (forcedLockActive()) return;
     const ok = window.confirm(
-      "盤を再生成すると、保存済みの前線進捗（開いたマス・旗・地雷シード・ルート焦点）が消えます。よろしいですか？",
+      "盤を再生成すると、保存済みの前線進捗（開いたマス・マーク・地雷シード・ルート焦点）が消えます。よろしいですか？",
     );
     if (!ok) return;
     clearPersistedFrontProgress();
@@ -694,6 +695,7 @@ function render(): void {
     render();
   });
 
+  root.querySelector("#btn-home")?.addEventListener("click",()=>boardInput.home());
   boardInput.paint();
 }
 
@@ -712,10 +714,10 @@ function applyBoardAction(action:BoardAction,{sx,sy}:Coord):void {
       lastBoardLog=`周囲開放 (${sx},${sy}) ×${r.opened}`;
     } else lastBoardLog=`ルート焦点 (${sx},${sy})`;
   } else if(action==='chord')return;
-  else if(flag){const r=toggleFlag(board,sx,sy);if(!r.ok)return;lastBoardLog=r.flagged?`旗立て (${sx},${sy})`:`旗解除 (${sx},${sy})`;}
+  else if(flag){const r=toggleFlag(board,sx,sy);if(!r.ok)return;lastBoardLog=r.flagged?`敵位置をマーク (${sx},${sy})`:`マーク解除 (${sx},${sy})`;}
   else {
     const r=openCell(board,sx,sy);
-    if(!r.ok){if(r.reason==='flagged'){selected={sx,sy};skipped=false;lastBoardLog=`旗付きマス (${sx},${sy}) は開けません`;saveFrontProgress();render();}return;}
+    if(!r.ok){if(r.reason==='flagged'){selected={sx,sy};skipped=false;lastBoardLog=`マーク付きマス (${sx},${sy}) は開けません`;saveFrontProgress();render();}return;}
     lastBoardLog=`開放 (${sx},${sy}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
   }
   selected=chordHit??{sx,sy};skipped=false;
@@ -723,7 +725,11 @@ function applyBoardAction(action:BoardAction,{sx,sy}:Coord):void {
   else if(board.status==='won')lastBoardLog='掃討完了 → sectorCleared';
   saveFrontProgress();render();
 }
-const boardInput=bindBoardInput(root,applyBoardAction);
+const boardInput=bindBoardInput(root,applyBoardAction,({sx,sy})=>{
+  const cell=getCell(board,sx,sy);
+  if(!cell||cell.blocked||cell.open||forcedLockActive())return null;
+  return reversedTouch ? cell.flagged?'unmark':'mark' : cell.flagged?null:'open';
+});
 
 render();
 
