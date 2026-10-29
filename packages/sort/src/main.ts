@@ -1,3 +1,4 @@
+import {playLogRecording,playLogBlocked,setPlayLogOperation} from '@estg/shared';
 import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
 import {
@@ -55,7 +56,15 @@ import {
 } from "./playHud";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
-let state: RefineLive = createRefineFromLocationSearch(window.location.search);
+const SORT_SESSION_KEY='wreckline.sortSession.v1';
+function initialSortState():RefineLive{
+ if(playLogRecording()){
+  const raw=localStorage.getItem(SORT_SESSION_KEY);
+  if(raw){const saved=JSON.parse(raw) as {route:string;state:RefineLive};if(saved.route===location.search&&saved.state&&['play','result'].includes(saved.state.phase))return saved.state;}
+ }
+ return createRefineFromLocationSearch(window.location.search);
+}
+let state: RefineLive = initialSortState();
 let chainTimer: ReturnType<typeof setTimeout> | null = null;
 /** Cell indices to play fall-in animation on the next render (settle tick only). */
 let fallInIndices: Set<number> = new Set();
@@ -161,6 +170,7 @@ function schedulePlayTimers() {
       state.chainWindowMsLeft || SORT_V0_RULES.clearBlinkMs,
     );
     chainTimer = setTimeout(() => {
+      if(playLogBlocked()){schedulePlayTimers();return;}
       state = commitClearStep(state);
       render();
       schedulePlayTimers();
@@ -171,6 +181,7 @@ function schedulePlayTimers() {
   if (state.playMode === "settling") {
     const delay = Math.max(40, SORT_V0_RULES.settleStepMs);
     chainTimer = setTimeout(() => {
+      if(playLogBlocked()){schedulePlayTimers();return;}
       const before = state.board;
       state = tickSettleStep(state);
       fallInIndices = new Set(settleMotionIndices(before, state.board));
@@ -182,6 +193,10 @@ function schedulePlayTimers() {
 }
 
 function setState(next: RefineLive) {
+  if(playLogRecording()&&next.phase!==state.phase){
+    setPlayLogOperation(`sort.${next.phase}`);
+    localStorage.setItem(SORT_SESSION_KEY,JSON.stringify({route:location.search,state:next}));
+  }
   const prevMode = state.playMode;
   state = next;
   // Non-timer updates (swaps / taps) should not reuse stale fall-in marks.

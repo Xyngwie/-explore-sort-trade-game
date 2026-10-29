@@ -518,3 +518,22 @@ ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・�
 - 新しい味方大破は既存World.enemySuppliesのammo/power形式へ現地ドロップし、World.currentAmmoとmechBattery.activityを0にする。Unit.wreckSuppliesDroppedは新しい大破を処理した印としてcheckpointに保存し、再開時の重複を防ぐ。敵の既存deathHandled方式は変更しない。既に死んでいる旧checkpoint/格納庫残骸に対する追加の資源消去・返却移行はしない。明示的な売却では資源を追加付与しない。
 - 新規に回収した敵残骸も、直接の取得と帰還報告の両経路で携行弾薬0/活動量0として作る。既にfleetにある旧残骸を再初期化しない。
 - 装甲換算は神宮確定：活動量切れ直前の残HPと等価（HP67/120なら67個）。既存整数資源compactYieldBagで切り捨て、保存耐久/最大HPへ換算しない。SupplyDrop.kind="armor"、armor個数を既存World.enemySuppliesへ保存し、ammo/powerは0。接近回収は装備盾のHPに全量加算し、最大HPをmax(既存最大HP,加算後HP)とする（20/50+67→87/87）。本体HP・格納庫在庫を増やさず、装備盾がなければ消費しない。盾ID/所有先は維持し、通常のcheckpoint/盾保存へ反映する。
+
+### 新規ゲームからの復元可能プレイログ（format 1）
+
+詳細は [PLAY_LOG_DESIGN.md](PLAY_LOG_DESIGN.md)。記録されたゲームではIndexedDB `wreckline.playLog.v1` が正本。HubSave v3の資産フィールドは変更せず、`saveHubSaveToLocalStorage` は候補用アダプターへ渡す。booleanのtrueは候補受理であり、IDB commit前の成功表示・遷移・後続取引を共通barrierが止める。未記録の既存セーブと実験室は従来の保存契約を維持し、途中のログ合成を行わない。
+
+- stores: games(gameId)、entries([gameId,seq] / unique [gameId,operationId])、pending(gameId)、meta(active)。初期状態・全履歴は保持し、書出し/新規ゲームでも削除しない。
+- entry: format/rules/build/gameId/seq/operationId/at/kind/module/context、path/before/afterのpatch、前後state checksum、record checksum。復元は値の適用だけで、現在の価格/乱数/ルールで再計算しない。
+- files: `local:wreckline.hubSave.v3`、M45 stash、Restore edges、`local:wreckline.sortSession.v1`（routeと開始/結果）、引渡し/戻りガード、誤射履歴等。sessionの引渡しintentも候補へ含める。表示設定・単独の作者名設定キーは除外（回路に保存済みの作者/署名は個体情報として保持）。機体・回路・学習・盤面・置き去り/地面/設置資産はHub全体に含まれる。
+- sorties: 既存sortieNonceを開始の識別子にし、一度だけ開始snapshotを記録。終了は既存sortieIdとpayload、対応するHub差分で一度だけ。Worldの途中再開snapshotはgames.resumeへ分離し、完全戦闘イベント履歴にはしない。
+- 候補を再試行用ジャーナルとIDB.pendingへ保持。active gameId・期待seq/hash・候補一致を確認して、state/entry/unique操作IDを同一IDB transactionで確定する。失敗は未確定で停止し、同じ結果を再試行。commit済みIDは二重適用しない。
+- 互換キー `wreckline.playLog.active.v1` は正本の参照。再試行キー `wreckline.playLog.pending.v1:<gameId>:<operationId>` とsession側 `wreckline.playLog.pending.v1` は未確定候補のみ。確定後の候補journal削除は履歴削除ではない。競合候補は保持して明示的に最新確定状態へ戻せる。
+- localStorageはcommit後の派生キャッシュ。片側だけ失敗した場合はIDBから復旧し、IDB不可/ログ不正時に無記録保存へ切替えない。全保存拒否時は安全に保存できたと表示しない。ページ終了前にasync commitが完了しなければ次回の同一候補再試行を用いる。
+- JSONはreadonly transactionで固定した[0,seq]とsnapshotを出し、復元一致を検証する。旧ゲームも選択可能。インポートUI・サーバー・改ざん防止の保証はなし。
+
+タブ単位の引渡し予約は `session:<tabId>:<key>` として正本に分け、別タブへコピーしない。`wreckline.playLog.tab.v1` は再読込をまたぐ論理タブID。未確定操作の復旧はその操作が記録したタブ文脈を引き継ぎ、既に後続操作まで確定済みの古いack再試行では古い遷移を繰り返さず最新の格納庫状態へ戻す。
+
+# #331 確定済み操作の再試行と後続候補
+
+確定済みoperationIdへの同一entryの再試行は確定状態を返すだけで、ゲーム単位のpendingを変更しない。後続操作が別タブで準備済みの場合も、その候補を維持する。pendingの消去は新規操作の確定時、候補完全一致の確認後、entry・確定状態と同一トランザクション内でのみ行う。

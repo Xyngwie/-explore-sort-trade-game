@@ -1,3 +1,4 @@
+import {playLogNavigate} from '@estg/shared';
 import { loadHubSaveFromLocalStorage, saveHubSaveToLocalStorage, type HubSnapshot } from "@estg/shared";
 
 const PENDING_SORT_UNOPENED_KEY = "wreckline.pendingSortUnopenedBack.v1";
@@ -58,7 +59,7 @@ function restorePendingSortOnBack(): void {
   if (!hub) return;
   saveHubWithUnopened(hub.unopenedContainers + pending);
   clearPendingSort();
-  window.location.reload();
+  playLogNavigate(window.location.href);
 }
 
 // This module is loaded before main.ts. Delegation therefore records the

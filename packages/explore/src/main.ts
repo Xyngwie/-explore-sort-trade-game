@@ -1,3 +1,4 @@
+import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
 import { mountShieldDebugConsole } from "@estg/shared";
 import { prepareRequestedShieldFixture, inspectShieldFixture } from "./debug/shieldFixture";
@@ -291,9 +292,10 @@ mountShieldDebugConsole(() => inspectShieldFixture(world),createAlphaLabHost(()=
   keys.clear();input.move={x:0,y:0};input.clickMove=null;input.fire=false;input.interact=false;needsDom=true;renderDom();
 },()=>{if(world.phase!=="sortie")throw new Error("出撃中に一時停止できます");sortiePaused=!sortiePaused;needsDom=true;renderDom();return sortiePaused;}));
 let sortiePaused = exploreSession.paused;
+setPlayLogCheckpointProvider(()=>world.phase==='sortie'?{v:1,kind:'sortie',body:snapshotSortieWorld(world)}:world.phase==='result'?{v:1,kind:'result',body:snapshotResultWorld(world)}:null);
 const leaveForHub = exploreSession.leaveForHub;
 if (leaveForHub) {
-  window.location.replace(resolveModuleBaseUrl("trade"));
+  playLogNavigate(resolveModuleBaseUrl("trade"),true);
 }
 /** Last phase the DOM was rendered for; see game/phaseWatch.ts. */
 const phaseWatch = createPhaseWatcher(world.phase);
@@ -982,6 +984,7 @@ function renderDom(): void {
     document.getElementById("btn-start")?.addEventListener("click", () => {
       if (sortieEquipmentNote()) return;
       startSortie(world);
+      recordPlayLogSortie(snapshotSortieWorld(world));
       armExploreSortieBack();
       needsDom = true;
       renderDom();
@@ -1409,7 +1412,7 @@ function frame(now: number): void {
   last = now;
   const logLen = world.logs.length;
 
-  if (sortieFrameShouldTick(world.phase, sortiePaused)) {
+  if (!playLogBlocked() && sortieFrameShouldTick(world.phase, sortiePaused)) {
     syncMoveFromKeys();
     tickWorld(world, dt, input);
     // C20-a: squad-level availability can change mid-sortie (only alive

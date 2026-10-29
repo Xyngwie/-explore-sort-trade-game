@@ -1,3 +1,4 @@
+import {recordPlayLogSettlement} from '@estg/shared';
 /**
  * U9 (CIRCUIT_DATA_MODEL_V0 §5.4・§9 U9, 2026-10-03 決定): when a sortie reaches
  * its result, Explore writes the return (wrecked / left-behind mechs, wear,
@@ -38,6 +39,7 @@ export function saveSortieResultToHub(world: World, storage?: Store | null): Dir
   const hub = applyCircuitHubSide(world, normalizeHubSnapshot(loaded.hub));
   const applied = applyExploreReturnToHub(hub, payload);
   if (!applied.applied) return { status: "already_applied", payload };
+  recordPlayLogSettlement(world.sortieNonce??'',payload);
   const ok = saveHubSaveToLocalStorage(normalizeHubSnapshot(applied.hub), storage ?? undefined);
   if (!ok) return { status: "skipped", reason: "write_refused" };
   // M3/M8: the return topped the squad up from the stock; who is still short.
