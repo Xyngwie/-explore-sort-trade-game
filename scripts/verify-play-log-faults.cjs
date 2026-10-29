@@ -410,6 +410,77 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
       });
       await ctx.close();
     }
+    // A committed retry must not delete another tab's prepared successor B.
+    {
+      const ctx = await b.newContext(),
+        a = await ctx.newPage(),
+        other = await ctx.newPage();
+      await a.goto(url);
+      await ready(a);
+      await other.goto(url);
+      await ready(other);
+      const committedA = await a.evaluate(async () => {
+        const h = window.playHarness, db = await h.openPlayLogDB();
+        try {
+          const game = await h.readPlayGame(db, await h.activePlayGameId(db));
+          const state = structuredClone(game.state);
+          state.files["retry.fixture"] = { value: "A" };
+          const draft = h.makePlayDraft(game, state, null, {
+            kind: "retry.fixture.A", module: "test", context: null, build: "test",
+          });
+          await h.stagePlayDraft(db, draft);
+          await h.commitPlayDraft(db, draft);
+          return draft;
+        } finally { db.close(); }
+      });
+      const preparedB = await other.evaluate(async () => {
+        const h = window.playHarness, db = await h.openPlayLogDB();
+        try {
+          const game = await h.readPlayGame(db, await h.activePlayGameId(db));
+          const state = structuredClone(game.state);
+          state.files["retry.fixture"] = { value: "B" };
+          const draft = h.makePlayDraft(game, state, null, {
+            kind: "retry.fixture.B", module: "test", context: null, build: "test",
+          });
+          await h.stagePlayDraft(db, draft);
+          return draft;
+        } finally { db.close(); }
+      });
+      await a.evaluate(async (draft) => {
+        const h = window.playHarness, db = await h.openPlayLogDB();
+        try { await h.commitPlayDraft(db, draft); } finally { db.close(); }
+      }, committedA);
+      const pending = await other.evaluate(async (id) => {
+        const db = await window.playHarness.openPlayLogDB();
+        try {
+          return await new Promise((resolve, reject) => {
+            const r = db.transaction("pending").objectStore("pending").get(id);
+            r.onsuccess = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+          });
+        } finally { db.close(); }
+      }, preparedB.gameId);
+      assert.deepEqual(pending, preparedB);
+      const result = await other.evaluate(async (draft) => {
+        const h = window.playHarness, db = await h.openPlayLogDB();
+        try {
+          await h.commitPlayDraft(db, draft);
+          const pending = await new Promise((resolve, reject) => {
+            const r = db.transaction("pending").objectStore("pending").get(draft.gameId);
+            r.onsuccess = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+          });
+          if (pending !== undefined) throw new Error("new_commit_pending_not_removed");
+          return await h.exportPlayGame(db, draft.gameId);
+        } finally { db.close(); }
+      }, preparedB);
+      assert.deepEqual(result.game.state, preparedB.state);
+      assert.equal(result.game.seq, preparedB.entry.seq);
+      assert.equal(result.entries.filter(e => e.operationId === committedA.operationId).length, 1);
+      assert.equal(result.entries.filter(e => e.operationId === preparedB.operationId).length, 1);
+      results.push({ scenario: "Two real tabs: A commit, B stage, A retry preserves B pending, B commit and full replay match; no duplicate A", status: "PASS" });
+      await ctx.close();
+    }
     // Growth measurements against the real IDB engine, retaining every record.
     {
       const ctx = await b.newContext(),

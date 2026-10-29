@@ -334,5 +334,65 @@
     "Capacity failure stops confirmation without trimming history"
   ],
   "specQuestions": [],
-  "uiNotes": "Recording panel and failure UI are sized to visualViewport; mobile copy/buttons fit without clipping; failure export contains only confirmed history."
+  "uiNotes": "Recording panel and failure UI are sized to visualViewport; mobile copy/buttons fit without clipping; failure export contains only confirmed history.",
+  "auditCorrection20261029": {
+    "auditedHead": "ca841d7ef8d9072547aad59c2e7231fa6e2d92d4",
+    "before": "FAIL: Chromium two-tab A commit / B stage / A retry deleted B pending (undefined)",
+    "after": {
+      "method": "Chromium real IndexedDB; explicit fault injection; separate disposable contexts",
+      "results": [
+        {
+          "scenario": "Quota refusal before staging, unchanged confirmed state, persistent candidate survives reload, identical operation/result on retry",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Two tabs CAS at same head, one charge/reward/sequence, rejected candidate retained, explicit reload to committed state",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Prepared IDB owner survives interrupted commit and competing tab journal; reload recovers that exact operation first",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Per-tab canonical protocol namespace preserves source reservation on reload without copying it into another tab",
+          "status": "PASS"
+        },
+        {
+          "scenario": "IDB commit succeeds, localStorage mirror fails, reload recovers authoritative state without reapplying",
+          "status": "PASS"
+        },
+        {
+          "scenario": "IndexedDB denied, no silent fallback or premature save",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Existing save remains unchanged and unlogged; no synthesized history",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Existing inbound handoff without a game origin is not synthesized into a new genesis",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Corrupt record metadata blocks boot; no silent correction or unlogged continuation",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Two real tabs: A commit, B stage, A retry preserves B pending, B commit and full replay match; no duplicate A",
+          "status": "PASS"
+        },
+        {
+          "scenario": "Real IDB append/export/replay growth without pruning",
+          "status": "PASS",
+          "records": 1001,
+          "writeMs": 1636,
+          "exportReplayMs": 37,
+          "jsonBytes": 467806,
+          "reloadAndVerifyMs": 203
+        }
+      ]
+    },
+    "scope": "Real Chromium IndexedDB and two separate pages in one disposable browser context. No physical device or public deployment test.",
+    "ci": "Final head result linked in PR #331"
+  }
 }

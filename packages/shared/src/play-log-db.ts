@@ -193,8 +193,9 @@ export async function commitPlayDraft(
           error = new Error("operation_id_mismatch");
           safeAbort(t);
         } else {
+          // An acknowledged or lost-ack retry is read-only. The original commit
+          // removed its own pending atomically; another tab may now own this slot.
           result = g;
-          t.objectStore("pending").delete(d.gameId);
         }
         return;
       }
