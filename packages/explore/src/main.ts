@@ -1,5 +1,5 @@
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
-import { clampZoom, gestureDown, gestureMove, gestureUp, MAP_WHEEL_STEP, newMapGestureState, withViewCamera, type MapGestureState } from "./game/mapZoom";
+import { clampZoom, gestureDownForTap, gestureMove, gestureUp, MAP_WHEEL_STEP, newMapGestureState, withViewCamera, type MapGestureState } from "./game/mapZoom";
 import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
 import { mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
@@ -633,10 +633,11 @@ function bindCanvas(): void {
   }, { passive: false });
   canvas.addEventListener("pointerdown", (e) => {
     if (world.phase !== "sortie" || !canvas) return;
-    const gesture = gestureDown(currentGesture(), e.pointerId, e.clientX, e.clientY, e.timeStamp);
+    // Map the tap with the zoom on screen BEFORE this pointer (a double-tap toggles zoom; Q3: its 2nd tap is still a map tap at the shown spot).
+    const { kind: gesture, tapZoom: zoomBefore } = gestureDownForTap(currentGesture(), e.pointerId, e.clientX, e.clientY, e.timeStamp);
     syncZoomAttr();
     if (gesture === "pinch") return; // a second finger is a pinch, not a map tap
-    withViewCamera(world, currentGesture().zoom, () => mapPointerDown(e));
+    withViewCamera(world, zoomBefore, () => mapPointerDown(e));
   });
 }
 function mapPointerDown(e: PointerEvent): void {

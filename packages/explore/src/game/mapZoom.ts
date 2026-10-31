@@ -67,3 +67,11 @@ export function gestureUp(s: MapGestureState, id: number): void {
   s.pointers.delete(id);
   if (s.pointers.size < 2) s.pinch = null;
 }
+/**
+ * pointerdown for the map: runs gestureDown and returns the zoom the screen showed BEFORE this pointer
+ * (a double-tap's 2nd tap must map with the old zoom — decided Q3: it is still a normal map tap).
+ */
+export function gestureDownForTap(s: MapGestureState, id: number, x: number, y: number, t: number): { kind: "tap" | "pinch" | "doubletap"; tapZoom: number } {
+  const zoomBefore = s.zoom;
+  return { kind: gestureDown(s, id, x, y, t), tapZoom: zoomBefore };
+}
