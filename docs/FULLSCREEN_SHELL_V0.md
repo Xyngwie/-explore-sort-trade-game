@@ -27,7 +27,7 @@
 - `packages/shared/src/fullscreen-shell.ts`。各モジュールの `boot.ts` が本体読込前に `mountFullscreenShell(module)` を呼ぶ。
 - `html,body` を `100dvh` 固定・`overflow:hidden`。既存の `#app` はそのまま `#wl-shell-panel`（縦スクロール可・`overscroll-behavior:contain`）の中へ移すだけ。画面デザインは変えない。
 - `body` は `touch-action:manipulation`（ダブルタップ拡大抑止）、タブバーは `touch-action:none`。地図のピンチ等は PR5。
-- PC：`body` 最大幅 960px・中央寄せ（暫定・技術値）。
+- PC：`body` 最大幅 960px・中央寄せ（決定済み 2026-11-01、§5-5）。
 - シェルはセーブを読むだけで書かない（selftest で保存・チェックポイント不変を確認）。
 
 ## 4. タブ → 既存画面（2026-11-01 神宮確定）
@@ -68,9 +68,9 @@
 12. 数値：スマホ（幅 600px 以下）は 10,000 以上を 12.3k、PC は 3 桁区切り。
 - 弾は在庫 `inventory.ammo` のみ（機体の積載弾は含めない）。
 - 更新：読込時＋同じページの保存（`wreckline:hub-saved` イベント）＋別タブの `storage` イベント（技術判断）。
-- スマホ判定は幅 600px 以下（技術判断）。
+- スマホ判定は幅 600px 以下（provisional ★・§13-1 で質問中）。
 - HUD 各項目に生の値 `data-value` を付ける（表示は変えない。検証用）。Alpha Lab の保存も HUD 更新イベントを出す。
-- Alpha Lab 帯（`#shield-debug-console`）は開いたとき高さ 45dvh まで、内側でスクロール（下のパネルを覆わない。技術判断）。
+- Alpha Lab 帯（`#shield-debug-console`）は開いたとき高さ 45dvh まで、内側でスクロール（下のパネルを覆わない。provisional ★・§13-2 で質問中）。
 
 ## 7. PR2 追加決定（神宮 2026-11-01）
 1. Alpha Lab のデバッグ帯は今のまま（HUD より上）。PR6 で見直す。
@@ -149,3 +149,8 @@ PR4 To-do（STATUS）の解消：(1) Cr タップのパレットは購入の行�
 
 補足：ブリーフィングのタブ表示・出撃開始で非表示は #339 ④ の決定どおり実装。
 検証：`scripts/verify-screen-fit.cjs`（PC 1280×900／スマホ 390×844）＋ `fullscreen-shell.selftest.ts`（タブ表示規則）。セーブ・チェックポイントの形式は変更なし。
+
+## 13. 未決の細部（provisional ★・2026-11-01 整理）
+PR1〜PR6 の記録を見直し、神宮決定の記録が無い値を質問にした。決定済み：タブ→画面の対応（§4、2026-11-01）、スマホ 100 万以上の 1.2M（§7-3、2026-11-01）、PC 最大幅 960px（§5-5、2026-11-01）。
+1. スマホ表示（12.3k／1.2M）に切り替える画面幅 = A **★600px 以下（現状）** ／ B 480px 以下 ／ C 768px 以下 → provisional ★
+2. Alpha Lab 帯を開いたときの高さ上限 = A **★45dvh・内側スクロール（現状）** ／ B 30dvh ／ C 上限なし（パネルを押し下げる）→ provisional ★

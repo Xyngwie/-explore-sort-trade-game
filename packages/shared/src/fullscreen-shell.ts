@@ -11,7 +11,7 @@ import { PALETTE_CSS, closeResourcePalette, openResourcePalette } from "./resour
 
 export type ShellTabId = "DOCK" | "INVADE" | "SORT" | "RESTORE" | "SORTIE";
 export const SHELL_TABS: readonly ShellTabId[] = ["DOCK", "INVADE", "SORT", "RESTORE", "SORTIE"];
-/** Q3 tab → existing module (provisional mapping, see design memo §4). */
+/** Q3 tab → existing module (決定済み（2026-11-01）, FULLSCREEN_SHELL_V0 §4). */
 export const SHELL_TAB_MODULE: Record<ShellTabId, ModuleKey> = {
   DOCK: "trade",
   INVADE: "invade",
@@ -43,7 +43,7 @@ export function hudItems(hub: Pick<HubSnapshot, "credits" | "inventory" | "unope
   const labels: Record<HudKey, string> = { credits: "Cr", ammo: "弾", armor: "装", power: "電", unopened: "箱" };
   return (Object.keys(labels) as HudKey[]).map((key) => ({ key, label: labels[key], value: v[key], color: HUD_COLORS[key] }));
 }
-/** Mobile: >=10,000 → 12.3k (>=1,000,000 → 1.2M, provisional). PC: thousands separators. */
+/** Mobile: >=10,000 → 12.3k (>=1,000,000 → 1.2M: 決定済み（2026-11-01）, §7-3). PC: thousands separators. */
 export function formatHudNumber(value: number, mobile: boolean): string {
   const v = Math.max(0, Math.floor(value));
   if (!mobile) return v.toLocaleString("en-US");
@@ -51,6 +51,7 @@ export function formatHudNumber(value: number, mobile: boolean): string {
   const [d, u] = v >= 1_000_000 ? [1_000_000, "M"] : [1_000, "k"];
   return (Math.floor((v / d) * 10) / 10).toFixed(1).replace(/\.0$/, "") + u;
 }
+/** Provisional ★ (FULLSCREEN_SHELL_V0 §13-1): phone width for the 12.3k / 1.2M format, ≤600px. Not a 神宮 decision yet. */
 export const HUD_MOBILE_QUERY = "(max-width: 600px)";
 
 export type ShellContext = {
@@ -92,6 +93,7 @@ export const SHELL_CSS = `
 html,body{height:100dvh!important;max-height:100dvh;overflow:hidden!important;overscroll-behavior:none}
 body{margin:0 auto!important;max-width:${SHELL_MAX_WIDTH_PX}px;display:flex;flex-direction:column;touch-action:manipulation}
 #wl-shell-panel{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+/* Provisional ★ (§13-2): open Alpha Lab strip max height 45dvh. */
 body>#shield-debug-console{flex:0 1 auto;min-height:0;max-height:45dvh;overflow:auto}
 #wl-shell-hud{box-sizing:border-box!important;flex:0 0 auto;display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;overflow:hidden;white-space:nowrap;background:#0d1117;border-bottom:1px solid #30363d;font:600 13px/1 system-ui,sans-serif}
 #wl-shell-hud[hidden]{display:none}
