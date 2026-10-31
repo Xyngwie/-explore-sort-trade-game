@@ -1,3 +1,4 @@
+import { normalizeNewGameIntro, type NewGameIntro } from "./onboarding";
 import { ownedShieldKeys, normalizeLostMechShields, type LostMechShieldMap } from "./lost-mech-shields";
 import { clearFieldCells, normalizeFieldCells, type FieldCellState } from "./field-cell-state";
 import { normalizeStrippingObservations, type WreckStrippingObservation } from "./wreck-stripping";
@@ -288,8 +289,10 @@ export type HubSnapshot = {
   firstInvadeClear?: FirstInvadeClear;
   /** Rank selection and highest completed rank; absent in legacy saves. */
   invadeRank?: InvadeRankProgress;
-  /** Starter equipment was already granted/checked; never re-equip after manual removal. */
+  /** Legacy grant/check stamp; new introductions set it from birth to forbid a free starter. */
   starterCircuitGranted?: boolean;
+  /** Only games started with the container introduction. Never synthesized for legacy saves. */
+  newGameIntro?: NewGameIntro;
   /**
    * HubSave v3 (additive, 2026-10-03 item 15): mechs chosen to sortie in the
    * hangar (instanceIds, without a size limit). Trade's deploy
@@ -550,6 +553,28 @@ export const INITIAL_HUB: HubSnapshot = {
   lostMechs: [],
   appliedSortieIds: [],
 };
+
+/** One source for first boot and explicit new game. INITIAL_HUB remains the legacy/debug template. */
+export function createNewGameHub(): HubSnapshot {
+  return normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    credits: 0,
+    unopenedContainers: 10,
+    inventory: { ammo: 0, armor: 0, power: 0, junk: 0 },
+    fleet: [],
+    circuits: [],
+    starterCircuitGranted: true,
+    ammoBatteryRepaired: true,
+    newGameIntro: {
+      version: 1,
+      initialOpened: 0,
+      initialHarvest: 0,
+      zeroHarvestAwarded: false,
+      craftedCircuitIds: [],
+      results: [],
+    },
+  });
+}
 
 export const HUB_LIMITS = {
   maxAmmo: 100,
@@ -1243,6 +1268,7 @@ export function normalizeHubSnapshot(
     ...(firstInvadeClear ? { firstInvadeClear } : {}),
     ...(normalizeInvadeRank(rawRec?.invadeRank) ? { invadeRank: normalizeInvadeRank(rawRec?.invadeRank)! } : {}),
     ...(ammoBatteryRepaired ? { ammoBatteryRepaired: true } : {}),
+    ...(normalizeNewGameIntro(rawRec?.newGameIntro) ? {newGameIntro: normalizeNewGameIntro(rawRec?.newGameIntro)!} : {}),
     ...(rawRec?.starterCircuitGranted === true || circuits.some(c => c.circuitId.startsWith("false-1x1-")) ? { starterCircuitGranted: true } : {}),
     ...((): { mechLearning?: MechLearningState } => {
       const mechLearning = normalizeMechLearning(rawRec?.mechLearning ?? fallback.mechLearning);

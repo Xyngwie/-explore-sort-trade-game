@@ -1,3 +1,4 @@
+import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
 import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
 import { mountShieldDebugConsole } from "@estg/shared";
@@ -198,7 +199,9 @@ function freshHub(): HubSnapshot | null {
 function sortieEquipmentNote(): string {
   const hub = freshHub();
   if (entrySaveRefused) return "戦場情報を保存できませんでした。保存を許可して再読込してください。";
-  if (!hub) return "";
+  if (!hub) return DEBUG_FIXTURE_ACTIVE ? "" : "出撃機の保存データがありません。格納庫で新規ゲームを開始してください。";
+  const introError = DEBUG_FIXTURE_ACTIVE ? "" : firstSortieError(hub, world.leader.instanceId);
+  if (introError) return introError;
   const ids = world.deployedInstanceIds.length ? world.deployedInstanceIds : resolveSortieSelection(hub);
   const error = squadEquipmentError(hub, ids);
   return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾・盾回路・P盾回路は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
@@ -975,7 +978,7 @@ function renderDom(): void {
           }
         </table>
         <div class="row"><button type="button" id="btn-start" ${sortieEquipmentNote() ? "disabled" : ""}>出撃</button></div>
-        ${sortieEquipmentNote() ? `<p class="warn">${escapeHtml(sortieEquipmentNote())}</p>` : ""}
+        ${sortieEquipmentNote() ? `<p class="warn">${escapeHtml(sortieEquipmentNote())}</p><a class="btn" href="${resolveModuleBaseUrl("trade")}">格納庫へ</a>` : ""}
         ${Object.values(world.mechBattery).some(b => b.activity <= 0) ? `<p class="warn" id="power-empty-presortie">活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。</p>` : ""}
         ${preSortieAmmoNote ? `<p class="warn" id="ammo-short-presortie">${escapeHtml(preSortieAmmoNote)}</p>` : ""}
         <p class="help">${briefingHelpText(cmdLocked)}</p>
@@ -983,7 +986,7 @@ function renderDom(): void {
     bindDebugUnlockToggle();
     document.getElementById("btn-start")?.addEventListener("click", () => {
       if (sortieEquipmentNote()) return;
-      startSortie(world);
+      if (!startSortie(world)) { needsDom = true; renderDom(); return; }
       recordPlayLogSortie(snapshotSortieWorld(world));
       armExploreSortieBack();
       needsDom = true;

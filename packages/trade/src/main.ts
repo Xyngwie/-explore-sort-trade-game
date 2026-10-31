@@ -1,3 +1,4 @@
+import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
 import {playLogNavigate} from '@estg/shared';
 import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
@@ -308,6 +309,7 @@ function unopenedPanel(s: HangarState): string {
   return `
     <div class="card" id="unopened-panel">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">未開封コンテナ</h2>
+      ${s.hub.newGameIntro?.opening?.url ? `<a class="btn" id="intro-resume" href="${escapeHtml(s.hub.newGameIntro.opening.url)}">開封作業へ戻る</a>` : ""}
       <p class="muted" style="margin:0 0 0.5rem;font-size:0.75rem">探索を経由せず仕分（Module 2）へ送れる在庫。スキップ預け / 購入（仮 ${unit}c/個）。</p>
       <div class="stat-pills" style="margin-bottom:0.5rem">
         <span class="stat-pill"><span class="stat-k">在庫</span> ${stock}</span>
@@ -342,7 +344,7 @@ function nextSortiePanel(s: HangarState): string {
   const ready = buildNextSortieReadiness(s);
   const digest = buildNextSortieReturnDigest(s);
   const equipmentError = squadEquipmentError(s.hub, ready.selectedIds);
-  const equipmentNote = equipmentError === "squad_full" ? "出撃部隊の回路上限を超えています。装備を外すか出撃機を変更してください。" : equipmentError === "category_full" ? "武器種・特殊弾・盾回路・P盾回路は各機体に各1枚までです。装備を変更してください。" : "";
+  const equipmentNote = (DEBUG_FIXTURE_ACTIVE ? "" : firstSortieError(s.hub,ready.selectedIds[0])) || (equipmentError === "squad_full" ? "出撃部隊の回路上限を超えています。装備を外すか出撃機を変更してください。" : equipmentError === "category_full" ? "武器種・特殊弾・盾回路・P盾回路は各機体に各1枚までです。装備を変更してください。" : "");
   const emptyActivity = s.hub.fleet.filter(m => ready.selectedIds.includes(m.instanceId) && m.battery.activity <= 0);
   const powerWarning = emptyActivity.length ? `出撃部隊に活動量0の機体が${emptyActivity.length}機あります。出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。` : "";
   const deployUrl = buildDeployUrl(s);
@@ -500,6 +502,7 @@ function render() {
         : ""
     }
 
+    ${!DEBUG_FIXTURE_ACTIVE && state.hub.newGameIntro && !state.hub.newGameIntro.firstSortie ? `<div class="card" id="new-game-guide"><h2>初出撃の準備</h2><p>まず未開封コンテナを仕分で開封してください。開封後は格納庫へ戻り、資源の売買で資金と材料を整え、機体と1×1回路を作成します。回路を修復して隊長機に装備し、既存の補給で出撃を準備してください。</p><a class="btn secondary" href="#unopened-panel">コンテナを開封する</a><p>初期支給の開封済み ${state.hub.newGameIntro.initialOpened}/10個。初期支給分は購入分と別に開封します。</p></div>` : ""}
     ${nextSortiePanel(state)}
 
     <div class="card wallet-card">
@@ -512,11 +515,12 @@ function render() {
         <span class="stat-pill"><span class="stat-k">未開封</span> ${Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0))}</span>
       </div>
       <div class="row">
-        <button type="button" id="btn-seed">シード読込</button>
-        <button type="button" class="secondary" id="btn-grant">機体を受領</button>
+        <button type="button" id="btn-seed">検証用シード読込</button>
+        <button type="button" class="secondary" id="btn-grant">デモ機体を受領</button>
         <button type="button" class="secondary" id="btn-inv">デモ物資</button>
-        <button type="button" class="secondary" id="btn-reset">初期化</button>
+        <button type="button" class="secondary" id="btn-reset">デモ初期化</button>
       </div>
+      <p class="muted">上のシード・デモ操作は検証用データの付与・置換です。通常の新規ゲームの支給とは別です。</p>
       <details class="sortie-details">
         <summary>検証用回路 · ヘルプ</summary>
         <div class="row" style="margin-top:0.5rem">
@@ -723,7 +727,7 @@ function render() {
     render();
   });
   document.getElementById("btn-sortie-sort")?.addEventListener("click", () => {
-    const stock = Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0));
+    const stock = Math.min(Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0)), state.hub.newGameIntro && state.hub.newGameIntro.initialOpened < 10 ? 10-state.hub.newGameIntro.initialOpened : Infinity);
     if (stock < 1) return;
     const launched = launchSortFromUnopened(state, stock);
     state = launched.state;

@@ -14,6 +14,8 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
     p.waitForFunction(
       () => window.playHarness && !document.querySelector("#play-log-blocker"),
     );
+  // Financial fault fixtures are explicitly seeded; normal new games now start at 0c.
+  const seed = async (p) => { await p.locator("#seed").click(); await ready(p); };
   const snapshot = (p) =>
     p.evaluate(async () => {
       const h = window.playHarness,
@@ -31,6 +33,7 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
         p = await ctx.newPage();
       await p.goto(url);
       await ready(p);
+      await seed(p);
       const before = await snapshot(p);
       await p.evaluate(() => {
         const put = IDBObjectStore.prototype.put;
@@ -91,6 +94,7 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
         a = await ctx.newPage();
       await a.goto(url);
       await ready(a);
+      await seed(a);
       const c = await ctx.newPage();
       await c.goto(url);
       await ready(c);
@@ -142,6 +146,7 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
         a = await ctx.newPage();
       await a.goto(url);
       await ready(a);
+      await seed(a);
       const c = await ctx.newPage();
       await c.goto(url);
       await ready(c);
@@ -175,7 +180,7 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
       ]);
       await ready(c);
       const data = await snapshot(c);
-      assert.equal(data.game.seq, 1);
+      assert.equal(data.game.seq, candidate.entry.seq);
       assert.equal(data.entries.at(-1).operationId, candidate.operationId);
       assert.deepEqual(data.game.state, candidate.state);
       results.push({
@@ -195,6 +200,7 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
         sessionStorage.setItem("wreckline.pendingSortUnopenedBack.v1", "1"),
       );
       await ready(a);
+      await seed(a);
       const c = await ctx.newPage();
       await c.goto(url);
       await ready(c);
@@ -228,6 +234,7 @@ const url = "http://127.0.0.1:5188/scripts/play-log-harness.html";
       });
       await p.goto(url);
       await ready(p);
+      await seed(p);
       const before = await snapshot(p);
       await p.evaluate(() => {
         const put = Storage.prototype.setItem;

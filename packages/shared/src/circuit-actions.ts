@@ -405,7 +405,7 @@ export function hasTrueTwenty(hub: HubSnapshot): boolean {
  * squad slot rather than silently generating another starter circuit.
  */
 export function ensureCaptainFalseOneByOne(hub: HubSnapshot): HubSnapshot {
-  if (hub.starterCircuitGranted) return hub;
+  if (hub.newGameIntro || hub.starterCircuitGranted) return hub;
   const captain = hub.fleet[0];
   if (!captain) return hub;
   const mine = hub.circuits.filter((c) => c.equippedTo === captain.instanceId);

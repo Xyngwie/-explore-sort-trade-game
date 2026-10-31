@@ -21,6 +21,7 @@
     "src/circuit-purchase.selftest.ts",
     "src/mech-power.selftest.ts",
     "src/res-signs.selftest.ts",
-    "src/wreck-sale.selftest.ts"
+    "src/wreck-sale.selftest.ts",
+    "src/onboarding.selftest.ts"
   ]
 }

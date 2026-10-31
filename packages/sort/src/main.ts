@@ -1,3 +1,4 @@
+import {loadHubSaveFromLocalStorage,saveHubSaveToLocalStorage,completeIntroOpening} from "@estg/shared";
 import {playLogRecording,playLogBlocked,setPlayLogOperation} from '@estg/shared';
 import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
@@ -56,13 +57,53 @@ import {
 } from "./playHud";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
-const SORT_SESSION_KEY='wreckline.sortSession.v1';
-function initialSortState():RefineLive{
- if(playLogRecording()){
-  const raw=localStorage.getItem(SORT_SESSION_KEY);
-  if(raw){const saved=JSON.parse(raw) as {route:string;state:RefineLive};if(saved.route===location.search&&saved.state&&['play','result'].includes(saved.state.phase))return saved.state;}
- }
- return createRefineFromLocationSearch(window.location.search);
+const SORT_SESSION_KEY = "wreckline.sortSession.v1";
+const introOpeningId = new URLSearchParams(location.search).get("introOpening");
+function activeIntroOpening(): boolean {
+  const hub = loadHubSaveFromLocalStorage()?.hub;
+  const opening = hub?.newGameIntro?.opening,
+    params = new URLSearchParams(location.search);
+  return (
+    !!introOpeningId &&
+    opening?.id === introOpeningId &&
+    Number(params.get("salvagedContainers")) === opening.containerCount &&
+    Number(params.get("totalStockPieces")) === opening.containerCount * 25
+  );
+}
+function introReturnUrl(url: string, cancel = false): string {
+  if (!introOpeningId) return url;
+  const target = new URL(url);
+  target.searchParams.set(
+    cancel ? "introCancelId" : "introResultId",
+    introOpeningId,
+  );
+  return target.toString();
+}
+function initialSortState(): RefineLive {
+  if (playLogRecording()) {
+    const raw = localStorage.getItem(SORT_SESSION_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw) as { route: string; state: RefineLive };
+      if (
+        saved.route === location.search &&
+        saved.state &&
+        ["play", "result"].includes(saved.state.phase) &&
+        (!introOpeningId ||
+          activeIntroOpening() ||
+          saved.state.phase === "result")
+      )
+        return saved.state;
+    }
+  }
+  const next = createRefineFromLocationSearch(window.location.search);
+  if (introOpeningId && !activeIntroOpening())
+    return {
+      ...next,
+      phase: "blocked",
+      blockReason:
+        "このコンテナの開封は終了または取り消されています。格納庫へ戻ってください。",
+    };
+  return next;
 }
 let state: RefineLive = initialSortState();
 let chainTimer: ReturnType<typeof setTimeout> | null = null;
@@ -171,7 +212,9 @@ function schedulePlayTimers() {
     );
     chainTimer = setTimeout(() => {
       if(playLogBlocked()){schedulePlayTimers();return;}
-      state = commitClearStep(state);
+      const next=commitClearStep(state);
+      if(next.phase!==state.phase){setState(next);return;}
+      state = next;
       render();
       schedulePlayTimers();
     }, delay);
@@ -183,7 +226,9 @@ function schedulePlayTimers() {
     chainTimer = setTimeout(() => {
       if(playLogBlocked()){schedulePlayTimers();return;}
       const before = state.board;
-      state = tickSettleStep(state);
+      const next=tickSettleStep(state);
+      if(next.phase!==state.phase){setState(next);return;}
+      state = next;
       fallInIndices = new Set(settleMotionIndices(before, state.board));
       render();
       fallInIndices = new Set();
@@ -193,9 +238,33 @@ function schedulePlayTimers() {
 }
 
 function setState(next: RefineLive) {
-  if(playLogRecording()&&next.phase!==state.phase){
+  if (introOpeningId && next.phase === "play" && !activeIntroOpening()) return;
+  if (introOpeningId && next.phase === "result") {
+    const hub = loadHubSaveFromLocalStorage()?.hub;
+    if (hub) {
+      const result = toCraftingResult(next);
+      const updated = completeIntroOpening(
+        hub,
+        introOpeningId,
+        result.yieldBag ?? {},
+      );
+      if (updated !== hub) {
+        setPlayLogOperation("intro.opening.result", {
+          id: introOpeningId,
+          harvest: result.yieldBag ?? {},
+          award: updated.credits - hub.credits,
+        });
+        if (!saveHubSaveToLocalStorage(updated))
+          throw new Error("記録を保存できません");
+      }
+    }
+  }
+  if (playLogRecording() && next.phase !== state.phase) {
     setPlayLogOperation(`sort.${next.phase}`);
-    localStorage.setItem(SORT_SESSION_KEY,JSON.stringify({route:location.search,state:next}));
+    localStorage.setItem(
+      SORT_SESSION_KEY,
+      JSON.stringify({ route: location.search, state: next }),
+    );
   }
   const prevMode = state.playMode;
   state = next;
@@ -368,7 +437,7 @@ function render() {
   const result = state.phase === "result" ? toCraftingResult(state) : null;
   const handoffUrl =
     result != null
-      ? buildSortToTradeUrlFromResult(result, tradeBaseUrl())
+      ? introReturnUrl(buildSortToTradeUrlFromResult(result, tradeBaseUrl()))
       : "";
   const emptySkipHubUrl =
     state.phase === "blocked" && isEmptyCargoEntry(state)
@@ -376,7 +445,7 @@ function render() {
       : "";
   const cargoSkipHubUrl =
     state.phase === "briefing" && canSkipWithCargo(state)
-      ? buildCargoSkipToHubUrl(state, tradeBaseUrl())
+      ? introReturnUrl(buildCargoSkipToHubUrl(state, tradeBaseUrl()),true)
       : "";
 
   const showLiveBoard = state.phase === "play";
@@ -440,6 +509,10 @@ function render() {
     </div>
   `;
 
+  if(introOpeningId) {
+    document.getElementById("btn-test-play")?.remove();
+    document.getElementById("btn-again")?.remove();
+  }
   document.getElementById("btn-start")?.addEventListener("click", () => {
     armBagIntroFlash();
     setState(startRefine(state));
@@ -479,7 +552,7 @@ function render() {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       // Swipe already consumed this gesture — ignore the trailing click.
-      if (suppressCellClick) {
+      if (suppressCellClick && e.detail !== 0) {
         suppressCellClick = false;
         return;
       }
@@ -573,18 +646,19 @@ function finishPointerSwipe(e: PointerEvent) {
     dx,
     dy,
   );
-  if (target == null) {
-    // Tap / rejected diagonal: leave to click handler (tap-tap select/swap).
-    return;
-  }
-  // Consume trailing synthetic click so swipe does not also tap.
+  // Preserve rejection of diagonals and off-board swipes. Only travel below
+  // the existing swipe threshold is a tap (no new gesture threshold).
+  if (target == null && Math.max(Math.abs(dx), Math.abs(dy)) >= SORT_V0_RULES.swipeMinPx) return;
+  // Capture retargets the compatibility click to #app, so pointer taps must
+  // reach the same tap reducer here. The click handler remains for keyboard input.
+  // Consume trailing synthetic click so a gesture is never applied twice.
   // Clear shortly after in case the browser never emits click.
   suppressCellClick = true;
   window.setTimeout(() => {
     suppressCellClick = false;
   }, 350);
   e.preventDefault();
-  setState(swapPanels(state, sel, target));
+  setState(target == null ? tapCell(state, sel) : swapPanels(state, sel, target));
 }
 
 root.addEventListener("pointerup", finishPointerSwipe);

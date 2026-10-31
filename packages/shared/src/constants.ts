@@ -83,8 +83,8 @@ export const HUB_SAVE_CORRUPT_KEY_PREFIX = "wreckline.hubSave.corrupt.";
 export const CRAFT_SIGNATURE_STORAGE_KEY = "wreckline.craftSignature.v0";
 
 export const HANDOFF_QUERY_KEYS = {
-  exploreToSort: ["salvagedContainers", "totalStockPieces", "isExtracted", "forcedRescueRecovered", "craftMultiplier", "circuitBonuses"] as const,
-  sortToTrade: ["fromSort", "craftMultiplier", "yieldBag", "depositUnopenedContainers"] as const,
+  exploreToSort: ["introOpening", "salvagedContainers", "totalStockPieces", "isExtracted", "forcedRescueRecovered", "craftMultiplier", "circuitBonuses"] as const,
+  sortToTrade: ["introResultId", "introCancelId", "fromSort", "craftMultiplier", "yieldBag", "depositUnopenedContainers"] as const,
   /** Old Sort→Trade marker: still read as "returned from Sort", grants nothing. */
   sortToTradeLegacy: ["importMaterials"] as const,
   tradeToExplore: [

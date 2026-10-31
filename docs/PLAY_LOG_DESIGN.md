@@ -80,3 +80,7 @@ JSONをCLIで検証：`npx tsx scripts/verify-play-log-export.ts <JSONファイ�
 既存entryと同じ操作の再試行は現在の確定状態を返すだけとし、pendingには書き込まない。元の確定処理が自身のpendingを同一トランザクションで消去しているため、再試行時のゲーム単位のpendingは別タブの後続操作であり得る。新規確定時のみ、候補の完全一致を確認したpendingを消去する。
 
 Chromium実IndexedDBの2タブでA確定→B準備→A再試行を検証する回帰テストを追加。修正前はB候補がundefinedとなることを再現した。修正後の結果と最終CIはPR本文および検証記録に記載する。
+
+### 新規ゲーム導入（2026-10-31）
+
+新規gameIdのgenesisはcreateNewGameHub()（未開封10個・0c・機体/回路なし・4資源0）から作成する。既存履歴のgenesisは変換せず、そのまま保持・復元する。newGameIntroの予約・固定結果・受取・初出撃nonce・収穫0付与はHUB差分として同じ確定プロトコルで記録する。ゲームルールを再計算して過去の初期値や支給へ変更することはない。詳細NEW_GAME_INTRO.md。

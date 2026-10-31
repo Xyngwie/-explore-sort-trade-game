@@ -4,6 +4,8 @@ import { validateAndConsumeSortHandoff } from "./sort-handoff-guard";
 
 const RESOURCE_KEYS = [
   "yieldBag",
+  "introResultId",
+  "introCancelId",
   "depositUnopenedContainers",
 ];
 
