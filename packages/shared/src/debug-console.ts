@@ -28,7 +28,7 @@ function storageSnapshot(store: Storage): Record<string, string | null> {
   return Object.fromEntries([HUB_SAVE_STORAGE_KEY,"estg.sortieCheckpoint"].filter(k=>store.getItem(k)!==null).map(k=>[k,JSON.stringify(JSON.parse(store.getItem(k)!), (key,value)=>["lastEditorName","editorName","latitude","longitude","signature"].includes(key)?undefined:value)]));
 }
 
-/** PR6 §12-3 provisional ★: compact one-line strip while closed (keeps the panel height for the screen). */
+/** PR6 §12-3: compact one-line strip while closed (keeps the panel height for the screen). */
 export const ALPHA_LAB_STRIP_CSS = "margin:4px 8px;padding:4px 8px;border:1px solid #d5a948;border-radius:6px;font-size:12px;line-height:1.4";
 
 /** Mounted outside the app root: rerenders cannot remove debug controls. */

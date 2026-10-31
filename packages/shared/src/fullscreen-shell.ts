@@ -176,8 +176,8 @@ export function scrollShellToHash(doc: Document = document): boolean {
 
 /**
  * PR6 §12-4（FULLSCREEN_SHELL_V0 #339 ④）: explore shows the tab bar on the
- * briefing screen only; sortie start (and later phases, provisional ★) hide it.
- * The shell HUD stays hidden in explore (explore has its own HUD, provisional ★).
+ * briefing screen only; sortie start and later phases hide it.
+ * The shell HUD stays hidden in explore (explore has its own HUD).
  */
 export function exploreTabsVisible(phase: string): boolean {
   return phase === "briefing";
