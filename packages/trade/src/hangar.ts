@@ -103,6 +103,7 @@ import { squadEquipmentError, chargeMechPower,
   mechAmmoCap,
   MECH_BATTERY_DEFAULT_CAPACITY,
   refillFleetAmmo,
+  applyContainerBuy,
   previewAmmoShort,
 } from "@estg/shared";
 import { isHubCircuitOnLostMech } from "./lost-mech-circuits";
@@ -1724,13 +1725,7 @@ export function buyUnopenedContainers(
       notice: `クレジット不足（要 ${cost}c / 持 ${credits}c · 未開封 ${unit}c×${n}）`,
     };
   }
-  const hub = addUnopenedContainers(
-    normalizeHubSnapshot({
-      ...state.hub,
-      credits: credits - cost,
-    }),
-    n,
-  );
+  const hub = applyContainerBuy(state.hub, n)!;
   const next: HangarState = {
     ...state,
     hub,

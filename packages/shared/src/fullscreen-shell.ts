@@ -1,11 +1,13 @@
 /**
  * WRECKLINE fullscreen shell PR1 (docs/FULLSCREEN_SHELL_V0.md).
  * Pure tab model + a DOM mount that wraps the existing #app without
- * redesigning it. Reads the hub save only; never writes it.
+ * redesigning it. The shell reads the hub save only; trades go through
+ * resource-palette.ts (PR2b).
  */
 import { loadHubSaveFromLocalStorage, HUB_SAVED_EVENT, type HubSnapshot } from "./hub-save";
 import { HUB_SAVE_STORAGE_KEY, resolveModuleBaseUrl, type ModuleKey } from "./constants";
 import { playLogNavigate } from "./play-log-hooks";
+import { PALETTE_CSS, closeResourcePalette, openResourcePalette } from "./resource-palette";
 
 export type ShellTabId = "DOCK" | "INVADE" | "SORT" | "RESTORE" | "SORTIE";
 export const SHELL_TABS: readonly ShellTabId[] = ["DOCK", "INVADE", "SORT", "RESTORE", "SORTIE"];
@@ -121,7 +123,7 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
   if (!doc.getElementById(STYLE_ID)) {
     const style = doc.createElement("style");
     style.id = STYLE_ID;
-    style.textContent = SHELL_CSS;
+    style.textContent = SHELL_CSS + PALETTE_CSS;
     doc.head.appendChild(style);
   }
   // Existing screen goes inside the panel untouched (its own layout/min-height kept).
@@ -170,6 +172,10 @@ function goToUnopened(doc: Document, current: ModuleKey): void {
 export function hudUnopenedEnabled(ctx: ShellContext): boolean {
   return !!ctx.hub && !ctx.handoffInProgress && ctx.current !== "explore";
 }
+/** PR2b: 弾/装/電/Cr tap opens the trade palette; same availability as the unopened tap. */
+export function hudPaletteEnabled(ctx: ShellContext): boolean {
+  return hudUnopenedEnabled(ctx);
+}
 function readHub(): HubSnapshot | null {
   try { return loadHubSaveFromLocalStorage()?.hub ?? null; } catch { return null; }
 }
@@ -184,7 +190,7 @@ function mountHud(doc: Document, current: ModuleKey, model: ShellModel, hub: Hub
     const mobile = !!doc.defaultView?.matchMedia?.(HUD_MOBILE_QUERY).matches;
     bar.textContent = "";
     for (const it of hudItems(h)) {
-      const el = doc.createElement(it.key === "unopened" ? "button" : "span");
+      const el = doc.createElement("button");
       el.className = "wl-hud-i" + (it.value === 0 ? " zero" : "");
       el.dataset.hudKey = it.key;
       el.dataset.value = String(it.value);
@@ -195,11 +201,14 @@ function mountHud(doc: Document, current: ModuleKey, model: ShellModel, hub: Hub
       el.append(k, " " + formatHudNumber(it.value, mobile));
       if (el instanceof HTMLButtonElement) {
         el.type = "button";
-        el.disabled = !hudUnopenedEnabled({ current, hub: h, handoffInProgress: handoff });
+        const ctx = { current, hub: h, handoffInProgress: handoff };
+        el.disabled = it.key === "unopened" ? !hudUnopenedEnabled(ctx) : !hudPaletteEnabled(ctx);
+        if (it.key !== "unopened") el.dataset.palette = it.key;
         el.addEventListener("click", () => {
           if (el.disabled) return;
           el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
-          setTimeout(() => goToUnopened(doc, current), 120);
+          if (it.key === "unopened") { closeResourcePalette(doc); setTimeout(() => goToUnopened(doc, current), 120); }
+          else openResourcePalette(doc, it.key as "credits" | "ammo" | "armor" | "power");
         });
       }
       bar.appendChild(el);

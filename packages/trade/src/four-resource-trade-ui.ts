@@ -9,10 +9,14 @@ import {
   saveHubSaveToLocalStorage,
   type HubSnapshot,
   type ResourceId,
+  RESOURCE_BUY_PRICE,
+  RESOURCE_SELL_PRICE,
+  applyResourceTrade,
+  resourceSellConfirmText,
 } from "@estg/shared";
 
-const SELL_PRICE = 5;
-const BUY_PRICE = 6;
+const SELL_PRICE = RESOURCE_SELL_PRICE;
+const BUY_PRICE = RESOURCE_BUY_PRICE;
 const CARD_ID = "four-resource-trade";
 const LEGACY_HEADING = "型付き在庫";
 
@@ -65,30 +69,13 @@ function renderCard(card: HTMLElement): void {
       const action = button.dataset.fourResourceAction;
       if (!id || !RESOURCE_IDS.includes(id)) return;
 
+      if (action !== "sell" && action !== "buy") return;
+      // Q9 (PR2b): every sell confirms, same text as the HUD palette.
+      if (action === "sell" && !window.confirm(resourceSellConfirmText(RESOURCE_LABEL_JA[id], 1))) return;
       setPlayLogOperation(`resource.${action}`,{id,quantity:1});
-      const hubNow = getHub();
-      const current = Math.max(0, Math.floor(hubNow.inventory?.[id] ?? 0));
-      const inventory = { ...hubNow.inventory };
-
-      if (action === "sell") {
-        if (current < 1) return;
-        if (current === 1) delete inventory[id];
-        else inventory[id] = current - 1;
-        saveHubSaveToLocalStorage({
-          ...hubNow,
-          credits: hubNow.credits + SELL_PRICE,
-          inventory,
-        });
-      } else {
-        if (hubNow.credits < BUY_PRICE) return;
-        inventory[id] = current + 1;
-        saveHubSaveToLocalStorage({
-          ...hubNow,
-          credits: hubNow.credits - BUY_PRICE,
-          inventory,
-        });
-      }
-
+      const next = applyResourceTrade(getHub(), id, action, 1);
+      if (!next) return;
+      saveHubSaveToLocalStorage(next);
       playLogNavigate(window.location.href);
     });
   });
