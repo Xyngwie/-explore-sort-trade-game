@@ -97,7 +97,7 @@ body>#shield-debug-console{flex:0 1 auto;min-height:0;max-height:45dvh;overflow:
 #wl-shell-hud .wl-hud-i.zero{color:#6e7681!important}
 #wl-shell-hud button.wl-hud-i:active:not(:disabled){transform:translateY(1px);filter:brightness(.8)}
 #wl-shell-hud button.wl-hud-i.flash{animation:wl-hud-flash .25s}
-@keyframes wl-hud-flash{from{background:#ffffff33}to{background:none}
+@keyframes wl-hud-flash{from{background:#ffffff33}to{background:none}}
 #wl-shell-tabs{flex:0 0 auto;display:flex;height:${SHELL_TAB_HEIGHT_PX}px;padding-bottom:env(safe-area-inset-bottom);background:#0d1117;border-top:1px solid #30363d;touch-action:none}
 #wl-shell-tabs[hidden]{display:none}
 #wl-shell-tabs button{all:unset;box-sizing:border-box!important;flex:1!important;min-width:0!important;height:100%!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;padding:0!important;background:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:#c9d1d9!important;font:600 12px/1 system-ui,sans-serif!important;letter-spacing:.06em!important;cursor:pointer}

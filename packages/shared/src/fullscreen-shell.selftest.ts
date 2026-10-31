@@ -107,4 +107,24 @@ for (const prop of ["background", "border", "border-radius", "box-shadow", "colo
   assert.match(tabRule, new RegExp(`(^|;)${prop}:[^;]*!important`), prop);
 assert.match(SHELL_CSS, /button:disabled\{color:#484f58!important\}/);
 assert.match(SHELL_CSS, /aria-current=page\]\{color:#fff!important;box-shadow:inset 0 2px 0 #4f8fe8!important\}/);
+// SHELL_CSS must parse: balanced braces, and every shell rule must be TOP-LEVEL
+// (a missing "}" once nested all tab rules inside @keyframes, silently killing them).
+function topLevelRules(css: string): { sel: string; body: string }[] {
+  const out: { sel: string; body: string }[] = [];
+  let depth = 0, start = 0, sel = "";
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c === "{") { if (depth === 0) { sel = css.slice(start, i).trim(); start = i + 1; } depth++; }
+    else if (c === "}") { depth--; assert.ok(depth >= 0, `unbalanced } at ${i}`); if (depth === 0) { out.push({ sel, body: css.slice(start, i) }); start = i + 1; } }
+  }
+  assert.equal(depth, 0, "SHELL_CSS braces unbalanced");
+  assert.equal(css.slice(start).trim(), "", "trailing junk in SHELL_CSS");
+  return out;
+}
+const rules = topLevelRules(SHELL_CSS);
+const sels = rules.map((r) => r.sel);
+for (const sel of ["#wl-shell-tabs", "#wl-shell-tabs button", "#wl-shell-tabs button:disabled", "#wl-shell-tabs button[aria-current=page]", "#wl-shell-hud", "@keyframes wl-hud-flash"])
+  assert.ok(sels.includes(sel), `top-level rule missing: ${sel}`);
+const kf = rules.find((r) => r.sel === "@keyframes wl-hud-flash")!;
+assert.deepEqual(topLevelRules(kf.body).map((r) => r.sel), ["from", "to"], "keyframes contains only from/to");
 console.log("shared fullscreen-shell.selftest ok");
