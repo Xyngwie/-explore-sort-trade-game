@@ -1,6 +1,13 @@
 ## 全画面シェル PR3 機体ゲージ（2026-11-01・神宮決定）
 - 青い外輪（装甲）・黄色い中心（電力）・赤い縦棒（弾薬）を 1 つのゲージにまとめ、HUB 機体カードと Explore 僚機カードに置いた。数字はタップで 1.5 秒。神宮決定（細部 1〜13 すべて★）を `docs/FULLSCREEN_SHELL_V0.md` §9 に記録。テスト：`verify-mech-gauge.cjs`（PC/スマホ：HUB 機体カードと出撃中の Explore 僚機カード、値が機体と一致、タップで 1.5 秒・カードを選ばない、セーブ/チェックポイント不変）。
 - To-do（PR4 で見直す）：(1) Cr タップのパレットに売却ボタンも出ている（決定は「購入の行」）。(2) 箱の購入に確認がなく、長押しでまとめて買える。
+## 風紀委員 / 細部は番号と★推奨で聞き、仮実装する（2026-11-01）
+- Who: inspector（風紀委員）
+- What: 神宮に決めてほしい細部は、番号、選択肢、★推奨をセットで聞く。回答を待つあいだは ★の値で仮実装し、docs に「暫定」と書く。回答が ★ と違うときはその部分だけ直す。仮実装の PR は、回答がそろい、CI と確認スクリプトが緑になるまでマージしない。決まった内容は問いの番号と選んだ中身をセットで docs に残す
+- Why: 神宮が、別チームの進め方をここに取り入れると言った（2026-11-01）。続けて、各 Automation の Instructions も同じ進め方に揃えるよう言った。起動は入れない
+- Scope: `docs/AGENT_CANON.md`、`docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/automations/INSTRUCTIONS_LEAD.md`、`docs/automations/INSTRUCTIONS_ARROW.md`、`docs/automations/INSTRUCTIONS_JAVELIN.md`、`docs/automations/INSTRUCTIONS_TOMAHAWK.md`、`docs/automations/README.md`。機能コードは変えていない。仮実装の `SPEC_DECISION` は出していない。Automations は起動していない。ダッシュボードの Instructions は、このファイルを貼り直すまで古いままである
+- Status: この節
+
 ## 全画面シェル PR2b HUD 補給・売買パレット（2026-11-01）
 - 神宮の決定（長押しの細部 1〜9 も含む）を `docs/FULLSCREEN_SHELL_V0.md` §8 に記録。HUD の 弾・装・電・Cr をタップするとボトムシートが開く。行は 弾・装・電・ジャンクの売買と箱の購入。ページは再読み込みしない。売却は毎回確認する（DOCK カードにも付けた）。導入中も使えて、explore と SORT 受け渡し中は無効。
 - テスト：`resource-trade.selftest.ts`（段階・最大・旧 DOCK カードと同じ結果・箱の購入・セーブ/チェックポイント不変・#332）。`verify-hud-palette.cjs`（PC/スマホ：開く・1個・長押し・ずらして取消・確認・再読み込みなし・閉じる・受け渡し中は無効）、`verify-new-game-intro.cjs`、`verify-fullscreen-shell.cjs`、`verify-alpha-lab.cjs` はすべて PASS。

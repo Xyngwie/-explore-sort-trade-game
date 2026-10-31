@@ -71,7 +71,7 @@ ${dead ? "" : `<path class="mg-ring" d="${ringArcPath(c - barW / 2, c, r, m.ring
 <rect x="${barX}" y="${barY}" width="${barW}" height="${barH}" rx="1" fill="${C.track}"${zero(m.ammo)}/>
 <rect class="mg-ammo" x="${barX}" y="${barY + barH * (1 - ammo)}" width="${barW}" height="${barH * ammo}" rx="1" fill="${C.ammo}"/>
 ${dead ? `<path d="M ${c - core} ${c - core} L ${c + core - barW} ${c + core} M ${c + core - barW} ${c - core} L ${c - core} ${c + core}" stroke="${C.dead}" stroke-width="2"/>` : ""}
-${m.leader ? `<circle cx="${c - barW / 2}" cy="${c}" r="${c - 1 - barW / 2}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".6"/>` : ""}
+${m.leader ? `<circle class="mg-leader" cx="${c - barW / 2}" cy="${c}" r="${c - 1 - barW / 2}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".6"/>` : ""}
 </svg>`;
 }
 /** Wrapper element: a button that shows the numbers on tap. */

@@ -180,6 +180,7 @@ function moneyClickAllowed(): boolean {
 }
 
 function fleetCards(s: HangarState): string {
+  const leaderId = buildNextSortieReadiness(s).selectedIds[0] ?? null;
   if (s.hub.fleet.length === 0) {
     return `<p class="muted">艦隊が空です。「シード読込」または「機体を受領」でデモ機を追加してください。</p>`;
   }
@@ -215,7 +216,7 @@ function fleetCards(s: HangarState): string {
           </label>
         </div>
         <div style="margin-top:0.35rem" data-durability-pct="${pct}" class="${durabilityBarClass(m.status)}-gauge">
-          ${mechGaugeHtml(hubMechGaugeModel(s.hub, m), MECH_GAUGE_SIZE_PX.hubCard)}
+          ${mechGaugeHtml(hubMechGaugeModel(s.hub, m, leaderId), MECH_GAUGE_SIZE_PX.hubCard)}
         </div>
         <div class="row">
           ${moneyAct}

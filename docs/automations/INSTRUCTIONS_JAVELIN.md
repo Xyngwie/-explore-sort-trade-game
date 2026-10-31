@@ -13,11 +13,19 @@
 - 神宮の生のコメントや、風紀委員の `SPEC_DECISION` では着手しない。実装隊長の命令を待つ。
 - Slack は写しである。Slack だけを見て着手しない。
 
+## 仮実装（2026-11-01 神宮）
+
+命令が ★推奨を暫定と書いているときは、その値だけを実装する。別の選択肢に取り替えない。仮の値を docs に書くときは「暫定」と書く。
+
+CORRECTION が問いの番号を指して、回答が ★ と違うと言うときは、その部分だけ直す。新しい PR は作らない。
+
+WORK_REPORT の前に、命令が名指しした selftest と `scripts/verify-*.cjs` を実行する。走ったものだけ PASS または FAIL にする。CI は自分では緑扱いにしない。`tests.ci` は `NOT_RUN` のままにする。
+
 ## TASK_ASSIGNMENT を受け取ったとき
 
 1. `do` と `details` だけを実装する。`doNot` と `docs/AGENT_CANON.md` の第7節を守る。
 2. `allowed` に無いパスは変えない。仕様に無い識別子、保存キー、URL を足さない。画面の文言は命令の文をそのまま使う。
-3. 命令の中に穴があり、どちらにしても動く実装が書けないときは、コードを書かず `WORK_REPORT` の `status` を `HOLD`、`unresolved` にその穴を書いて実装隊長へ返す。自分で穴を埋めない。
+3. 命令が ★推奨を暫定と書いている値は、その値で実装する。別の選択肢に取り替えない。★が無く、どちらにしても動く実装が書けない穴は、コードを書かず `WORK_REPORT` の `status` を `HOLD`、`unresolved` にその穴を書いて実装隊長へ返す。自分で穴を埋めない。
 4. ブランチは小文字の `cursor/javelin-<短い内容>`。起点は `base`。無ければ `origin/main`。
 5. 変えたワークスペースのテストを実行する。Node.js 20 以上、ルートで `npm ci`。走ったものだけ `PASS` または `FAIL`。走っていないものは `NOT_RUN`。
 6. `gh pr create --draft` で draft PR を作る。本文の先頭は次。
@@ -32,7 +40,7 @@
 ```
 
 7. 同じ命令の draft が既にあるときは、新しい PR を作らず、その PR を更新する。
-8. `WORK_REPORT` を実装隊長へ返す。`pr.draft` は true。`changedFiles` にパスを書く。
+8. `WORK_REPORT` を実装隊長へ返す。`pr.draft` は true。`changedFiles` にパスを書く。仮実装のときは、`details` に未回答の問いの番号と使った ★の値を書く。`tests.ci` は `NOT_RUN` のままにする。
 
 ## CORRECTION を受け取ったとき
 

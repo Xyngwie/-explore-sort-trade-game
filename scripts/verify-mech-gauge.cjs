@@ -82,6 +82,10 @@ const root = path.resolve(__dirname, ".."),
       await p.waitForTimeout(1500); await p.reload(); await p.waitForTimeout(800);
       for (let i = 0; i < 2; i++) { await p.locator("#btn-buy-mech").click(); await p.waitForTimeout(800); }
       await p.locator("#btn-select-all").click(); await p.waitForTimeout(800);
+      // Detail 8: HUB leader (first selected deploy mech) has the white outline; the other cards don't.
+      const lead = await p.evaluate(() => { const sel = [...document.querySelectorAll('.fleet-row input[data-act=select]:checked')].map((e) => e.dataset.id); return { sel, outlined: [...document.querySelectorAll(".fleet-row")].filter((r) => r.querySelector(".mech-gauge .mg-leader")).map((r) => r.dataset.id), rows: document.querySelectorAll(".fleet-row").length }; });
+      assert.ok(lead.sel.length >= 2 && lead.rows >= 2, JSON.stringify(lead));
+      assert.deepEqual(lead.outlined, [lead.sel[0]], "only the HUB leader card is outlined: " + JSON.stringify(lead));
       await p.locator("#link-deploy").click();
       await p.locator("#btn-start").waitFor({ timeout: 15000 });
       await p.locator("#btn-start").click();
@@ -100,6 +104,7 @@ const root = path.resolve(__dirname, ".."),
         // ring arc length follows armor (full at start → a ring path exists)
         assert.equal(rings, +m[1] > 0 ? 1 : 0);
       }
+      assert.equal(await p.locator(".wing-card .mg-leader").count(), 0, "Explore wingman cards have no leader outline");
       const wText = await wg.first().getAttribute("data-mech-gauge");
       // Real tap while running: shows text, card not selected.
       const sel0 = await p.locator(".wing-card.selected").count();
