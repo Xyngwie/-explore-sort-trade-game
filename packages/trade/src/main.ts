@@ -1,6 +1,7 @@
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
 import {playLogNavigate,PALETTE_TRADE_EVENT,loadHubSaveFromLocalStorage as loadHubForPalette,normalizeHubSnapshot as normalizeHubForPalette} from '@estg/shared';
-import { mountShieldDebugConsole } from "@estg/shared";
+import { mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
+import { hubMechGaugeModel } from "./mech-gauge-hub";
 import "./style.css";
 import {
   CTA_COPY,
@@ -213,11 +214,9 @@ function fleetCards(s: HangarState): string {
             出撃
           </label>
         </div>
-        <div style="margin-top:0.35rem">
-          耐久 ${m.durability}/${m.durabilityMax}
-          <span class="${durabilityBarClass(m.status)}"><span style="width:${pct}%"></span></span>
+        <div style="margin-top:0.35rem" data-durability-pct="${pct}" class="${durabilityBarClass(m.status)}-gauge">
+          ${mechGaugeHtml(hubMechGaugeModel(s.hub, m), MECH_GAUGE_SIZE_PX.hubCard)}
         </div>
-        <p class="muted">活動量 ${Number(m.battery.activity.toFixed(2))}/${m.battery.capacity}</p>
         <div class="row">
           ${moneyAct}
           ${reviveMechCost(m) ? `<button type="button" class="secondary fleet-act" data-act="sell-wreck" data-id="${escapeHtml(m.instanceId)}">残骸売却 400c</button>` : ""}
@@ -808,5 +807,6 @@ function render() {
 }
 
 render();
+installMechGaugeTap();
 
 mountShieldDebugConsole();

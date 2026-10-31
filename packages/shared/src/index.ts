@@ -59,3 +59,4 @@ export * from "./onboarding";
 export * from "./fullscreen-shell";
 export * from "./resource-trade";
 export * from "./resource-palette";
+export * from "./mech-gauge";

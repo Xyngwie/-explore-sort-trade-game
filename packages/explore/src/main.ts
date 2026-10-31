@@ -1,7 +1,8 @@
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
 import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
-import { mountShieldDebugConsole } from "@estg/shared";
+import { mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
+import { exploreMechGaugeModel } from "./game/mechGaugeExplore";
 import { prepareRequestedShieldFixture, inspectShieldFixture } from "./debug/shieldFixture";
 import { createAlphaLabHost, applyPendingLabCircuits } from "./debug/alphaLabHost";
 import { squadSees } from "./game/vision";
@@ -289,6 +290,7 @@ function bootExploreSession(): { world: World; paused: boolean; leaveForHub: boo
 
 const exploreSession = bootExploreSession();
 let world: World = exploreSession.world;
+installMechGaugeTap();
 mountShieldDebugConsole(() => inspectShieldFixture(world),createAlphaLabHost(()=>world,next=>{
   world=next;const hub=freshHub();
   if(hub){const plan=resortieSearch(checkpointSortieSearch("",world.invadeSector),hub,world.deployedInstanceIds);if(plan)bootSearch=plan.search;}
@@ -847,10 +849,8 @@ function wingPanelHtml(): string {
           <span>${escapeHtml(w.name)} ${w.alive ? "" : "（撃破）"}</span>
           <span class="badge ${status.badgeClass}">${status.badgeText}</span>
         </h3>
-        <div class="wing-hp${hpPulse}" role="meter" aria-label="HP" aria-valuenow="${Math.max(0, Math.ceil(w.hp))}" aria-valuemin="0" aria-valuemax="${w.maxHp}">
-          <div class="wing-hp-fill" style="width:${hpPct.toFixed(1)}%"></div>
-        </div>
-        <div class="muted">HP ${Math.max(0, Math.ceil(w.hp))}/${w.maxHp} · <span class="wing-load">${escapeHtml(loadLineJa(world, w))}</span>${shieldHudText(world, w) ? `・${shieldHudText(world, w)}` : ""}${wreckCarrierId(world, w.id) ? "・搭載中" : ""}${effectiveActivity(world, w) == null ? "" : `・活動量 ${Number(effectiveActivity(world, w)!.toFixed(1))}`}${quirk}${cover}</div>
+        <div class="wing-gauge-row"><span class="wing-gauge${hpPulse}" role="meter" aria-label="HP" aria-valuenow="${Math.max(0, Math.ceil(w.hp))}" aria-valuemin="0" aria-valuemax="${w.maxHp}" data-hp-pct="${hpPct.toFixed(1)}">${mechGaugeHtml(exploreMechGaugeModel(world, w), MECH_GAUGE_SIZE_PX.explorePanel)}</span>
+        <div class="muted"><span class="wing-load">${escapeHtml(loadLineJa(world, w))}</span>${shieldHudText(world, w) ? `・${shieldHudText(world, w)}` : ""}${wreckCarrierId(world, w.id) ? "・搭載中" : ""}${quirk}${cover}</div></div>
         ${orderRow}
       </div>`;
     })
