@@ -4,7 +4,7 @@
  * swapped in only while drawing and mapping taps. Zoom is never saved (resets on reload / new sortie).
  */
 import type { Camera, World } from "./types";
-/** provisional ★ values */
+/** §11 values (神宮決定 2026-11-01) */
 export const MAP_ZOOM_MIN = 1;
 export const MAP_ZOOM_MAX = 2.5;
 export const MAP_ZOOM_DOUBLE_TAP = 2;
