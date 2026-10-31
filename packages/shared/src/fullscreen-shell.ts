@@ -135,6 +135,7 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
     doc.body.insertBefore(panel, doc.body.firstChild);
   }
   if (app && app.parentElement !== panel) panel.appendChild(app);
+  if (!scrollShellToHash(doc)) doc.defaultView?.setTimeout(() => scrollShellToHash(doc), 0);
   mountHud(doc, current, model, hub);
   doc.getElementById("wl-shell-tabs")?.remove();
   const nav = doc.createElement("nav");
@@ -157,6 +158,33 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
   }
   doc.body.appendChild(nav);
   return model;
+}
+
+/**
+ * PR6 §12-1: the page no longer scrolls; `#wl-shell-panel` does. A hash that
+ * arrived before the panel existed (e.g. SORT tab → trade#unopened-panel) is
+ * re-applied inside the panel once the target exists.
+ */
+export function scrollShellToHash(doc: Document = document): boolean {
+  const id = decodeURIComponent((doc.location?.hash ?? "").slice(1));
+  if (!id) return false;
+  const el = doc.getElementById(id);
+  if (!el || !doc.getElementById("wl-shell-panel")?.contains(el)) return false;
+  el.scrollIntoView({ block: "start" });
+  return true;
+}
+
+/**
+ * PR6 §12-4（FULLSCREEN_SHELL_V0 #339 ④）: explore shows the tab bar on the
+ * briefing screen only; sortie start (and later phases, provisional ★) hide it.
+ * The shell HUD stays hidden in explore (explore has its own HUD, provisional ★).
+ */
+export function exploreTabsVisible(phase: string): boolean {
+  return phase === "briefing";
+}
+export function setExploreShellPhase(phase: string, doc: Document = document): void {
+  const nav = doc.getElementById("wl-shell-tabs");
+  if (nav) nav.hidden = !exploreTabsVisible(phase);
 }
 
 /** Q5: same destination as the SORT tab. */

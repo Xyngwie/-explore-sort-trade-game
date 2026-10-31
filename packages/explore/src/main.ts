@@ -1,4 +1,4 @@
-import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
+import {DEBUG_FIXTURE_ACTIVE,firstSortieError,setExploreShellPhase} from "@estg/shared";
 import { clampZoom, gestureDownForTap, gestureMove, gestureUp, MAP_WHEEL_STEP, newMapGestureState, withViewCamera, type MapGestureState } from "./game/mapZoom";
 import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
@@ -944,6 +944,7 @@ function renderDom(): void {
   if (logPanel.guard.selected()) { deferredLogRender = true; return; }
   deferredLogRender = false;
   phaseWatch.markRendered(world.phase);
+  setExploreShellPhase(world.phase);
   renderedUnlockSignature = unlockSignature();
   renderedLeaderAlive = captainActive(world);
   // U9: record the sortie result before any result button can be pressed.

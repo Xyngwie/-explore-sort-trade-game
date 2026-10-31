@@ -127,7 +127,9 @@ export async function bootPlayLog(
     const viewport = window.visualViewport,
       width = viewport?.width ?? innerWidth,
       height = viewport?.height ?? innerHeight;
-    panel.style.width = `${Math.max(0, width - 16)}px`;
+    // PR6 §12-2: the shell caps body at 960px; size to the shell column, not the window.
+    const column = document.body?.clientWidth || width;
+    panel.style.width = `${Math.max(0, Math.min(width, column) - 16)}px`;
     if (overlay) {
       overlay.style.left = `${viewport?.offsetLeft ?? 0}px`;
       overlay.style.top = `${viewport?.offsetTop ?? 0}px`;

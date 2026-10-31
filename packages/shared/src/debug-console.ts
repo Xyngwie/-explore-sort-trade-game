@@ -28,11 +28,14 @@ function storageSnapshot(store: Storage): Record<string, string | null> {
   return Object.fromEntries([HUB_SAVE_STORAGE_KEY,"estg.sortieCheckpoint"].filter(k=>store.getItem(k)!==null).map(k=>[k,JSON.stringify(JSON.parse(store.getItem(k)!), (key,value)=>["lastEditorName","editorName","latitude","longitude","signature"].includes(key)?undefined:value)]));
 }
 
+/** PR6 §12-3 provisional ★: compact one-line strip while closed (keeps the panel height for the screen). */
+export const ALPHA_LAB_STRIP_CSS = "margin:4px 8px;padding:4px 8px;border:1px solid #d5a948;border-radius:6px;font-size:12px;line-height:1.4";
+
 /** Mounted outside the app root: rerenders cannot remove debug controls. */
 export function mountShieldDebugConsole(inspect?: () => unknown, host?: AlphaLabHost): void {
   if (typeof document === "undefined" || document.getElementById("shield-debug-console")) return;
   const box = document.createElement("details"); box.id = "shield-debug-console";
-  box.style.cssText = "margin:8px;padding:12px;border:2px solid #d5a948;border-radius:8px;color:inherit;overflow-wrap:anywhere;max-width:100%;box-sizing:border-box";
+  box.style.cssText = ALPHA_LAB_STRIP_CSS + ";color:inherit;overflow-wrap:anywhere;max-width:100%;box-sizing:border-box";
   const summary = document.createElement("summary"); summary.textContent = DEBUG_FIXTURE_ACTIVE ? "アルファ実験室 · DEBUG_FIXTURE（通常セーブとは別）" : "アルファ実験室 · 開発・検証用：盾システム";box.append(summary);
   if (!DEBUG_FIXTURE_ACTIVE) {
     const a = document.createElement("a"), u = new URL(location.href);u.search = "";u.hash = "";u.searchParams.set(DEBUG_QUERY, DEBUG_VALUE);

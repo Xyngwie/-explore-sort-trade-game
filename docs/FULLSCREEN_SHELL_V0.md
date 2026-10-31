@@ -137,3 +137,15 @@ PR4 To-do（STATUS）の解消：(1) Cr タップのパレットは購入の行�
 6. PC の操作 = マウスホイールで拡大・縮小（1 段 1.15 倍）。ダブルクリックもダブルタップと同じ（神宮決定 2026-11-01）
 7. 拡大率の保存 = 保存しない。再読み込み・次の出撃・再開で 1 倍に戻る（神宮決定 2026-11-01）
 8. 倍率の表示 = 出さない（倍率の文字やボタンなし）（神宮決定 2026-11-01）
+
+## 12. PR6 各画面フィット（2026-11-01・provisional ★）
+
+1. window スクロール前提の洗い出し：`scrollIntoView`（ツリー・SORT タブ）は最寄りのスクロール祖先＝`#wl-shell-panel` を動かすのでそのまま。ハッシュ付きで開いた時（例 `trade#unopened-panel`）はシェル装着後に `scrollShellToHash` でパネル内へ再スクロール = **provisional ★**
+2. `play-log-browser.ts` の visualViewport：記録パネル幅は「表示領域幅とシェル列幅（最大 960px）の小さい方 −16px」。ブロッカーは従来どおり visualViewport 追従 = **provisional ★**
+3. Alpha Lab 帯：閉じている時は 1 行のコンパクト帯（余白 4px・枠 1px・12px 文字、高さ ≤40px）。中身は変更なし = **provisional ★**
+4. ブリーフィングのタブ（#339 ④ 決定済み）：explore はブリーフィング中のみ下部タブを表示し、出撃開始で非表示 → 実装。
+5. 結果画面（result）のタブ：非表示のまま = **provisional ★**
+6. explore のシェル HUD（資源の帯）：ブリーフィングでも非表示（explore 独自 HUD を使う）= **provisional ★**
+7. RESTORE の盤面高さ上限は従来どおり `window.innerHeight` 基準（CSS の vh と一致させるため変更なし）= **provisional ★**
+
+検証：`scripts/verify-screen-fit.cjs`（PC 1280×900／スマホ 390×844）＋ `fullscreen-shell.selftest.ts`（タブ表示規則）。セーブ・チェックポイントの形式は変更なし。
