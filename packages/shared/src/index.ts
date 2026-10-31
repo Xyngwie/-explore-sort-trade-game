@@ -56,3 +56,4 @@ export * from './play-log-hooks';
 export {bootPlayLog} from './play-log-browser';
 
 export * from "./onboarding";
+export * from "./fullscreen-shell";
