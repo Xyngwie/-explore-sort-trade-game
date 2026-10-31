@@ -135,6 +135,7 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
     doc.body.insertBefore(panel, doc.body.firstChild);
   }
   if (app && app.parentElement !== panel) panel.appendChild(app);
+  if (!scrollShellToHash(doc)) watchShellHash(doc, panel);
   mountHud(doc, current, model, hub);
   doc.getElementById("wl-shell-tabs")?.remove();
   const nav = doc.createElement("nav");
@@ -157,6 +158,57 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
   }
   doc.body.appendChild(nav);
   return model;
+}
+
+/**
+ * PR6 §12-1: the page no longer scrolls; `#wl-shell-panel` does. A hash that
+ * arrived before the panel existed (e.g. SORT tab → trade#unopened-panel) is
+ * re-applied inside the panel once the target exists.
+ */
+export function scrollShellToHash(doc: Document = document): boolean {
+  const id = decodeURIComponent((doc.location?.hash ?? "").slice(1));
+  if (!id) return false;
+  const el = doc.getElementById(id);
+  if (!el || !doc.getElementById("wl-shell-panel")?.contains(el)) return false;
+  el.scrollIntoView({ block: "start" });
+  return true;
+}
+
+/**
+ * Targets rendered later (trade's dynamic imports, re-renders that rebuild
+ * #app) are re-scrolled on each panel mutation. Ends 1.5s after the first hit,
+ * after 10s, or on any user input in the panel (Bugbot #342).
+ */
+function watchShellHash(doc: Document, panel: HTMLElement): void {
+  const win = doc.defaultView;
+  if (!win || !doc.location?.hash || typeof win.MutationObserver === "undefined") return;
+  const inputs = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+  let settle: number | undefined;
+  const obs = new win.MutationObserver(() => {
+    if (scrollShellToHash(doc) && settle === undefined) settle = win.setTimeout(stop, 1500);
+  });
+  const stop = () => {
+    obs.disconnect();
+    win.clearTimeout(timer);
+    win.clearTimeout(settle);
+    for (const e of inputs) panel.removeEventListener(e, stop);
+  };
+  const timer = win.setTimeout(stop, 10000);
+  for (const e of inputs) panel.addEventListener(e, stop, { passive: true });
+  obs.observe(panel, { childList: true, subtree: true });
+}
+
+/**
+ * PR6 §12-4（FULLSCREEN_SHELL_V0 #339 ④）: explore shows the tab bar on the
+ * briefing screen only; sortie start and later phases hide it.
+ * The shell HUD stays hidden in explore (explore has its own HUD).
+ */
+export function exploreTabsVisible(phase: string): boolean {
+  return phase === "briefing";
+}
+export function setExploreShellPhase(phase: string, doc: Document = document): void {
+  const nav = doc.getElementById("wl-shell-tabs");
+  if (nav) nav.hidden = !exploreTabsVisible(phase);
 }
 
 /** Q5: same destination as the SORT tab. */

@@ -128,3 +128,11 @@ for (const sel of ["#wl-shell-tabs", "#wl-shell-tabs button", "#wl-shell-tabs bu
 const kf = rules.find((r) => r.sel === "@keyframes wl-hud-flash")!;
 assert.deepEqual(topLevelRules(kf.body).map((r) => r.sel), ["from", "to"], "keyframes contains only from/to");
 console.log("shared fullscreen-shell.selftest ok");
+
+// PR6 §12-4: explore tabs on briefing only (save/checkpoint untouched: pure).
+{
+  const { exploreTabsVisible } = await import("./fullscreen-shell");
+  for (const [p, v] of [["briefing", true], ["sortie", false], ["result", false], ["landing", false]] as const)
+    if (exploreTabsVisible(p) !== v) throw new Error(`exploreTabsVisible(${p})`);
+  console.log("PR6 explore tabs phase rule OK");
+}
