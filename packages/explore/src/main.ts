@@ -1,4 +1,5 @@
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
+import { clampZoom, gestureDownForTap, gestureMove, gestureUp, MAP_WHEEL_STEP, newMapGestureState, withViewCamera, type MapGestureState } from "./game/mapZoom";
 import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
 import { mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
@@ -618,8 +619,30 @@ function bindCanvas(): void {
   boundCanvases.add(canvas);
   canvas.width = 720;
   canvas.height = 420;
+  const c = canvas;
+  // PR5 gestures (§11): pinch / double-tap / wheel zoom, map only. View-only zoom (never saved).
+  c.addEventListener("pointermove", (e) => { gestureMove(currentGesture(), e.pointerId, e.clientX, e.clientY); syncZoomAttr(); });
+  const up = (e: PointerEvent) => gestureUp(currentGesture(), e.pointerId);
+  c.addEventListener("pointerup", up); c.addEventListener("pointercancel", up); c.addEventListener("pointerleave", up);
+  c.addEventListener("wheel", (e) => {
+    if (world.phase !== "sortie") return;
+    e.preventDefault();
+    const g = currentGesture();
+    g.zoom = clampZoom(e.deltaY < 0 ? g.zoom * MAP_WHEEL_STEP : g.zoom / MAP_WHEEL_STEP);
+    syncZoomAttr();
+  }, { passive: false });
   canvas.addEventListener("pointerdown", (e) => {
     if (world.phase !== "sortie" || !canvas) return;
+    // Map the tap with the zoom on screen BEFORE this pointer (a double-tap toggles zoom; Q3: its 2nd tap is still a map tap at the shown spot).
+    const { kind: gesture, tapZoom: zoomBefore } = gestureDownForTap(currentGesture(), e.pointerId, e.clientX, e.clientY, e.timeStamp);
+    syncZoomAttr();
+    if (gesture === "pinch") return; // a second finger is a pinch, not a map tap
+    withViewCamera(world, zoomBefore, () => mapPointerDown(e));
+  });
+}
+function mapPointerDown(e: PointerEvent): void {
+  {
+    if (!canvas) return;
     const pt = worldFromCanvas(canvas, world, e.clientX, e.clientY);
     mapTargetPick = null;
     if (stripTargetPending) {
@@ -660,7 +683,17 @@ function bindCanvas(): void {
     paintWingPalette();
     noteCollectTap(world, pt);
     input.clickMove = pt;
-  });
+  }
+}
+let mapGesture: MapGestureState = newMapGestureState();
+let mapGestureWorld: World | null = null;
+/** Zoom resets with each new world (new sortie / reload / restore). */
+function currentGesture(): MapGestureState {
+  if (mapGestureWorld !== world) { mapGesture = newMapGestureState(); mapGestureWorld = world; syncZoomAttr(); }
+  return mapGesture;
+}
+function syncZoomAttr(): void {
+  if (canvas) canvas.dataset.mapZoom = mapGesture.zoom.toFixed(2);
 }
 
 /** Sortie action-row buttons that are circuit-gated (id → command). */
@@ -1424,7 +1457,7 @@ function frame(now: number): void {
     if (captainActive(world) !== renderedLeaderAlive) renderDom();
     if (canvas) {
       const ctx = canvas.getContext("2d");
-      if (ctx) renderWorld(ctx, world, canvas.width, canvas.height);
+      if (ctx) withViewCamera(world, currentGesture().zoom, () => renderWorld(ctx, world, canvas!.width, canvas!.height));
     }
     // Light HUD refresh ~8Hz + on log/stance changes
     if (needsDom || world.logs.length !== logLen || Math.floor(now / 120) !== Math.floor((now - dt * 1000) / 120)) {
