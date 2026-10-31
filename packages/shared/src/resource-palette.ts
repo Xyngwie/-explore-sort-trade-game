@@ -46,11 +46,11 @@ function readHub(): HubSnapshot | null {
 type Delta = { key: string; text: string };
 type Btn = { label: string; act: string; max: number; unit: number; sign: 1 | -1; short: string; run: (q: number) => Delta[] | null; confirm?: (q: number) => string; noHold?: boolean };
 
-/** Open the sheet (idempotent). Returns the sheet element. */
 /** PR4 §10-6 (神宮決定 2026-11-01): box purchase confirm text, shared by the palette and DOCK. */
 export function containerBuyConfirmText(q: number): string {
   return `未開封コンテナを ${q} 個購入しますか？（${UNOPENED_CONTAINER_PRICE_CREDITS * q}c）`;
 }
+/** Open the sheet (idempotent). Returns the sheet element. */
 export function openResourcePalette(doc: Document, focus: PaletteFocus): HTMLElement {
   closeResourcePalette(doc);
   const backdrop = doc.createElement("div");

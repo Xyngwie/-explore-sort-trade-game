@@ -32,7 +32,10 @@ export function installHubTreeNav(doc: Document): void {
     if (!el) return;
     const card = (el.classList.contains("card") ? el : el.nextElementSibling ?? el) as HTMLElement;
     card.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
-    card.classList.remove("hub-tree-flash"); void card.offsetWidth; card.classList.add("hub-tree-flash");
+    // Only one flash at a time: clear every earlier one first (reduced motion has no animationend to clear it).
+    doc.querySelectorAll(".hub-tree-flash").forEach((x) => x.classList.remove("hub-tree-flash"));
+    void card.offsetWidth; card.classList.add("hub-tree-flash");
+    card.addEventListener("animationend", () => card.classList.remove("hub-tree-flash"), { once: true });
     doc.body.dataset.hubTreeLast = b.dataset.hubNode;
   });
 }

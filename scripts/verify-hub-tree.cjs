@@ -76,14 +76,25 @@ const root = path.resolve(__dirname, ".."),
       const want = { squad: "#hub-anchor-squad + *", reserve: "#hub-anchor-reserve + .card", circuits: "#hub-anchor-circuits + .card", market: "#four-resource-trade" };
       for (const [key, sel2] of Object.entries(want)) {
         await p.locator(`#hub-tree [data-hub-node=${key}]`).click();
+        assert.equal(await p.locator(sel2).first().evaluate((e) => e.classList.contains("hub-tree-flash")), true, key + " flashes");
         await p.waitForTimeout(900);
         assert.equal(await p.evaluate(() => document.body.dataset.hubTreeLast), key);
         const top = await p.locator(sel2).first().evaluate((e) => e.getBoundingClientRect().top);
         assert.ok(top >= -2 && top < 260, `${key} scrolled into view (top ${top})`);
-        assert.equal(await p.locator(sel2).first().evaluate((e) => e.classList.contains("hub-tree-flash")), true);
       }
       assert.match(await p.locator("#four-resource-trade").textContent(), /売却|購入/, "物資市場 = current Trade market card");
       assert.equal(p.url().startsWith(base), true, "stays on the Trade page");
+      // Two quick taps → exactly one flashing section; normal motion clears it on animationend.
+      await p.locator("#hub-tree [data-hub-node=squad]").click(); await p.locator("#hub-tree [data-hub-node=circuits]").click();
+      assert.equal(await p.locator(".hub-tree-flash").count(), 1, "one flash after two taps");
+      await p.waitForTimeout(1200);
+      assert.equal(await p.locator(".hub-tree-flash").count(), 0, "flash cleared after animation");
+      // Reduced motion: no animationend, so the outline stays — but never piles up.
+      await p.emulateMedia({ reducedMotion: "reduce" });
+      for (const k of ["squad", "reserve", "circuits", "market"]) { await p.locator(`#hub-tree [data-hub-node=${k}]`).click(); await p.waitForTimeout(150); }
+      assert.equal(await p.locator(".hub-tree-flash").count(), 1, "reduced motion: exactly one outlined section");
+      assert.equal(await p.locator("#four-resource-trade").evaluate((e) => e.classList.contains("hub-tree-flash")), true);
+      await p.emulateMedia({ reducedMotion: "no-preference" });
       assert.deepEqual(await snap(), s0, "tree taps write no save / checkpoint");
       await p.locator("#hub-tree [data-hub-node=market]").click(); await p.waitForTimeout(600);
       await p.screenshot({ path: `/tmp/hubtree-${mobile ? "m" : "d"}.png` });
