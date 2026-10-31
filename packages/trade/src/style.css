@@ -394,3 +394,11 @@ a.btn.deploy-cta:hover {
   color: #c9d1d9;
   background: #262b33;
 }
+/* PR4 HUB tree (provisional ★) */
+.hub-tree-root{font-weight:700;margin-bottom:.35rem}
+.hub-tree ul{list-style:none;margin:0;padding:0 0 0 .9rem;border-left:2px solid #30363d}
+.hub-tree li{margin:.2rem 0}
+.hub-tree-node{display:flex;justify-content:space-between;gap:.5rem;width:100%;text-align:left;min-height:40px}
+.hub-tree-flash{animation:hubTreeFlash .6s ease-out 1}
+@keyframes hubTreeFlash{0%{box-shadow:0 0 0 2px #58a6ff}100%{box-shadow:0 0 0 2px transparent}}
+@media (prefers-reduced-motion: reduce){.hub-tree-flash{animation:none;outline:2px solid #58a6ff}}

@@ -44,9 +44,13 @@ function readHub(): HubSnapshot | null {
 }
 
 type Delta = { key: string; text: string };
-type Btn = { label: string; act: string; max: number; unit: number; sign: 1 | -1; short: string; run: (q: number) => Delta[] | null; confirm?: (q: number) => string };
+type Btn = { label: string; act: string; max: number; unit: number; sign: 1 | -1; short: string; run: (q: number) => Delta[] | null; confirm?: (q: number) => string; noHold?: boolean };
 
 /** Open the sheet (idempotent). Returns the sheet element. */
+/** PR4 (provisional ★): box purchase confirm text, shared by the palette and DOCK. */
+export function containerBuyConfirmText(q: number): string {
+  return `未開封コンテナを ${q} 個購入しますか？（${UNOPENED_CONTAINER_PRICE_CREDITS * q}c）`;
+}
 export function openResourcePalette(doc: Document, focus: PaletteFocus): HTMLElement {
   closeResourcePalette(doc);
   const backdrop = doc.createElement("div");
@@ -137,13 +141,16 @@ export function openResourcePalette(doc: Document, focus: PaletteFocus): HTMLEle
       const stock = resourceStock(hub, id);
       const label = RESOURCE_LABEL_JA[id] ?? SHORT[id];
       addRow(id, `${SHORT[id]}　在庫 ${stock}`, ROW_COLOR[id], `買 ${RESOURCE_BUY_PRICE}c / 売 ${RESOURCE_SELL_PRICE}c`, [
-        mk(id, "buy", hub, credits), mk(id, "sell", hub, credits, label),
+        // PR4 To-do (1): Cr tap = purchase rows only (decided 「購入の行」); sell stays on 弾・装・電 taps.
+        mk(id, "buy", hub, credits), ...(focus === "credits" ? [] : [mk(id, "sell", hub, credits, label)]),
       ]);
     }
     const cmax = maxContainerBuy(hub);
     addRow("unopened", `箱　在庫 ${Math.max(0, Math.floor(hub.unopenedContainers ?? 0))}`, "#ffffff", `買 ${UNOPENED_CONTAINER_PRICE_CREDITS}c`, [{
       label: "購入", act: "buy", max: cmax, unit: UNOPENED_CONTAINER_PRICE_CREDITS, sign: -1,
       short: shortfallText(UNOPENED_CONTAINER_PRICE_CREDITS, credits),
+      // PR4 To-do (2), provisional ★: confirm every box purchase; one box per tap (no long-press bulk).
+      noHold: true, confirm: (q) => containerBuyConfirmText(q),
       run: (q) => commit("unopened.buy", { quantity: q }, applyContainerBuy(readHub() ?? hub, q))
         ? [{ key: "Cr", text: String(-UNOPENED_CONTAINER_PRICE_CREDITS * q) }, { key: "箱", text: String(q) }] : null,
     }]);
@@ -199,7 +206,7 @@ function installHold(doc: Document, el: HTMLButtonElement, b: Btn, run: (q: numb
     if (el.disabled || b.max < 1) return;
     el.setPointerCapture?.(e.pointerId);
     active = true; steps = -1; qty = 1; flashed = false;
-    timer = setTimeout(tick, HOLD_START_DELAY_MS);
+    if (!b.noHold) timer = setTimeout(tick, HOLD_START_DELAY_MS);
   });
   el.addEventListener("pointerup", (e) => {
     if (!active) return;

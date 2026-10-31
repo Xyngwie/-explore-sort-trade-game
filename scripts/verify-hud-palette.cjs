@@ -121,6 +121,18 @@ const root = path.resolve(__dirname, ".."),
       await p.locator("#wl-shell-hud [data-hud-key=credits]").click();
       await p.locator("#wl-palette").waitFor();
       assert.equal(await p.locator("#wl-palette").getAttribute("data-focus"), "credits");
+      // PR4 To-do (1): Cr tap = purchase rows only.
+      assert.equal(await p.locator("#wl-palette button[data-palette-act=sell]").count(), 0, "Cr palette has no sell buttons");
+      assert.equal(await p.locator("#wl-palette button[data-palette-act=buy]").count(), 5);
+      // PR4 To-do (2): box buy = one per tap, no hold bulk, confirm first.
+      const ub = p.locator("#wl-palette button[data-palette-row=unopened][data-palette-act=buy]");
+      const ubb = await ub.boundingBox(), u0 = await p.evaluate((k) => JSON.parse(localStorage.getItem(k)).hub.unopenedContainers ?? 0, hubKey);
+      const nd = dialogs.length;
+      await p.mouse.move(ubb.x + ubb.width / 2, ubb.y + ubb.height / 2); await p.mouse.down(); await p.waitForTimeout(1200);
+      assert.equal(await p.locator("#wl-palette .wl-pal-bubble").count(), 0, "box hold does not grow");
+      await p.mouse.up(); await settle();
+      assert.match(dialogs[nd] || "", /未開封コンテナを 1 個購入しますか/);
+      assert.equal(await p.evaluate((k) => JSON.parse(localStorage.getItem(k)).hub.unopenedContainers ?? 0, hubKey), u0 + 1, "exactly one box");
       await p.mouse.click(5, 40);
       assert.equal(await p.locator("#wl-palette").count(), 0, "outside tap closes");
       // DOCK card sell now confirms too
