@@ -12,9 +12,9 @@ const project='/-explore-sort-trade-game/',repo=path.resolve(__dirname,'..');
   const p=await ctx.newPage(),errors=[];let accept=true;p.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message);});p.on('dialog',d=>accept?d.accept():d.dismiss());
   await p.goto(base);await p.locator('#btn-seed').click();await p.waitForFunction(()=>!document.querySelector('#play-log-blocker'));await p.locator('[data-circuit-purchase]').waitFor();
   await p.evaluate(()=>{const s=JSON.parse(localStorage.getItem('wreckline.hubSave.v3'));s.hub.circuits[0].lastEditorName='PRIVATE_TEST_SIGNATURE';s.hub.circuits[0].circuitBoard.lastEditorName='PRIVATE_TEST_SIGNATURE';localStorage.setItem('wreckline.hubSave.v3',JSON.stringify(s));sessionStorage.setItem('normal-sentinel','normal session');});
-  // The play log (#331) journals this write: wait until it is committed (signature in the real save, no pending
-  // journal entry) so the baseline is the settled normal save, not a mid-write state.
-  await p.waitForFunction(()=>(localStorage.getItem('wreckline.hubSave.v3')||'').includes('PRIVATE_TEST_SIGNATURE')&&!Object.keys(sessionStorage).some(k=>k.startsWith('wreckline.playLog.pending.v1')),null,{timeout:15000});
+  // The play log (#331) journals this write behind a storage facade: read the NATIVE stores (normalSnapshot) and
+  // wait until the signature is in the native save and no pending journal entry remains so the baseline is the settled normal save, not a mid-write state.
+  await p.waitForFunction(()=>{const n=window.normalSnapshot();return (n.local['wreckline.hubSave.v3']||'').includes('PRIVATE_TEST_SIGNATURE')&&!Object.keys(n.session).some(k=>k.startsWith('wreckline.playLog.pending.v1'));},null,{timeout:15000});
   const normal=await p.evaluate(()=>window.normalSnapshot()),normalHub=JSON.parse(normal.local['wreckline.hubSave.v3']).hub;
   await p.locator('#shield-debug-console > summary').click();await p.locator('#alpha-lab-enter').click();await p.locator('#sortie-paused').waitFor();await p.mouse.click(5,5);
   const open=async()=>{if(!await p.locator('#shield-debug-console').evaluate(e=>e.open))await p.locator('#shield-debug-console > summary').click();};
