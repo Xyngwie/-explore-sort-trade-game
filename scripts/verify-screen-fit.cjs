@@ -68,7 +68,7 @@ const root = path.resolve(__dirname, ".."),
       await p.locator("#hub-tree [data-hub-node]").last().click(); await p.waitForTimeout(900);
       f = await fit(); assert.equal(f.winY, 0, "tree nav keeps window still"); assert.ok(f.panelTop > 0, "tree nav scrolls the panel " + JSON.stringify(f));
       await p.evaluate(() => { document.getElementById("wl-shell-panel").scrollTop = 0; });
-      await p.goto(base + "#unopened-panel"); await p.locator("#unopened-panel").waitFor(); await p.waitForTimeout(900);
+      await p.goto("about:blank"); await p.goto(base + "#unopened-panel"); await p.locator("#unopened-panel").waitFor(); await p.waitForTimeout(900); // fresh initial load (Bugbot #342)
       f = await fit(); assert.equal(f.winY, 0); assert.ok(f.panelTop > 0, "hash load scrolls the panel " + JSON.stringify(f));
       const save0 = await p.evaluate((k) => localStorage.getItem(k), K);
       assert.ok(JSON.parse(save0).hub, "save intact");

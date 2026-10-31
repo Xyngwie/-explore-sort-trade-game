@@ -135,7 +135,7 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
     doc.body.insertBefore(panel, doc.body.firstChild);
   }
   if (app && app.parentElement !== panel) panel.appendChild(app);
-  if (!scrollShellToHash(doc)) doc.defaultView?.setTimeout(() => scrollShellToHash(doc), 0);
+  if (!scrollShellToHash(doc)) watchShellHash(doc, panel);
   mountHud(doc, current, model, hub);
   doc.getElementById("wl-shell-tabs")?.remove();
   const nav = doc.createElement("nav");
@@ -172,6 +172,30 @@ export function scrollShellToHash(doc: Document = document): boolean {
   if (!el || !doc.getElementById("wl-shell-panel")?.contains(el)) return false;
   el.scrollIntoView({ block: "start" });
   return true;
+}
+
+/**
+ * Targets rendered later (trade's dynamic imports, re-renders that rebuild
+ * #app) are re-scrolled on each panel mutation. Ends 1.5s after the first hit,
+ * after 10s, or on any user input in the panel (Bugbot #342).
+ */
+function watchShellHash(doc: Document, panel: HTMLElement): void {
+  const win = doc.defaultView;
+  if (!win || !doc.location?.hash || typeof win.MutationObserver === "undefined") return;
+  const inputs = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+  let settle: number | undefined;
+  const obs = new win.MutationObserver(() => {
+    if (scrollShellToHash(doc) && settle === undefined) settle = win.setTimeout(stop, 1500);
+  });
+  const stop = () => {
+    obs.disconnect();
+    win.clearTimeout(timer);
+    win.clearTimeout(settle);
+    for (const e of inputs) panel.removeEventListener(e, stop);
+  };
+  const timer = win.setTimeout(stop, 10000);
+  for (const e of inputs) panel.addEventListener(e, stop, { passive: true });
+  obs.observe(panel, { childList: true, subtree: true });
 }
 
 /**
