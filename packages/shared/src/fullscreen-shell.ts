@@ -90,6 +90,7 @@ export const SHELL_CSS = `
 html,body{height:100dvh!important;max-height:100dvh;overflow:hidden!important;overscroll-behavior:none}
 body{margin:0 auto!important;max-width:${SHELL_MAX_WIDTH_PX}px;display:flex;flex-direction:column;touch-action:manipulation}
 #wl-shell-panel{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+body>#shield-debug-console{flex:0 1 auto;min-height:0;max-height:45dvh;overflow:auto}
 #wl-shell-hud{flex:0 0 auto;display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;overflow:hidden;white-space:nowrap;background:#0d1117;border-bottom:1px solid #30363d;font:600 13px/1 system-ui,sans-serif}
 #wl-shell-hud[hidden]{display:none}
 #wl-shell-hud .wl-hud-i{display:inline-flex;gap:3px;align-items:baseline;min-width:0;background:none;border:0;padding:4px 2px;font:inherit;color:inherit}
@@ -99,9 +100,10 @@ body{margin:0 auto!important;max-width:${SHELL_MAX_WIDTH_PX}px;display:flex;flex
 @keyframes wl-hud-flash{from{background:#ffffff33}to{background:none}
 #wl-shell-tabs{flex:0 0 auto;display:flex;height:${SHELL_TAB_HEIGHT_PX}px;padding-bottom:env(safe-area-inset-bottom);background:#0d1117;border-top:1px solid #30363d;touch-action:none}
 #wl-shell-tabs[hidden]{display:none}
-#wl-shell-tabs button{flex:1;min-width:0;background:none;border:0;color:#c9d1d9;font:600 12px/1 system-ui,sans-serif;letter-spacing:.06em}
-#wl-shell-tabs button:disabled{color:#484f58}
-#wl-shell-tabs button[aria-current=page]{color:#fff!important;box-shadow:inset 0 2px 0 #4f8fe8}
+#wl-shell-tabs button{all:unset;box-sizing:border-box!important;flex:1!important;min-width:0!important;height:100%!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;padding:0!important;background:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:#c9d1d9!important;font:600 12px/1 system-ui,sans-serif!important;letter-spacing:.06em!important;cursor:pointer}
+#wl-shell-tabs button:disabled{cursor:default}
+#wl-shell-tabs button:disabled{color:#484f58!important}
+#wl-shell-tabs button[aria-current=page]{color:#fff!important;box-shadow:inset 0 2px 0 #4f8fe8!important}
 `;
 
 export function mountFullscreenShell(current: ModuleKey, doc: Document = document): ShellModel {
@@ -185,6 +187,7 @@ function mountHud(doc: Document, current: ModuleKey, model: ShellModel, hub: Hub
       const el = doc.createElement(it.key === "unopened" ? "button" : "span");
       el.className = "wl-hud-i" + (it.value === 0 ? " zero" : "");
       el.dataset.hudKey = it.key;
+      el.dataset.value = String(it.value);
       if (it.key !== "unopened") el.dataset.walletKey = it.key;
       el.style.color = it.color;
       const k = doc.createElement("span");

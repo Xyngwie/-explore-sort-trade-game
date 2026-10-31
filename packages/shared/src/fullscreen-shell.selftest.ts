@@ -14,6 +14,7 @@ import {
   hudItems,
   formatHudNumber,
   hudUnopenedEnabled,
+  SHELL_CSS,
   type HubSnapshot,
 } from "./index";
 
@@ -99,4 +100,11 @@ s3.setItem(SORTIE_CHECKPOINT_KEY, "{\"v\":1}");
 const snap = JSON.stringify([...s3.m]);
 assert.equal(hudItems(loadHubSaveFromLocalStorage(s3 as any)!.hub)[2].value, 7);
 assert.equal(JSON.stringify([...s3.m]), snap);
+// Tab bar ignores per-screen button styles (DOCK/SORT): reset + !important on every visual prop.
+const tabRule = SHELL_CSS.match(/#wl-shell-tabs button\{([^}]*)\}/)![1];
+assert.ok(tabRule.startsWith("all:unset"));
+for (const prop of ["background", "border", "border-radius", "box-shadow", "color", "font", "padding", "margin"])
+  assert.match(tabRule, new RegExp(`(^|;)${prop}:[^;]*!important`), prop);
+assert.match(SHELL_CSS, /button:disabled\{color:#484f58!important\}/);
+assert.match(SHELL_CSS, /aria-current=page\]\{color:#fff!important;box-shadow:inset 0 2px 0 #4f8fe8!important\}/);
 console.log("shared fullscreen-shell.selftest ok");

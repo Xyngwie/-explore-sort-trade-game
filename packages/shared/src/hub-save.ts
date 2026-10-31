@@ -1573,6 +1573,11 @@ export function loadHubSaveFromLocalStorage(
  * releases success/navigation only after the atomic IndexedDB state+log commit.
  */
 export const HUB_SAVED_EVENT = "wreckline:hub-saved";
+/** Same-page notification for read-only views (fullscreen shell HUD). Never throws. */
+export function notifyHubSaved(): void {
+  if (typeof dispatchEvent !== "function" || typeof Event !== "function") return;
+  try { dispatchEvent(new Event(HUB_SAVED_EVENT)); } catch { /* never block a save */ }
+}
 export function saveHubSaveToLocalStorage(
   hub: HubSnapshot,
   storage?: SaveStorage | null,
@@ -1585,8 +1590,7 @@ export function saveHubSaveToLocalStorage(
     }
     store.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(createHubSave(hub)));
     // Same-page notification for read-only views (fullscreen shell HUD).
-    if (!storage && typeof dispatchEvent === "function" && typeof Event === "function")
-      try { dispatchEvent(new Event(HUB_SAVED_EVENT)); } catch { /* never block a save */ }
+    if (!storage) notifyHubSaved();
     return true;
   } catch {
     return false;

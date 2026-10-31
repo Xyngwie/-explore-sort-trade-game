@@ -1,6 +1,6 @@
 import { DEBUG_FIXTURE_ACTIVE, DEBUG_META_KEY, readNormalSaveKey } from "./debug-storage";
 import { HUB_SAVE_STORAGE_KEY } from "./constants";
-import { INITIAL_HUB, loadHubSaveWithStatus, resolveSortieSelection, serializeHubSave, createHubSave, type HubSnapshot } from "./hub-save";
+import { INITIAL_HUB, loadHubSaveWithStatus, resolveSortieSelection, serializeHubSave, createHubSave, notifyHubSaved, type HubSnapshot } from "./hub-save";
 import { SORTIE_CHECKPOINT_KEY } from "./sortie-checkpoint";
 import { readSortieCheckpoint } from "./sortie-checkpoint";
 import type { FieldObjectIdentities, FieldObjectReference } from "./field-object-identities";
@@ -89,6 +89,7 @@ export function persistLabPair(hub:HubSnapshot,world:unknown,store:Storage):void
     store.setItem(HUB_SAVE_STORAGE_KEY,serializeHubSave(createHubSave(hub)));
     if(world && (world as {phase:string}).phase!=="briefing")store.setItem(SORTIE_CHECKPOINT_KEY,JSON.stringify({v:1,kind:(world as {phase:string}).phase==="result"?"result":"sortie",body:world}));
   } catch(e) {try{restore(HUB_SAVE_STORAGE_KEY,beforeHub);restore(SORTIE_CHECKPOINT_KEY,beforeCheckpoint);}catch{/* report failure; never fall back to normal */}throw new Error(`実験状態を保存できませんでした：${String(e)}`);}
+  if(store===globalThis.localStorage)notifyHubSaved();
 }
 /** Confirmed copy uses only getItem on the normal area. Never migrate/write it. */
 export function copyNormalSaveToLab():void {
