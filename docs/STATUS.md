@@ -1,3 +1,9 @@
+## 全画面1枚完結型UI（FULLSCREEN_SHELL）決定・PR1 外枠シェル（2026-10-31）
+- 神宮決定 Q1〜Q12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` に記録。PR 分割 1 外枠シェル／2 HUD→2b パレット／3 計器／4 HUB ツリー→4b→4c／5 ジェスチャー／6 各画面フィット。
+- PR1：100dvh 固定・ページ縦スクロール廃止（`#wl-shell-panel` 内のみスクロール）・touch-action・下部タブ（DOCK=trade, INVADE=invade, SORT=DOCK #unopened-panel, RESTORE=restore, SORTIE=explore／暫定）。Q4 は explore でタブ非表示、Q11 は導入中 DOCK のみ。
+- 検証：`npm test`（`fullscreen-shell.selftest.ts`：タブ規則＋セーブ・チェックポイント不変）、`scripts/verify-new-game-intro.cjs` PASS（PC 1280×900／スマホ 390×844）。
+- 細部決定（神宮 2026-11-01、すべて★）：①SORT タブ→DOCK `#unopened-panel`（実装済）②RESTORE は回路未選択で開く ③導入中は DOCK のみ ④ブリーフィングでは表示・出撃開始で非表示（PR6 で実装）⑤最大幅 960px。
+
 ## Codex / 新規ゲーム導入（2026-10-31・Draft #332）
 - Who: Codex（神宮直接指示。Automations起動なし）
 - What: codex/new-game-onboarding。支給10コンテナ・機体/回路/資源/資金ゼロ、作成回路の初出撃条件、収穫ゼロ判定

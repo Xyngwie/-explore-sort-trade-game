@@ -1,5 +1,6 @@
 import {
   bootPlayLog,
+  mountFullscreenShell,
   DEBUG_FIXTURE_ACTIVE,
   loadHubSaveFromLocalStorage,
   playLogNavigate,
@@ -11,5 +12,6 @@ void bootPlayLog(async () => {
     playLogNavigate(resolveModuleBaseUrl("trade"), true);
     return;
   }
+  mountFullscreenShell("invade");
   await import("./main");
 });

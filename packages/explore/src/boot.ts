@@ -1,5 +1,6 @@
 import {
   bootPlayLog,
+  mountFullscreenShell,
   DEBUG_FIXTURE_ACTIVE,
   loadHubSaveFromLocalStorage,
   readSortieCheckpoint,
@@ -17,5 +18,6 @@ void bootPlayLog(async () => {
     playLogNavigate(resolveModuleBaseUrl("trade"), true);
     return;
   }
+  mountFullscreenShell("explore");
   await import("./main");
 });
