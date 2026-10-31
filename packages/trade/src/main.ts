@@ -42,7 +42,6 @@ import {
   repairMech,
   reviveWreck,
   buyNewMech,
-  holdingPills,
   createNewMech,
   BUY_MECH_LABEL_JA,
   createMechLabelJa,
@@ -490,7 +489,6 @@ function render() {
   const sigDraft = keepSigFocus ? sigBefore.value : null;
   renderDeferred = false;
   const ready = buildNextSortieReadiness(state);
-  const holdings = holdingPills(state.hub);
 
   root.innerHTML = `
     <p class="pill">MODULE 3 · TRADE · HANGAR V0</p>
@@ -507,12 +505,9 @@ function render() {
 
     <div class="card wallet-card">
       <div class="stat-pills">
-        ${holdings
-          .map((p) => `<span class="stat-pill" data-wallet-key="${p.key}"><span class="stat-k">${escapeHtml(p.labelJa)}</span> ${p.value}</span>`)
-          .join("")}
+        <!-- Cr・弾・装・電・未開封 moved to the shell HUD (#wl-shell-hud, PR2 2026-11-01). -->
         <span class="stat-pill"><span class="stat-k">艦隊</span> ${ready.total}</span>
         <span class="stat-pill"><span class="stat-k">出撃</span> ${state.selectedDeployIds.length}</span>
-        <span class="stat-pill"><span class="stat-k">未開封</span> ${Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0))}</span>
       </div>
       <div class="row">
         <button type="button" id="btn-seed">検証用シード読込</button>

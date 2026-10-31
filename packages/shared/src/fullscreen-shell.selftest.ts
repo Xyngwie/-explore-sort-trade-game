@@ -11,6 +11,9 @@ import {
   SHELL_TABS,
   SHELL_TAB_MODULE,
   shellTabHref,
+  hudItems,
+  formatHudNumber,
+  hudUnopenedEnabled,
   type HubSnapshot,
 } from "./index";
 
@@ -73,4 +76,27 @@ assert.deepEqual(enabled(ids(loadHubSaveFromLocalStorage(s2 as any)!.hub, "trade
 assert.equal(shellTabHref("SORT", "/g/", "/g/sort/"), "/g/#unopened-panel");
 assert.equal(shellTabHref("SORT", "/g/#x", "/g/sort/"), "/g/#unopened-panel");
 assert.equal(shellTabHref("RESTORE", "/g/", "/g/restore/"), "/g/restore/");
+// PR2 HUD: order, labels, colors, stock-only values, zero, formatting.
+const h = { ...legacy, credits: 12345, unopenedContainers: 3, inventory: { ammo: 0, armor: 7, power: 1, junk: 99 } };
+assert.deepEqual(hudItems(h).map((i) => [i.label, i.value, i.color]), [
+  ["Cr", 12345, "#ffffff"], ["弾", 0, "#f85149"], ["装", 7, "#58a6ff"], ["電", 1, "#d4a72c"], ["箱", 3, "#ffffff"],
+]);
+assert.deepEqual(hudItems(null).map((i) => i.value), [0, 0, 0, 0, 0]);
+assert.equal(hudItems({ ...h, credits: -5, inventory: { ammo: 2.9 } as any })[0].value, 0);
+assert.equal(formatHudNumber(9999, true), "9999");
+assert.equal(formatHudNumber(10000, true), "10k");
+assert.equal(formatHudNumber(12345, true), "12.3k");
+assert.equal(formatHudNumber(5_000_000, true), "5M");
+assert.equal(formatHudNumber(1234567, false), "1,234,567");
+// Unopened tap: onboarding OK, SORT handoff / no save / explore off.
+assert.equal(hudUnopenedEnabled({ current: "trade", hub: fresh, handoffInProgress: false }), true);
+assert.equal(hudUnopenedEnabled({ current: "sort", hub: fresh, handoffInProgress: true }), false);
+assert.equal(hudUnopenedEnabled({ current: "trade", hub: null, handoffInProgress: false }), false);
+// HUD reads the loaded save without mutating save or checkpoint.
+const s3 = new Mem();
+assert.ok(saveHubSaveToLocalStorage(h, s3 as any));
+s3.setItem(SORTIE_CHECKPOINT_KEY, "{\"v\":1}");
+const snap = JSON.stringify([...s3.m]);
+assert.equal(hudItems(loadHubSaveFromLocalStorage(s3 as any)!.hub)[2].value, 7);
+assert.equal(JSON.stringify([...s3.m]), snap);
 console.log("shared fullscreen-shell.selftest ok");

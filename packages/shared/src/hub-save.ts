@@ -1572,6 +1572,7 @@ export function loadHubSaveFromLocalStorage(
  * its boolean is candidate acceptance, not durable commit. The shared UI barrier
  * releases success/navigation only after the atomic IndexedDB state+log commit.
  */
+export const HUB_SAVED_EVENT = "wreckline:hub-saved";
 export function saveHubSaveToLocalStorage(
   hub: HubSnapshot,
   storage?: SaveStorage | null,
@@ -1583,6 +1584,9 @@ export function saveHubSaveToLocalStorage(
       return false;
     }
     store.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(createHubSave(hub)));
+    // Same-page notification for read-only views (fullscreen shell HUD).
+    if (!storage && typeof dispatchEvent === "function" && typeof Event === "function")
+      try { dispatchEvent(new Event(HUB_SAVED_EVENT)); } catch { /* never block a save */ }
     return true;
   } catch {
     return false;

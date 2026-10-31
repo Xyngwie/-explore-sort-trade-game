@@ -3,8 +3,8 @@
  * Pure tab model + a DOM mount that wraps the existing #app without
  * redesigning it. Reads the hub save only; never writes it.
  */
-import { loadHubSaveFromLocalStorage, type HubSnapshot } from "./hub-save";
-import { resolveModuleBaseUrl, type ModuleKey } from "./constants";
+import { loadHubSaveFromLocalStorage, HUB_SAVED_EVENT, type HubSnapshot } from "./hub-save";
+import { HUB_SAVE_STORAGE_KEY, resolveModuleBaseUrl, type ModuleKey } from "./constants";
 import { playLogNavigate } from "./play-log-hooks";
 
 export type ShellTabId = "DOCK" | "INVADE" | "SORT" | "RESTORE" | "SORTIE";
@@ -24,6 +24,32 @@ export function shellTabHref(id: ShellTabId, tradeBase: string, moduleBase: stri
 }
 export const SHELL_MAX_WIDTH_PX = 960;
 export const SHELL_TAB_HEIGHT_PX = 56;
+export const SHELL_HUD_HEIGHT_PX = 32;
+
+/** PR2 HUD (神宮 2026-11-01): Cr・弾・装・電・箱, stock only, display only. */
+export type HudKey = "credits" | "ammo" | "armor" | "power" | "unopened";
+export type HudItem = { key: HudKey; label: string; value: number; color: string };
+export const HUD_COLORS: Record<HudKey, string> = {
+  credits: "#ffffff", ammo: "#f85149", armor: "#58a6ff", power: "#d4a72c", unopened: "#ffffff",
+};
+export function hudItems(hub: Pick<HubSnapshot, "credits" | "inventory" | "unopenedContainers"> | null): HudItem[] {
+  const n = (v: unknown) => Math.max(0, Math.floor(Number(v) || 0));
+  const v: Record<HudKey, number> = {
+    credits: n(hub?.credits), ammo: n(hub?.inventory?.ammo), armor: n(hub?.inventory?.armor),
+    power: n(hub?.inventory?.power), unopened: n(hub?.unopenedContainers),
+  };
+  const labels: Record<HudKey, string> = { credits: "Cr", ammo: "弾", armor: "装", power: "電", unopened: "箱" };
+  return (Object.keys(labels) as HudKey[]).map((key) => ({ key, label: labels[key], value: v[key], color: HUD_COLORS[key] }));
+}
+/** Mobile: >=10,000 → 12.3k (>=1,000,000 → 1.2M, provisional). PC: thousands separators. */
+export function formatHudNumber(value: number, mobile: boolean): string {
+  const v = Math.max(0, Math.floor(value));
+  if (!mobile) return v.toLocaleString("en-US");
+  if (v < 10_000) return String(v);
+  const [d, u] = v >= 1_000_000 ? [1_000_000, "M"] : [1_000, "k"];
+  return (Math.floor((v / d) * 10) / 10).toFixed(1).replace(/\.0$/, "") + u;
+}
+export const HUD_MOBILE_QUERY = "(max-width: 600px)";
 
 export type ShellContext = {
   current: ModuleKey;
@@ -64,6 +90,13 @@ export const SHELL_CSS = `
 html,body{height:100dvh!important;max-height:100dvh;overflow:hidden!important;overscroll-behavior:none}
 body{margin:0 auto!important;max-width:${SHELL_MAX_WIDTH_PX}px;display:flex;flex-direction:column;touch-action:manipulation}
 #wl-shell-panel{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+#wl-shell-hud{flex:0 0 auto;display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;overflow:hidden;white-space:nowrap;background:#0d1117;border-bottom:1px solid #30363d;font:600 13px/1 system-ui,sans-serif}
+#wl-shell-hud[hidden]{display:none}
+#wl-shell-hud .wl-hud-i{display:inline-flex;gap:3px;align-items:baseline;min-width:0;background:none;border:0;padding:4px 2px;font:inherit;color:inherit}
+#wl-shell-hud .wl-hud-i.zero{color:#6e7681!important}
+#wl-shell-hud button.wl-hud-i:active:not(:disabled){transform:translateY(1px);filter:brightness(.8)}
+#wl-shell-hud button.wl-hud-i.flash{animation:wl-hud-flash .25s}
+@keyframes wl-hud-flash{from{background:#ffffff33}to{background:none}
 #wl-shell-tabs{flex:0 0 auto;display:flex;height:${SHELL_TAB_HEIGHT_PX}px;padding-bottom:env(safe-area-inset-bottom);background:#0d1117;border-top:1px solid #30363d;touch-action:none}
 #wl-shell-tabs[hidden]{display:none}
 #wl-shell-tabs button{flex:1;min-width:0;background:none;border:0;color:#c9d1d9;font:600 12px/1 system-ui,sans-serif;letter-spacing:.06em}
@@ -98,6 +131,7 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
     doc.body.insertBefore(panel, doc.body.firstChild);
   }
   if (app && app.parentElement !== panel) panel.appendChild(app);
+  mountHud(doc, current, model, hub);
   doc.getElementById("wl-shell-tabs")?.remove();
   const nav = doc.createElement("nav");
   nav.id = "wl-shell-tabs";
@@ -112,15 +146,66 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
     b.disabled = !t.enabled;
     b.addEventListener("click", () => {
       if (b.disabled) return;
-      if (t.id === "SORT" && current === "trade") {
-        doc.location.hash = SHELL_SORT_TAB_HASH;
-        doc.querySelector(SHELL_SORT_TAB_HASH)?.scrollIntoView({ block: "start" });
-        return;
-      }
-      playLogNavigate(shellTabHref(t.id, resolveModuleBaseUrl("trade"), resolveModuleBaseUrl(t.module)));
+      if (t.id === "SORT") goToUnopened(doc, current);
+      else playLogNavigate(resolveModuleBaseUrl(t.module));
     });
     nav.appendChild(b);
   }
   doc.body.appendChild(nav);
   return model;
+}
+
+/** Q5: same destination as the SORT tab. */
+function goToUnopened(doc: Document, current: ModuleKey): void {
+  if (current === "trade") {
+    doc.location.hash = SHELL_SORT_TAB_HASH;
+    doc.querySelector(SHELL_SORT_TAB_HASH)?.scrollIntoView({ block: "start" });
+    return;
+  }
+  playLogNavigate(shellTabHref("SORT", resolveModuleBaseUrl("trade"), resolveModuleBaseUrl("sort")));
+}
+/** Unopened tap: works in onboarding (it is the next step); off mid-SORT-handoff or with no save. */
+export function hudUnopenedEnabled(ctx: ShellContext): boolean {
+  return !!ctx.hub && !ctx.handoffInProgress && ctx.current !== "explore";
+}
+function readHub(): HubSnapshot | null {
+  try { return loadHubSaveFromLocalStorage()?.hub ?? null; } catch { return null; }
+}
+function mountHud(doc: Document, current: ModuleKey, model: ShellModel, hub: HubSnapshot | null): void {
+  doc.getElementById("wl-shell-hud")?.remove();
+  const bar = doc.createElement("div");
+  bar.id = "wl-shell-hud";
+  bar.hidden = model.hidden;
+  doc.body.insertBefore(bar, doc.body.firstChild);
+  const handoff = current === "sort" && doc.location.search.length > 1;
+  const render = (h: HubSnapshot | null) => {
+    const mobile = !!doc.defaultView?.matchMedia?.(HUD_MOBILE_QUERY).matches;
+    bar.textContent = "";
+    for (const it of hudItems(h)) {
+      const el = doc.createElement(it.key === "unopened" ? "button" : "span");
+      el.className = "wl-hud-i" + (it.value === 0 ? " zero" : "");
+      el.dataset.hudKey = it.key;
+      if (it.key !== "unopened") el.dataset.walletKey = it.key;
+      el.style.color = it.color;
+      const k = doc.createElement("span");
+      k.textContent = it.label;
+      el.append(k, " " + formatHudNumber(it.value, mobile));
+      if (el instanceof HTMLButtonElement) {
+        el.type = "button";
+        el.disabled = !hudUnopenedEnabled({ current, hub: h, handoffInProgress: handoff });
+        el.addEventListener("click", () => {
+          if (el.disabled) return;
+          el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+          setTimeout(() => goToUnopened(doc, current), 120);
+        });
+      }
+      bar.appendChild(el);
+    }
+  };
+  render(hub);
+  const win = doc.defaultView;
+  if (!win) return;
+  win.addEventListener(HUB_SAVED_EVENT, () => render(readHub()));
+  win.addEventListener("storage", (e) => { if (!e.key || e.key === HUB_SAVE_STORAGE_KEY) render(readHub()); });
+  win.matchMedia?.(HUD_MOBILE_QUERY).addEventListener?.("change", () => render(readHub()));
 }
