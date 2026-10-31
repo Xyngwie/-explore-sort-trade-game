@@ -1,8 +1,9 @@
-import {playLogNavigate} from '@estg/shared';
+import {cancelIntroOpening,playLogNavigate} from '@estg/shared';
 import { loadHubSaveFromLocalStorage, saveHubSaveToLocalStorage, type HubSnapshot } from "@estg/shared";
 
 const PENDING_SORT_UNOPENED_KEY = "wreckline.pendingSortUnopenedBack.v1";
-const SORT_HANDOFF_KEYS = ["fromSort", "importMaterials" /* old URL marker */, "craftMultiplier", "yieldBag", "depositUnopenedContainers"];
+const INTRO_PENDING_KEY="wreckline.pendingIntroOpening.v1";
+const SORT_HANDOFF_KEYS = ["introResultId", "introCancelId","fromSort", "importMaterials" /* old URL marker */, "craftMultiplier", "yieldBag", "depositUnopenedContainers"];
 
 function readCount(raw: string | null): number {
   const value = Number.parseInt(raw ?? "", 10);
@@ -35,21 +36,9 @@ function hasSortHandoff(): boolean {
   return SORT_HANDOFF_KEYS.some((key) => params.has(key));
 }
 
-function markPendingSort(): void {
-  const target = document.activeElement?.closest<HTMLElement>("#btn-sort-unopened, #btn-sortie-sort");
-  const input = target?.id === "btn-sort-unopened"
-    ? document.getElementById("input-sort-unopened") as HTMLInputElement | null
-    : null;
-  const panel = target?.closest("#unopened-panel");
-  const stockMatch = panel?.textContent?.match(/在庫\s*(\d+)/);
-  const quantity = input
-    ? Math.max(1, Math.floor(Number(input.value) || 1))
-    : Math.max(1, readCount(stockMatch?.[1] ?? null));
-  sessionStorage.setItem(PENDING_SORT_UNOPENED_KEY, String(quantity));
-}
-
 function clearPendingSort(): void {
   sessionStorage.removeItem(PENDING_SORT_UNOPENED_KEY);
+  sessionStorage.removeItem(INTRO_PENDING_KEY);
 }
 
 function restorePendingSortOnBack(): void {
@@ -57,17 +46,24 @@ function restorePendingSortOnBack(): void {
   if (pending < 1) return;
   const hub = readSavedHub();
   if (!hub) return;
-  saveHubWithUnopened(hub.unopenedContainers + pending);
+  const introId = sessionStorage.getItem(INTRO_PENDING_KEY);
+  if (introId) {
+    const opening = hub.newGameIntro?.opening;
+    if (opening?.id === introId) {
+      if (
+        !saveHubSaveToLocalStorage({
+          ...cancelIntroOpening(hub, introId),
+          unopenedContainers: hub.unopenedContainers + opening.containerCount,
+        })
+      )
+        return;
+    }
+  } else saveHubWithUnopened(hub.unopenedContainers + pending);
   clearPendingSort();
   playLogNavigate(window.location.href);
 }
 
-// This module is loaded before main.ts. Delegation therefore records the
-// reservation before hangar.ts decrements and persists the stock.
-document.addEventListener("click", (event) => {
-  const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest("#btn-sort-unopened, #btn-sortie-sort")) markPendingSort();
-});
+// Accepted launches record the actual quantity in hangar.ts; failed clicks reserve nothing.
 
 // A real Sort→HUB handoff is committed, so the reservation is no longer
 // refundable when the user later navigates back through history.

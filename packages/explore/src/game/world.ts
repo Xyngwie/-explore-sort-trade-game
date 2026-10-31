@@ -1,3 +1,4 @@
+import {DEBUG_FIXTURE_ACTIVE,loadHubSaveFromLocalStorage, saveHubSaveToLocalStorage, firstSortieError, firstSortieCircuit} from "@estg/shared";
 import { restoreFieldAtSortieStart } from "./fieldPersistence";
 import { makeEnemyIdentity } from "./enemyIdentity";
 import {
@@ -455,11 +456,54 @@ export function createWorld(boot: SortieBootstrap): World {
   };
 }
 
-export function startSortie(world: World): void {
+export function startSortie(world: World): boolean {
+  const hub = loadHubSaveFromLocalStorage()?.hub;
+  const nonce = Math.random().toString(36).slice(2, 10);
+  if (typeof window !== "undefined" && !DEBUG_FIXTURE_ACTIVE && !hub) {
+    world.logs.push({
+      t: world.elapsed,
+      text: "出撃機の保存データがありません。格納庫で新規ゲームを開始してください。",
+      kind: "tactical",
+    });
+    return false;
+  }
+  if (
+    !DEBUG_FIXTURE_ACTIVE &&
+    hub?.newGameIntro &&
+    !hub.newGameIntro.firstSortie
+  ) {
+    const error = firstSortieError(hub, world.leader.instanceId);
+    if (error) {
+      world.logs.push({ t: world.elapsed, text: error, kind: "tactical" });
+      return false;
+    }
+    const circuitId = firstSortieCircuit(hub, world.leader.instanceId)!;
+    if (
+      !saveHubSaveToLocalStorage({
+        ...hub,
+        newGameIntro: {
+          ...hub.newGameIntro,
+          firstSortie: { nonce, leaderId: world.leader.instanceId!, circuitId },
+        },
+      })
+    ) {
+      world.logs.push({
+        t: world.elapsed,
+        text: "記録を保存できません。格納庫へ戻って再試行してください。",
+        kind: "tactical",
+      });
+      return false;
+    }
+  }
   delete world.shieldReturnSettled;
   delete world.barricades;
   delete world.fieldReturnReport;
-  world.enemies = placeEnemies(world.leader.pos, world.densityThreat, world.invadeSector?.neighborCount ?? 0, world.invadeSector?.invadeRank ?? 0);
+  world.enemies = placeEnemies(
+    world.leader.pos,
+    world.densityThreat,
+    world.invadeSector?.neighborCount ?? 0,
+    world.invadeSector?.invadeRank ?? 0,
+  );
   world.enemySupplies = [];
   world.recallSpawns = undefined;
   world.recoveredEnemyUnits = [];
@@ -477,7 +521,7 @@ export function startSortie(world: World): void {
   world.friendlyFire = { count: 0, byShooter: {} };
   world.leftBehind = [];
   world.recoveredLostMechIds = [];
-  world.sortieNonce = Math.random().toString(36).slice(2, 10);
+  world.sortieNonce = nonce;
   if (world.circuitPlay) {
     world.circuitPlay.order = null;
     world.circuitPlay.pending = null;
@@ -493,7 +537,8 @@ export function startSortie(world: World): void {
   }
   if (world.coverObjects) {
     for (let i = world.coverObjects.length - 1; i >= 0; i--) {
-      if (world.coverObjects[i]!.id.startsWith("trench-")) world.coverObjects.splice(i, 1);
+      if (world.coverObjects[i]!.id.startsWith("trench-"))
+        world.coverObjects.splice(i, 1);
     }
   }
   for (const c of world.containers) {
@@ -516,6 +561,7 @@ export function startSortie(world: World): void {
   }
   faceAtSortieStart(world);
   restoreFieldAtSortieStart(world);
+  return true;
 }
 
 /** Facing PR1 (神宮 10/17): the leader faces up the screen, wingmen face outward from the spawn; enemies face the nearest ally. */

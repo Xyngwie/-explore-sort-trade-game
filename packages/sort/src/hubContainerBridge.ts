@@ -7,21 +7,68 @@ const PIECES_PER_CONTAINER = 25;
 
 function readHubUnopenedContainers(): number {
   try {
-    const n = Number(loadHubSaveFromLocalStorage()?.hub.unopenedContainers ?? 0);
+    const hub = loadHubSaveFromLocalStorage()?.hub;
+    let n = Number(hub?.unopenedContainers ?? 0);
+    const intro = hub?.newGameIntro;
+    if (intro && intro.initialOpened < 10) {
+      if (
+        intro.opening?.id !==
+        new URLSearchParams(location.search).get("introOpening")
+      )
+        return 0;
+      n = Math.min(n, 10 - intro.initialOpened - intro.opening!.initialCount);
+    } else if (
+      new URLSearchParams(location.search).has("introOpening") &&
+      intro?.opening?.id !==
+        new URLSearchParams(location.search).get("introOpening")
+    )
+      return 0;
     return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
   } catch {
     return 0;
   }
 }
 
-function spendHubContainers(count: number): boolean {
+function spendHubContainers(count: number, url: string): boolean {
   if (count < 1) return false;
   try {
     const hub = loadHubSaveFromLocalStorage()?.hub;
     if (!hub) return false;
     const have = Number(hub.unopenedContainers ?? 0);
     if (!Number.isFinite(have) || have < count) return false;
-    return saveHubSaveToLocalStorage({ ...hub, unopenedContainers: Math.floor(have) - count });
+    let next = { ...hub, unopenedContainers: Math.floor(have) - count };
+    if (
+      hub.newGameIntro &&
+      new URLSearchParams(location.search).has("introOpening")
+    ) {
+      const intro = hub.newGameIntro,
+        opening = intro.opening;
+      const initial = intro.initialOpened < 10;
+      if (
+        !opening ||
+        opening.id !==
+          new URLSearchParams(location.search).get("introOpening") ||
+        (initial && count > 10 - intro.initialOpened - opening.initialCount)
+      )
+        return false;
+      next = {
+        ...next,
+        newGameIntro: {
+          ...intro,
+          opening: {
+            ...opening,
+            initialCount: opening.initialCount + (initial ? count : 0),
+            containerCount: opening.containerCount + count,
+            url,
+          },
+        },
+      };
+      sessionStorage.setItem(
+        "wreckline.pendingSortUnopenedBack.v1",
+        String(opening.containerCount + count),
+      );
+    }
+    return saveHubSaveToLocalStorage(next);
   } catch {
     return false;
   }
@@ -32,7 +79,7 @@ function isExploreHandoffQuery(): boolean {
   return p.has("salvagedContainers") || p.has("totalStockPieces") || p.has("isExtracted");
 }
 
-function addContainersToQuery(count: number): void {
+function addContainersToQuery(count: number): string {
   const u = new URL(window.location.href);
   const containers = Math.max(0, Number.parseInt(u.searchParams.get("salvagedContainers") ?? "0", 10) || 0);
   const stock = Math.max(
@@ -43,7 +90,7 @@ function addContainersToQuery(count: number): void {
   u.searchParams.set("salvagedContainers", String(containers + count));
   u.searchParams.set("totalStockPieces", String(stock + count * PIECES_PER_CONTAINER));
   if (!u.searchParams.has("isExtracted")) u.searchParams.set("isExtracted", "1");
-  playLogNavigate(u.toString());
+  return u.toString();
 }
 
 function installContainerButtons(): void {
@@ -71,12 +118,13 @@ function installContainerButtons(): void {
   const handleAdd = (count: number) => {
     addButton.disabled = true;
     allButton.disabled = true;
-    if (!spendHubContainers(count)) {
+    const url=addContainersToQuery(count);
+    if (!spendHubContainers(count,url)) {
       addButton.disabled = false;
       allButton.disabled = false;
       return;
     }
-    addContainersToQuery(count);
+    playLogNavigate(url);
   };
 
   addButton.addEventListener("click", () => handleAdd(1));

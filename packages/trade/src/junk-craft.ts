@@ -174,6 +174,9 @@ export function craftJunkCircuit(
     credits: heldCredits(hub) - creditCost,
     inventory,
     circuits: [record, ...hub.circuits],
+    ...(hub.newGameIntro && !hub.newGameIntro.firstSortie && side === 1 && !isTrue ? {newGameIntro: {
+      ...hub.newGameIntro, craftedCircuitIds: [...hub.newGameIntro.craftedCircuitIds, record.circuitId],
+    }} : {}),
   });
   const saved = next.circuits.find((c) => c.circuitId === opts.circuitId);
   if (!saved) return { ok: false, hub, reason: "bad_size" };

@@ -1,4 +1,7 @@
-import {setPlayLogOperation} from '@estg/shared';
+import {DEBUG_FIXTURE_ACTIVE,HUB_SAVE_STORAGE_KEY,HUB_SAVE_LEGACY_STORAGE_KEY} from "@estg/shared";
+import {reserveIntroOpening, cancelIntroOpening, receiveIntroOpening} from "@estg/shared";
+import {createNewGameHub, firstSortieError} from "@estg/shared";
+import {setPlayLogOperation,playLogRecording} from '@estg/shared';
 /**
  * Hangar state helpers for Module 3 stub UI.
  * Pure transitions + localStorage persistence via shared hub-save.
@@ -390,11 +393,44 @@ export {
 export function createInitialHangar(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
+  const hadHubData = (() => {
+    if (DEBUG_FIXTURE_ACTIVE) return true;
+    try {
+      const source =
+        storage ?? (typeof localStorage !== "undefined" ? localStorage : null);
+      if (
+        !playLogRecording() &&
+        typeof location !== "undefined" &&
+        Object.values(HANDOFF_QUERY_KEYS).some((keys) =>
+          keys.some((key) => new URLSearchParams(location.search).has(key)),
+        )
+      )
+        return true;
+      return (
+        !!source &&
+        (source.getItem(HUB_SAVE_STORAGE_KEY) !== null ||
+          source.getItem(HUB_SAVE_LEGACY_STORAGE_KEY) !== null ||
+          source.getItem("estg.sortieCheckpoint") !== null ||
+          source.getItem("wreckline.sortSession.v1") !== null)
+      );
+    } catch {
+      return true;
+    } // Unknown/unreadable storage is never a fresh origin.
+  })();
   const loaded = loadHubSaveFromLocalStorage(storage ?? undefined);
   const stash = loadM45StashFromLocalStorage(storage ?? undefined);
   let hub = loaded?.hub
     ? normalizeHubSnapshot(loaded.hub)
-    : normalizeHubSnapshot(INITIAL_HUB);
+    : hadHubData ||
+        stash.lastCircuit ||
+        stash.lastInvadeSector ||
+        stash.updatedAt
+      ? normalizeHubSnapshot(INITIAL_HUB)
+      : createNewGameHub();
+  const beforeIntroReceipts = hub;
+  for (const result of hub.newGameIntro?.results ?? [])
+    hub = receiveIntroOpening(hub, result.id);
+  const receivedIntro = hub !== beforeIntroReceipts;
   const log: HangarLog = loaded
     ? [`セーブ読込 (${loaded.savedAt})`]
     : ["初期ハブ（セーブなし）"];
@@ -445,7 +481,7 @@ export function createInitialHangar(
     lastExploreReturn: null,
     craftSignature,
   };
-  if (migratedCircuit || backfilled) {
+  if (migratedCircuit || backfilled || receivedIntro) {
     return persistHangar(state, storage ?? undefined);
   }
   return state;
@@ -519,7 +555,19 @@ export function ingestLocationSearch(
   if (sort) {
     // fix/hub-save-legacy-retire: an old URL's importMaterials grants nothing
     // (資材 is gone); only the yieldBag / unopened containers below are received.
-    if (sort.yieldBag && Object.keys(sort.yieldBag).length > 0) {
+    const introParams = new URLSearchParams(search);
+    const resultId = introParams.get("introResultId"), cancelId = introParams.get("introCancelId");
+    if (resultId) {
+      hub = receiveIntroOpening(hub,resultId);
+      consumed = true;
+    } else if (cancelId) {
+      const opening=hub.newGameIntro?.opening;
+      if(opening?.id===cancelId) {
+        hub=addUnopenedContainers(cancelIntroOpening(hub,cancelId),opening.containerCount);
+      }
+      consumed=true;
+    }
+    if (!resultId && !cancelId && sort.yieldBag && Object.keys(sort.yieldBag).length > 0) {
       hub = importYieldBagIntoHub(hub, sort.yieldBag);
       const keys = Object.entries(sort.yieldBag)
         .map(([k, v]) => `${k}:${v}`)
@@ -531,7 +579,7 @@ export function ingestLocationSearch(
       0,
       Math.floor(Number(sort.depositUnopenedContainers) || 0),
     );
-    if (deposit > 0) {
+    if (!resultId && !cancelId && deposit > 0) {
       hub = addUnopenedContainers(hub, deposit);
       log = pushLog(log, `未開封コンテナ預け +${deposit}`);
       notices.push(`未開封コンテナ +${deposit}`);
@@ -902,6 +950,7 @@ export function loadPlaytestSeed(
     | null
     | LoadPlaytestSeedOptions,
 ): HangarState {
+  setPlayLogOperation('debug.playtest-seed');
   const opts: LoadPlaytestSeedOptions =
     storageOrOpts != null &&
     typeof storageOrOpts === "object" &&
@@ -966,6 +1015,7 @@ export function resolveHangarPerfectInjectRate(ctx?: {
 export function resetHangar(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
 ): HangarState {
+  setPlayLogOperation('debug.reset');
   clearHubSaveFromLocalStorage(storage ?? undefined);
   clearM45StashFromLocalStorage(storage ?? undefined);
   const hub = normalizeHubSnapshot(INITIAL_HUB);
@@ -1063,7 +1113,7 @@ export function wreckCountLineJa(hub: Pick<HubSnapshot, "lostMechs">): string | 
 export function buildDeployUrl(state: HangarState): string | null {
   // Only the chosen mechs go out — and only they take wear.
   const ids = selectionAfter(state.hub, state.selectedDeployIds);
-  if (ids.length === 0 || squadEquipmentError(state.hub, ids)) return null;
+  if (ids.length === 0 || squadEquipmentError(state.hub, ids) || (!DEBUG_FIXTURE_ACTIVE && firstSortieError(state.hub,ids[0]))) return null;
   // F1 (2026-10-12): startingAmmo = the hub ammo stock (`inventory.ammo`, M1), not the old typed ammoLoad.
   const ammo = Math.max(0, Math.floor(state.hub.inventory.ammo ?? 0));
   const payload = buildTradeToExplorePayloadFromFleet(
@@ -1723,8 +1773,22 @@ export function launchSortFromUnopened(
   qty = 1,
 ): { state: HangarState; url: string | null } {
   const n = Math.max(1, Math.floor(qty));
-  setPlayLogOperation('container.open',{quantity:n});
-  const url = buildSortFromUnopenedUrl(state, n);
+  const intro = state.hub.newGameIntro;
+  if (intro?.opening?.url)
+    return {
+      state: { ...state, notice: "開封中のコンテナへ戻ります" },
+      url: intro.opening.url,
+    };
+  if (intro && intro.initialOpened < 10 && n > 10 - intro.initialOpened)
+    return {
+      state: {
+        ...state,
+        notice: `初期支給分は購入分と別に開封してください（初期分残り ${10 - intro.initialOpened}個）。`,
+      },
+      url: null,
+    };
+  setPlayLogOperation("container.open", { quantity: n });
+  let url = buildSortFromUnopenedUrl(state, n);
   if (!url) {
     const have = Math.max(0, Math.floor(state.hub.unopenedContainers ?? 0));
     return {
@@ -1735,13 +1799,32 @@ export function launchSortFromUnopened(
       url: null,
     };
   }
-  const spent = spendUnopenedContainers(state.hub, n);
+  let spent = spendUnopenedContainers(state.hub, n);
   if (!spent) {
     return {
       state: { ...state, notice: `未開封不足（要 ${n}）` },
       url: null,
     };
   }
+  if (intro) {
+    const id =
+      globalThis.crypto?.randomUUID?.() ??
+      `intro-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const target = new URL(url);
+    target.searchParams.set("introOpening", id);
+    url = target.toString();
+    spent = reserveIntroOpening(
+      spent,
+      id,
+      n,
+      url,
+      intro.initialOpened < 10 ? n : 0,
+    );
+    if (typeof sessionStorage !== "undefined")
+      sessionStorage.setItem("wreckline.pendingIntroOpening.v1", id);
+  }
+  if (typeof sessionStorage !== "undefined")
+    sessionStorage.setItem("wreckline.pendingSortUnopenedBack.v1", String(n));
   const next: HangarState = {
     ...state,
     hub: spent,

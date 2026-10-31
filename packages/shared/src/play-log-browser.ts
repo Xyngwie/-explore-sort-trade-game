@@ -1,6 +1,5 @@
+import {createNewGameHub} from "./hub-save";
 import {
-  INITIAL_HUB,
-  normalizeHubSnapshot,
   createHubSave,
   serializeHubSave,
 } from "./hub-save";
@@ -623,7 +622,7 @@ export async function bootPlayLog(
       const initial: PlayState = {
         files: {
           ["local:" + HUB_SAVE_STORAGE_KEY]: parse(
-            serializeHubSave(createHubSave(normalizeHubSnapshot(INITIAL_HUB))),
+            serializeHubSave(createHubSave(createNewGameHub())),
           ),
         },
         sorties: {},
@@ -693,7 +692,7 @@ export async function bootPlayLog(
           files: {
             ["local:" + HUB_SAVE_STORAGE_KEY]: parse(
               serializeHubSave(
-                createHubSave(normalizeHubSnapshot(INITIAL_HUB)),
+                createHubSave(createNewGameHub()),
               ),
             ),
           },

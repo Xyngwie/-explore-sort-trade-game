@@ -1,0 +1,229 @@
+{
+  "type": "IMPLEMENTATION_VERIFICATION",
+  "feature": "new-game-container-introduction",
+  "recordedAt": "2026-10-31",
+  "pr": 332,
+  "base": "cf0712326f7dd1e928a84b31ac8d8e02066b811a",
+  "branch": "codex/new-game-onboarding",
+  "ownerDecision": {
+    "Q1": "A",
+    "source": "docs/spec-questions/new-game-intro-containers.json"
+  },
+  "initialAssets": {
+    "credits": 0,
+    "unopenedContainers": 10,
+    "fleet": [],
+    "circuits": [],
+    "inventory": {
+      "ammo": 0,
+      "armor": 0,
+      "power": 0,
+      "junk": 0
+    }
+  },
+  "unitTests": "PASS: exact initial assets/roundtrip; created active false 1x1 on actual leader; no auto grant; core storage refusal and nonce; wrong/absent leader; initial/normal receipts and cancellation once; no wallet-based award; legacy M45/corrupt/future/inbound data preserved",
+  "workspaceTests": "PASS",
+  "typecheck": "PASS",
+  "productionBuilds": {
+    "trade": "PASS",
+    "sort": "PASS",
+    "restore": "PASS",
+    "explore": "PASS",
+    "invade": "PASS"
+  },
+  "browserMethod": "Local production dist served under intercepted public URL shapes; disposable Chromium contexts. No public deployment writes.",
+  "browserMainFlows": {
+    "status": "PASS",
+    "results": [
+      {
+        "viewport": "1280x900",
+        "status": "PASS",
+        "scope": "Fresh assets, direct/forced gates, skip cancellation, split 4+6 zero harvest, reward abort/retry, 300 armor purchases and mech creation, 1x1 craft/Restore/equip/paid supplies, actual first sortie abort/retry, exported full replay, explicit new game",
+        "errors": []
+      },
+      {
+        "viewport": "390x844",
+        "status": "PASS",
+        "scope": "Fresh assets, direct/forced gates, skip cancellation, split 4+6 zero harvest, reward abort/retry, 300 armor purchases and mech creation, 1x1 craft/Restore/equip/paid supplies, actual first sortie abort/retry, exported full replay, explicit new game",
+        "errors": []
+      },
+      {
+        "viewport": "390x844",
+        "status": "PASS",
+        "scope": "Natural nonzero harvest using actual swap, sell/buy reinvestment, initial-only addition and cancellation, mixed batch rejection, purchased stock excluded, normal paid batch IDs/cancel/receive-once, no false zero-harvest award"
+      }
+    ]
+  },
+  "browserFinalEntryAndInputRegression": {
+    "status": "PASS",
+    "results": [
+      {
+        "viewport": "390x844",
+        "status": "PASS",
+        "scope": "Natural nonzero harvest using native touch/keyboard/mouse swipe, rejected diagonal unchanged, sell/buy reinvestment, initial-only addition and cancellation, mixed batch rejection, purchased stock excluded, normal paid batch IDs/cancel/receive-once, no false zero-harvest award"
+      },
+      {
+        "status": "PASS",
+        "scope": "Cold orphaned combat URL redirects to normal zero-asset introduction, no demo wallet or units",
+        "route": "explore/?deployableMechs=3&startingAmmo=999"
+      },
+      {
+        "status": "PASS",
+        "scope": "Cold orphaned combat URL redirects to normal zero-asset introduction, no demo wallet or units",
+        "route": "invade/?fromHub=1&deployableMechs=3"
+      }
+    ]
+  },
+  "normalEconomyAndFirstSortie": {
+    "status": "PASS",
+    "results": [
+      {
+        "status": "PASS",
+        "viewport": "390x844",
+        "normalHarvestOnly": true,
+        "debugFixture": false,
+        "freeGrants": false,
+        "zeroHarvestAward": false,
+        "initialHarvest": 184,
+        "harvestCredits": 920,
+        "actualSwaps": 20,
+        "existingProfitCycles": 212,
+        "records": 1350,
+        "finalCredits": 68,
+        "scope": "Actual normal opening/sales, existing 2 junk purchase + 1x1 craft +25c sale (+7c cycle), armor300+500c mech creation, Restore/equip/paid ammo, actual first sortie and full exported replay",
+        "errors": []
+      }
+    ]
+  },
+  "indexedDBFailureAndConcurrencyRegression": {
+    "method": "Chromium real IndexedDB; explicit fault injection; separate disposable contexts",
+    "results": [
+      {
+        "scenario": "Quota refusal before staging, unchanged confirmed state, persistent candidate survives reload, identical operation/result on retry",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Two tabs CAS at same head, one charge/reward/sequence, rejected candidate retained, explicit reload to committed state",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Prepared IDB owner survives interrupted commit and competing tab journal; reload recovers that exact operation first",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Per-tab canonical protocol namespace preserves source reservation on reload without copying it into another tab",
+        "status": "PASS"
+      },
+      {
+        "scenario": "IDB commit succeeds, localStorage mirror fails, reload recovers authoritative state without reapplying",
+        "status": "PASS"
+      },
+      {
+        "scenario": "IndexedDB denied, no silent fallback or premature save",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Existing save remains unchanged and unlogged; no synthesized history",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Existing inbound handoff without a game origin is not synthesized into a new genesis",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Corrupt record metadata blocks boot; no silent correction or unlogged continuation",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Two real tabs: A commit, B stage, A retry preserves B pending, B commit and full replay match; no duplicate A",
+        "status": "PASS"
+      },
+      {
+        "scenario": "Real IDB append/export/replay growth without pruning",
+        "status": "PASS",
+        "records": 1001,
+        "writeMs": 3259,
+        "exportReplayMs": 99,
+        "jsonBytes": 468151,
+        "reloadAndVerifyMs": 290
+      }
+    ]
+  },
+  "isolatedShieldDebugRegression": {
+    "viewport": [
+      390,
+      844
+    ],
+    "method": "same-origin local production builds, real UI, DEBUG_FIXTURE",
+    "physicalDevice": "NOT_RUN",
+    "publicVersion": "NOT_RUN",
+    "results": [
+      {
+        "preset": "NO_SHIELD_NO_CIRCUIT",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "NORMAL_SHIELD_AND_RESERVE",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "STRIPPING_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "P_SHIELD_LEADER_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "P_SHIELD_WINGMAN_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "preset": "BARRICADE_PERSISTENCE_READY",
+        "status": "PASS",
+        "reloadPreservesIdentity": true,
+        "normalSaveUnchanged": true
+      },
+      {
+        "scenario": "hostile fire, front shield depletion and two-second reserve exchange",
+        "status": "PASS"
+      },
+      {
+        "scenario": "real jobs, evidence export, movement blocking, dismantle/pickup, return/HUB/re-sortie, explicit reset, all-module and exit isolation",
+        "status": "PASS"
+      }
+    ]
+  },
+  "saveTransactions": {
+    "genesis": "New-game initial snapshot once; old game origins never rewritten",
+    "opening": "Unique paid reservation ID and fixed start bag, actual completion only; initial source kept separate from purchases",
+    "receipt": "Fixed saved harvest; receiving consumes the receipt and adds inventory in the same logged commit; a missing receipt never falls back to URL data",
+    "zeroHarvest": "Initial count reaches 10 with cumulative harvest zero; add 5,000,000c once, including flag in the same saved result",
+    "firstSortie": "Owned actual leader + active crafted false 1x1; persisted nonce and start snapshot share existing IDB confirmation barrier"
+  },
+  "observedBug": {
+    "before": "Real pointer capture retargeted pointerup/click to #app: first tap selected 0 cells, no harvest through intended taps.",
+    "after": "PASS native touch selection exactly once, keyboard click, actual mouse swipe and nonzero harvest. Rejected diagonal unchanged; no match/spawn/rate/swipe threshold changes."
+  },
+  "ci": "Final head SHA and final CI URL/conclusion are recorded in PR #332 body/checks",
+  "notRun": {
+    "physicalSmartphone": "NOT_RUN",
+    "publicVersionManualPlay": "NOT_RUN",
+    "deployment": "NOT_TRIGGERED"
+  },
+  "limitations": [
+    "Normal income verification is an observed natural opening and existing +7c crafting/sale path; no seed or special initial contents were injected.",
+    "Local browser checks use 390x844 emulation, not a physical smartphone.",
+    "Play log restoration covers confirmed state, not a full combat replay."
+  ]
+}
