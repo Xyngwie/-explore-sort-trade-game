@@ -712,7 +712,7 @@ function render() {
   syncBuyTotal();
   document.getElementById("btn-buy-unopened")?.addEventListener("click", () => {
     const q = Math.max(1, Math.floor(Number(buyQtyInput?.value) || 1));
-    if (!confirm(containerBuyConfirmText(q))) return; // PR4 To-do (2), provisional ★
+    if (!confirm(containerBuyConfirmText(q))) return; // PR4 §10-6 (神宮決定 2026-11-01)
     state = buyUnopenedContainers(state, q);
     render();
   });

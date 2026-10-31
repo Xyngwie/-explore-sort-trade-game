@@ -2,7 +2,7 @@
 import { hubVisibleCircuits, type HubSnapshot } from "@estg/shared";
 export type HubTreeKey = "squad" | "reserve" | "circuits" | "market";
 export type HubTreeNode = { key: HubTreeKey; label: string; count: string; target: string };
-/** Provisional ★: scroll targets on the current DOCK (= Trade) page. 物資市場 = the Trade market card (Q12). */
+/** §10-3 (神宮決定 2026-11-01): scroll targets on the current DOCK (= Trade) page. 物資市場 = the Trade market card (Q12). */
 export const HUB_TREE_TARGET: Record<HubTreeKey, string> = {
   squad: "hub-anchor-squad", reserve: "hub-anchor-reserve", circuits: "hub-anchor-circuits", market: "four-resource-trade",
 };
@@ -22,7 +22,7 @@ export function hubTreeHtml(nodes: HubTreeNode[]): string {
   <ul>${nodes.map((n) => `<li><button type="button" class="hub-tree-node" data-hub-node="${n.key}" data-target="${n.target}"><span>${n.label}</span>${n.count ? `<span class="muted mono">${n.count}</span>` : ""}</button></li>`).join("")}</ul>
 </nav>`;
 }
-/** Tap = scroll the panel to the section and flash it once (provisional ★). */
+/** Tap = scroll the panel to the section and flash it once (§10-2, 神宮決定 2026-11-01). */
 export function installHubTreeNav(doc: Document): void {
   doc.addEventListener("click", (e) => {
     const b = (e.target as Element | null)?.closest?.("[data-hub-node]") as HTMLElement | null;

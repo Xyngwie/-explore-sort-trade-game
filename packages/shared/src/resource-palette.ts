@@ -47,7 +47,7 @@ type Delta = { key: string; text: string };
 type Btn = { label: string; act: string; max: number; unit: number; sign: 1 | -1; short: string; run: (q: number) => Delta[] | null; confirm?: (q: number) => string; noHold?: boolean };
 
 /** Open the sheet (idempotent). Returns the sheet element. */
-/** PR4 (provisional ★): box purchase confirm text, shared by the palette and DOCK. */
+/** PR4 §10-6 (神宮決定 2026-11-01): box purchase confirm text, shared by the palette and DOCK. */
 export function containerBuyConfirmText(q: number): string {
   return `未開封コンテナを ${q} 個購入しますか？（${UNOPENED_CONTAINER_PRICE_CREDITS * q}c）`;
 }
@@ -149,7 +149,7 @@ export function openResourcePalette(doc: Document, focus: PaletteFocus): HTMLEle
     addRow("unopened", `箱　在庫 ${Math.max(0, Math.floor(hub.unopenedContainers ?? 0))}`, "#ffffff", `買 ${UNOPENED_CONTAINER_PRICE_CREDITS}c`, [{
       label: "購入", act: "buy", max: cmax, unit: UNOPENED_CONTAINER_PRICE_CREDITS, sign: -1,
       short: shortfallText(UNOPENED_CONTAINER_PRICE_CREDITS, credits),
-      // PR4 To-do (2), provisional ★: confirm every box purchase; one box per tap (no long-press bulk).
+      // PR4 §10-6/7 (神宮決定 2026-11-01): confirm every box purchase; one box per tap (no long-press bulk).
       noHold: true, confirm: (q) => containerBuyConfirmText(q),
       run: (q) => commit("unopened.buy", { quantity: q }, applyContainerBuy(readHub() ?? hub, q))
         ? [{ key: "Cr", text: String(-UNOPENED_CONTAINER_PRICE_CREDITS * q) }, { key: "箱", text: String(q) }] : null,
