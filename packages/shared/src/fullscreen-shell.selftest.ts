@@ -10,6 +10,7 @@ import {
   computeShellModel,
   SHELL_TABS,
   SHELL_TAB_MODULE,
+  shellTabHref,
   type HubSnapshot,
 } from "./index";
 
@@ -68,4 +69,8 @@ const s2 = new Mem();
 assert.ok(saveHubSaveToLocalStorage(fresh, s2 as any));
 assert.deepEqual(enabled(ids(loadHubSaveFromLocalStorage(s2 as any)!.hub, "trade")), []);
 
+// Decision 1: SORT tab → DOCK #unopened-panel; others → own module.
+assert.equal(shellTabHref("SORT", "/g/", "/g/sort/"), "/g/#unopened-panel");
+assert.equal(shellTabHref("SORT", "/g/#x", "/g/sort/"), "/g/#unopened-panel");
+assert.equal(shellTabHref("RESTORE", "/g/", "/g/restore/"), "/g/restore/");
 console.log("shared fullscreen-shell.selftest ok");

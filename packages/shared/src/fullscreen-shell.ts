@@ -17,6 +17,11 @@ export const SHELL_TAB_MODULE: Record<ShellTabId, ModuleKey> = {
   RESTORE: "restore",
   SORTIE: "explore",
 };
+/** Decided 2026-11-01: SORT tab opens DOCK's unopened-container panel (opening starts in the hub). */
+export const SHELL_SORT_TAB_HASH = "#unopened-panel";
+export function shellTabHref(id: ShellTabId, tradeBase: string, moduleBase: string): string {
+  return id === "SORT" ? tradeBase.replace(/#.*$/, "") + SHELL_SORT_TAB_HASH : moduleBase;
+}
 export const SHELL_MAX_WIDTH_PX = 960;
 export const SHELL_TAB_HEIGHT_PX = 56;
 
@@ -106,7 +111,13 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
     if (t.active) b.setAttribute("aria-current", "page");
     b.disabled = !t.enabled;
     b.addEventListener("click", () => {
-      if (!b.disabled) playLogNavigate(resolveModuleBaseUrl(t.module));
+      if (b.disabled) return;
+      if (t.id === "SORT" && current === "trade") {
+        doc.location.hash = SHELL_SORT_TAB_HASH;
+        doc.querySelector(SHELL_SORT_TAB_HASH)?.scrollIntoView({ block: "start" });
+        return;
+      }
+      playLogNavigate(shellTabHref(t.id, resolveModuleBaseUrl("trade"), resolveModuleBaseUrl(t.module)));
     });
     nav.appendChild(b);
   }
