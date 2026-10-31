@@ -545,6 +545,7 @@
 
 ## 進行中／次にやること
 
+- **To-do（全画面シェル PR6・2026-11-01）**: PR1（#333）以降、縦スクロールするのは `window` ではなく `#wl-shell-panel`。PR6 の各画面フィットで、`window.scrollY`／`scrollTo`／`scroll` イベント／`position:sticky`・`fixed`／`scrollIntoView` など window のスクロール位置を前提にしたコードを洗い出して直す（例：`play-log-browser.ts` の `visualViewport` scroll 監視）→ [FULLSCREEN_SHELL_V0.md](FULLSCREEN_SHELL_V0.md)
 - **Trade の資源履歴の増減**（神宮 10/17）: 増える＝緑、減る＝赤、どちらでもない＝灰色（青から変更）。数の符号は増える「+」、減る「−」（U+2212）、0 は「±0」で灰色。数のない表示は色だけ変える。色分けの文化の設定 → [MECH_WORLD_BUILDING_DESIGN.md §1.1](MECH_WORLD_BUILDING_DESIGN.md)
 - **資源の色**（神宮 10/17）: 弾薬＝赤 `#f85149`、電力＝黄色 `#d4a72c`、装甲（防御）＝青 `#58a6ff`。SORT と探索の地図で同じ色。盤面の警告は白の点滅、ヒントは白の点線、3 連鎖以上の輪郭は紫。探索の拾得表示の文字は薄い赤／薄い黄色／灰色 → [SORT_V2_RULES.md §4.3.1](SORT_V2_RULES.md)
 - **陣営の色の標準**（神宮 10/17）: 青＝指揮下・緑＝友軍・黄＝中立・赤＝敵対 → [EXPLORE_FACING_AIM_V0.md §9](EXPLORE_FACING_AIM_V0.md)
