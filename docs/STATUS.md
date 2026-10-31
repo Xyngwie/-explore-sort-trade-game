@@ -1,8 +1,8 @@
 ## 風紀委員 / 細部は番号と★推奨で聞き、仮実装する（2026-11-01）
 - Who: inspector（風紀委員）
 - What: 神宮に決めてほしい細部は、番号、選択肢、★推奨をセットで聞く。回答を待つあいだは ★の値で仮実装し、docs に「暫定」と書く。回答が ★ と違うときはその部分だけ直す。仮実装の PR は、回答がそろい、CI と確認スクリプトが緑になるまでマージしない。決まった内容は問いの番号と選んだ中身をセットで docs に残す
-- Why: 神宮が、別チームの進め方をここに取り入れると言った（2026-11-01）
-- Scope: `docs/AGENT_CANON.md`、`docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/automations/INSTRUCTIONS_LEAD.md`、`docs/automations/README.md`。機能コードは変えていない。仮実装の `SPEC_DECISION` は出していない
+- Why: 神宮が、別チームの進め方をここに取り入れると言った（2026-11-01）。続けて、各 Automation の Instructions も同じ進め方に揃えるよう言った。起動は入れない
+- Scope: `docs/AGENT_CANON.md`、`docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/automations/INSTRUCTIONS_LEAD.md`、`docs/automations/INSTRUCTIONS_ARROW.md`、`docs/automations/INSTRUCTIONS_JAVELIN.md`、`docs/automations/INSTRUCTIONS_TOMAHAWK.md`、`docs/automations/README.md`。機能コードは変えていない。仮実装の `SPEC_DECISION` は出していない。Automations は起動していない。ダッシュボードの Instructions は、このファイルを貼り直すまで古いままである
 - Status: この節
 
 ## 全画面シェル PR2b HUD 補給・売買パレット（2026-11-01）
@@ -77,13 +77,6 @@
 - Why: 神宮が、確認ラウンドの完了を文書に残すよう指示した。Issue へは出さない
 - Scope: 文書のみ。実装コードは変えていない。`TASK_ASSIGNMENT` は出していない。実装隊長宛の `SPEC_DECISION` は出していない。Issue コメントも Slack も書いていない
 - Status: draft https://github.com/Xyngwie/-explore-sort-trade-game/pull/327 。main には未反映。Deploy Modules Preview は文書だけのため **NOT_TRIGGERED**
-
-## 風紀委員 / 細部は番号と★推奨で聞き、仮実装する（2026-11-01）
-- Who: inspector（風紀委員）
-- What: 神宮に決めてほしい細部は、番号、選択肢、★推奨をセットで聞く。回答を待つあいだは ★の値で仮実装し、docs に「暫定」と書く。回答が ★ と違うときはその部分だけ直す。仮実装の PR は、回答がそろい、CI と確認スクリプトが緑になるまでマージしない。決まった内容は問いの番号と選んだ中身をセットで docs に残す
-- Why: 神宮が、別チームの進め方をここに取り入れると言った（2026-11-01）
-- Scope: `docs/AGENT_CANON.md`、`docs/automations/INSTRUCTIONS_INSPECTOR.md`、`docs/automations/INSTRUCTIONS_LEAD.md`、`docs/automations/README.md`。機能コードは変えていない。仮実装の `SPEC_DECISION` は出していない
-- Status: この節
 
 ## 風紀委員 / 一問ごとの SPEC_DECISION を止める（2026-10-26）
 - Who: inspector（風紀委員）
