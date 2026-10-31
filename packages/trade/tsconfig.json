@@ -24,6 +24,7 @@
     "src/wreck-sale.selftest.ts",
     "src/onboarding.selftest.ts",
     "src/hud-match.selftest.ts",
-    "src/mech-gauge-hub.selftest.ts"
+    "src/mech-gauge-hub.selftest.ts",
+    "src/hub-tree.selftest.ts"
   ]
 }

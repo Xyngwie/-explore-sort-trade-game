@@ -1,7 +1,8 @@
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
 import {playLogNavigate,PALETTE_TRADE_EVENT,loadHubSaveFromLocalStorage as loadHubForPalette,normalizeHubSnapshot as normalizeHubForPalette} from '@estg/shared';
-import { mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
+import { containerBuyConfirmText, mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
 import { hubMechGaugeModel } from "./mech-gauge-hub";
+import { hubTreeHtml, hubTreeModel, installHubTreeNav } from "./hub-tree";
 import "./style.css";
 import {
   CTA_COPY,
@@ -503,6 +504,8 @@ function render() {
     }
 
     ${!DEBUG_FIXTURE_ACTIVE && state.hub.newGameIntro && !state.hub.newGameIntro.firstSortie ? `<div class="card" id="new-game-guide"><h2>初出撃の準備</h2><p>まず未開封コンテナを仕分で開封してください。開封後は格納庫へ戻り、資源の売買で資金と材料を整え、機体と1×1回路を作成します。回路を修復して隊長機に装備し、既存の補給で出撃を準備してください。</p><a class="btn secondary" href="#unopened-panel">コンテナを開封する</a><p>初期支給の開封済み ${state.hub.newGameIntro.initialOpened}/10個。初期支給分は購入分と別に開封します。</p></div>` : ""}
+    ${hubTreeHtml(hubTreeModel(state.hub, ready.selectedIds))}
+    <span id="hub-anchor-squad"></span>
     ${nextSortiePanel(state)}
 
     <div class="card wallet-card">
@@ -530,6 +533,7 @@ function render() {
 
     ${unopenedPanel(state)}
 
+    <span id="hub-anchor-reserve"></span>
     <div class="card">
       <div class="sortie-head">
         <h2 style="font-size:1rem;margin:0">ハンガー</h2>
@@ -578,6 +582,7 @@ function render() {
       }</p>
     </div>
 
+    <span id="hub-anchor-circuits"></span>
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">保有回路</h2>
       <p class="muted" style="margin:0 0 0.35rem;font-size:0.75rem">効果値は Restore/Trade 共通スコア（最小閉ループ）。売却 仮 = 最低${CIRCUIT_SELL_BASE_CREDITS}c + 出来栄え（有効値×${CIRCUIT_SELL_CREDITS_PER_EFFECT}c）。効果0も +${CIRCUIT_SELL_BASE_CREDITS}c で売却可。完璧（Fully Awakened）の回路だけ ＋完璧ボーナス 2×round(4×1.5^N)c（N＝盤の一辺）。</p>
@@ -707,6 +712,7 @@ function render() {
   syncBuyTotal();
   document.getElementById("btn-buy-unopened")?.addEventListener("click", () => {
     const q = Math.max(1, Math.floor(Number(buyQtyInput?.value) || 1));
+    if (!confirm(containerBuyConfirmText(q))) return; // PR4 §10-6 (神宮決定 2026-11-01)
     state = buyUnopenedContainers(state, q);
     render();
   });
@@ -809,5 +815,6 @@ function render() {
 
 render();
 installMechGaugeTap();
+installHubTreeNav(document);
 
 mountShieldDebugConsole();

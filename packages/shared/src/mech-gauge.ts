@@ -1,12 +1,12 @@
 /**
- * PR3 integrated mech gauge (docs/FULLSCREEN_SHELL_V0.md §9, values provisional).
+ * PR3 integrated mech gauge (docs/FULLSCREEN_SHELL_V0.md §9, 神宮決定 2026-11-01).
  * Armor = blue outer ring, depleting clockwise from 12 o'clock.
  * Power = yellow core, liquid level. Ammo = red vertical magazine bar on the side.
  * Numbers are hidden; a tap shows them for MECH_GAUGE_TAP_MS (Q7).
  * Display only: it never changes gameplay or the save.
  */
 export const MECH_GAUGE_COLORS = { armor: "#58a6ff", power: "#d4a72c", ammo: "#f85149", track: "#30363d", dead: "#6e7681" } as const;
-/* Provisional (神宮 TBD). */
+/* 神宮決定 2026-11-01（docs/FULLSCREEN_SHELL_V0.md §9）. */
 export const MECH_GAUGE_TAP_MS = 1500;
 export const MECH_GAUGE_SIZE_PX = { hubCard: 44, explorePanel: 32 } as const;
 export const MECH_GAUGE_ANIM_MS = 250;
