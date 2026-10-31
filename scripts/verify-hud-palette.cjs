@@ -61,6 +61,7 @@ const root = path.resolve(__dirname, ".."),
       await p.waitForFunction((k) => !!localStorage.getItem(k), hubKey);
       await p.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.hub.credits = 100; s.hub.inventory = { ...s.hub.inventory, ammo: 5, power: 0 }; localStorage.setItem(k, JSON.stringify(s)); }, hubKey);
       await flushed();
+      await p.waitForTimeout(1500); // let the in-flight play-log write finish (reload mid-write shows the play-log error screen)
       await p.reload();
       await p.locator("#wl-shell-hud [data-hud-key=ammo]").waitFor();
       const credits = () => p.locator("#wl-shell-hud [data-hud-key=credits]").getAttribute("data-value").then(Number);

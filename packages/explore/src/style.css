@@ -110,30 +110,13 @@ button.active-stance { outline: 2px solid #fff; outline-offset: 1px; }
   box-shadow: 0 0 10px #e5534b66;
   animation: wing-hit-border 0.55s ease-in-out infinite alternate;
 }
-.wing-hp {
-  height: 6px;
-  border-radius: 999px;
-  background: #21262d;
-  overflow: hidden;
-  margin: 0 0 0.35rem;
-}
-.wing-hp-fill {
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(90deg, #3fb950, #56d364);
-  border-radius: 999px;
-  transition: width 0.15s linear;
-}
-.wing-hp.pulse .wing-hp-fill {
-  background: linear-gradient(90deg, #e5534b, #ff7b72);
-  animation: wing-hp-pulse 0.45s ease-in-out infinite alternate;
-}
-.wing-hp.engage-pulse .wing-hp-fill {
-  background: linear-gradient(90deg, #db6d28, #f0b429);
-}
-@keyframes wing-hp-pulse {
-  from { filter: brightness(1); opacity: 1; }
-  to { filter: brightness(1.35); opacity: 0.72; }
+.wing-gauge-row { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.35rem; }
+.wing-gauge { display: inline-flex; border-radius: 50%; }
+/* PR3 (Q6): danger = blinking white outline around the gauge (provisional). */
+.wing-gauge.pulse .mech-gauge { animation: mech-gauge-blink 0.45s ease-in-out infinite alternate; }
+@keyframes mech-gauge-blink {
+  from { box-shadow: 0 0 0 2px #ffffff; }
+  to { box-shadow: 0 0 0 2px transparent; }
 }
 @keyframes wing-hit-border {
   from { box-shadow: 0 0 6px #e5534b55; }
