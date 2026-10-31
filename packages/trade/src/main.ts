@@ -1,5 +1,5 @@
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
-import {playLogNavigate} from '@estg/shared';
+import {playLogNavigate,PALETTE_TRADE_EVENT,loadHubSaveFromLocalStorage as loadHubForPalette,normalizeHubSnapshot as normalizeHubForPalette} from '@estg/shared';
 import { mountShieldDebugConsole } from "@estg/shared";
 import "./style.css";
 import {
@@ -97,6 +97,8 @@ const showInjectionDetails = isPerfectCircuitDebugContext({
 
 let state: HangarState = createInitialHangar();
 window.addEventListener("alpha-lab-change",()=>{state=createInitialHangar();render();});
+// PR2b: the HUD palette wrote the hub save; take its hub so later DOCK saves keep the trade.
+window.addEventListener(PALETTE_TRADE_EVENT,()=>{const h=loadHubForPalette()?.hub;if(h){state={...state,hub:normalizeHubForPalette(h)};render();}});
 {
   const ingested = ingestLocationSearch(state, window.location.search);
   state = ingested.state;

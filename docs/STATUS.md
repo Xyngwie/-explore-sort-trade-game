@@ -1,3 +1,6 @@
+## 全画面シェル PR2b HUD 補給・売買パレット（2026-11-01）
+- 神宮の決定（長押しの細部 1〜9 も含む）を `docs/FULLSCREEN_SHELL_V0.md` §8 に記録。HUD の 弾・装・電・Cr をタップするとボトムシートが開く。行は 弾・装・電・ジャンクの売買と箱の購入。ページは再読み込みしない。売却は毎回確認する（DOCK カードにも付けた）。導入中も使えて、explore と SORT 受け渡し中は無効。
+- テスト：`resource-trade.selftest.ts`（段階・最大・旧 DOCK カードと同じ結果・箱の購入・セーブ/チェックポイント不変・#332）。`verify-hud-palette.cjs`（PC/スマホ：開く・1個・長押し・ずらして取消・確認・再読み込みなし・閉じる・受け渡し中は無効）、`verify-new-game-intro.cjs`、`verify-fullscreen-shell.cjs`、`verify-alpha-lab.cjs` はすべて PASS。
 ## 全画面シェル PR2 上部 HUD（2026-11-01）
 - 神宮決定 1〜12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` §6 に記録。`#wl-shell-hud`：Cr・弾・装・電・箱、explore 以外で表示、箱タップ＝DOCK `#unopened-panel`。DOCK 所持バーから同 5 項目を削除（艦隊・出撃は残す）。
 - テスト：`fullscreen-shell.selftest.ts`（並び・色・0・書式・タップ可否・セーブ/チェックポイント不変）、`trade/src/hud-match.selftest.ts`（旧バーとの値一致）。`verify-new-game-intro.cjs`・`verify-alpha-lab.cjs`・`verify-fullscreen-shell.cjs`（DOCK・SORT のタブ計算スタイル一致）PASS（後者はクレジットを HUD の `data-value` で確認）。
