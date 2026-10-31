@@ -11,6 +11,10 @@ import {
   SHELL_TABS,
   SHELL_TAB_MODULE,
   shellTabHref,
+  hudItems,
+  formatHudNumber,
+  hudUnopenedEnabled,
+  SHELL_CSS,
   type HubSnapshot,
 } from "./index";
 
@@ -73,4 +77,54 @@ assert.deepEqual(enabled(ids(loadHubSaveFromLocalStorage(s2 as any)!.hub, "trade
 assert.equal(shellTabHref("SORT", "/g/", "/g/sort/"), "/g/#unopened-panel");
 assert.equal(shellTabHref("SORT", "/g/#x", "/g/sort/"), "/g/#unopened-panel");
 assert.equal(shellTabHref("RESTORE", "/g/", "/g/restore/"), "/g/restore/");
+// PR2 HUD: order, labels, colors, stock-only values, zero, formatting.
+const h = { ...legacy, credits: 12345, unopenedContainers: 3, inventory: { ammo: 0, armor: 7, power: 1, junk: 99 } };
+assert.deepEqual(hudItems(h).map((i) => [i.label, i.value, i.color]), [
+  ["Cr", 12345, "#ffffff"], ["弾", 0, "#f85149"], ["装", 7, "#58a6ff"], ["電", 1, "#d4a72c"], ["箱", 3, "#ffffff"],
+]);
+assert.deepEqual(hudItems(null).map((i) => i.value), [0, 0, 0, 0, 0]);
+assert.equal(hudItems({ ...h, credits: -5, inventory: { ammo: 2.9 } as any })[0].value, 0);
+assert.equal(formatHudNumber(9999, true), "9999");
+assert.equal(formatHudNumber(10000, true), "10k");
+assert.equal(formatHudNumber(12345, true), "12.3k");
+assert.equal(formatHudNumber(5_000_000, true), "5M");
+assert.equal(formatHudNumber(1234567, false), "1,234,567");
+// Unopened tap: onboarding OK, SORT handoff / no save / explore off.
+assert.equal(hudUnopenedEnabled({ current: "trade", hub: fresh, handoffInProgress: false }), true);
+assert.equal(hudUnopenedEnabled({ current: "sort", hub: fresh, handoffInProgress: true }), false);
+assert.equal(hudUnopenedEnabled({ current: "trade", hub: null, handoffInProgress: false }), false);
+// HUD reads the loaded save without mutating save or checkpoint.
+const s3 = new Mem();
+assert.ok(saveHubSaveToLocalStorage(h, s3 as any));
+s3.setItem(SORTIE_CHECKPOINT_KEY, "{\"v\":1}");
+const snap = JSON.stringify([...s3.m]);
+assert.equal(hudItems(loadHubSaveFromLocalStorage(s3 as any)!.hub)[2].value, 7);
+assert.equal(JSON.stringify([...s3.m]), snap);
+// Tab bar ignores per-screen button styles (DOCK/SORT): reset + !important on every visual prop.
+const tabRule = SHELL_CSS.match(/#wl-shell-tabs button\{([^}]*)\}/)![1];
+assert.ok(tabRule.startsWith("all:unset"));
+for (const prop of ["background", "border", "border-radius", "box-shadow", "color", "font", "padding", "margin"])
+  assert.match(tabRule, new RegExp(`(^|;)${prop}:[^;]*!important`), prop);
+assert.match(SHELL_CSS, /button:disabled\{color:#484f58!important\}/);
+assert.match(SHELL_CSS, /aria-current=page\]\{color:#fff!important;box-shadow:inset 0 2px 0 #4f8fe8!important\}/);
+// SHELL_CSS must parse: balanced braces, and every shell rule must be TOP-LEVEL
+// (a missing "}" once nested all tab rules inside @keyframes, silently killing them).
+function topLevelRules(css: string): { sel: string; body: string }[] {
+  const out: { sel: string; body: string }[] = [];
+  let depth = 0, start = 0, sel = "";
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c === "{") { if (depth === 0) { sel = css.slice(start, i).trim(); start = i + 1; } depth++; }
+    else if (c === "}") { depth--; assert.ok(depth >= 0, `unbalanced } at ${i}`); if (depth === 0) { out.push({ sel, body: css.slice(start, i) }); start = i + 1; } }
+  }
+  assert.equal(depth, 0, "SHELL_CSS braces unbalanced");
+  assert.equal(css.slice(start).trim(), "", "trailing junk in SHELL_CSS");
+  return out;
+}
+const rules = topLevelRules(SHELL_CSS);
+const sels = rules.map((r) => r.sel);
+for (const sel of ["#wl-shell-tabs", "#wl-shell-tabs button", "#wl-shell-tabs button:disabled", "#wl-shell-tabs button[aria-current=page]", "#wl-shell-hud", "@keyframes wl-hud-flash"])
+  assert.ok(sels.includes(sel), `top-level rule missing: ${sel}`);
+const kf = rules.find((r) => r.sel === "@keyframes wl-hud-flash")!;
+assert.deepEqual(topLevelRules(kf.body).map((r) => r.sel), ["from", "to"], "keyframes contains only from/to");
 console.log("shared fullscreen-shell.selftest ok");

@@ -1,3 +1,8 @@
+## 全画面シェル PR2 上部 HUD（2026-11-01）
+- 神宮決定 1〜12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` §6 に記録。`#wl-shell-hud`：Cr・弾・装・電・箱、explore 以外で表示、箱タップ＝DOCK `#unopened-panel`。DOCK 所持バーから同 5 項目を削除（艦隊・出撃は残す）。
+- テスト：`fullscreen-shell.selftest.ts`（並び・色・0・書式・タップ可否・セーブ/チェックポイント不変）、`trade/src/hud-match.selftest.ts`（旧バーとの値一致）。`verify-new-game-intro.cjs`・`verify-alpha-lab.cjs`・`verify-fullscreen-shell.cjs`（DOCK・SORT のタブ計算スタイル一致）PASS（後者はクレジットを HUD の `data-value` で確認）。
+- 追加決定（神宮 11/01）：Alpha Lab 帯は現状維持（PR6 で見直し）／タブバーは各画面のボタンスタイルを上書きして全画面同じ見た目（実装）／スマホ 100 万以上は 1.2M。スマホ判定 600px 以下は技術判断。
+
 ## 全画面1枚完結型UI（FULLSCREEN_SHELL）決定・PR1 外枠シェル（2026-10-31）
 - 神宮決定 Q1〜Q12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` に記録。PR 分割 1 外枠シェル／2 HUD→2b パレット／3 計器／4 HUB ツリー→4b→4c／5 ジェスチャー／6 各画面フィット。
 - PR1：100dvh 固定・ページ縦スクロール廃止（`#wl-shell-panel` 内のみスクロール）・touch-action・下部タブ（DOCK=trade, INVADE=invade, SORT=DOCK #unopened-panel, RESTORE=restore, SORTIE=explore／暫定）。Q4 は explore でタブ非表示、Q11 は導入中 DOCK のみ。
