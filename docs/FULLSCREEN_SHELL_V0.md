@@ -165,5 +165,6 @@ PR1〜PR6 の記録を見直し、記録の無かった値を神宮に確認し�
 6. 2 列にする画面 = A **★DOCK（HUB）だけ。他画面は 960px 中央のまま** ／ B 全画面を最大 1440px に → 暫定
 7. 補給・売買パレット（HUD タップ）= A **★今のままボトムシート** ／ B 2 列時は右列の上に固定表示 → 暫定
 8. 見出し（BASE HUB・お知らせ）= A **★2 列の上に全幅** ／ B 左列の先頭 → 暫定
+9. 1 列のとき（1200px 未満の PC）の HUB カード幅 = A **★今のまま 28rem（約 450px）** ／ B 960px いっぱい → 暫定
 
-実装：`trade/src/hub-columns.ts`（描画後に #app の子を左右の列へ移すだけ。狭い画面では移さない）。検証：`scripts/verify-pc-two-column.cjs`（1600／1280／1100／スマホ 390）＋ `hub-columns.selftest.ts`。セーブ・チェックポイント形式は変更なし。
+実装：`trade/src/hub-columns.ts`（描画後に #app の子を左右の列へ移すだけ。狭い画面では移さない）。2 列時は Trade の `#app` 最大幅 28rem を外す。検証：`scripts/verify-pc-two-column.cjs`（1600／1280／1100／スマホ 390）＋ `hub-columns.selftest.ts`。セーブ・チェックポイント形式は変更なし。

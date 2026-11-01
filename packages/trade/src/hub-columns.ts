@@ -20,6 +20,7 @@ export function hubColumnFor(p: HubColumnProbe): "left" | "right" {
 
 export const HUB_2COL_CSS = `@media ${HUB_2COL_QUERY}{
 html.wl-hub-2col body{max-width:${HUB_2COL_MAX_PX}px!important}
+html.wl-hub-2col #app{max-width:none}
 #app>.hub-cols{display:grid;grid-template-columns:${HUB_2COL_RATIO};gap:16px;align-items:start}
 #app>.hub-cols>div{min-width:0}
 }`;
