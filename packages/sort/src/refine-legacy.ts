@@ -34,13 +34,14 @@ export const SORT_V0_RULES = {
   invalidRatio: 0.2,
   /** Match length (horizontal / vertical only — no diagonal). */
   minClearLine: 3,
+  /** 盤 6 列×7 行（暫定 ★A・SORT_V0 §盤サイズ 2026-11-02：スマホ 1 画面に収める。旧 6×12）。 */
   boardCols: 6,
-  boardRows: 12,
+  boardRows: 7,
   /**
    * Prefill rows from the bag on start (Zoo Keeper: fill the whole board).
    * Equals boardRows so play begins on a filled field — no rising pressure.
    */
-  initialFillRows: 12,
+  initialFillRows: 7,
   /**
    * Short blink before erase (ms). Not the main skill window —
    * active chain is during slow settle below.

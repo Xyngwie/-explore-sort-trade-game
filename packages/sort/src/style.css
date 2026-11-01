@@ -748,3 +748,9 @@ button.cell {
   border: 1px solid rgba(180, 140, 70, 0.35);
   vertical-align: middle;
 }
+
+/* 盤フィット（暫定 ★A 2026-11-02・docs/SORT_V0.md「盤サイズ」）: inside the fullscreen shell panel, fill the panel (not 100dvh)
+   so the 6×7 board and 精製を終える fit one screen without scrolling. */
+#wl-shell-panel > #app { min-height: 100%; }
+/* 盤フィット（暫定 ★A）: during play the page header (MODULE 2 · Athanor 精製) is hidden; the play HUD stays. */
+#wl-shell-panel .shell:has(> .play-field[data-phase="playing"]) > .chrome { display: none; }
