@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { hubColumnFor, HUB_2COL_MIN_PX, HUB_2COL_MAX_PX, HUB_2COL_RATIO } from "./hub-columns";
+const p = (id: string, classes: string[] = [], heading = "") => ({ id, classes, heading });
+assert.equal(hubColumnFor(p("hub-tree")), "left");
+assert.equal(hubColumnFor(p("", ["card", "sortie-card"])), "right", "作戦室 right");
+assert.equal(hubColumnFor(p("unopened-panel")), "right");
+assert.equal(hubColumnFor(p("four-resource-trade")), "right");
+assert.equal(hubColumnFor(p("", ["card"], "型付き在庫")), "right");
+assert.equal(hubColumnFor(p("", ["card"], "ハンガー")), "left");
+assert.equal(hubColumnFor(p("hub-anchor-squad")), "left");
+assert.deepEqual([HUB_2COL_MIN_PX, HUB_2COL_MAX_PX, HUB_2COL_RATIO], [1200, 1440, "3fr 2fr"], "暫定 ★ values");
+console.log("trade hub-columns.selftest ok");

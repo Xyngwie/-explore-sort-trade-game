@@ -1,3 +1,4 @@
+import { arrangeHubColumns, watchHubColumns } from "./hub-columns";
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
 import {playLogNavigate,PALETTE_TRADE_EVENT,loadHubSaveFromLocalStorage as loadHubForPalette,normalizeHubSnapshot as normalizeHubForPalette} from '@estg/shared';
 import { containerBuyConfirmText, mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
@@ -602,6 +603,7 @@ function render() {
       </ul>
     </div>
   `;
+  arrangeHubColumns(root); watchHubColumns(root); // PC 2-column（暫定 ★）
 
   document.getElementById("btn-signature")?.addEventListener("click", () => {
     const input = document.getElementById("input-signature") as HTMLInputElement | null;
