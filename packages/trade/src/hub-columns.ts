@@ -1,16 +1,16 @@
 /**
- * PC 2-column HUB（暫定 ★・FULLSCREEN_SHELL_V0 §15）.
+ * PC 2-column HUB（神宮決定 2026-11-01・FULLSCREEN_SHELL_V0 §15）.
  * Wide PC only: left = 母艦・小隊ツリー（ツリー・ハンガー・回路など）, right = 作戦室（出撃カード）・未開封・物資市場.
  * Pure DOM re-parenting of the rendered #app children; narrow screens keep the original single column.
  */
-export const HUB_2COL_MIN_PX = 1200; // 暫定 ★ breakpoint
-export const HUB_2COL_MAX_PX = 1440; // 暫定 ★ overall max width
-export const HUB_2COL_RATIO = "3fr 2fr"; // 暫定 ★ left : right
+export const HUB_2COL_MIN_PX = 1200; // 1. 2 列にする画面幅 = 1200px 以上（神宮決定 2026-11-01）
+export const HUB_2COL_MAX_PX = 1440; // 4. 全体の最大幅 = 1440px（神宮決定 2026-11-01）
+export const HUB_2COL_RATIO = "3fr 2fr"; // 2. 列幅の比率 = 3:2（神宮決定 2026-11-01）
 export const HUB_2COL_QUERY = `(min-width: ${HUB_2COL_MIN_PX}px)`;
 
 export type HubColumnProbe = { id: string; classes: string[]; heading: string };
 
-/** 暫定 ★ which card goes right. */
+/** 3. 左右の振り分け = 右：作戦室・未開封・物資市場、他は左（神宮決定 2026-11-01） */
 export function hubColumnFor(p: HubColumnProbe): "left" | "right" {
   if (p.id === "unopened-panel" || p.id === "four-resource-trade") return "right";
   if (p.classes.includes("sortie-card")) return "right"; // 作戦室

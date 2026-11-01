@@ -1,4 +1,4 @@
-/** Shell tab tap regression (PC test run-20261101-pc-fullscreen-shell-001): every enabled bottom tab is hit across its whole area (edges too) on DOCK/RESTORE/INVADE/explore briefing; an edge tap navigates; save and checkpoint kept. */
+/** Shell tab tap regression (PC test run-20261101-pc-fullscreen-shell-001): every enabled bottom tab is hit across its whole area (edges too) on DOCK/SORT/RESTORE/INVADE/explore briefing; an edge tap navigates; save and checkpoint kept. */
 const assert = require("node:assert/strict"),
   fs = require("node:fs"),
   http = require("node:http"),
@@ -62,8 +62,9 @@ const root = path.resolve(__dirname, ".."),
       await p.waitForTimeout(1500); await p.reload(); await p.waitForTimeout(800);
       const hit = () => p.evaluate(() => { const nav = document.getElementById("wl-shell-tabs"); if (!nav || nav.hidden) return ["no tabs"]; const bad = []; for (const b of nav.querySelectorAll("button")) { const r = b.getBoundingClientRect(); for (const fx of [0.05, 0.25, 0.5, 0.75, 0.95]) for (const fy of [0.15, 0.5, 0.85]) { const e = document.elementFromPoint(r.left + r.width * fx, r.top + r.height * fy); if (e !== b) bad.push(`${b.textContent}@${fx},${fy}→${e ? e.id || e.className || e.tagName : "null"}`); } } return bad; });
       const core = () => p.evaluate((k) => { const h = JSON.parse(localStorage.getItem(k)).hub; return JSON.stringify({ c: h.credits, i: h.inventory, f: (h.fleet || []).map((m) => m.id) }); }, K); const save0 = await core();
-      for (const sub of ["", "restore/", "invade/"]) {
+      for (const sub of ["", "sort/", "restore/", "invade/"]) {
         await p.goto(base + sub); await p.locator("#wl-shell-tabs").waitFor(); await p.waitForTimeout(2000);
+        assert.ok(new URL(p.url()).pathname.endsWith("/" + sub), "stayed on " + (sub || "trade") + ": " + p.url());
         assert.deepEqual(await hit(), [], "tabs fully tappable on " + (sub || "trade"));
       }
       // Real edge tap on INVADE (where the CTA bar used to cover the tabs) → DOCK.

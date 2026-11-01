@@ -8,5 +8,5 @@ assert.equal(hubColumnFor(p("four-resource-trade")), "right");
 assert.equal(hubColumnFor(p("", ["card"], "型付き在庫")), "right");
 assert.equal(hubColumnFor(p("", ["card"], "ハンガー")), "left");
 assert.equal(hubColumnFor(p("hub-anchor-squad")), "left");
-assert.deepEqual([HUB_2COL_MIN_PX, HUB_2COL_MAX_PX, HUB_2COL_RATIO], [1200, 1440, "3fr 2fr"], "暫定 ★ values");
+assert.deepEqual([HUB_2COL_MIN_PX, HUB_2COL_MAX_PX, HUB_2COL_RATIO], [1200, 1440, "3fr 2fr"], "神宮決定 2026-11-01 values");
 console.log("trade hub-columns.selftest ok");

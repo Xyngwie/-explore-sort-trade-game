@@ -603,7 +603,7 @@ function render() {
       </ul>
     </div>
   `;
-  arrangeHubColumns(root); watchHubColumns(root); // PC 2-column（暫定 ★）
+  arrangeHubColumns(root); watchHubColumns(root); // PC 2-column（神宮決定 2026-11-01）
 
   document.getElementById("btn-signature")?.addEventListener("click", () => {
     const input = document.getElementById("input-signature") as HTMLInputElement | null;

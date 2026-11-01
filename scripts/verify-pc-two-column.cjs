@@ -1,4 +1,4 @@
-/** PC 2-column HUB（暫定 ★）: ≥1200px → left tree/hangar, right 作戦室・未開封・市場, max 1440px; mobile unchanged; save kept. */
+/** PC 2-column HUB（神宮決定 2026-11-01）: ≥1200px → left tree/hangar, right 作戦室・未開封・市場, max 1440px; mobile unchanged; save kept. */
 const assert = require("node:assert/strict"),
   fs = require("node:fs"),
   http = require("node:http"),
