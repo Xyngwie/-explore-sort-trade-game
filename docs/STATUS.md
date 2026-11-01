@@ -1,5 +1,5 @@
 ## 出撃ガードの案内（2026-11-01・暫定・draft）
-- Explore で出撃を止められ「格納庫へ」で戻ると、HUB 先頭に「回路が未装備です。…」＋[修復へ移動] のバナー。細部 6 点とガード一覧は暫定 ★ → [FULLSCREEN_SHELL_V0.md §14](FULLSCREEN_SHELL_V0.md)
+- Explore で出撃を止められ「格納庫へ」で戻ると、HUB 先頭に「回路が未装備です。…」＋[修復へ移動] のバナー。細部 6 点とガード一覧は暫定 ★ → [FULLSCREEN_SHELL_V0.md §16](FULLSCREEN_SHELL_V0.md)
 
 ## 全画面シェル PR6 各画面フィット（2026-11-01・神宮決定）
 - PR6 各画面フィット（#342）：window スクロール前提の解消・記録パネル幅・Alpha Lab 帯のコンパクト化・ブリーフィングでタブ表示 → [FULLSCREEN_SHELL_V0.md §12](FULLSCREEN_SHELL_V0.md)

@@ -1,5 +1,5 @@
 /**
- * Sortie-guard guidance（暫定 ★・FULLSCREEN_SHELL_V0 §14）.
+ * Sortie-guard guidance（暫定 ★・FULLSCREEN_SHELL_V0 §16）.
  * When Explore's briefing refuses 出撃 and the player goes back to HUB, the HUB
  * shows one banner saying what is missing and a button to the place that fixes it.
  * Reads the save only; nothing is written (session flag lives in sessionStorage).
