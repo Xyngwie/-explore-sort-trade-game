@@ -104,6 +104,11 @@ body>#shield-debug-console{flex:0 1 auto;min-height:0;max-height:45dvh;overflow:
 @keyframes wl-hud-flash{from{background:#ffffff33}to{background:none}}
 #wl-shell-tabs{box-sizing:border-box!important;flex:0 0 auto;display:flex;height:${SHELL_TAB_HEIGHT_PX}px;padding-bottom:env(safe-area-inset-bottom);background:#0d1117;border-top:1px solid #30363d;touch-action:none}
 #wl-shell-tabs[hidden]{display:none}
+/* Tab tap fix: screens' own fixed bars (invade CTA bar z 1000, explore toast) covered the tab row.
+   Tabs sit above page content but below sheets/dialogs (palette, play-log ≥9000);
+   fixed bottom bars use --wl-shell-tabs-h to stay above the tab row. */
+#wl-shell-tabs{position:relative;z-index:1001}
+body:has(>#wl-shell-tabs:not([hidden])){--wl-shell-tabs-h:${SHELL_TAB_HEIGHT_PX}px}
 #wl-shell-tabs button{all:unset;box-sizing:border-box!important;flex:1!important;min-width:0!important;height:100%!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;padding:0!important;background:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:#c9d1d9!important;font:600 12px/1 system-ui,sans-serif!important;letter-spacing:.06em!important;cursor:pointer}
 #wl-shell-tabs button:disabled{cursor:default}
 #wl-shell-tabs button:disabled{color:#484f58!important}
