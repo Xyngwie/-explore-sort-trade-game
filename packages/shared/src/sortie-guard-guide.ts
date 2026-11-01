@@ -1,5 +1,5 @@
 /**
- * Sortie-guard guidance（暫定 ★・FULLSCREEN_SHELL_V0 §16）.
+ * Sortie-guard guidance（神宮決定 2026-11-01・FULLSCREEN_SHELL_V0 §16）.
  * When Explore's briefing refuses 出撃 and the player goes back to HUB, the HUB
  * shows one banner saying what is missing and a button to the place that fixes it.
  * Reads the save only; nothing is written (session flag lives in sessionStorage).
@@ -12,7 +12,7 @@ import { isCircuitRestoreStateActive } from "./circuit-board";
 export type SortieGuardCode = "first_circuit_unrepaired" | "first_circuit_unequipped" | "first_leader" | "squad_full" | "category_full";
 export type SortieGuardGuide = { code: SortieGuardCode; text: string; action: string; target: string };
 
-/** sessionStorage flag set by Explore's 格納庫へ link（暫定 ★: banner only after a guard return）. */
+/** sessionStorage flag set by Explore's 格納庫へ link（5. 出す条件 = 格納庫へ から戻ったときだけ・神宮決定 2026-11-01）. */
 export const SORTIE_GUARD_RETURN_KEY = "estg.sortieGuardReturn";
 
 export function sortieGuardGuide(hub: HubSnapshot, ids: readonly string[]): SortieGuardGuide | null {

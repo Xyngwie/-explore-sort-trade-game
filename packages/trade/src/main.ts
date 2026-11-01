@@ -480,7 +480,7 @@ function nextSortiePanel(s: HangarState): string {
 let signatureComposing = false;
 let renderDeferred = false;
 
-/** Sortie-guard guidance（暫定 ★）: shown after Explore's 格納庫へ, gone once fixed, acted on or closed. */
+/** Sortie-guard guidance（神宮決定 2026-11-01）: shown after Explore's 格納庫へ, gone once fixed, acted on or closed. */
 function guardBanner(hub: HangarState["hub"], ids: readonly string[]): string {
   let flagged = false;
   try { flagged = sessionStorage.getItem(SORTIE_GUARD_RETURN_KEY) === "1"; } catch { /* no storage */ }

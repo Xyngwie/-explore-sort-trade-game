@@ -1,4 +1,4 @@
-/** Sortie-guard guidance（暫定 ★）: Explore briefing refuses 出撃 (no repaired circuit on leader) → 格納庫へ → HUB banner 「回路が未装備です…」+[修復へ移動] → scrolls #wl-shell-panel to 回路欄; closes; no banner without a guard return; #332 guide kept; save untouched. */
+/** Sortie-guard guidance（神宮決定 2026-11-01）: Explore briefing refuses 出撃 (no repaired circuit on leader) → 格納庫へ → HUB banner 「回路が未装備です…」+[修復へ移動] → scrolls #wl-shell-panel to 回路欄; closes; no banner without a guard return; #332 guide kept; save untouched. */
 const assert = require("node:assert/strict"),
   fs = require("node:fs"),
   http = require("node:http"),

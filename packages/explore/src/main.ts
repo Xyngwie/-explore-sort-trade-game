@@ -1018,7 +1018,7 @@ function renderDom(): void {
         <p class="help">${briefingHelpText(cmdLocked)}</p>
       </div>`;
     bindDebugUnlockToggle();
-    // Sortie-guard guidance（暫定 ★）: HUB shows where to fix it.
+    // Sortie-guard guidance（神宮決定 2026-11-01）: HUB shows where to fix it.
     document.getElementById("link-guard-hub")?.addEventListener("click", () => { try { sessionStorage.setItem(SORTIE_GUARD_RETURN_KEY, "1"); } catch { /* private mode: no banner */ } });
     document.getElementById("btn-start")?.addEventListener("click", () => {
       if (sortieEquipmentNote()) return;
