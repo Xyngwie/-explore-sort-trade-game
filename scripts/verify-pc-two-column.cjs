@@ -67,6 +67,7 @@ const root = path.resolve(__dirname, ".."),
       assert.ok(lay.docOver <= 0, "no horizontal overflow");
       if (wide) { assert.ok(lay.rLeft >= lay.lRight, "right column beside left"); assert.ok(Math.abs(lay.lW / lay.rW - 1.5) < 0.1 && lay.lW > 500, "3:2 columns, not squeezed " + JSON.stringify(lay)); assert.ok(lay.tree && lay.unopened && lay.market && lay.sortie, JSON.stringify(lay)); assert.ok(lay.body <= 1440 && lay.body > 960, "max width 1440: " + lay.body); }
       else assert.ok(lay.body <= 960, "single column keeps 960px");
+      assert.ok(await p.evaluate(() => { const a = document.getElementById("hub-anchor-squad"); return !!a && !!a.nextElementSibling && a.nextElementSibling.classList.contains("sortie-card"); }), "tree 第1小隊 anchor stays next to 作戦室");
       // Buttons still work after re-parenting: buy a mech.
       const n0 = await p.evaluate((k) => JSON.parse(localStorage.getItem(k)).hub.fleet.length, K);
       await p.locator("#btn-buy-mech").click(); await p.waitForTimeout(800);

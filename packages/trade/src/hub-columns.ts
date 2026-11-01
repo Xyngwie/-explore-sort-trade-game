@@ -52,7 +52,9 @@ export function arrangeHubColumns(root: HTMLElement, wide = matchMedia(HUB_2COL_
   kids.forEach((k, i) => {
     k.dataset.hubOrder = String(i);
     if (treeAt >= 0 && i < treeAt) return;
-    (hubColumnFor(probe(k)) === "right" ? right : left).appendChild(k);
+    // Empty anchor spans (#hub-anchor-*) follow the card after them, so tree navigation's nextElementSibling still finds it.
+    let t = k; while (t.tagName === "SPAN" && t.id.startsWith("hub-anchor-") && t.nextElementSibling) t = t.nextElementSibling as HTMLElement;
+    (hubColumnFor(probe(t)) === "right" ? right : left).appendChild(k);
   });
   root.appendChild(cols);
 }
