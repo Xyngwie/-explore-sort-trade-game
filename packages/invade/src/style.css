@@ -299,7 +299,7 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
   position: fixed;
   left: max(0.75rem, calc(50% - 20rem));
   right: max(0.75rem, calc(50% - 20rem));
-  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  bottom: calc(var(--wl-shell-tabs-h, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
   z-index: 1000;
   margin-top: 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
