@@ -70,7 +70,7 @@ const root = path.resolve(__dirname, ".."),
       if (!mobile) {
         await p.setViewportSize({ width: 1600, height: 900 }); await p.waitForTimeout(800);
         const at = await p.evaluate(() => { const g = document.getElementById("sortie-guard-guide"), L = document.getElementById("hub-col-left"); return { cols: !!L, inCol: !!g.closest(".hub-cols"), above: !!L && g.getBoundingClientRect().bottom <= L.getBoundingClientRect().top + 1, full: !!L && g.getBoundingClientRect().width > L.getBoundingClientRect().width + 50 }; });
-        assert.ok(at.cols && !at.inCol && at.above && at.full, "PC ≥1200 banner full-width above the 2 columns (暫定 ★A) " + JSON.stringify(at));
+        assert.ok(at.cols && !at.inCol && at.above && at.full, "PC ≥1200 banner full-width above the 2 columns (§16-7 神宮決定 2026-11-01) " + JSON.stringify(at));
         await p.setViewportSize({ width: 1600, height: 900 });
         assert.equal(await goCheck("first_leader @1600"), "hub-anchor-reserve");
         await p.evaluate(() => sessionStorage.setItem("estg.sortieGuardReturn", "1")); await p.reload(); await p.locator("#sortie-guard-guide").waitFor();
