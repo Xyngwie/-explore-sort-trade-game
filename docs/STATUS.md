@@ -1,6 +1,11 @@
-## 全画面シェル PR5 ジェスチャー（2026-11-01・神宮決定）
+## 全画面シェル PR6 各画面フィット（2026-11-01・神宮決定）
 - PR6 各画面フィット（#342）：window スクロール前提の解消・記録パネル幅・Alpha Lab 帯のコンパクト化・ブリーフィングでタブ表示 → [FULLSCREEN_SHELL_V0.md §12](FULLSCREEN_SHELL_V0.md)
   - 細部決定：1. ハッシュ付きで開いた時の位置 = パネル内の目的位置へ自動スクロール（神宮決定 2026-11-01）／2. 記録パネルの幅 = シェル列幅基準（最大 960px −16px）（神宮決定 2026-11-01）／3. Alpha Lab 帯 = 閉時 1 行コンパクト帯（神宮決定 2026-11-01）／4. 結果画面のタブ = 非表示（神宮決定 2026-11-01）／5. explore のシェル HUD = ブリーフィングでも非表示（神宮決定 2026-11-01）／6. RESTORE の盤面高さ上限 = window.innerHeight 基準のまま（神宮決定 2026-11-01）
+- 整理（#343）：タブ対応・1.2M・960px は決定済みと確認 → [FULLSCREEN_SHELL_V0.md §13](FULLSCREEN_SHELL_V0.md)
+  - 1. スマホの短縮表示（12.3k／1.2M）に切り替える画面幅 = 600px 以下（神宮決定 2026-11-01）
+  - 2. Alpha Lab 帯を開いたときの高さ上限 = 45dvh・帯の内側でスクロール（神宮決定 2026-11-01）
+
+## 全画面シェル PR5 ジェスチャー（2026-11-01・神宮決定）
 - Explore の地図だけ：ダブルタップで 1 倍↔2 倍、ピンチで 1〜2.5 倍、PC はホイール。拡大は表示だけでセーブ・チェックポイントは変わらない。4b・4c は後回し。神宮決定（細部 1〜8）：
   - 1. 拡大の範囲 = 1 倍〜2.5 倍。縮小（1 倍未満）はなし（神宮決定 2026-11-01）
   - 2. ダブルタップ = 1 倍 ↔ 2 倍の切り替え（1 倍より大きいときは 1 倍に戻す）。判定は 0.3 秒以内・30px 以内（神宮決定 2026-11-01）
@@ -30,11 +35,11 @@
 ## 全画面シェル PR2 上部 HUD（2026-11-01）
 - 神宮決定 1〜12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` §6 に記録。`#wl-shell-hud`：Cr・弾・装・電・箱、explore 以外で表示、箱タップ＝DOCK `#unopened-panel`。DOCK 所持バーから同 5 項目を削除（艦隊・出撃は残す）。
 - テスト：`fullscreen-shell.selftest.ts`（並び・色・0・書式・タップ可否・セーブ/チェックポイント不変）、`trade/src/hud-match.selftest.ts`（旧バーとの値一致）。`verify-new-game-intro.cjs`・`verify-alpha-lab.cjs`・`verify-fullscreen-shell.cjs`（DOCK・SORT のタブ計算スタイル一致）PASS（後者はクレジットを HUD の `data-value` で確認）。
-- 追加決定（神宮 11/01）：Alpha Lab 帯は現状維持（PR6 で見直し）／タブバーは各画面のボタンスタイルを上書きして全画面同じ見た目（実装）／スマホ 100 万以上は 1.2M。スマホ判定 600px 以下は技術判断。
+- 追加決定（神宮 11/01）：Alpha Lab 帯は現状維持（PR6 で見直し）／タブバーは各画面のボタンスタイルを上書きして全画面同じ見た目（実装）／スマホ 100 万以上は 1.2M。スマホ判定 600px 以下（神宮決定 2026-11-01、FULLSCREEN_SHELL_V0 §13-1）。
 
 ## 全画面1枚完結型UI（FULLSCREEN_SHELL）決定・PR1 外枠シェル（2026-10-31）
 - 神宮決定 Q1〜Q12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` に記録。PR 分割 1 外枠シェル／2 HUD→2b パレット／3 計器／4 HUB ツリー→4b→4c／5 ジェスチャー／6 各画面フィット。
-- PR1：100dvh 固定・ページ縦スクロール廃止（`#wl-shell-panel` 内のみスクロール）・touch-action・下部タブ（DOCK=trade, INVADE=invade, SORT=DOCK #unopened-panel, RESTORE=restore, SORTIE=explore／暫定）。Q4 は explore でタブ非表示、Q11 は導入中 DOCK のみ。
+- PR1：100dvh 固定・ページ縦スクロール廃止（`#wl-shell-panel` 内のみスクロール）・touch-action・下部タブ（DOCK=trade, INVADE=invade, SORT=DOCK #unopened-panel, RESTORE=restore, SORTIE=explore／2026-11-01 神宮確定）。Q4 は explore でタブ非表示、Q11 は導入中 DOCK のみ。
 - 検証：`npm test`（`fullscreen-shell.selftest.ts`：タブ規則＋セーブ・チェックポイント不変）、`scripts/verify-new-game-intro.cjs` PASS（PC 1280×900／スマホ 390×844）。
 - 細部決定（神宮 2026-11-01、すべて★）：①SORT タブ→DOCK `#unopened-panel`（実装済）②RESTORE は回路未選択で開く ③導入中は DOCK のみ ④ブリーフィングでは表示・出撃開始で非表示（PR6 で実装）⑤最大幅 960px。
 
