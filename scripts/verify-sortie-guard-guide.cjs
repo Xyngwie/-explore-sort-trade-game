@@ -62,6 +62,21 @@ const root = path.resolve(__dirname, ".."),
       await p.waitForTimeout(1500); await p.reload(); await p.waitForTimeout(800);
       assert.equal(await p.locator("#sortie-guard-guide").count(), 0, "no banner without a guard return");
       assert.equal(await p.locator("#new-game-guide").count(), 1, "#332 guide kept");
+      // Each banner's button target exists and is scrolled to inside the shell panel.
+      const goCheck = async (label) => { const id = await p.locator("#sortie-guard-go").getAttribute("data-target"); assert.equal(await p.locator("#" + id).count(), 1, label + " target #" + id + " exists"); await p.locator("#sortie-guard-go").click(); await p.waitForTimeout(600); const pos = await p.evaluate((i) => { const pn = document.getElementById("wl-shell-panel"), a = document.getElementById(i); return { top: pn.scrollTop, d: Math.abs(a.getBoundingClientRect().top - pn.getBoundingClientRect().top), winY: window.scrollY }; }, id); assert.ok(pos.top > 0 && pos.d < 40 && pos.winY === 0, label + " scrolled to #" + id + " " + JSON.stringify(pos)); assert.equal(await p.locator("#sortie-guard-guide").count(), 0, label + " banner gone after acting"); return id; };
+      // 隊長機 未選択 (no mech yet) → [格納庫へ移動] → ハンガー (#hub-anchor-reserve).
+      await p.evaluate(() => sessionStorage.setItem("estg.sortieGuardReturn", "1")); await p.reload(); await p.locator("#sortie-guard-guide").waitFor();
+      assert.equal(await p.locator("#sortie-guard-guide").getAttribute("data-guard"), "first_leader");
+      if (!mobile) {
+        await p.setViewportSize({ width: 1600, height: 900 }); await p.waitForTimeout(800);
+        const at = await p.evaluate(() => { const g = document.getElementById("sortie-guard-guide"), L = document.getElementById("hub-col-left"); return { cols: !!L, inCol: !!g.closest(".hub-cols"), above: !!L && g.getBoundingClientRect().bottom <= L.getBoundingClientRect().top + 1, full: !!L && g.getBoundingClientRect().width > L.getBoundingClientRect().width + 50 }; });
+        assert.ok(at.cols && !at.inCol && at.above && at.full, "PC ≥1200 banner full-width above the 2 columns (暫定 ★A) " + JSON.stringify(at));
+        await p.setViewportSize({ width: 1600, height: 900 });
+        assert.equal(await goCheck("first_leader @1600"), "hub-anchor-reserve");
+        await p.evaluate(() => sessionStorage.setItem("estg.sortieGuardReturn", "1")); await p.reload(); await p.locator("#sortie-guard-guide").waitFor();
+        await p.setViewportSize({ width: 1280, height: 900 }); await p.waitForTimeout(600);
+      }
+      assert.equal(await goCheck("first_leader"), "hub-anchor-reserve");
       await p.locator("#btn-buy-mech").click(); await p.waitForTimeout(800);
       await p.locator("#btn-select-all").click(); await p.waitForTimeout(800);
       const core = () => p.evaluate((k) => { const h = JSON.parse(localStorage.getItem(k)).hub; return JSON.stringify({ c: h.credits, i: h.inventory, f: (h.fleet || []).map((m) => m.instanceId), ci: h.circuits.length }); }, K);
@@ -74,10 +89,8 @@ const root = path.resolve(__dirname, ".."),
       await p.locator("#sortie-guard-guide").waitFor({ timeout: 15000 });
       const txt = await p.locator("#sortie-guard-guide").textContent();
       assert.match(txt, /回路が未装備です/); assert.match(txt, /修復へ移動/);
-      await p.locator("#sortie-guard-go").click(); await p.waitForTimeout(600);
-      const pos = await p.evaluate(() => { const pn = document.getElementById("wl-shell-panel"), a = document.getElementById("hub-anchor-circuits"); return { top: pn.scrollTop, d: Math.abs(a.getBoundingClientRect().top - pn.getBoundingClientRect().top), winY: window.scrollY }; });
-      assert.ok(pos.top > 0 && pos.d < 40 && pos.winY === 0, "scrolled to 回路欄 inside panel " + JSON.stringify(pos));
-      assert.equal(await p.locator("#sortie-guard-guide").count(), 0, "banner gone after acting");
+      assert.equal(txt.match(/回路が未装備です。1×1回路を作成・修復して隊長機に装備してください。/) !== null, true, "1-A wording");
+      assert.equal(await goCheck("first_circuit_unrepaired"), "hub-anchor-circuits");
       await p.reload(); await p.waitForTimeout(1200);
       assert.equal(await p.locator("#sortie-guard-guide").count(), 0, "not shown again after acting");
       // ✕ path

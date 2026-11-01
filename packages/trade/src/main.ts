@@ -1,3 +1,4 @@
+import { arrangeHubColumns, watchHubColumns } from "./hub-columns";
 import {DEBUG_FIXTURE_ACTIVE,firstSortieError,sortieGuardGuide,sortieGuardBannerHtml,SORTIE_GUARD_RETURN_KEY} from "@estg/shared";
 import {playLogNavigate,PALETTE_TRADE_EVENT,loadHubSaveFromLocalStorage as loadHubForPalette,normalizeHubSnapshot as normalizeHubForPalette} from '@estg/shared';
 import { containerBuyConfirmText, mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
@@ -623,6 +624,7 @@ function render() {
     </div>
   `;
   bindGuardBanner();
+  arrangeHubColumns(root); watchHubColumns(root); // PC 2-column（神宮決定 2026-11-01）
 
   document.getElementById("btn-signature")?.addEventListener("click", () => {
     const input = document.getElementById("input-signature") as HTMLInputElement | null;

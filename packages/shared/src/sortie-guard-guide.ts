@@ -23,7 +23,7 @@ export function sortieGuardGuide(hub: HubSnapshot, ids: readonly string[]): Sort
     const crafted = hub.circuits.filter((c) => intro.craftedCircuitIds.includes(c.circuitId) && c.origin === "crafted");
     const repaired = crafted.some((c) => isCircuitRestoreStateActive(c.restoreState));
     return repaired
-      ? { code: "first_circuit_unequipped", text: "回路が未装備です。修復済みの回路を隊長機に装備してください。", action: "回路を装備する", target: "hub-anchor-circuits" }
+      ? { code: "first_circuit_unequipped", text: "回路が未装備です。1×1回路を作成・修復して隊長機に装備してください。", action: "回路を装備する", target: "hub-anchor-circuits" }
       : { code: "first_circuit_unrepaired", text: "回路が未装備です。1×1回路を作成・修復して隊長機に装備してください。", action: "修復へ移動", target: "hub-anchor-circuits" };
   }
   const e = squadEquipmentError(hub, ids);
