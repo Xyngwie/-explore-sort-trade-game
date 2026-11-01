@@ -1,5 +1,5 @@
 import { arrangeHubColumns, watchHubColumns } from "./hub-columns";
-import {DEBUG_FIXTURE_ACTIVE,firstSortieError} from "@estg/shared";
+import {DEBUG_FIXTURE_ACTIVE,firstSortieError,sortieGuardGuide,sortieGuardBannerHtml,SORTIE_GUARD_RETURN_KEY} from "@estg/shared";
 import {playLogNavigate,PALETTE_TRADE_EVENT,loadHubSaveFromLocalStorage as loadHubForPalette,normalizeHubSnapshot as normalizeHubForPalette} from '@estg/shared';
 import { containerBuyConfirmText, mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
 import { hubMechGaugeModel } from "./mech-gauge-hub";
@@ -481,6 +481,25 @@ function nextSortiePanel(s: HangarState): string {
 let signatureComposing = false;
 let renderDeferred = false;
 
+/** Sortie-guard guidance（神宮決定 2026-11-01）: shown after Explore's 格納庫へ, gone once fixed, acted on or closed. */
+function guardBanner(hub: HangarState["hub"], ids: readonly string[]): string {
+  let flagged = false;
+  try { flagged = sessionStorage.getItem(SORTIE_GUARD_RETURN_KEY) === "1"; } catch { /* no storage */ }
+  if (!flagged || DEBUG_FIXTURE_ACTIVE) return "";
+  const g = sortieGuardGuide(hub, ids);
+  if (!g) { try { sessionStorage.removeItem(SORTIE_GUARD_RETURN_KEY); } catch { /* */ } return ""; }
+  return sortieGuardBannerHtml(g);
+}
+function bindGuardBanner(): void {
+  const clear = () => { try { sessionStorage.removeItem(SORTIE_GUARD_RETURN_KEY); } catch { /* */ } };
+  document.getElementById("sortie-guard-go")?.addEventListener("click", (e) => {
+    const id = (e.currentTarget as HTMLElement).dataset.target!;
+    clear(); document.getElementById("sortie-guard-guide")?.remove();
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+  });
+  document.getElementById("sortie-guard-close")?.addEventListener("click", () => { clear(); document.getElementById("sortie-guard-guide")?.remove(); });
+}
+
 function render() {
   if (signatureComposing) {
     renderDeferred = true;
@@ -505,6 +524,7 @@ function render() {
     }
 
     ${!DEBUG_FIXTURE_ACTIVE && state.hub.newGameIntro && !state.hub.newGameIntro.firstSortie ? `<div class="card" id="new-game-guide"><h2>初出撃の準備</h2><p>まず未開封コンテナを仕分で開封してください。開封後は格納庫へ戻り、資源の売買で資金と材料を整え、機体と1×1回路を作成します。回路を修復して隊長機に装備し、既存の補給で出撃を準備してください。</p><a class="btn secondary" href="#unopened-panel">コンテナを開封する</a><p>初期支給の開封済み ${state.hub.newGameIntro.initialOpened}/10個。初期支給分は購入分と別に開封します。</p></div>` : ""}
+    ${guardBanner(state.hub, ready.selectedIds)}
     ${hubTreeHtml(hubTreeModel(state.hub, ready.selectedIds))}
     <span id="hub-anchor-squad"></span>
     ${nextSortiePanel(state)}
@@ -603,6 +623,7 @@ function render() {
       </ul>
     </div>
   `;
+  bindGuardBanner();
   arrangeHubColumns(root); watchHubColumns(root); // PC 2-column（神宮決定 2026-11-01）
 
   document.getElementById("btn-signature")?.addEventListener("click", () => {

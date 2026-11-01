@@ -52,11 +52,14 @@ export function arrangeHubColumns(root: HTMLElement, wide = matchMedia(HUB_2COL_
   kids.forEach((k, i) => {
     k.dataset.hubOrder = String(i);
     if (treeAt >= 0 && i < treeAt) return;
+    // §16 7. PC 2列（1200px 以上）でのバナーの位置 = 2カラムの上に全幅（神宮決定 2026-11-01）
+    if (k.id === "sortie-guard-guide") return;
     // Empty anchor spans (#hub-anchor-*) follow the card after them, so tree navigation's nextElementSibling still finds it.
     let t = k; while (t.tagName === "SPAN" && t.id.startsWith("hub-anchor-") && t.nextElementSibling) t = t.nextElementSibling as HTMLElement;
     (hubColumnFor(probe(t)) === "right" ? right : left).appendChild(k);
   });
   root.appendChild(cols);
+  const banner = root.querySelector(":scope>#sortie-guard-guide"); if (banner) root.insertBefore(banner, cols);
 }
 
 let watching = false;

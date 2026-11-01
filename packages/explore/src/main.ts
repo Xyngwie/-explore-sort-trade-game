@@ -1,4 +1,4 @@
-import {DEBUG_FIXTURE_ACTIVE,firstSortieError,setExploreShellPhase} from "@estg/shared";
+import {DEBUG_FIXTURE_ACTIVE,firstSortieError,setExploreShellPhase,SORTIE_GUARD_RETURN_KEY} from "@estg/shared";
 import { clampZoom, gestureDownForTap, gestureMove, gestureUp, MAP_WHEEL_STEP, newMapGestureState, withViewCamera, type MapGestureState } from "./game/mapZoom";
 import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
@@ -1012,12 +1012,14 @@ function renderDom(): void {
           }
         </table>
         <div class="row"><button type="button" id="btn-start" ${sortieEquipmentNote() ? "disabled" : ""}>出撃</button></div>
-        ${sortieEquipmentNote() ? `<p class="warn">${escapeHtml(sortieEquipmentNote())}</p><a class="btn" href="${resolveModuleBaseUrl("trade")}">格納庫へ</a>` : ""}
+        ${sortieEquipmentNote() ? `<p class="warn">${escapeHtml(sortieEquipmentNote())}</p><a class="btn" id="link-guard-hub" href="${resolveModuleBaseUrl("trade")}">格納庫へ</a>` : ""}
         ${Object.values(world.mechBattery).some(b => b.activity <= 0) ? `<p class="warn" id="power-empty-presortie">活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。</p>` : ""}
         ${preSortieAmmoNote ? `<p class="warn" id="ammo-short-presortie">${escapeHtml(preSortieAmmoNote)}</p>` : ""}
         <p class="help">${briefingHelpText(cmdLocked)}</p>
       </div>`;
     bindDebugUnlockToggle();
+    // Sortie-guard guidance（神宮決定 2026-11-01）: HUB shows where to fix it.
+    document.getElementById("link-guard-hub")?.addEventListener("click", () => { try { sessionStorage.setItem(SORTIE_GUARD_RETURN_KEY, "1"); } catch { /* private mode: no banner */ } });
     document.getElementById("btn-start")?.addEventListener("click", () => {
       if (sortieEquipmentNote()) return;
       if (!startSortie(world)) { needsDom = true; renderDom(); return; }
