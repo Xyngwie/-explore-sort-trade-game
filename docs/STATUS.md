@@ -1,5 +1,5 @@
 ## 全画面シェル PC 2 列 HUB（2026-11-01・暫定・draft）
-- 幅 1200px 以上の PC で DOCK を 2 列（左＝母艦・小隊ツリー、右＝作戦室・未開封・物資市場、最大 1440px）。細部 8 点は暫定 ★ → [FULLSCREEN_SHELL_V0.md §14](FULLSCREEN_SHELL_V0.md)
+- 幅 1200px 以上の PC で DOCK を 2 列（左＝母艦・小隊ツリー、右＝作戦室・未開封・物資市場、最大 1440px）。細部 8 点は暫定 ★ → [FULLSCREEN_SHELL_V0.md §15](FULLSCREEN_SHELL_V0.md)
 
 ## 全画面シェル PR6 各画面フィット（2026-11-01・神宮決定）
 - PR6 各画面フィット（#342）：window スクロール前提の解消・記録パネル幅・Alpha Lab 帯のコンパクト化・ブリーフィングでタブ表示 → [FULLSCREEN_SHELL_V0.md §12](FULLSCREEN_SHELL_V0.md)

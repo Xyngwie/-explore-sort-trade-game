@@ -1,5 +1,5 @@
 /**
- * PC 2-column HUB（暫定 ★・FULLSCREEN_SHELL_V0 §14）.
+ * PC 2-column HUB（暫定 ★・FULLSCREEN_SHELL_V0 §15）.
  * Wide PC only: left = 母艦・小隊ツリー（ツリー・ハンガー・回路など）, right = 作戦室（出撃カード）・未開封・物資市場.
  * Pure DOM re-parenting of the rendered #app children; narrow screens keep the original single column.
  */
