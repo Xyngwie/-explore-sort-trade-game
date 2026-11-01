@@ -1,7 +1,9 @@
 ## 全画面シェル PR6 各画面フィット（2026-11-01・神宮決定）
 - PR6 各画面フィット（#342）：window スクロール前提の解消・記録パネル幅・Alpha Lab 帯のコンパクト化・ブリーフィングでタブ表示 → [FULLSCREEN_SHELL_V0.md §12](FULLSCREEN_SHELL_V0.md)
   - 細部決定：1. ハッシュ付きで開いた時の位置 = パネル内の目的位置へ自動スクロール（神宮決定 2026-11-01）／2. 記録パネルの幅 = シェル列幅基準（最大 960px −16px）（神宮決定 2026-11-01）／3. Alpha Lab 帯 = 閉時 1 行コンパクト帯（神宮決定 2026-11-01）／4. 結果画面のタブ = 非表示（神宮決定 2026-11-01）／5. explore のシェル HUD = ブリーフィングでも非表示（神宮決定 2026-11-01）／6. RESTORE の盤面高さ上限 = window.innerHeight 基準のまま（神宮決定 2026-11-01）
-- 整理（2026-11-01）：タブ対応・1.2M・960px は決定済みと確認。未決の 600px 判定・Alpha Lab 帯の開時高さは provisional ★ → [FULLSCREEN_SHELL_V0.md §13](FULLSCREEN_SHELL_V0.md)
+- 整理（#343）：タブ対応・1.2M・960px は決定済みと確認 → [FULLSCREEN_SHELL_V0.md §13](FULLSCREEN_SHELL_V0.md)
+  - 1. スマホの短縮表示（12.3k／1.2M）に切り替える画面幅 = 600px 以下（神宮決定 2026-11-01）
+  - 2. Alpha Lab 帯を開いたときの高さ上限 = 45dvh・帯の内側でスクロール（神宮決定 2026-11-01）
 
 ## 全画面シェル PR5 ジェスチャー（2026-11-01・神宮決定）
 - Explore の地図だけ：ダブルタップで 1 倍↔2 倍、ピンチで 1〜2.5 倍、PC はホイール。拡大は表示だけでセーブ・チェックポイントは変わらない。4b・4c は後回し。神宮決定（細部 1〜8）：
@@ -33,7 +35,7 @@
 ## 全画面シェル PR2 上部 HUD（2026-11-01）
 - 神宮決定 1〜12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` §6 に記録。`#wl-shell-hud`：Cr・弾・装・電・箱、explore 以外で表示、箱タップ＝DOCK `#unopened-panel`。DOCK 所持バーから同 5 項目を削除（艦隊・出撃は残す）。
 - テスト：`fullscreen-shell.selftest.ts`（並び・色・0・書式・タップ可否・セーブ/チェックポイント不変）、`trade/src/hud-match.selftest.ts`（旧バーとの値一致）。`verify-new-game-intro.cjs`・`verify-alpha-lab.cjs`・`verify-fullscreen-shell.cjs`（DOCK・SORT のタブ計算スタイル一致）PASS（後者はクレジットを HUD の `data-value` で確認）。
-- 追加決定（神宮 11/01）：Alpha Lab 帯は現状維持（PR6 で見直し）／タブバーは各画面のボタンスタイルを上書きして全画面同じ見た目（実装）／スマホ 100 万以上は 1.2M。スマホ判定 600px 以下は未決（provisional ★・FULLSCREEN_SHELL_V0 §13-1）。
+- 追加決定（神宮 11/01）：Alpha Lab 帯は現状維持（PR6 で見直し）／タブバーは各画面のボタンスタイルを上書きして全画面同じ見た目（実装）／スマホ 100 万以上は 1.2M。スマホ判定 600px 以下（神宮決定 2026-11-01、FULLSCREEN_SHELL_V0 §13-1）。
 
 ## 全画面1枚完結型UI（FULLSCREEN_SHELL）決定・PR1 外枠シェル（2026-10-31）
 - 神宮決定 Q1〜Q12（すべて★）を `docs/FULLSCREEN_SHELL_V0.md` に記録。PR 分割 1 外枠シェル／2 HUD→2b パレット／3 計器／4 HUB ツリー→4b→4c／5 ジェスチャー／6 各画面フィット。

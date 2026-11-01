@@ -51,7 +51,7 @@ export function formatHudNumber(value: number, mobile: boolean): string {
   const [d, u] = v >= 1_000_000 ? [1_000_000, "M"] : [1_000, "k"];
   return (Math.floor((v / d) * 10) / 10).toFixed(1).replace(/\.0$/, "") + u;
 }
-/** Provisional ★ (FULLSCREEN_SHELL_V0 §13-1): phone width for the 12.3k / 1.2M format, ≤600px. Not a 神宮 decision yet. */
+/** §13-1. 短縮表示（12.3k／1.2M）に切り替える画面幅 = 600px 以下（神宮決定 2026-11-01） */
 export const HUD_MOBILE_QUERY = "(max-width: 600px)";
 
 export type ShellContext = {
@@ -93,7 +93,7 @@ export const SHELL_CSS = `
 html,body{height:100dvh!important;max-height:100dvh;overflow:hidden!important;overscroll-behavior:none}
 body{margin:0 auto!important;max-width:${SHELL_MAX_WIDTH_PX}px;display:flex;flex-direction:column;touch-action:manipulation}
 #wl-shell-panel{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-/* Provisional ★ (§13-2): open Alpha Lab strip max height 45dvh. */
+/* §13-2. 開いた Alpha Lab 帯の高さ上限 = 45dvh・帯の内側でスクロール（神宮決定 2026-11-01） */
 body>#shield-debug-console{flex:0 1 auto;min-height:0;max-height:45dvh;overflow:auto}
 #wl-shell-hud{box-sizing:border-box!important;flex:0 0 auto;display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;overflow:hidden;white-space:nowrap;background:#0d1117;border-bottom:1px solid #30363d;font:600 13px/1 system-ui,sans-serif}
 #wl-shell-hud[hidden]{display:none}
