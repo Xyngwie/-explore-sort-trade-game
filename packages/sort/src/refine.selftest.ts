@@ -21,6 +21,7 @@ import {
   isNearStuckHint,
   refillFromAbove,
   resolveChains,
+  moveBudgetFor,
   resolveCraftMultiplier,
   resolveNearStuckHint,
   resolveSwipeNeighbor,
@@ -1320,6 +1321,8 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   s = {
     ...s,
     board,
+    cols,
+    rows,
     bag: ["ammo"],
     playMode: "idle",
     pendingClear: [],
@@ -1615,5 +1618,18 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
   console.log("sort combo clear feedback ok");
 }
 
+
+// Board fit (神宮決定 2026-11-02, SORT_V0 §8): new boards are 6×7; a saved 6×12 session keeps its own shape.
+{
+  assert(SORT_V0_RULES.boardCols === 6 && SORT_V0_RULES.boardRows === 7 && SORT_V0_RULES.initialFillRows === 7, "6×7 board");
+  let n = createRefineFromLocationSearch("?salvagedContainers=3&isExtracted=1");
+  assert(n.cols === 6 && n.rows === 7 && n.board.length === 42, "new board 6×7");
+  n = startRefine(n, 7);
+  assert(n.board.length === 42 && n.board.every((c) => c != null), "6×7 filled on start");
+  assert(n.movesLeft === moveBudgetFor(n.validPieceBudget), "moves formula unchanged");
+  const old = JSON.parse(JSON.stringify({ ...n, rows: 12, board: [...n.board, ...n.board.slice(0, 30)] })) as RefineLive;
+  const r = resolveChains(old.board, old.cols, old.rows, old.bag);
+  assert(r.board.length === 72, "saved 6×12 session continues as 6×12");
+}
 
 console.log("sort refine.selftest: ok");
