@@ -749,8 +749,8 @@ button.cell {
   vertical-align: middle;
 }
 
-/* 盤フィット（暫定 ★A 2026-11-02・docs/SORT_V0.md「盤サイズ」）: inside the fullscreen shell panel, fill the panel (not 100dvh)
+/* 盤フィット（7. 収めるもの = 盤面と「精製を終える」・神宮決定 2026-11-02・SORT_V0 §8）: inside the fullscreen shell panel, fill the panel (not 100dvh)
    so the 6×7 board and 精製を終える fit one screen without scrolling. */
 #wl-shell-panel > #app { min-height: 100%; }
-/* 盤フィット（暫定 ★A）: during play the page header (MODULE 2 · Athanor 精製) is hidden; the play HUD stays. */
+/* 6. 詰め方 = 見出しを隠す（神宮決定 2026-11-02）: during play the page header (MODULE 2 · Athanor 精製) is hidden; the play HUD stays. */
 #wl-shell-panel .shell:has(> .play-field[data-phase="playing"]) > .chrome { display: none; }

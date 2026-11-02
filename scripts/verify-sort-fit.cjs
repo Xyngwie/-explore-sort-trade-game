@@ -1,4 +1,4 @@
-/** SORT board fit (暫定 ★A 2026-11-02, docs/SORT_V0.md「盤サイズ」): 6×7 board and 精製を終える fully visible without scrolling on phone 390×844 and PC 1280×900 / 1600×900; hub save untouched, no checkpoint. */
+/** SORT board fit (神宮決定 2026-11-02, docs/SORT_V0.md §8): 6×7 board and 精製を終える fully visible without scrolling on phone 390×844 and PC 1280×900 / 1600×900; hub save untouched, no checkpoint. */
 const assert = require("node:assert/strict"),
   fs = require("node:fs"),
   http = require("node:http"),
@@ -66,7 +66,7 @@ const root = path.resolve(__dirname, ".."),
       assert.ok(m.top >= m.panelTop - 1 && m.bottom <= m.limit + 1 && m.scroll === 0, "board fully visible without scroll " + JSON.stringify(m));
       assert.ok(m.over <= 0, "no horizontal overflow");
       assert.ok(m.panelOver <= 1 && m.finishBottom <= m.limit + 1, "board + 精製を終える on one screen, panel does not scroll " + JSON.stringify(m));
-      assert.equal(m.header, false, "page header hidden during play (暫定 ★A)");
+      assert.equal(m.header, false, "page header hidden during play (6. 神宮決定 2026-11-02)");
       if (vp.m) assert.ok(m.cellPx >= 44, "phone cells ≥44px tap target " + m.cellPx);
       results.push({ viewport: vp.w + "x" + vp.h, ...m, status: "PASS" });
       await p.screenshot({ path: `/tmp/sortfit-${vp.w}.png` });

@@ -1619,7 +1619,7 @@ function settleUntilQuiet(s: RefineLive, maxTicks = 200): RefineLive {
 }
 
 
-// Board fit (暫定 ★A 2026-11-02): new boards are 6×7; a saved 6×12 session keeps its own shape.
+// Board fit (神宮決定 2026-11-02, SORT_V0 §8): new boards are 6×7; a saved 6×12 session keeps its own shape.
 {
   assert(SORT_V0_RULES.boardCols === 6 && SORT_V0_RULES.boardRows === 7 && SORT_V0_RULES.initialFillRows === 7, "6×7 board");
   let n = createRefineFromLocationSearch("?salvagedContainers=3&isExtracted=1");

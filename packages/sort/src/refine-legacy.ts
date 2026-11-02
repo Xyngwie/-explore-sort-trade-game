@@ -34,7 +34,7 @@ export const SORT_V0_RULES = {
   invalidRatio: 0.2,
   /** Match length (horizontal / vertical only — no diagonal). */
   minClearLine: 3,
-  /** 盤 6 列×7 行（暫定 ★A・SORT_V0 §盤サイズ 2026-11-02：スマホ 1 画面に収める。旧 6×12）。 */
+  /** 盤 6 列×7 行（1. 盤面の形 = 6×7・神宮決定 2026-11-02・SORT_V0 §8。旧 6×12）。 */
   boardCols: 6,
   boardRows: 7,
   /**
