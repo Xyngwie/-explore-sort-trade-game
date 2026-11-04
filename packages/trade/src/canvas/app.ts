@@ -13,6 +13,8 @@ import {
   type FrameInfo,
 } from "@estg/shared";
 import { DockScene } from "./dock-scene";
+import { browserDockEnv } from "./dock-sections";
+import { tabUrl } from "./tabs";
 import { StartScene, layoutStart } from "./start-scene";
 
 export type SceneId = "start" | "dock";
@@ -29,7 +31,12 @@ export function mountCanvasApp(doc: Document = document): void {
     input.blur();
     input.hidden = true;
     input.disabled = true;
-    dock = new DockScene({ navigateLegacy: () => playLogNavigate(resolveModuleBaseUrl("trade")) });
+    dock = new DockScene({
+      navigateLegacy: () => playLogNavigate(resolveModuleBaseUrl("trade")),
+      env: browserDockEnv(),
+      onTab: (tab) => { if (!playLogBlocked()) playLogNavigate(tabUrl(tab)); },
+      redraw: () => surface.invalidate(),
+    });
     current = "dock";
     surface.invalidate();
   });

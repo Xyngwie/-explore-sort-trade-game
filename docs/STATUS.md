@@ -1,3 +1,10 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-1：DOCK の残り（2026-11-04・暫定 ★）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: canvas 版 DOCK に全欄（次の出撃・未開封・売却・ハンガー・在庫・署名表示・回路・装備・作成/購入・履歴/ログ・検証用・ツリー・導入ガイド・出撃ガード）と下部タブ。共通部品（Flow・確認／一覧ダイアログ・トグル・機体ゲージ）を `canvas-ui` に追加 → [CANVAS_UNIFIED_V0.md](CANVAS_UNIFIED_V0.md)
+- Why: 神宮決定（2026-11-04）：統合方式 = 最初から 1 ページ、順番 = DOCK の残り → SORT → RESTORE → INVADE → 探索、ブランチ = `claude/canvas-unified`（#348 の上）
+- Scope: DOCK だけ。SORT・RESTORE・INVADE・探索は既存版のページへ移動（CANVAS-U2）。既存版の画面コード・セーブ形式・価格は変更なし
+- Status: 細部 CANVAS-U1〜U9 は ★推奨で仮実装（暫定）。PR は #348 の上の draft。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 単一 canvas 刷新・第1段階：共通基盤と DOCK の縦断（2026-11-04・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: `packages/shared/src/canvas-ui/`（描画・入力・スクロール・モーダルの共通基盤）と、canvas 版の入口 `packages/trade/canvas/index.html`（開始前の名前入力 → DOCK の HUD・未開封数・物資市場の購入）。既存版の DOCK は変更なし → [CANVAS_SHELL_V0.md](CANVAS_SHELL_V0.md)

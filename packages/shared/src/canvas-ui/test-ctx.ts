@@ -21,7 +21,7 @@ export function createStubCtx(): StubCtx {
     },
     fillText(text: string) { self.texts.push(text); self.ops++; },
   } as unknown as StubCtx;
-  for (const m of ["save", "restore", "beginPath", "rect", "clip", "fillRect", "strokeRect", "moveTo", "lineTo", "arcTo", "closePath", "fill", "stroke", "setTransform", "clearRect"]) {
+  for (const m of ["save", "restore", "beginPath", "rect", "clip", "fillRect", "strokeRect", "moveTo", "lineTo", "arcTo", "closePath", "fill", "stroke", "setTransform", "clearRect", "arc", "setLineDash"]) {
     (self as unknown as Record<string, () => void>)[m] = () => { self.ops++; };
   }
   return self;

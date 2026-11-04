@@ -92,12 +92,13 @@ const CONFIGS = [
       };
       /** Scroll the DOCK list (wheel) until the 44px button is fully visible. */
       const reveal = async (id) => {
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 60; i++) {
           const r = await region(id);
           if (r && r.visible && r.h >= 43) return r;
           const vh = cfg.viewport.height;
           await p.mouse.move(cfg.viewport.width / 2, vh / 2);
-          await p.mouse.wheel(0, r && r.cy < vh / 2 ? -80 : 80);
+          const dist = r ? r.cy - vh / 2 : 400;
+          await p.mouse.wheel(0, Math.sign(dist || 1) * Math.min(600, Math.abs(dist) * 0.8 + 40));
           await p.waitForTimeout(40);
         }
         throw new Error(`${cfg.name}: cannot reveal ${id} ` + JSON.stringify(await region(id)) + JSON.stringify(await p.evaluate(() => [window.__wlCanvas.scroll("dock"), window.__wlCanvas.pressing()])));
@@ -150,6 +151,8 @@ const CONFIGS = [
 
       // ---- hit alignment at the edges (coordinate conversion at this DPR) ----
       const h0 = await hub();
+      await reveal("dock:ammo:buy");
+      await reveal("dock:ammo:step:1");
       const step = await region("dock:ammo:step:1");
       await tapAt(step.left + 2, step.top + 2); // just inside
       await tapAt(step.left - 3, step.cy); // just outside (gap): nothing
@@ -166,7 +169,7 @@ const CONFIGS = [
       // ---- container: confirm dialog, behind-dialog tap, cancel, confirm ----
       // Scroll the box row into view first (small screens).
       await reveal("dock:unopened:buy");
-      const behind = await region("dock:ammo:buy");
+      const behind = await region("dock:unopened:step:1");
       await tap("dock:unopened:buy");
       assert.equal((await region("dock:confirm:ok"))?.visible, true, "dialog open");
       assert.equal((await hub()).unopenedContainers, h1.unopenedContainers, "no buy before confirm");

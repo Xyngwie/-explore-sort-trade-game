@@ -55,7 +55,7 @@ export type Ctx2D = Pick<
   CanvasRenderingContext2D,
   | "save" | "restore" | "beginPath" | "rect" | "clip" | "fillRect" | "strokeRect" | "fillText"
   | "measureText" | "moveTo" | "lineTo" | "arcTo" | "closePath" | "fill" | "stroke" | "setTransform"
-  | "clearRect"
+  | "clearRect" | "arc" | "setLineDash"
 > & {
   fillStyle: CanvasRenderingContext2D["fillStyle"];
   strokeStyle: CanvasRenderingContext2D["strokeStyle"];
@@ -174,6 +174,8 @@ export class CanvasUI {
   private scrollStack: string[] = [];
   private press: Press | null = null;
   private activations = 0;
+  /** Per-id values kept across frames (measured heights, …). Never game state. */
+  readonly memo = new Map<string, number>();
   constructor(private readonly opts: CanvasUIOptions = {}) {}
 
   /* ---------------- frame ---------------- */
@@ -199,6 +201,10 @@ export class CanvasUI {
     if (!this.ctx) throw new Error("CanvasUI: draw outside beginFrame/endFrame");
     return this.ctx;
   }
+  /** Ask for another frame (e.g. a measured height changed). */
+  requestRedraw(): void { this.opts.invalidate?.(); }
+  /** Set a scroll position (clamped on the next frame). */
+  scrollTo(id: string, y: number): void { this.scrollY.set(id, Math.max(0, y)); this.opts.invalidate?.(); }
   /** Highest layer that receives input (a modal blocks everything under it). */
   get topLayer(): number { return this.topLayerFrame; }
 
@@ -235,8 +241,10 @@ export class CanvasUI {
    * A vertically scrolling, clipped area. `draw(offsetY)` draws content in
    * canvas coordinates already shifted by the scroll offset (y - offsetY).
    */
-  scrollArea(id: string, rect: Rect, contentH: number, draw: (offsetY: number) => void): void {
+  scrollArea(id: string, rect: Rect, contentH: number | "auto", draw: (offsetY: number) => number | void): void {
     const ctx = this.context;
+    const autoKey = `scroll:${id}:h`;
+    if (contentH === "auto") contentH = this.memo.get(autoKey) ?? rect.h;
     const area: ScrollArea = { id, rect, layer: this.layer, contentH };
     this.buildingScroll.push(area);
     this.setScroll(id, this.getScroll(id), area);
@@ -248,7 +256,12 @@ export class CanvasUI {
     ctx.clip();
     this.clipStack.push(clip);
     this.scrollStack.push(id);
-    draw(off);
+    const used = draw(off);
+    if (typeof used === "number" && Math.round(used) !== Math.round(this.memo.get(autoKey) ?? -1)) {
+      this.memo.set(autoKey, used);
+      area.contentH = used;
+      this.opts.invalidate?.();
+    }
     this.scrollStack.pop();
     this.clipStack.pop();
     ctx.restore();
