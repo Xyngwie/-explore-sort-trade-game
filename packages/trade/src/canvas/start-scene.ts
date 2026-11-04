@@ -22,7 +22,7 @@ export const NAME_FIRST_NOTE = "開始すると名前は確定し、あとから
 export function startWithName(draft: string, store?: IdentityStore | null): StartOutcome {
   if (isCraftSignatureLocked(store)) return { ok: true, name: loadCraftSignature(store) };
   const name = sanitizeEditorName(draft);
-  // CANVAS-D1 (暫定 ★): an empty name cannot start (no silent default name).
+  // CANVAS-D1 (神宮決定 2026-11-04): an empty name cannot start (no silent default name).
   if (!name) return { ok: false, notice: "名前を入力してください。" };
   const r = saveCraftSignatureOnce(name, store);
   if (r.ok) return { ok: true, name: r.signature };

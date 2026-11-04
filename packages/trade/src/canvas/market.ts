@@ -31,7 +31,7 @@ export const MARKET_SHORT: Record<MarketItem, string> = { ammo: "弾", armor: "�
 export const MARKET_NAME: Record<MarketItem, string> = { ...RESOURCE_LABEL_JA, unopened: "未開封コンテナ" };
 export const MARKET_COLOR: Record<MarketItem, string> = { ammo: "#f85149", armor: "#58a6ff", power: "#d4a72c", junk: "#c9d1d9", unopened: "#ffffff" };
 
-/** Quantity buttons (CANVAS-Q2: no HTML number field). 暫定 ★ CANVAS-D3. */
+/** Quantity buttons (CANVAS-Q2: no HTML number field). CANVAS-D3 (神宮決定 2026-11-04). */
 export const QTY_STEPS = [-10, -1, 1, 10] as const;
 
 export function unitPrice(item: MarketItem): number {
@@ -50,7 +50,7 @@ export function maxBuy(hub: HubSnapshot | null, item: MarketItem): number {
 export function clampQty(q: number, max: number): number {
   return Math.max(1, Math.min(Math.max(1, Math.floor(max)), Math.floor(Number(q) || 1)));
 }
-/** CANVAS-D2 (暫定 ★): box purchases confirm every time (§10-6 text); resource buys do not (existing rule). */
+/** CANVAS-D2 (神宮決定 2026-11-04): box purchases confirm every time (§10-6 text); resource buys do not (existing rule). */
 export function needsConfirm(item: MarketItem): boolean {
   return item === "unopened";
 }

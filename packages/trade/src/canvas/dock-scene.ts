@@ -144,7 +144,7 @@ export class DockScene {
       this.hub = r.hub;
       this.delta = { item, deltas: r.deltas };
       this.notice = null;
-      // CANVAS-D4 (暫定 ★): quantity returns to 1 after each purchase.
+      // CANVAS-D4 (神宮決定 2026-11-04): quantity returns to 1 after each purchase.
       for (const it of MARKET_ITEMS) this.qty[it] = clampQty(it === item ? 1 : this.qty[it], maxBuy(this.hub, it));
     } else {
       this.notice = failureNotice(r.reason);
