@@ -16,4 +16,13 @@ export default defineConfig({
     },
   },
   server: { port: 5175 },
+  // Two pages: the existing DOCK (index.html) and the canvas edition (canvas/index.html, docs/CANVAS_SHELL_V0.md).
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        canvas: path.resolve(__dirname, "canvas/index.html"),
+      },
+    },
+  },
 });
