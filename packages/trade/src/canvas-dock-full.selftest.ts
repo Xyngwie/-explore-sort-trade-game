@@ -82,7 +82,25 @@ assert.equal(store.writes, w0, "redraw / resize never saves");
 for (const s of ["次の出撃", "未開封コンテナ", "物資市場（購入）", "資源の売却", "ハンガー", "型付き在庫", "署名（刻印）", "保有回路", "回路装備", "回路作成", "資源履歴", "検証用"]) assert.ok(ctx.texts.includes(s), s);
 
 // Every enabled control is a ≥44px target.
-for (const r of regions()) if (!r.disabled && r.visible && !r.id.endsWith(":box") && !r.id.includes("backdrop")) assert.ok(r.h >= 43.9 || r.id.startsWith("dock:gauge"), `${r.id} h=${r.h}`);
+// Every enabled control is a ≥44px target, also on a 320px phone (whole list scrolled through).
+for (const width of [390, 320]) {
+  frame = { ...frame, width };
+  ui.scrollTo("dock", 0);
+  for (let step = 0; step < 80; step++) {
+    draw(); draw();
+    for (const r of regions()) {
+      if (r.disabled || !r.visible || r.id.endsWith(":box") || r.id.includes("backdrop") || r.id.startsWith("dock:gauge")) continue;
+      const full = r.h >= 43.9 || r.y <= 92 || r.y + r.h >= frame.height - 60; // partly clipped at the scroll edges
+      if (full) assert.ok(r.w >= 43.9, `${width}px ${r.id} ${r.w}×${r.h}`);
+      if (r.y > 92 && r.y + r.h < frame.height - 60) assert.ok(r.h >= 43.9, `${width}px ${r.id} ${r.w}×${r.h}`);
+    }
+    const y = ui.getScroll("dock");
+    ui.wheel({ x: 100, y: 400 }, 300);
+    if (ui.getScroll("dock") === y) break;
+  }
+}
+frame = { ...frame, width: 390 };
+ui.scrollTo("dock", 0); draw(); draw();
 
 // --- tabs: onboarding = DOCK only; seeded = all but the active one -----------------
 assert.deepEqual(dockTabs(createNewGameHub()).map((t) => t.enabled), [false, false, false, false, false]);

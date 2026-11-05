@@ -56,34 +56,34 @@ export function layoutMarketRows(x0: number, y0: number, inner: number, wide: bo
   let y = y0;
   const rows: MarketRow[] = [];
   for (const item of MARKET_ITEMS) {
-    const rowH = wide ? 76 : 116;
-    const rect: Rect = { x: x0, y, w: inner, h: rowH };
-    // Narrow rows: shrink the steppers (≥36px) then the quantity box before the buy button drops below 72px.
-    let stepW = 44, qtyW = 52;
-    const fixed = () => 16 + GAP + stepW * 4 + qtyW + GAP * 4;
-    if (!wide) {
-      if (inner - fixed() < 88) stepW = Math.max(36, 44 - Math.ceil((88 - (inner - fixed())) / 4));
-      if (inner - fixed() < 72) qtyW = 44;
-    }
-    const buyW = wide ? 128 : Math.max(72, Math.min(140, inner - fixed()));
+    // Every control keeps the 44px minimum (CANVAS_MIN_TARGET_PX). When the buy button
+    // (≥ 88px) does not fit beside the quantity buttons, it moves to its own line.
+    const T = CANVAS_MIN_TARGET_PX;
+    const stepW = T, qtyW = 52, minBuy = 88;
     const ctrlTotal = stepW * 4 + qtyW + GAP * 4;
-    const ctrlY = wide ? y + (rowH - 44) / 2 : y + 44;
+    const buyBelow = !wide && inner - 16 - ctrlTotal - GAP < minBuy;
+    const rowH = wide ? 76 : buyBelow ? 116 + T + 6 : 116;
+    const rect: Rect = { x: x0, y, w: inner, h: rowH };
+    const buyW = wide ? 128 : buyBelow ? inner - 16 : Math.min(140, inner - 16 - ctrlTotal - GAP);
+    const ctrlY = wide ? y + (rowH - T) / 2 : y + 44;
     const ctrlX = wide ? rect.x + rect.w - 8 - buyW - GAP - ctrlTotal : rect.x + 8;
     const steps: Rect[] = [];
     let x = ctrlX;
     for (let i = 0; i < QTY_STEPS.length; i++) {
       if (i === 2) { x += qtyW + GAP; }
-      steps.push({ x, y: ctrlY, w: stepW, h: 44 });
+      steps.push({ x, y: ctrlY, w: stepW, h: T });
       x += stepW + GAP;
     }
-    const qty: Rect = { x: ctrlX + stepW * 2 + GAP * 2, y: ctrlY, w: qtyW, h: 44 };
-    const buy: Rect = { x: rect.x + rect.w - 8 - buyW, y: ctrlY, w: buyW, h: 44 };
+    const qty: Rect = { x: ctrlX + stepW * 2 + GAP * 2, y: ctrlY, w: qtyW, h: T };
+    const buy: Rect = buyBelow
+      ? { x: rect.x + 8, y: ctrlY + T + 6, w: buyW, h: T }
+      : { x: rect.x + rect.w - 8 - buyW, y: ctrlY, w: buyW, h: T };
     const info: Rect = wide
       ? { x: rect.x + 10, y: y + 8, w: Math.max(0, ctrlX - rect.x - 18), h: 36 }
       : { x: rect.x + 10, y: y + 6, w: inner - 20, h: 36 };
     const note: Rect = wide
       ? { x: rect.x + 10, y: y + 46, w: Math.max(0, ctrlX - rect.x - 18), h: 22 }
-      : { x: rect.x + 10, y: y + 92, w: inner - 20, h: 20 };
+      : { x: rect.x + 10, y: y + rowH - 24, w: inner - 20, h: 20 };
     rows.push({ item, rect, steps, qty, buy, info, note });
     y += rowH + ROW_GAP;
   }

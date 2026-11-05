@@ -195,6 +195,8 @@ export class CanvasUI {
   private scrollY = new Map<string, number>();
   private scrollStack: string[] = [];
   private press: Press | null = null;
+  /** Every pointer currently touching (not only the one that pressed). */
+  private downs = new Set<number>();
   private activations = 0;
   /** Per-id values kept across frames (measured heights, …). Never game state. */
   readonly memo = new Map<string, number>();
@@ -408,11 +410,18 @@ export class CanvasUI {
     }
     return null;
   }
-  pointerDown(pointerId: number, p: Point): void {
-    if (this.press) {
-      // A second finger cancels the first and is ignored itself (no two-finger buys).
-      this.press = null;
-      this.opts.invalidate?.();
+  /**
+   * `primary` = the browser says no other pointer of this kind is down
+   * (PointerEvent.isPrimary): stale pointers whose release never arrived are
+   * forgotten. Unknown (undefined) keeps them.
+   */
+  pointerDown(pointerId: number, p: Point, primary?: boolean): void {
+    if (primary === true) this.downs.clear();
+    this.downs.add(pointerId);
+    if (this.downs.size > 1) {
+      // While another finger touches, nothing presses: the first press is
+      // cancelled and every further touch is ignored until all are lifted.
+      if (this.press) { this.press = null; this.opts.invalidate?.(); }
       return;
     }
     const hit = this.hitTest(p);
@@ -454,6 +463,7 @@ export class CanvasUI {
   }
   /** Returns true when a region was activated. */
   pointerUp(pointerId: number, p: Point): boolean {
+    this.downs.delete(pointerId);
     const s = this.press;
     if (!s || s.pointerId !== pointerId) return false;
     this.press = null;
@@ -477,6 +487,8 @@ export class CanvasUI {
     return true;
   }
   pointerCancel(pointerId?: number): void {
+    if (pointerId === undefined) this.downs.clear();
+    else this.downs.delete(pointerId);
     if (!this.press) return;
     if (pointerId !== undefined && this.press.pointerId !== pointerId) return;
     this.press = null;

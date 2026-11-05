@@ -184,7 +184,7 @@ const CONFIGS = [
       await tap("dock:unopened:buy");
       await tap("dock:confirm:ok");
       await settle();
-      const h2 = await hub();
+      let h2 = await hub();
       assert.equal(h2.unopenedContainers, h1.unopenedContainers + 1);
       assert.equal(h2.credits, h1.credits - 15);
       const e2 = await entries();
@@ -212,6 +212,28 @@ const CONFIGS = [
         assert.ok(n === 1 || n === 2, "1 or 2 taps landed");
         assert.equal(e3.length - e2.length, n, "one entry per purchase");
         assert.equal(new Set(e3.map((e) => e.op)).size, e3.length, "no duplicated operation ids");
+      }
+
+      // ---- several fingers: a re-tap while the first finger stays down never buys ----
+      if (cdp) {
+        const mb = await reveal("dock:ammo:buy");
+        const other = await region("dock:ammo:step:1");
+        const c0 = (await hub()).credits, n0 = (await entries()).length;
+        const A = { x: other.cx, y: other.cy, id: 1 }, B = { x: mb.cx, y: mb.cy, id: 2 }, C = { x: mb.cx, y: mb.cy, id: 3 };
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A, B] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [A] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A, C] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [A] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await p.waitForTimeout(150);
+        await settle();
+        assert.equal((await hub()).credits, c0, `${cfg.name}: re-tap with the first finger down never buys`);
+        assert.equal((await entries()).length, n0);
+        await tapAt(mb.cx, mb.cy);
+        await settle();
+        assert.equal((await hub()).credits, c0 - 6, "after all fingers are lifted, a tap buys again");
+        h2.credits = c0 - 6; // keep the later expectations relative
       }
 
       // ---- redraw / resize never writes ----

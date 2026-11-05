@@ -123,7 +123,7 @@ export class CanvasSurface {
       const owner = e.pointerType !== "mouse" && this.raw.size > 0 ? this.raw.values().next().value! : this.ui.rawAt(p);
       if (owner) { this.raw.set(e.pointerId, owner); owner.down(this.sample(e)); this.invalidate(); return; }
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      this.ui.pointerDown(e.pointerId, p);
+      this.ui.pointerDown(e.pointerId, p, e.isPrimary);
     });
     c.addEventListener("pointermove", (e) => {
       const h = this.raw.get(e.pointerId);

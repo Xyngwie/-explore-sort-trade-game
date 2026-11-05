@@ -1,9 +1,10 @@
-## 全モジュールの 1 ページ・1 canvas 統合 U-4：INVADE（2026-11-05・暫定 ★）
+## 全モジュールの 1 ページ・1 canvas 統合 U-4：INVADE（2026-11-05・神宮決定）＋ #348 追加指摘の修正
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: INVADE を同じアプリ・同じ canvas のシーンに（`/canvas/invade/`）。盤の入力は既存の `BoardGesture` をそのまま使う（閾値・タイミングは変更なし） → [CANVAS_UNIFIED_V0.md §11](CANVAS_UNIFIED_V0.md)
 - Why: 神宮「Rは★　それを作業してから　U-4へ」（2026-11-05）
 - Scope: INVADE だけ。探索は既存版のページ。INVADE の規則・セーブ形式・受け渡しの契約は変更なし
-- Status: 細部 CANVAS-I1〜I6 は ★推奨で仮実装（暫定）。PR #349 に続けて積んだ（draft）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+- Status: 細部 CANVAS-I1〜I6 はすべて★のとおり神宮決定（2026-11-05）。#348 への追加指摘 2 件（数量ボタンの 44px・複数の指の追跡）を #349 で修正（[§12](CANVAS_UNIFIED_V0.md)）。PR #349（draft）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+  - I1 URL = `/canvas/invade/`／I2 枠 = 幅と「表示の高さ −120px」の小さい方の正方形／I3 盤の上のホイール = 拡大縮小／I4 予告 = 白スコープ・開く予告は 0.3 秒で明るく／I5 段位 = 一覧ダイアログ＋確認／I6 = 「出発ハンドオフ」カードは出さない（すべて神宮決定 2026-11-05）
 
 ## 全モジュールの 1 ページ・1 canvas 統合 U-3：RESTORE（2026-11-05・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
