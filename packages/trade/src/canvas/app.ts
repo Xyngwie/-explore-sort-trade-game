@@ -22,6 +22,8 @@ import {
   SHELL_MAX_WIDTH_PX,
   bindEditorNameInput,
   computeShellModel,
+  Flow,
+  isPerfectCircuitDebugContext,
   drawResourceHud,
   drawShellTabs,
   loadHubSaveFromLocalStorage,
@@ -32,14 +34,21 @@ import {
   type FrameInfo,
 } from "@estg/shared";
 import { SortScene, armSortBackTrap, sortPopstateAction } from "@estg/sort/canvas";
+import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } from "@estg/restore/canvas";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
-import { browserDockEnv } from "./dock-sections";
+import { browserDockEnv, DOCK_ANCHOR } from "./dock-sections";
 import { tabUrl } from "./tabs";
 import { StartScene, layoutStart } from "./start-scene";
-import { clearHandoffFromUrl, createInitialHangar, ingestLocationSearch } from "../hangar";
+import { clearHandoffFromUrl, createInitialHangar, ingestLocationSearch, loadCraftSignature } from "../hangar";
 import { captureSortYieldFromHandoff, clearPendingSort, gateSortHandoff, hasSortHandoff, restorePendingSortOnBack } from "../sort-return-core";
 
-export type SceneId = "start" | "dock" | "sort";
+export type SceneId = "start" | "dock" | "sort" | "restore";
+/** The RESTORE page of this app (same app, own path like the existing /restore/ page). */
+export const CANVAS_RESTORE_PATH = "restore/";
+/** `/…/canvas/` for both `/…/canvas/` and `/…/canvas/restore/`. */
+export function canvasRootPath(pathname: string): string {
+  return pathname.endsWith("/" + CANVAS_RESTORE_PATH) ? pathname.slice(0, -CANVAS_RESTORE_PATH.length) : pathname;
+}
 
 /**
  * SORT when the query is an Explore/HUB→Sort handoff: a Sort-only key
@@ -57,11 +66,13 @@ const stripQuery = (u: string) => { const x = new URL(u); return x.origin + x.pa
  * A module URL that this page shows itself → the same query on this page.
  * Anything else (modules not on canvas yet) → null (leave the page).
  */
-export function inPageUrl(url: string, canvasBase: string, sortBase: string, tradeBase: string): string | null {
+export function inPageUrl(url: string, canvasBase: string, sortBase: string, tradeBase: string, restoreBase?: string): string | null {
   let u: URL;
   try { u = new URL(url, canvasBase); } catch { return null; }
   const at = u.origin + u.pathname;
-  if (at === stripQuery(canvasBase) || at === stripQuery(sortBase) || at === stripQuery(tradeBase)) return stripQuery(canvasBase) + u.search;
+  const root = stripQuery(canvasBase);
+  if (at === root || at === stripQuery(sortBase) || at === stripQuery(tradeBase)) return root + u.search;
+  if (at === root + CANVAS_RESTORE_PATH || (restoreBase && at === stripQuery(restoreBase))) return root + CANVAS_RESTORE_PATH + u.search;
   return null;
 }
 
@@ -72,14 +83,18 @@ export function mountCanvasApp(doc: Document = document): void {
   let current: SceneId = "start";
   let dock: DockScene | null = null;
   let sort: SortScene | null = null;
+  let restore: RestoreScene | null = null;
+  let restoreLoading = 0;
   let sortSearch = "";
-  const canvasBase = () => win.location.origin + win.location.pathname;
+  const canvasBase = () => win.location.origin + canvasRootPath(win.location.pathname);
   const sortBase = stripQuery(new URL(resolveModuleBaseUrl("sort"), win.location.href).toString());
   const tradeBase = stripQuery(new URL(resolveModuleBaseUrl("trade"), win.location.href).toString());
+  const restoreBase = stripQuery(new URL(resolveModuleBaseUrl("restore"), win.location.href).toString());
+  const onRestorePage = () => win.location.pathname.endsWith("/" + CANVAS_RESTORE_PATH);
 
   /** Open a URL: in place when this page shows it, else through the play log. */
   const go = (url: string) => {
-    const inPage = inPageUrl(url, canvasBase(), sortBase, tradeBase);
+    const inPage = inPageUrl(url, canvasBase(), sortBase, tradeBase, restoreBase);
     if (!inPage) { playLogNavigate(url); return; }
     win.history.pushState({}, "", inPage);
     enter();
@@ -115,10 +130,44 @@ export function mountCanvasApp(doc: Document = document): void {
     });
     current = "sort";
   };
+  const enterRestore = () => {
+    const search = win.location.search;
+    const build = () => {
+      const showInjectionDetails = isPerfectCircuitDebugContext({ search, hostname: win.location.hostname, isDev: Boolean(import.meta.env.DEV) });
+      restore = new RestoreScene({
+        search,
+        href: () => win.location.href,
+        hubBase: canvasBase(),
+        go,
+        redraw: () => surface.invalidate(),
+        signature: loadCraftSignature(),
+        rateOpts: {
+          hostname: win.location.hostname,
+          isDev: Boolean(import.meta.env.DEV),
+          envRate: (import.meta.env.VITE_PERFECT_CIRCUIT_RATE as string | undefined) ?? (import.meta.env.PERFECT_CIRCUIT_RATE as string | undefined) ?? null,
+          showInjectionDetails,
+        },
+      });
+      // Existing app.ts: consume trade→restore keys so a refresh uses the local session / storage.
+      if (restore.session.source === "handoff-board" || restore.session.source === "handoff-id") {
+        try { win.history.replaceState(null, "", stripInboundSearchFromLocation(win.location.href)); } catch { /* ignore */ }
+      }
+      restoreLoading = 0;
+      surface.invalidate();
+    };
+    current = "restore";
+    // Existing main.ts: large v2 Perfect boards (N ≥ 15) paint 「生成中…」 before the blocking generation.
+    restoreLoading = slowPerfectBoardSide(search) ?? 0;
+    if (restoreLoading) { surface.invalidate(); win.requestAnimationFrame(() => setTimeout(build, 0)); }
+    else build();
+  };
   const enter = () => {
     sort?.dispose();
     sort = null;
-    if (sceneForSearch(win.location.search) === "sort") enterSort();
+    restore?.dispose();
+    restore = null;
+    if (onRestorePage()) enterRestore();
+    else if (sceneForSearch(win.location.search) === "sort") enterSort();
     else enterDock();
     surface.invalidate();
   };
@@ -165,10 +214,40 @@ export function mountCanvasApp(doc: Document = document): void {
     if (scene.animating()) surface.invalidate();
   };
 
+  const drawRestore = (ui: CanvasUI, frame: FrameInfo) => {
+    const ctx = ui.context;
+    const L = layoutDock(frame, false);
+    ctx.fillStyle = CANVAS_THEME.bg;
+    ctx.fillRect(0, 0, frame.width, frame.height);
+    const hub = loadHubSaveFromLocalStorage()?.hub ?? null;
+    drawResourceHud(ui, L.hud, hub, frame.width <= CANVAS_MOBILE_MAX_W);
+    const top = L.hud.y + L.hud.h;
+    const area = { x: L.column.x, y: top, w: L.column.w, h: L.tabs.y - top };
+    if (!restore) {
+      ui.text("生成中…", area.x + 16, area.y + 40, { size: 18, weight: 700 });
+      ui.text(`${restoreLoading}×${restoreLoading} のパーフェクト基板を生成しています。大きい盤は少し時間がかかります。`, area.x + 16, area.y + 70, { size: 13, color: CANVAS_THEME.muted, maxW: area.w - 32 });
+    } else {
+      const scene = restore;
+      ui.scrollArea("restore", area, "auto", (off) => {
+        const originY = area.y - off;
+        const f = new Flow(ui, area.x + 12, originY + 12, area.w - 24, originY);
+        scene.draw(ui, f, frame.height);
+        f.gap(12);
+        return f.y - originY;
+      });
+    }
+    drawShellTabs(ui, L.tabs, computeShellModel({ current: "restore", hub, handoffInProgress: false }).tabs, (tab) => {
+      if (playLogBlocked()) return;
+      if (tab.id === "SORT") { go(canvasBase()); dock?.goAnchor(DOCK_ANCHOR.unopened); } // §5-1: SORT tab = DOCK 未開封
+      else go(tabUrl(tab));
+    });
+  };
+
   const surface = new CanvasSurface(canvas, {
     blocked: () => playLogBlocked(),
     draw: (ui, frame) => {
-      if (current === "sort" && sort) drawSort(ui, frame, sort);
+      if (current === "restore") drawRestore(ui, frame);
+      else if (current === "sort" && sort) drawSort(ui, frame, sort);
       else if (current === "dock" && dock) dock.draw(ui, frame);
       else start.draw(ui, frame);
       placeInput(frame);
@@ -214,6 +293,8 @@ export function mountCanvasApp(doc: Document = document): void {
     frames: () => surface.frameCount,
     activations: () => surface.ui.activationCount,
     pressing: () => surface.ui.pressing,
+    restoreEdge: (i: number) => restore?.debugEdgeCenter(i) ?? null,
+    restore: () => (restore ? { source: restore.session.source, cols: restore.session.puzzle.cols, rows: restore.session.puzzle.rows, locked: restore.locked, outcome: restore.play().outcome, marks: restore.marks.join(""), zoom: restore.zoomMode, persist: restore.persist, editor: restore.editorName } : null),
     sort: () => (sort ? { phase: sort.state.phase, playMode: sort.state.playMode, movesLeft: sort.state.movesLeft, selected: sort.state.selected, cols: sort.state.cols, rows: sort.state.rows } : null),
   };
   surface.invalidate();

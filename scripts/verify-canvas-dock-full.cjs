@@ -187,11 +187,18 @@ const CONFIGS = [
       await tap("start:go");
       assert.deepEqual(await hub(), saved);
       assert.equal((await entries()).length, n);
-      // A tab leaves through the play log to the existing module page.
-      // On 127.0.0.1 module links use the dev-server ports (LOCAL_DEV_MODULE_URLS), so only the request is checked.
-      const toRestore = p.waitForRequest((r) => /:5177\/|\/restore\//.test(r.url()) && r.isNavigationRequest(), { timeout: 15000 });
+      // RESTORE is on this page since U-3: its tab switches scenes in place.
       await tap("tab:RESTORE");
-      await toRestore;
+      await settle();
+      assert.equal(await scene(), "restore", "RESTORE tab opens in place");
+      await p.goBack();
+      await settle();
+      assert.equal(await scene(), "dock");
+      // A module not on canvas yet (INVADE) is left through the play log to its existing page.
+      // On 127.0.0.1 module links use the dev-server ports (LOCAL_DEV_MODULE_URLS), so only the request is checked.
+      const toInvade = p.waitForRequest((r) => /:5176\/|\/invade\//.test(r.url()) && r.isNavigationRequest(), { timeout: 15000 });
+      await tap("tab:INVADE");
+      await toInvade;
       await backToCanvas();
       await tap("start:go");
       // 探索へ: marks the squad deployed and opens explore with the squad.

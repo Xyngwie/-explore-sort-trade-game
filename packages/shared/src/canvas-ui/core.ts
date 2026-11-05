@@ -88,6 +88,8 @@ type Region = {
   backdrop?: boolean;
   /** Drag region: release reports start and end (wherever it ends). */
   onDrag?: (start: Point, end: Point) => void;
+  /** Drag region: every move while pressed (same `start` object for one gesture). */
+  onDragMove?: (start: Point, current: Point) => void;
 };
 type ScrollArea = { id: string; rect: Rect; layer: number; contentH: number };
 
@@ -287,9 +289,9 @@ export class CanvasUI {
    * swipe), wherever the pointer ends. Never inside a scroll area. A cancel,
    * a second finger or a modal opening drops the gesture.
    */
-  dragRegion(id: string, rect: Rect, onDrag: (start: Point, end: Point) => void): void {
+  dragRegion(id: string, rect: Rect, onDrag: (start: Point, end: Point) => void, onDragMove?: (start: Point, current: Point) => void): void {
     const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
-    this.building.push({ id, rect, clip, layer: this.layer, disabled: false, onDrag });
+    this.building.push({ id, rect, clip, layer: this.layer, disabled: false, onDrag, onDragMove });
   }
   isPressed(id: string): boolean {
     return !!this.press && this.press.mode === "press" && this.press.regionId === id && this.press.inside;
@@ -401,6 +403,12 @@ export class CanvasUI {
     if (!dragging && s.mode !== "scroll" && s.scrollId && Math.abs(dy) > CANVAS_SCROLL_SLOP_PX && Math.abs(dy) >= Math.abs(dx)) {
       s.mode = "scroll"; // a scroll never activates the button it started on
       s.regionId = null;
+    }
+    if (dragging && s.mode === "press") {
+      const r = this.regions.find((x) => x.id === s.regionId);
+      if (r?.onDragMove && s.layer === this.topLayerFrame && !this.opts.blocked?.()) r.onDragMove(s.start, p);
+      this.opts.invalidate?.();
+      return;
     }
     if (s.mode === "scroll" && s.scrollId) {
       this.setScroll(s.scrollId, s.startScroll - dy);

@@ -1,3 +1,10 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-3：RESTORE（2026-11-05・暫定 ★）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: RESTORE を同じアプリ・同じ canvas のシーンに（`/canvas/restore/`）。DOCK → RESTORE → DOCK はページの読み込みなし。刻印名は開始画面の名前を自動で使う（CANVAS-Q1） → [CANVAS_UNIFIED_V0.md §10](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「★でok／U-3 にも取り掛かってください」（2026-11-05）
+- Scope: RESTORE だけ。INVADE・探索は既存版のページ。RESTORE の規則・セーブ形式・受け渡しの契約は変更なし
+- Status: 細部 CANVAS-R1〜R5 は ★推奨で仮実装（暫定）。PR #349 に続けて積んだ（draft）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 全モジュールの 1 ページ・1 canvas 統合 U-2：SORT（2026-11-05・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: SORT を同じページ・同じ canvas のシーンに。DOCK → SORT → DOCK はページの読み込みなし（同じページの履歴）。URL のクエリ・トークン・#332 の照合は既存のまま → [CANVAS_UNIFIED_V0.md §9](CANVAS_UNIFIED_V0.md)

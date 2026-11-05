@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@estg/shared": "*",
-    "@estg/sort": "*"
+    "@estg/sort": "*",
+    "@estg/restore": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
