@@ -3,7 +3,8 @@
 - What: 探索の canvas 化の計画（U-5a 土台・U-5b 出撃中の残り）と細部 CANVAS-X1〜X5 → [CANVAS_UNIFIED_V0.md §14](CANVAS_UNIFIED_V0.md)
 - Why: 神宮「U-5も始めてください」（2026-11-05）
 - Scope: 計画と細部の問い。実装はこのあと U-5a から。ブランチ `claude/canvas-unified`（#350 の上）
-- Status: 計画のみ。マージ・デプロイなし
+- Status: 細部 CANVAS-X1〜X5 はすべて★のとおり神宮決定（2026-11-05）。U-5a を実装中。マージ・デプロイなし
+  - X1 URL = `/canvas/explore/`／X2 U-5b まで canvas 版の「探索へ」等は既存版へ・canvas の探索は直接開いたときだけ／X3 地図 = 720:420 のまま幅（横向きは高さ）に合わせる／X4 配置 = 上 HUD・中央地図・下ボタン／X5 キー操作 = 既存のまま（すべて神宮決定 2026-11-05）
 
 ## canvas 統合 #349 への追加指摘の修正（2026-11-05）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
