@@ -1,7 +1,8 @@
 /**
  * Canvas 探索 on the single page (docs/CANVAS_UNIFIED_V0.md §14, U-5a):
- * CANVAS-X2 (DOCK 探索へ still leaves for the existing Explore page; the canvas
- * 探索 is opened directly with the same deploy query), briefing → 出撃, the map
+ * CANVAS-Y6 (DOCK 探索へ opens the canvas 探索 in place with the deploy query),
+ * briefing → 出撃, U-5b panels (wing cards + gauge tap, log, key table on PC
+ * only), the map
  * at 720:420 (CANVAS-X3) with HUD above and controls below / beside (X4), a map
  * tap = move target at the tapped world point, zoom (wheel on PC, double tap on
  * touch), keys on PC (X5), back swallowed during the sortie, hide → checkpoint +
@@ -170,25 +171,20 @@ const CONFIGS = [
       await reveal("dock:debug:seed");
       await tap("dock:debug:seed");
       await settle();
-      // ---- CANVAS-X2: 探索へ still opens the existing Explore page ------------------------------
+      // ---- CANVAS-Y6: 探索へ opens the canvas 探索 in place (deploy query kept) -----------------
+      const marker = await p.evaluate(() => (window.__marker = Math.random()));
       await reveal("dock:sortie:explore");
-      const leave = p.waitForRequest((r) => /:5173\/|\/explore\//.test(r.url()) && r.isNavigationRequest() && !/\/canvas\//.test(r.url()), { timeout: 15000 });
       await tap("dock:sortie:explore");
-      const deploy = new URL((await leave).url());
-      assert.ok(deploy.search.length > 1, `${cfg.name}: 探索へ carries the deploy query`);
-      await p.waitForTimeout(300);
-      // ---- the canvas 探索, opened directly with the same deploy query --------------------------
-      // Leaving to the dev port (:5173) lands on a chrome-error page; its storage errors are not ours.
-      errors.splice(0, errors.length, ...errors.filter((x) => !/SecurityError/.test(x)));
-      await p.goto(local + "canvas/explore/" + deploy.search);
-      await startGame();
+      await settle();
+      assert.ok(new URL(p.url()).pathname.endsWith("/canvas/explore/"), `${cfg.name}: 探索 path`);
+      assert.ok(new URL(p.url()).search.length > 1, `${cfg.name}: deploy query kept`);
+      assert.equal(await p.evaluate(() => window.__marker), marker, "same page (no load)");
       assert.equal(await scene(), "explore", `${cfg.name}: 探索 scene`);
       let e = await ex();
       assert.equal(e.phase, "briefing");
       assert.equal(e.note, "", `${cfg.name}: the seeded squad can sortie`);
       assert.deepEqual(await visibleHtmlControls(), ["canvas#wl-canvas"], `${cfg.name}: only the canvas`);
       assert.ok(await region("tab:DOCK"), "briefing shows the tabs");
-      const marker = await p.evaluate(() => (window.__marker = Math.random()));
       const start = await revealE("explore:start");
       await tapAt(start.cx, start.cy);
       await settle();
@@ -198,6 +194,17 @@ const CONFIGS = [
       assert.ok(Math.abs(e.map.w / e.map.h - 720 / 420) < 0.01, `${cfg.name}: map 720:420`);
       assert.ok(e.map.y + e.map.h <= cfg.viewport.height + 0.5, `${cfg.name}: map fits the screen height`);
       if (cfg.viewport.width > cfg.viewport.height) assert.ok(e.map.h < cfg.viewport.height - 40, "landscape: height wins");
+      // ---- U-5b panels -----------------------------------------------------------------------------
+      assert.ok(e.wingmen.length >= 1, `${cfg.name}: seeded wingmen ` + JSON.stringify(e));
+      for (const id of e.wingmen) {
+        const g = await revealC(`explore:gauge:${id}`);
+        await tapAt(g.cx, g.cy);
+      }
+      await p.waitForTimeout(200);
+      assert.ok((await ex()).log > 0, `${cfg.name}: log has rows`);
+      if (cfg.touch) assert.equal(await region("explore:keys"), null, `${cfg.name}: no key table on touch`);
+      else assert.ok(await revealC("explore:keys"), `${cfg.name}: key table toggle on PC`);
+      e = await ex();
       // ---- map tap = move target at the tapped world point ----------------------------------------
       await p.waitForTimeout(120);
       const tc = { x: e.map.x + e.map.w * 0.72, y: e.map.y + e.map.h * 0.62 };
@@ -287,7 +294,6 @@ const CONFIGS = [
       assert.equal(await scene(), "sort", `${cfg.name}: 仕分へ opens SORT`);
       assert.ok(new URL(p.url()).pathname.endsWith("/canvas/"), "SORT on the canvas root");
       assert.ok(new URL(p.url()).searchParams.has("salvagedContainers"), "Sort handoff query");
-      assert.equal(await p.evaluate(() => window.__marker), undefined, "(reload above reset the marker)");
       assert.deepEqual(errors, [], `${cfg.name}: no page errors`);
       results.push(cfg.name);
       console.log(`${cfg.name}: ok`);

@@ -109,7 +109,7 @@ export function layoutDock(frame: Pick<FrameInfo, "width" | "height" | "insets">
 }
 
 /** What the canvas edition does not have yet (shown as text, no fake buttons). */
-export const UNPORTED_LIST = "SORT・RESTORE・INVADE・探索の画面（いまは既存版のページへ移動します）・HUD タップのパレット・Alpha Lab 帯・デモ初期化・プレイ記録の書き出し";
+export const UNPORTED_LIST = "HUD タップのパレット・Alpha Lab 帯・デモ初期化・プレイ記録の書き出し";
 export const UNPORTED_TITLE = "未実装（この画面ではまだ操作できません）";
 
 export type DockSceneOptions = {

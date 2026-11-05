@@ -1,3 +1,10 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-5b：探索の残り（2026-11-05、細部は暫定 ★）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 探索の canvas シーンに僚機カードと機体ゲージ、シールドの欄、残骸盾・屹立、ログ、キー操作の説明（PC）、回路ロックの DEBUG 切り替え。canvas 版の「探索へ」・SORTIE タブ・INVADE からの出撃を同じページの canvas の探索へ → [CANVAS_UNIFIED_V0.md §14.5](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「U-5bも始めてください」（2026-11-05）
+- Scope: 探索の canvas シーンと行き先。Alpha Lab の帯は既存版だけ。探索の規則・セーブ形式・受け渡しの契約は変更なし
+- Status: 細部 CANVAS-Y1〜Y6 は暫定 ★（神宮の回答待ち）。ブランチ `claude/canvas-unified`（#351 の上）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 全モジュールの 1 ページ・1 canvas 統合 U-5a：探索の土台（2026-11-05）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: 探索を同じアプリ・同じ canvas のシーンに（`/canvas/explore/`、直接開いたときだけ＝X2）。起動・再出撃・結果の保存の規則を `exploreBoot.ts` に切り出し、既存のページと共有 → [CANVAS_UNIFIED_V0.md §14.4](CANVAS_UNIFIED_V0.md)

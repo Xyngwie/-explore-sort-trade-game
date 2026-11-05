@@ -4,6 +4,7 @@ import { CanvasUI, Flow, HUB_SAVE_STORAGE_KEY, EXPLORE_SORTIE_BACK_TRAP, SORTIE_
 import { createStubCtx } from "../../shared/src/canvas-ui/test-ctx";
 import { ExploreScene, EXPLORE_MAP_ASPECT, layoutExploreSortie, type ExploreHost } from "./canvas-api";
 import { executeExploreCommand } from "./game/commands";
+import { pushLog } from "./game/orders";
 import { getCoverObjects } from "./game/coverObjects";
 
 class MemStore {
@@ -70,7 +71,8 @@ assert.equal(scene.phase, "briefing");
 assert.equal(scene.equipmentNote(), "", "new game hub can sortie");
 const ui = new CanvasUI({ blocked: () => false });
 const ctx = createStubCtx();
-const W = 390, H = 844;
+const W = 390;
+let H = 844;
 const draw = () => {
   ctx.texts.length = 0;
   ui.beginFrame(ctx, W, H);
@@ -106,6 +108,52 @@ assert.ok(ctx.texts.some((t) => t.startsWith("残時間")), "HUD line");
 assert.ok(ctx.texts.includes("帰還要請（搭乗円）"), "extract button");
 const map = scene.map;
 assert.ok(Math.abs(map.w / map.h - EXPLORE_MAP_ASPECT) < 1e-6, "map rect drawn at the world aspect");
+
+// --- U-5b: wing cards, gauge tap, per-wingman orders, log, key table -------------------
+{
+  H = 4000; // tall frame: every control of the scroll area is on screen
+  draw(); draw(); draw();
+  const wing = scene.world.wingmen[0];
+  assert.ok(wing, "seeded squad has a wingman");
+  assert.ok(ctx.texts.includes("僚機指揮（オフスクリーン可）"), "wing panel title");
+  assert.ok(ctx.texts.some((t) => t.startsWith(wing.name)), "wing card name");
+  // gauge tap: the numbers replace the load line for 1.5 s (same as DOCK).
+  press(`explore:gauge:${wing.id}`);
+  draw();
+  const { exploreMechGaugeModel } = await import("./game/mechGaugeExplore");
+  assert.ok(ctx.texts.includes(exploreMechGaugeModel(scene.world, wing).text), "gauge tap shows the numbers");
+  now += 1600; draw();
+  assert.ok(!ctx.texts.includes(exploreMechGaugeModel(scene.world, wing).text), "numbers hide after 1.5 s");
+  // per-wingman order buttons (when unlocked) use the existing commands.
+  const order = ui.debugRegions().find((r) => r.id.startsWith(`explore:order:${wing.id}:`) && !r.disabled);
+  if (order) {
+    const stance = order.id.split(":").pop();
+    press(order.id);
+    assert.equal(scene.world.wingmen[0].stance, stance, "order button sets the stance");
+  }
+  // log: rows from world.logs, newest at the bottom, following.
+  now += 16; scene.frame(now);
+  const n0 = scene.log.rows.length;
+  pushLog(scene.world, "テストの戦報", "battle");
+  now += 16; scene.frame(now);
+  assert.equal(scene.log.rows.length, n0 + 1, "new log row");
+  assert.equal(scene.log.rows[scene.log.rows.length - 1].text, "テストの戦報", "appended at the end");
+  draw(); draw();
+  assert.ok(ctx.texts.includes("テストの戦報"), "log row drawn");
+  assert.equal(ui.getScroll("explore:log"), ui.maxScroll("explore:log"), "log follows the latest");
+  // key table (PC): ? hides / shows it; the choice is stored like the existing overlay.
+  assert.ok(ctx.texts.includes("カバー切替（障害物付近）"), "key table shown");
+  scene.keyDown("?", false); scene.keyUp("?");
+  draw();
+  assert.ok(!ctx.texts.includes("カバー切替（障害物付近）"), "? hides the key table");
+  assert.equal(store.getItem("estg.explore.shortcutsHidden"), "1");
+  press("explore:keys");
+  draw();
+  assert.ok(ctx.texts.includes("カバー切替（障害物付近）"), "キー shows it again");
+  assert.ok(ctx.texts.some((t) => t.startsWith("未発見コンテナは非表示")), "help line");
+  H = 844;
+  draw();
+}
 
 // --- back during the sortie is swallowed ---------------------------------------------------
 const pushedBefore = pushed.length;

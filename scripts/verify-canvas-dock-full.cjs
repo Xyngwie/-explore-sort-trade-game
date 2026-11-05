@@ -201,22 +201,25 @@ const CONFIGS = [
       await p.goBack();
       await settle();
       assert.equal(await scene(), "dock");
-      // A module not on canvas yet (探索 = SORTIE) is left through the play log to its existing page.
-      // On 127.0.0.1 module links use the dev-server ports (LOCAL_DEV_MODULE_URLS), so only the request is checked.
-      const toExploreTab = p.waitForRequest((r) => /:5173\/|\/explore\//.test(r.url()) && r.isNavigationRequest(), { timeout: 15000 });
+      // 探索 is on this page since U-5b (CANVAS-Y6): the SORTIE tab opens it in place.
       await tap("tab:SORTIE");
-      await toExploreTab;
-      await backToCanvas();
-      await tap("start:go");
-      // 探索へ: marks the squad deployed and opens explore with the squad.
+      await settle();
+      assert.equal(await scene(), "explore", "SORTIE tab opens 探索 in place");
+      assert.ok(new URL(p.url()).pathname.endsWith("/canvas/explore/"));
+      await p.goBack();
+      await settle();
+      assert.equal(await scene(), "dock");
+      // 探索へ: marks the squad deployed and opens 探索 with the squad (same page).
       const ex = await region("dock:sortie:explore");
       if (ex && !ex.disabled) {
         await reveal("dock:sortie:explore");
-        const toExplore = p.waitForRequest((r) => /:5173\/|\/explore\//.test(r.url()) && r.isNavigationRequest(), { timeout: 15000 });
         await tap("dock:sortie:explore");
-        const req = await toExplore;
-        assert.ok(new URL(req.url()).searchParams.get("deployedInstanceIds"), "deploy URL carries the squad");
-        await backToCanvas();
+        await settle();
+        assert.equal(await scene(), "explore", "探索へ opens 探索 in place");
+        assert.ok((await p.evaluate(() => window.__wlCanvas.explore())).deployed.length > 0, "the squad came along");
+        await p.goBack();
+        await settle();
+        assert.equal(await scene(), "dock");
       }
       const kinds = (await entries()).map((e) => e.kind);
       assert.ok(kinds.includes("trade.repair") && kinds.includes("resource.sell") && kinds.includes("resource.buy"), kinds.join(","));

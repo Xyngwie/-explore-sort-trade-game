@@ -286,11 +286,13 @@ const CONFIGS = [
       await p.waitForTimeout(300);
       assert.equal(await scene(), "invade", "locked: back is swallowed");
       assert.equal((await inv()).locked, true);
-      const toExplore = p.waitForRequest((r) => /:5173\/|\/explore\//.test(r.url()) && r.isNavigationRequest(), { timeout: 15000 });
+      // CANVAS-Y6 (U-5b): the forced sortie opens the canvas 探索 in place.
       await revealI("invade:to-explore-forced");
       await tap("invade:to-explore-forced");
-      const req = await toExplore;
-      assert.equal(new URL(req.url()).searchParams.get("engage"), "forced", "forced sortie URL");
+      await settle();
+      assert.equal(await scene(), "explore", `${cfg.name}: 探索へ opens the canvas 探索`);
+      assert.ok(new URL(p.url()).pathname.endsWith("/canvas/explore/"), "探索 path");
+      assert.equal((await p.evaluate(() => window.__wlCanvas.explore())).engage, "forced", "forced sortie");
       await p.waitForTimeout(400);
       errors.splice(0, errors.length, ...errors.filter((e) => !/Access is denied for this document/.test(e)));
       assert.deepEqual(errors, [], `${cfg.name}: no page errors / native dialogs`);

@@ -53,9 +53,8 @@ export const CANVAS_RESTORE_PATH = "restore/";
 /** The INVADE page of this app (same app, own path like the existing /invade/ page). */
 export const CANVAS_INVADE_PATH = "invade/";
 /**
- * The 探索 page of this app (U-5a). CANVAS-X2: until U-5b, nothing on the canvas
- * leads here (探索へ / SORTIE / INVADE sorties still open the existing page);
- * it is opened directly for the audit.
+ * The 探索 page of this app (U-5). CANVAS-X2 → CANVAS-Y6 (暫定 ★): with U-5b,
+ * 探索へ / the SORTIE tab / INVADE sorties open it in place.
  */
 export const CANVAS_EXPLORE_PATH = "explore/";
 const MODULE_PATHS = [CANVAS_RESTORE_PATH, CANVAS_INVADE_PATH, CANVAS_EXPLORE_PATH];
@@ -81,7 +80,7 @@ const stripQuery = (u: string) => { const x = new URL(u); return x.origin + x.pa
  * A module URL that this page shows itself → the same query on this page.
  * Anything else (modules not on canvas yet) → null (leave the page).
  */
-export function inPageUrl(url: string, canvasBase: string, sortBase: string, tradeBase: string, restoreBase?: string, invadeBase?: string): string | null {
+export function inPageUrl(url: string, canvasBase: string, sortBase: string, tradeBase: string, restoreBase?: string, invadeBase?: string, exploreBase?: string): string | null {
   let u: URL;
   try { u = new URL(url, canvasBase); } catch { return null; }
   const at = u.origin + u.pathname;
@@ -89,8 +88,7 @@ export function inPageUrl(url: string, canvasBase: string, sortBase: string, tra
   if (at === root || at === stripQuery(sortBase) || at === stripQuery(tradeBase)) return root + u.search;
   if (at === root + CANVAS_RESTORE_PATH || (restoreBase && at === stripQuery(restoreBase))) return root + CANVAS_RESTORE_PATH + u.search;
   if (at === root + CANVAS_INVADE_PATH || (invadeBase && at === stripQuery(invadeBase))) return root + CANVAS_INVADE_PATH + u.search;
-  // CANVAS-X2: the existing Explore page URL is not mapped here until U-5b.
-  if (at === root + CANVAS_EXPLORE_PATH) return root + CANVAS_EXPLORE_PATH + u.search;
+  if (at === root + CANVAS_EXPLORE_PATH || (exploreBase && at === stripQuery(exploreBase))) return root + CANVAS_EXPLORE_PATH + u.search;
   return null;
 }
 
@@ -118,7 +116,7 @@ export function mountCanvasApp(doc: Document = document): void {
 
   /** Open a URL: in place when this page shows it, else through the play log. */
   const go = (url: string) => {
-    const inPage = inPageUrl(url, canvasBase(), sortBase, tradeBase, restoreBase, invadeBase);
+    const inPage = inPageUrl(url, canvasBase(), sortBase, tradeBase, restoreBase, invadeBase, exploreBase);
     if (!inPage) { playLogNavigate(url); return; }
     win.history.pushState({}, "", inPage);
     enter();
@@ -216,6 +214,9 @@ export function mountCanvasApp(doc: Document = document): void {
       requestFrame: (fn) => win.requestAnimationFrame(fn),
       cancelFrame: (id) => win.cancelAnimationFrame(id),
       createCanvas: () => doc.createElement("canvas"),
+      setTimer: (fn, ms) => win.setTimeout(fn, ms),
+      touch: win.matchMedia?.("(pointer: coarse)").matches ?? false,
+      copy: (text) => win.navigator.clipboard.writeText(text),
     });
     if (scene.leaveForHub) {
       // Existing main.ts: no save / unreadable checkpoint / done → the hub (replace).
@@ -401,7 +402,7 @@ export function mountCanvasApp(doc: Document = document): void {
   win.addEventListener("keydown", (e) => {
     if (current === "sort" && sort && !playLogBlocked() && sort.key(e.key, e.shiftKey)) e.preventDefault();
     // 探索: the existing page's keys (CANVAS-X5), not while typing in the name field.
-    if (current === "explore" && explore && e.target !== input && explore.keyDown(e.key, e.repeat)) e.preventDefault();
+    if (current === "explore" && explore && e.target !== input && explore.keyDown(e.key, e.repeat, e.shiftKey)) e.preventDefault();
   });
   win.addEventListener("keyup", (e) => { if (current === "explore" && explore) explore.keyUp(e.key); });
   // Existing main.ts: hidden → checkpoint + pause; pagehide → checkpoint.
@@ -426,7 +427,7 @@ export function mountCanvasApp(doc: Document = document): void {
   });
 
   // The screen re-reads the save when it changed elsewhere; reading never writes.
-  const refresh = () => { dock?.reload(); surface.invalidate(); };
+  const refresh = () => { dock?.reload(); explore?.hubChanged(); surface.invalidate(); };
   win.addEventListener(HUB_SAVED_EVENT, refresh);
   win.addEventListener("storage", refresh);
   win.addEventListener("pageshow", refresh);
@@ -442,7 +443,7 @@ export function mountCanvasApp(doc: Document = document): void {
     pressing: () => surface.ui.pressing,
     invade: () => (invade ? { locked: invade.forcedLockActive(), status: invade.board.status, hitMine: invade.board.hitMine, selected: invade.selected, scale: invade.view.scale, x: invade.view.x, y: invade.view.y, reversed: invade.reversedTouch, open: invade.board.cells.flat().filter((c) => c.open).length, flagged: invade.board.cells.flat().filter((c) => c.flagged).length, log: invade.lastBoardLog, inbound: invade.inbound } : null),
     invadeViewport: () => invade?.boardViewport ?? null,
-    explore: () => (explore ? { phase: explore.phase, paused: explore.paused, zoom: explore.zoom, map: explore.map, clickMove: explore.clickMove, leader: { ...explore.world.leader.pos }, alive: explore.world.leader.alive, timeLeft: explore.world.timeLeft, salvaged: explore.world.salvaged, boarding: !!explore.world.boarding, inCover: explore.world.leader.inCover, picker: explore.picker?.options.map((o) => o.label) ?? null, toast: explore.toast, note: explore.equipmentNote() } : null),
+    explore: () => (explore ? { phase: explore.phase, paused: explore.paused, zoom: explore.zoom, map: explore.map, clickMove: explore.clickMove, leader: { ...explore.world.leader.pos }, alive: explore.world.leader.alive, timeLeft: explore.world.timeLeft, salvaged: explore.world.salvaged, boarding: !!explore.world.boarding, inCover: explore.world.leader.inCover, engage: explore.world.invadeSector?.engage ?? null, deployed: explore.world.deployedInstanceIds, log: explore.log.rows.length, wingmen: explore.world.wingmen.map((u) => u.id), picker: explore.picker?.options.map((o) => o.label) ?? null, toast: explore.toast, note: explore.equipmentNote() } : null),
     exploreToCanvas: (x: number, y: number) => explore?.worldToCanvas(x, y) ?? null,
     invadeCell: (sx: number, sy: number) => invade?.cellRect({ sx, sy }) ?? null,
     invadeFind: (kind: string) => invade?.board.cells.flat().find((c) => !c.blocked && (kind === "closed-safe" ? !c.open && !c.mine && !c.flagged && Math.max(Math.abs(c.sx), Math.abs(c.sy)) <= 3 : kind === "closed-any" ? !c.open && !c.mine && !c.flagged : kind === "mine" ? c.mine && !c.open : kind === "number" ? c.open && !c.mine && c.adjacent > 0 : false)) ?? null,
