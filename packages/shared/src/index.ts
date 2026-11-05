@@ -61,3 +61,4 @@ export * from "./resource-trade";
 export * from "./resource-palette";
 export * from "./mech-gauge";
 export * from "./sortie-guard-guide";
+export * from "./canvas-ui";
