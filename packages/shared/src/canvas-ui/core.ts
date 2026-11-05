@@ -55,7 +55,7 @@ export type Ctx2D = Pick<
   CanvasRenderingContext2D,
   | "save" | "restore" | "beginPath" | "rect" | "clip" | "fillRect" | "strokeRect" | "fillText"
   | "measureText" | "moveTo" | "lineTo" | "arcTo" | "closePath" | "fill" | "stroke" | "setTransform"
-  | "clearRect"
+  | "clearRect" | "arc" | "setLineDash"
 > & {
   fillStyle: CanvasRenderingContext2D["fillStyle"];
   strokeStyle: CanvasRenderingContext2D["strokeStyle"];
@@ -64,6 +64,21 @@ export type Ctx2D = Pick<
   textAlign: CanvasTextAlign;
   textBaseline: CanvasTextBaseline;
   globalAlpha: number;
+};
+
+/** A pointer event as a board with its own gesture rules needs it (canvas CSS px). */
+export type RawPointerSample = { id: number; type: string; button: number; buttons: number; x: number; y: number; ctrl: boolean };
+/**
+ * Region that takes raw pointer input (pointer type, buttons, Ctrl, several
+ * fingers) for a board that keeps its own gesture rules. The surface routes
+ * every event of a pointer that started in it, plus further touches, here.
+ */
+export type RawPointerHandler = {
+  down(s: RawPointerSample): void;
+  move(s: RawPointerSample): void;
+  up(s: RawPointerSample): void;
+  cancel(): void;
+  wheel?(p: Point, deltaY: number): void;
 };
 
 export type ButtonVariant = "normal" | "primary" | "danger";
@@ -86,8 +101,13 @@ type Region = {
   onActivate?: () => void;
   /** Modal backdrop: swallows input; activation = dismiss. */
   backdrop?: boolean;
+  /** Drag region: release reports start and end (wherever it ends). */
+  onDrag?: (start: Point, end: Point) => void;
+  /** Drag region: every move while pressed (same `start` object for one gesture). */
+  onDragMove?: (start: Point, current: Point) => void;
 };
 type ScrollArea = { id: string; rect: Rect; layer: number; contentH: number };
+type RawArea = { id: string; rect: Rect; clip: Rect; layer: number; handler: RawPointerHandler };
 
 type Press = {
   pointerId: number;
@@ -167,13 +187,19 @@ export class CanvasUI {
   /** Regions of the last completed frame (used for input). */
   private regions: Region[] = [];
   private scrolls: ScrollArea[] = [];
+  private buildingRaw: RawArea[] = [];
+  private raws: RawArea[] = [];
   private topLayerFrame = 0;
   private layer = 0;
   private clipStack: Rect[] = [];
   private scrollY = new Map<string, number>();
   private scrollStack: string[] = [];
   private press: Press | null = null;
+  /** Every pointer currently touching (not only the one that pressed). */
+  private downs = new Set<number>();
   private activations = 0;
+  /** Per-id values kept across frames (measured heights, …). Never game state. */
+  readonly memo = new Map<string, number>();
   constructor(private readonly opts: CanvasUIOptions = {}) {}
 
   /* ---------------- frame ---------------- */
@@ -183,6 +209,7 @@ export class CanvasUI {
     this.height = height;
     this.building = [];
     this.buildingScroll = [];
+    this.buildingRaw = [];
     this.layer = 0;
     this.clipStack = [{ x: 0, y: 0, w: width, h: height }];
     this.scrollStack = [];
@@ -190,6 +217,7 @@ export class CanvasUI {
   endFrame(): void {
     this.regions = this.building;
     this.scrolls = this.buildingScroll;
+    this.raws = this.buildingRaw;
     this.topLayerFrame = this.regions.reduce((m, r) => Math.max(m, r.layer), 0);
     for (const s of this.scrolls) this.setScroll(s.id, this.getScroll(s.id), s);
     this.ctx = null;
@@ -199,6 +227,10 @@ export class CanvasUI {
     if (!this.ctx) throw new Error("CanvasUI: draw outside beginFrame/endFrame");
     return this.ctx;
   }
+  /** Ask for another frame (e.g. a measured height changed). */
+  requestRedraw(): void { this.opts.invalidate?.(); }
+  /** Set a scroll position (clamped on the next frame). */
+  scrollTo(id: string, y: number): void { this.scrollY.set(id, Math.max(0, y)); this.opts.invalidate?.(); }
   /** Highest layer that receives input (a modal blocks everything under it). */
   get topLayer(): number { return this.topLayerFrame; }
 
@@ -235,8 +267,10 @@ export class CanvasUI {
    * A vertically scrolling, clipped area. `draw(offsetY)` draws content in
    * canvas coordinates already shifted by the scroll offset (y - offsetY).
    */
-  scrollArea(id: string, rect: Rect, contentH: number, draw: (offsetY: number) => void): void {
+  scrollArea(id: string, rect: Rect, contentH: number | "auto", draw: (offsetY: number) => number | void): void {
     const ctx = this.context;
+    const autoKey = `scroll:${id}:h`;
+    if (contentH === "auto") contentH = this.memo.get(autoKey) ?? rect.h;
     const area: ScrollArea = { id, rect, layer: this.layer, contentH };
     this.buildingScroll.push(area);
     this.setScroll(id, this.getScroll(id), area);
@@ -248,7 +282,12 @@ export class CanvasUI {
     ctx.clip();
     this.clipStack.push(clip);
     this.scrollStack.push(id);
-    draw(off);
+    const used = draw(off);
+    if (typeof used === "number" && Math.round(used) !== Math.round(this.memo.get(autoKey) ?? -1)) {
+      this.memo.set(autoKey, used);
+      area.contentH = used;
+      this.opts.invalidate?.();
+    }
     this.scrollStack.pop();
     this.clipStack.pop();
     ctx.restore();
@@ -266,6 +305,29 @@ export class CanvasUI {
   region(id: string, rect: Rect, opts: { disabled?: boolean; onActivate?: () => void } = {}): void {
     const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
     this.building.push({ id, rect, clip, layer: this.layer, disabled: !!opts.disabled, onActivate: opts.onActivate });
+  }
+  /**
+   * A region that reports the whole gesture on release (e.g. a puzzle board's
+   * swipe), wherever the pointer ends. Never inside a scroll area. A cancel,
+   * a second finger or a modal opening drops the gesture.
+   */
+  dragRegion(id: string, rect: Rect, onDrag: (start: Point, end: Point) => void, onDragMove?: (start: Point, current: Point) => void): void {
+    const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
+    this.building.push({ id, rect, clip, layer: this.layer, disabled: false, onDrag, onDragMove });
+  }
+  /** Register a raw-input region (see RawPointerHandler). */
+  rawRegion(id: string, rect: Rect, handler: RawPointerHandler): void {
+    const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
+    this.buildingRaw.push({ id, rect, clip, layer: this.layer, handler });
+  }
+  /** Raw region under `p` in the active layer (a modal above it wins). */
+  rawAt(p: Point): RawPointerHandler | null {
+    const top = this.topLayerFrame;
+    for (let i = this.raws.length - 1; i >= 0; i--) {
+      const r = this.raws[i];
+      if (r.layer === top && rectContains(r.clip, p) && rectContains(r.rect, p)) return r.handler;
+    }
+    return null;
   }
   isPressed(id: string): boolean {
     return !!this.press && this.press.mode === "press" && this.press.regionId === id && this.press.inside;
@@ -348,11 +410,18 @@ export class CanvasUI {
     }
     return null;
   }
-  pointerDown(pointerId: number, p: Point): void {
-    if (this.press) {
-      // A second finger cancels the first and is ignored itself (no two-finger buys).
-      this.press = null;
-      this.opts.invalidate?.();
+  /**
+   * `primary` = the browser says no other pointer of this kind is down
+   * (PointerEvent.isPrimary): stale pointers whose release never arrived are
+   * forgotten. Unknown (undefined) keeps them.
+   */
+  pointerDown(pointerId: number, p: Point, primary?: boolean): void {
+    if (primary === true) this.downs.clear();
+    this.downs.add(pointerId);
+    if (this.downs.size > 1) {
+      // While another finger touches, nothing presses: the first press is
+      // cancelled and every further touch is ignored until all are lifted.
+      if (this.press) { this.press = null; this.opts.invalidate?.(); }
       return;
     }
     const hit = this.hitTest(p);
@@ -373,9 +442,16 @@ export class CanvasUI {
     const s = this.press;
     if (!s || s.pointerId !== pointerId) return;
     const dy = p.y - s.start.y, dx = p.x - s.start.x;
-    if (s.mode !== "scroll" && s.scrollId && Math.abs(dy) > CANVAS_SCROLL_SLOP_PX && Math.abs(dy) >= Math.abs(dx)) {
+    const dragging = !!s.regionId && !!this.regions.find((x) => x.id === s.regionId)?.onDrag;
+    if (!dragging && s.mode !== "scroll" && s.scrollId && Math.abs(dy) > CANVAS_SCROLL_SLOP_PX && Math.abs(dy) >= Math.abs(dx)) {
       s.mode = "scroll"; // a scroll never activates the button it started on
       s.regionId = null;
+    }
+    if (dragging && s.mode === "press") {
+      const r = this.regions.find((x) => x.id === s.regionId);
+      if (r?.onDragMove && s.layer === this.topLayerFrame && !this.opts.blocked?.()) r.onDragMove(s.start, p);
+      this.opts.invalidate?.();
+      return;
     }
     if (s.mode === "scroll" && s.scrollId) {
       this.setScroll(s.scrollId, s.startScroll - dy);
@@ -387,12 +463,21 @@ export class CanvasUI {
   }
   /** Returns true when a region was activated. */
   pointerUp(pointerId: number, p: Point): boolean {
+    this.downs.delete(pointerId);
     const s = this.press;
     if (!s || s.pointerId !== pointerId) return false;
     this.press = null;
     this.opts.invalidate?.();
     if (s.mode !== "press" || !s.regionId) return false;
     if (s.layer !== this.topLayerFrame) return false; // a modal opened/closed meanwhile
+    const drag = this.regions.find((x) => x.id === s.regionId && x.onDrag);
+    if (drag) {
+      if (this.opts.blocked?.()) return false;
+      this.activations++;
+      drag.onDrag!(s.start, p);
+      this.opts.invalidate?.();
+      return true;
+    }
     const r = this.hitTest(p);
     if (!r || r.id !== s.regionId || r.disabled) return false;
     if (this.opts.blocked?.()) return false;
@@ -402,6 +487,8 @@ export class CanvasUI {
     return true;
   }
   pointerCancel(pointerId?: number): void {
+    if (pointerId === undefined) this.downs.clear();
+    else this.downs.delete(pointerId);
     if (!this.press) return;
     if (pointerId !== undefined && this.press.pointerId !== pointerId) return;
     this.press = null;

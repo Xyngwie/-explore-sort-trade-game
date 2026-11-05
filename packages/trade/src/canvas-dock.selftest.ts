@@ -170,20 +170,22 @@ const noInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 }
 
 // --- layout: phone portrait/landscape, PC, small phone ---------------------------
-for (const [w, h] of [[390, 844], [844, 390], [1280, 900], [320, 568], [1600, 1000]]) {
+for (const [w, h] of [[390, 844], [844, 390], [1280, 900], [320, 568], [280, 653], [360, 740], [1600, 1000]]) {
   const L = layoutDock({ width: w, height: h, insets: noInsets }, true);
   assert.ok(L.column.w <= 960 && L.column.x >= 0 && L.column.x + L.column.w <= w);
   for (const row of L.rows) {
     const rects = [...row.steps, row.qty, row.buy];
     for (const r of rects) {
-      assert.ok(r.h >= 44 && r.w >= 36, `${w}x${h} target size`);
+      assert.ok(r.h >= 44 && r.w >= 44, `${w}x${h} ${row.item} target ≥44px (${r.w}×${r.h})`);
       assert.ok(r.x >= row.rect.x && r.x + r.w <= row.rect.x + row.rect.w + 0.01, `${w}x${h} ${row.item} inside row`);
       assert.ok(r.y >= row.rect.y && r.y + r.h <= row.rect.y + row.rect.h, `${w}x${h} ${row.item} inside row vertically`);
     }
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
       const a = rects[i], c = rects[j];
-      assert.ok(a.x + a.w <= c.x + 0.01 || c.x + c.w <= a.x + 0.01, `${w}x${h} ${row.item} no overlap`);
+      const apart = a.x + a.w <= c.x + 0.01 || c.x + c.w <= a.x + 0.01 || a.y + a.h <= c.y + 0.01 || c.y + c.h <= a.y + 0.01;
+      assert.ok(apart, `${w}x${h} ${row.item} no overlap`);
     }
+    assert.ok(row.note.y >= Math.max(...rects.map((r) => r.y + r.h)) - 0.01 || L.wide, `${w}x${h} ${row.item} note below the controls`);
     assert.ok(row.info.w > 40, `${w}x${h} label room`);
   }
   assert.equal(L.rows.length, MARKET_ITEMS.length);

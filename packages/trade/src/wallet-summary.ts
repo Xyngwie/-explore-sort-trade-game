@@ -1,4 +1,4 @@
-import { parseYieldBagCompact, yieldBagTotal } from "@estg/shared";
+import { captureSortYieldFromHandoff } from "./sort-return-core";
 
 /**
  * Sort → Trade handoff bookkeeping (last Sort yield total).
@@ -12,25 +12,4 @@ import { parseYieldBagCompact, yieldBagTotal } from "@estg/shared";
  * (`holdingPills`: 弾薬 `inventory.ammo`, 装甲パーツ `inventory.armor`,
  * 電力パーツ `inventory.power`) and this file no longer touches it.
  */
-const LAST_SORT_YIELD_TOTAL_KEY = "wreckline.lastSortYieldTotal.v0";
-const HANDOFF_QUERY_KEYS = [
-  "fromSort",
-  "importMaterials", // old URL marker (grants nothing)
-  "craftMultiplier",
-  "yieldBag",
-  "depositUnopenedContainers",
-];
-
-function captureSortYieldFromHandoff() {
-  const params = new URLSearchParams(window.location.search);
-  if (!HANDOFF_QUERY_KEYS.some((key) => params.has(key))) return;
-
-  if (params.has("yieldBag")) {
-    const bag = parseYieldBagCompact(params.get("yieldBag"));
-    localStorage.setItem(LAST_SORT_YIELD_TOTAL_KEY, String(yieldBagTotal(bag)));
-  } else {
-    localStorage.setItem(LAST_SORT_YIELD_TOTAL_KEY, "0");
-  }
-}
-
 captureSortYieldFromHandoff();

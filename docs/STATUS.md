@@ -1,3 +1,35 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-4：INVADE（2026-11-05・神宮決定）＋ #348 追加指摘の修正
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: INVADE を同じアプリ・同じ canvas のシーンに（`/canvas/invade/`）。盤の入力は既存の `BoardGesture` をそのまま使う（閾値・タイミングは変更なし） → [CANVAS_UNIFIED_V0.md §11](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「Rは★　それを作業してから　U-4へ」（2026-11-05）
+- Scope: INVADE だけ。探索は既存版のページ。INVADE の規則・セーブ形式・受け渡しの契約は変更なし
+- Status: 細部 CANVAS-I1〜I6 はすべて★のとおり神宮決定（2026-11-05）。#348 への追加指摘 2 件（数量ボタンの 44px・複数の指の追跡）を #349 で修正（[§12](CANVAS_UNIFIED_V0.md)）。PR #349（draft）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+  - I1 URL = `/canvas/invade/`／I2 枠 = 幅と「表示の高さ −120px」の小さい方の正方形／I3 盤の上のホイール = 拡大縮小／I4 予告 = 白スコープ・開く予告は 0.3 秒で明るく／I5 段位 = 一覧ダイアログ＋確認／I6 = 「出発ハンドオフ」カードは出さない（すべて神宮決定 2026-11-05）
+
+## 全モジュールの 1 ページ・1 canvas 統合 U-3：RESTORE（2026-11-05・神宮決定）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: RESTORE を同じアプリ・同じ canvas のシーンに（`/canvas/restore/`）。DOCK → RESTORE → DOCK はページの読み込みなし。刻印名は開始画面の名前を自動で使う（CANVAS-Q1） → [CANVAS_UNIFIED_V0.md §10](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「★でok／U-3 にも取り掛かってください」（2026-11-05）
+- Scope: RESTORE だけ。INVADE・探索は既存版のページ。RESTORE の規則・セーブ形式・受け渡しの契約は変更なし
+- Status: 細部 CANVAS-R1〜R5 はすべて★のとおり神宮決定（2026-11-05）。PR #349（draft）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+  - R1 URL = `/canvas/restore/`／R2 拡大 = 大きい盤だけ 全体・1×・1.5×／R3 盤の移動 = ドラッグ（8px 未満はタップ）／R4 お知らせ = 一行を常に確保／R5 下の詳細 = 判定の詳細は残し URL 表は出さない（すべて神宮決定 2026-11-05）
+
+## 全モジュールの 1 ページ・1 canvas 統合 U-2：SORT（2026-11-05・神宮決定）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: SORT を同じページ・同じ canvas のシーンに。DOCK → SORT → DOCK はページの読み込みなし（同じページの履歴）。URL のクエリ・トークン・#332 の照合は既存のまま → [CANVAS_UNIFIED_V0.md §9](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「★を先に作ってから U-2」（2026-11-05）
+- Scope: DOCK ⇔ SORT だけ。探索 → SORT・RESTORE・INVADE・探索は既存版のページ。受け渡しの部品は既存のファイルから副作用のない関数に切り出し、既存のページもそれを呼ぶ（動きは同じ）。セーブ形式・価格・SORT の規則は変更なし
+- Status: 細部 CANVAS-S1〜S6 はすべて★のとおり神宮決定（2026-11-05）。PR #349（draft、base は #348 マージ後の main）。#348 は main にマージ済み（`0081248`）。マージ・デプロイの判断はオーケストレーター側。スマートフォン実機・公開版 NOT_RUN
+  - S1 URL = canvas ページに既存と同じクエリ／S2 タブ = 表示してすべて無効／S3 盤 = マス最大 65px・横向きは HUD 左・盤中央・「精製を終える」右／S4 見た目 = 既存の色と頭文字／S5 動き = 点滅 0.09 秒・落下 1 行 0.5 秒／S6 HUD = 3 行（すべて神宮決定 2026-11-05）
+
+## 全モジュールの 1 ページ・1 canvas 統合 U-1：DOCK の残り（2026-11-04、細部は 2026-11-05 神宮決定）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: canvas 版 DOCK に全欄（次の出撃・未開封・売却・ハンガー・在庫・署名表示・回路・装備・作成/購入・履歴/ログ・検証用・ツリー・導入ガイド・出撃ガード）と下部タブ。共通部品（Flow・確認／一覧ダイアログ・トグル・機体ゲージ）を `canvas-ui` に追加 → [CANVAS_UNIFIED_V0.md](CANVAS_UNIFIED_V0.md)
+- Why: 神宮決定（2026-11-04）：統合方式 = 最初から 1 ページ、順番 = DOCK の残り → SORT → RESTORE → INVADE → 探索、ブランチ = `claude/canvas-unified`（#348 の上）
+- Scope: DOCK だけ。SORT・RESTORE・INVADE・探索は既存版のページへ移動（CANVAS-U2）。既存版の画面コード・セーブ形式・価格は変更なし
+- Status: 細部 CANVAS-U1〜U9 はすべて★のとおり神宮決定（2026-11-05）。PR #349 は #348 の上の draft。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+  - U1 入口 = `/canvas/`／U2 未移植へのボタン = 既存版のページへ移動／U3 欄の並び = 次の出撃 → 未開封 → 市場 → 売却 → ハンガー → …／U4 選び方 = 一覧ダイアログ／U5 売却 = 1 タップ 1 個・毎回確認／U6 検証用 = DOCK の最後（デモ初期化を除く）／U7 仕分数 = −1・+1・全部／U8 HUD パレット = 移植しない／U9 装備できない理由 = 上部のお知らせ（すべて神宮決定 2026-11-05）
+
 ## 単一 canvas 刷新・第1段階：共通基盤と DOCK の縦断（2026-11-04・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: `packages/shared/src/canvas-ui/`（描画・入力・スクロール・モーダルの共通基盤）と、canvas 版の入口 `packages/trade/canvas/index.html`（開始前の名前入力 → DOCK の HUD・未開封数・物資市場の購入）。既存版の DOCK は変更なし → [CANVAS_SHELL_V0.md](CANVAS_SHELL_V0.md)

@@ -69,6 +69,26 @@ ui.pointerUp(8, center(btnB));
 assert.deepEqual(hits, ["a"], "two fingers → nothing");
 ui.pointerDown(9, center(btnB)); ui.pointerUp(9, center(btnB));
 assert.deepEqual(hits, ["a", "b"], "next single tap works again");
+// First finger stays down; the second lifts and taps again: still nothing (all fingers are tracked).
+hits = [];
+ui.pointerDown(30, center(btnA));
+ui.pointerDown(31, center(btnB)); ui.pointerUp(31, center(btnB));
+ui.pointerDown(32, center(btnB)); ui.pointerUp(32, center(btnB));
+assert.deepEqual(hits, [], "a re-tap while the first finger stays down does nothing");
+ui.pointerDown(33, center(btnA)); ui.pointerMove(33, center(btnA)); ui.pointerUp(33, center(btnA));
+assert.deepEqual(hits, [], "still nothing while finger 30 touches");
+ui.pointerUp(30, center(btnA));
+assert.deepEqual(hits, [], "lifting the first finger does not fire either");
+ui.pointerDown(34, center(btnA)); ui.pointerUp(34, center(btnA));
+assert.deepEqual(hits, ["a"], "after every finger is lifted, a single tap works");
+// A release that never arrived (e.g. the page was blocked while saving): the next primary touch forgets it.
+ui.pointerDown(35, center(btnA)); // no pointerUp
+ui.pointerDown(36, center(btnB), true); ui.pointerUp(36, center(btnB));
+assert.deepEqual(hits, ["a", "b"], "a primary touch clears stale pointers");
+// pointercancel of every pointer (blur / hidden) clears the tracking too.
+ui.pointerDown(37, center(btnA)); ui.pointerCancel();
+ui.pointerDown(38, center(btnA)); ui.pointerUp(38, center(btnA));
+assert.deepEqual(hits, ["a", "b", "a"], "cancel-all clears the tracking");
 
 // --- scroll area: drag scrolls and never activates ------------------------
 hits = [];

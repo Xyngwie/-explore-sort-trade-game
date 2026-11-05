@@ -92,12 +92,13 @@ const CONFIGS = [
       };
       /** Scroll the DOCK list (wheel) until the 44px button is fully visible. */
       const reveal = async (id) => {
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 60; i++) {
           const r = await region(id);
           if (r && r.visible && r.h >= 43) return r;
           const vh = cfg.viewport.height;
           await p.mouse.move(cfg.viewport.width / 2, vh / 2);
-          await p.mouse.wheel(0, r && r.cy < vh / 2 ? -80 : 80);
+          const dist = r ? r.cy - vh / 2 : 400;
+          await p.mouse.wheel(0, Math.sign(dist || 1) * Math.min(600, Math.abs(dist) * 0.8 + 40));
           await p.waitForTimeout(40);
         }
         throw new Error(`${cfg.name}: cannot reveal ${id} ` + JSON.stringify(await region(id)) + JSON.stringify(await p.evaluate(() => [window.__wlCanvas.scroll("dock"), window.__wlCanvas.pressing()])));
@@ -150,6 +151,8 @@ const CONFIGS = [
 
       // ---- hit alignment at the edges (coordinate conversion at this DPR) ----
       const h0 = await hub();
+      await reveal("dock:ammo:buy");
+      await reveal("dock:ammo:step:1");
       const step = await region("dock:ammo:step:1");
       await tapAt(step.left + 2, step.top + 2); // just inside
       await tapAt(step.left - 3, step.cy); // just outside (gap): nothing
@@ -166,7 +169,7 @@ const CONFIGS = [
       // ---- container: confirm dialog, behind-dialog tap, cancel, confirm ----
       // Scroll the box row into view first (small screens).
       await reveal("dock:unopened:buy");
-      const behind = await region("dock:ammo:buy");
+      const behind = await region("dock:unopened:step:1");
       await tap("dock:unopened:buy");
       assert.equal((await region("dock:confirm:ok"))?.visible, true, "dialog open");
       assert.equal((await hub()).unopenedContainers, h1.unopenedContainers, "no buy before confirm");
@@ -181,7 +184,7 @@ const CONFIGS = [
       await tap("dock:unopened:buy");
       await tap("dock:confirm:ok");
       await settle();
-      const h2 = await hub();
+      let h2 = await hub();
       assert.equal(h2.unopenedContainers, h1.unopenedContainers + 1);
       assert.equal(h2.credits, h1.credits - 15);
       const e2 = await entries();
@@ -209,6 +212,28 @@ const CONFIGS = [
         assert.ok(n === 1 || n === 2, "1 or 2 taps landed");
         assert.equal(e3.length - e2.length, n, "one entry per purchase");
         assert.equal(new Set(e3.map((e) => e.op)).size, e3.length, "no duplicated operation ids");
+      }
+
+      // ---- several fingers: a re-tap while the first finger stays down never buys ----
+      if (cdp) {
+        const mb = await reveal("dock:ammo:buy");
+        const other = await region("dock:ammo:step:1");
+        const c0 = (await hub()).credits, n0 = (await entries()).length;
+        const A = { x: other.cx, y: other.cy, id: 1 }, B = { x: mb.cx, y: mb.cy, id: 2 }, C = { x: mb.cx, y: mb.cy, id: 3 };
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A, B] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [A] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A, C] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [A] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await p.waitForTimeout(150);
+        await settle();
+        assert.equal((await hub()).credits, c0, `${cfg.name}: re-tap with the first finger down never buys`);
+        assert.equal((await entries()).length, n0);
+        await tapAt(mb.cx, mb.cy);
+        await settle();
+        assert.equal((await hub()).credits, c0 - 6, "after all fingers are lifted, a tap buys again");
+        h2.credits = c0 - 6; // keep the later expectations relative
       }
 
       // ---- redraw / resize never writes ----
