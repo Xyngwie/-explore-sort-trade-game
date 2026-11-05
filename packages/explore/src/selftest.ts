@@ -2847,7 +2847,9 @@ import {
     const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
     const render = main.slice(main.indexOf("function renderDom(): void {"));
     assert.ok(render.indexOf("ensureDirectSave()") > -1 && render.indexOf("ensureDirectSave()") < render.indexOf('if (world.phase === "briefing")'), "renderDom saves first");
-    assert.ok(main.includes("resortiePlan(bootSearch, world, payload)") && main.includes("resortieSearch(bootSearch, filled.hub, plan.ids)") && main.includes("refillBeforeSortie(plan.hub, plan.ids)"), "再出撃 rebuilds from HubSave (hangar selection), topped up from the stock first");
+    // The rules moved to game/exploreBoot.ts (shared with the canvas scene, docs/CANVAS_UNIFIED_V0.md §14).
+    const bootRules = readFileSync(new URL("./game/exploreBoot.ts", import.meta.url), "utf8");
+    assert.ok(main.includes("resortieFrom(world, bootSearch, boot, makeWorld, preSortieAmmoNote)") && bootRules.includes("resortiePlan(bootSearch, world, payload)") && bootRules.includes("resortieSearch(bootSearch, filled.hub, plan.ids)") && bootRules.includes("refillBeforeSortie(plan.hub, plan.ids)"), "再出撃 rebuilds from HubSave (hangar selection), topped up from the stock first");
   }
   console.log("explore U9 direct save / re-sortie ok");
 }

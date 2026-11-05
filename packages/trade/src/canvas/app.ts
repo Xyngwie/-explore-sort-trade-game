@@ -39,6 +39,7 @@ import {
 import { SortScene, armSortBackTrap, sortPopstateAction } from "@estg/sort/canvas";
 import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } from "@estg/restore/canvas";
 import { InvadeScene } from "@estg/invade/canvas";
+import { ExploreScene } from "@estg/explore/canvas";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
 import { browserDockEnv, DOCK_ANCHOR } from "./dock-sections";
 import { tabUrl } from "./tabs";
@@ -46,13 +47,19 @@ import { StartScene, layoutStart } from "./start-scene";
 import { clearHandoffFromUrl, createInitialHangar, ingestLocationSearch, loadCraftSignature } from "../hangar";
 import { captureSortYieldFromHandoff, clearPendingSort, gateSortHandoff, hasSortHandoff, restorePendingSortOnBack } from "../sort-return-core";
 
-export type SceneId = "start" | "dock" | "sort" | "restore" | "invade";
+export type SceneId = "start" | "dock" | "sort" | "restore" | "invade" | "explore";
 /** The RESTORE page of this app (same app, own path like the existing /restore/ page). */
 export const CANVAS_RESTORE_PATH = "restore/";
 /** The INVADE page of this app (same app, own path like the existing /invade/ page). */
 export const CANVAS_INVADE_PATH = "invade/";
-const MODULE_PATHS = [CANVAS_RESTORE_PATH, CANVAS_INVADE_PATH];
-/** `/…/canvas/` for `/…/canvas/`, `/…/canvas/restore/` and `/…/canvas/invade/`. */
+/**
+ * The 探索 page of this app (U-5a). CANVAS-X2: until U-5b, nothing on the canvas
+ * leads here (探索へ / SORTIE / INVADE sorties still open the existing page);
+ * it is opened directly for the audit.
+ */
+export const CANVAS_EXPLORE_PATH = "explore/";
+const MODULE_PATHS = [CANVAS_RESTORE_PATH, CANVAS_INVADE_PATH, CANVAS_EXPLORE_PATH];
+/** `/…/canvas/` for `/…/canvas/` and its module paths (`restore/`, `invade/`, `explore/`). */
 export function canvasRootPath(pathname: string): string {
   for (const m of MODULE_PATHS) if (pathname.endsWith("/" + m)) return pathname.slice(0, -m.length);
   return pathname;
@@ -82,6 +89,8 @@ export function inPageUrl(url: string, canvasBase: string, sortBase: string, tra
   if (at === root || at === stripQuery(sortBase) || at === stripQuery(tradeBase)) return root + u.search;
   if (at === root + CANVAS_RESTORE_PATH || (restoreBase && at === stripQuery(restoreBase))) return root + CANVAS_RESTORE_PATH + u.search;
   if (at === root + CANVAS_INVADE_PATH || (invadeBase && at === stripQuery(invadeBase))) return root + CANVAS_INVADE_PATH + u.search;
+  // CANVAS-X2: the existing Explore page URL is not mapped here until U-5b.
+  if (at === root + CANVAS_EXPLORE_PATH) return root + CANVAS_EXPLORE_PATH + u.search;
   return null;
 }
 
@@ -95,6 +104,7 @@ export function mountCanvasApp(doc: Document = document): void {
   let restore: RestoreScene | null = null;
   let restoreLoading = 0;
   let invade: InvadeScene | null = null;
+  let explore: ExploreScene | null = null;
   let sortSearch = "";
   const canvasBase = () => win.location.origin + canvasRootPath(win.location.pathname);
   const sortBase = stripQuery(new URL(resolveModuleBaseUrl("sort"), win.location.href).toString());
@@ -104,6 +114,7 @@ export function mountCanvasApp(doc: Document = document): void {
   const invadeBase = stripQuery(new URL(resolveModuleBaseUrl("invade"), win.location.href).toString());
   const exploreBase = new URL(resolveModuleBaseUrl("explore"), win.location.href).toString();
   const onInvadePage = () => win.location.pathname.endsWith("/" + CANVAS_INVADE_PATH);
+  const onExplorePage = () => win.location.pathname.endsWith("/" + CANVAS_EXPLORE_PATH);
 
   /** Open a URL: in place when this page shows it, else through the play log. */
   const go = (url: string) => {
@@ -191,14 +202,42 @@ export function mountCanvasApp(doc: Document = document): void {
     }
     current = "invade";
   };
+  const enterExplore = () => {
+    const scene = new ExploreScene({
+      search: win.location.search,
+      href: () => win.location.href,
+      replaceUrl: (url) => win.history.replaceState(null, "", url),
+      hubBase: canvasBase(),
+      go,
+      redraw: () => surface.invalidate(),
+      history: win.history,
+      storage: () => win.localStorage,
+      session: () => win.sessionStorage,
+      requestFrame: (fn) => win.requestAnimationFrame(fn),
+      cancelFrame: (id) => win.cancelAnimationFrame(id),
+      createCanvas: () => doc.createElement("canvas"),
+    });
+    if (scene.leaveForHub) {
+      // Existing main.ts: no save / unreadable checkpoint / done → the hub (replace).
+      scene.dispose();
+      win.history.replaceState({}, "", canvasBase());
+      enterDock();
+      return;
+    }
+    explore = scene;
+    current = "explore";
+  };
   const enter = () => {
+    explore?.dispose();
+    explore = null;
     sort?.dispose();
     sort = null;
     restore?.dispose();
     restore = null;
     invade?.dispose();
     invade = null;
-    if (onInvadePage()) enterInvade();
+    if (onExplorePage()) enterExplore();
+    else if (onInvadePage()) enterInvade();
     else if (onRestorePage()) enterRestore();
     else if (sceneForSearch(win.location.search) === "sort") enterSort();
     else enterDock();
@@ -302,10 +341,46 @@ export function mountCanvasApp(doc: Document = document): void {
     if (scene.animating()) surface.invalidate();
   };
 
+  /**
+   * 探索: the existing page hides the shell HUD, shows the tabs only in the
+   * briefing (exploreTabsVisible) and lays the sortie out as CANVAS-X3/X4.
+   */
+  const drawExplore = (ui: CanvasUI, frame: FrameInfo, scene: ExploreScene) => {
+    const ctx = ui.context;
+    const L = layoutDock(frame, false);
+    ctx.fillStyle = CANVAS_THEME.bg;
+    ctx.fillRect(0, 0, frame.width, frame.height);
+    const top = frame.insets.top;
+    const bottom = frame.height - frame.insets.bottom;
+    if (scene.phase === "sortie") {
+      scene.drawSortie(ui, { x: L.column.x, y: top, w: L.column.w, h: bottom - top }, frame.dpr);
+      if (scene.picker) pickerModal(ui, L.column, frame.height, scene.picker, frame.insets.top, frame.insets.bottom);
+      return;
+    }
+    const briefing = scene.phase === "briefing";
+    const area = { x: L.column.x, y: top, w: L.column.w, h: (briefing ? L.tabs.y : bottom) - top };
+    ui.scrollArea(`explore:${scene.phase}`, area, "auto", (off) => {
+      const originY = area.y - off;
+      const f = new Flow(ui, area.x + 12, originY + 12, area.w - 24, originY);
+      scene.drawPage(ui, f);
+      f.gap(12);
+      return f.y - originY;
+    });
+    if (briefing) {
+      const hub = loadHubSaveFromLocalStorage()?.hub ?? null;
+      drawShellTabs(ui, L.tabs, computeShellModel({ current: "explore", hub, handoffInProgress: false }).tabs, (tab) => {
+        if (playLogBlocked()) return;
+        if (tab.id === "SORT") { go(canvasBase()); dock?.goAnchor(DOCK_ANCHOR.unopened); } // §5-1: SORT tab = DOCK 未開封
+        else go(tabUrl(tab));
+      });
+    }
+  };
+
   const surface = new CanvasSurface(canvas, {
     blocked: () => playLogBlocked(),
     draw: (ui, frame) => {
-      if (current === "invade" && invade) drawInvade(ui, frame, invade);
+      if (current === "explore" && explore) drawExplore(ui, frame, explore);
+      else if (current === "invade" && invade) drawInvade(ui, frame, invade);
       else if (current === "restore") drawRestore(ui, frame);
       else if (current === "sort" && sort) drawSort(ui, frame, sort);
       else if (current === "dock" && dock) dock.draw(ui, frame);
@@ -325,12 +400,22 @@ export function mountCanvasApp(doc: Document = document): void {
   // SORT keys: arrows swap with the selected neighbour, Shift+arrow moves the selection.
   win.addEventListener("keydown", (e) => {
     if (current === "sort" && sort && !playLogBlocked() && sort.key(e.key, e.shiftKey)) e.preventDefault();
+    // 探索: the existing page's keys (CANVAS-X5), not while typing in the name field.
+    if (current === "explore" && explore && e.target !== input && explore.keyDown(e.key, e.repeat)) e.preventDefault();
   });
+  win.addEventListener("keyup", (e) => { if (current === "explore" && explore) explore.keyUp(e.key); });
+  // Existing main.ts: hidden → checkpoint + pause; pagehide → checkpoint.
+  doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden" && current === "explore") explore?.persistOnHide(true); });
+  win.addEventListener("pagehide", () => { if (current === "explore") explore?.persistOnHide(false); });
 
   win.addEventListener("popstate", () => {
     if (current === "start") return; // the URL is read when 開始 is pressed
     // Existing main.ts: during a forced-combat lock, back is swallowed (the trap is re-armed).
     if (current === "invade" && invade && invade.onPopstate()) return;
+    // Existing main.ts: during a sortie, back is swallowed (the trap is re-armed).
+    if (current === "explore" && explore && explore.onPopstate()) return;
+    // Popping the sortie trap (result screen) lands on the same 探索 URL: stay.
+    if (current === "explore" && explore && onExplorePage() && explore.search === win.location.search) return;
     if (current === "sort" && sortPopstateAction().block) { armSortBackTrap(win.history, win.location.href); return; }
     // Popping the trap entry lands on the same Sort URL: the existing page stays as it is.
     if (current === "sort" && sort && sceneForSearch(win.location.search) === "sort" && sortSearch === win.location.search) return;
@@ -357,6 +442,8 @@ export function mountCanvasApp(doc: Document = document): void {
     pressing: () => surface.ui.pressing,
     invade: () => (invade ? { locked: invade.forcedLockActive(), status: invade.board.status, hitMine: invade.board.hitMine, selected: invade.selected, scale: invade.view.scale, x: invade.view.x, y: invade.view.y, reversed: invade.reversedTouch, open: invade.board.cells.flat().filter((c) => c.open).length, flagged: invade.board.cells.flat().filter((c) => c.flagged).length, log: invade.lastBoardLog, inbound: invade.inbound } : null),
     invadeViewport: () => invade?.boardViewport ?? null,
+    explore: () => (explore ? { phase: explore.phase, paused: explore.paused, zoom: explore.zoom, map: explore.map, clickMove: explore.clickMove, leader: { ...explore.world.leader.pos }, alive: explore.world.leader.alive, timeLeft: explore.world.timeLeft, salvaged: explore.world.salvaged, boarding: !!explore.world.boarding, inCover: explore.world.leader.inCover, picker: explore.picker?.options.map((o) => o.label) ?? null, toast: explore.toast, note: explore.equipmentNote() } : null),
+    exploreToCanvas: (x: number, y: number) => explore?.worldToCanvas(x, y) ?? null,
     invadeCell: (sx: number, sy: number) => invade?.cellRect({ sx, sy }) ?? null,
     invadeFind: (kind: string) => invade?.board.cells.flat().find((c) => !c.blocked && (kind === "closed-safe" ? !c.open && !c.mine && !c.flagged && Math.max(Math.abs(c.sx), Math.abs(c.sy)) <= 3 : kind === "closed-any" ? !c.open && !c.mine && !c.flagged : kind === "mine" ? c.mine && !c.open : kind === "number" ? c.open && !c.mine && c.adjacent > 0 : false)) ?? null,
     restoreEdge: (i: number) => restore?.debugEdgeCenter(i) ?? null,

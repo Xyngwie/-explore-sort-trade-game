@@ -1,6 +1,6 @@
-import {DEBUG_FIXTURE_ACTIVE,firstSortieError,setExploreShellPhase,SORTIE_GUARD_RETURN_KEY} from "@estg/shared";
+import { setExploreShellPhase, SORTIE_GUARD_RETURN_KEY } from "@estg/shared";
 import { clampZoom, gestureDownForTap, gestureMove, gestureUp, MAP_WHEEL_STEP, newMapGestureState, withViewCamera, type MapGestureState } from "./game/mapZoom";
-import {playLogBlocked,playLogNavigate,recordPlayLogSortie,setPlayLogCheckpointProvider} from '@estg/shared';
+import { playLogBlocked, playLogNavigate, recordPlayLogSortie, setPlayLogCheckpointProvider } from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
 import { mountShieldDebugConsole, mechGaugeHtml, MECH_GAUGE_SIZE_PX, installMechGaugeTap } from "@estg/shared";
 import { exploreMechGaugeModel } from "./game/mechGaugeExplore";
@@ -10,8 +10,6 @@ import { squadSees } from "./game/vision";
 import { canBuildBarricade, startBarricade, startDismantle, wallEntries, barricadeWorking, interruptBarricade } from "./game/barricades";
 import { wallCircleOverlap } from "./game/barricadeGeometry";
 import { barricadePanelHtml } from "./ui/barricadePanel";
-import { directFieldEntryFromStorage } from "./game/directFieldEntry";
-import { attachFieldPersistence } from "./game/fieldPersistence";
 import { shieldPanelHtml, shieldGroupAt } from "./ui/shieldPanel";
 import { startShieldPickup, dropOwnedShield, takeShieldNotices } from "./game/shieldOperations";
 import { activeStripping, interruptStripping, startStrippingAt, canStripWreck } from "./game/strippingRuntime";
@@ -19,34 +17,25 @@ import { shieldHudText } from "./game/shields";
 import { LogPanel, repairSummary, type LogRow } from "./ui/logPanel";
 import { subscribeLogFeed } from "./game/logFeed";
 import type { LogLine } from "./game/types";
-import { effectiveActivity } from "./game/power";
 import { ENEMY_UNKNOWN_JA, enemyAt, noteEnemyTap } from "./game/enemyIdentity";
 import { isEnemySeen } from "./game/render";
 import "./style.css";
-import { loadLineJa, unitLoad, wreckCarrierId } from "./game/carry";
+import { loadLineJa, wreckCarrierId } from "./game/carry";
 import {
   HUB_SAVE_STORAGE_KEY,
   CTA_CHIP,
-  squadEquipmentError,
-  resolveSortieSelection,
   ammoShortLineJa,
-  parseTradeToExploreSearch,
   CTA_COPY,
   EXPLORE_SORTIE_BACK_TRAP,
   HANDOFF_QUERY_KEYS,
   SORTIE_PAUSE_LABEL,
   checkpointKindOnHide,
-  discardSortieCheckpoint,
   exploreBackBlocked,
-  exploreBootFromCheckpoint,
   historyTrapIsCurrent,
   isSortieDoneMark,
   loadHubSaveFromLocalStorage,
-  markDoneIfZeroContainersSaved,
   normalizeHubSnapshot,
-  saveHubSaveToLocalStorage,
   pushHistoryTrap,
-  readSortieCheckpoint,
   resolveModuleBaseUrl,
   sortieFrameShouldTick,
   sortiePausedAfter,
@@ -61,8 +50,6 @@ import {
   type World,
 } from "./game/types";
 import {
-  bootstrapFromSearch,
-  createWorld,
   startSortie,
 } from "./game/world";
 import { invadeIntelBannerText } from "./game/invadeIntelBanner";
@@ -78,11 +65,9 @@ import {
 import {
   snapshotResultWorld,
   snapshotSortieWorld,
-  worldFromCheckpointBody,
 } from "./game/checkpoint";
 import {
   campDrPercent,
-  inCampAura,
   isOperationTimedOut,
   toggleSquadCover,
   unitMoveSpeedMul,
@@ -126,12 +111,9 @@ import {
   isCampUnlocked,
   timeUpHelpSentence,
 } from "./game/campVisibility";
-import { attachLostMechContext } from "./game/lostMechs";
-import { invadeSquadSearch } from "./game/invadeSquad";
 import {
   COMMAND_UNLOCK_MODE_LABEL,
   isDebugUnlockToggleVisible,
-  resolveCommandUnlockMode,
   writeDebugCommandUnlockMode,
 } from "./game/unlockMode";
 import {
@@ -143,11 +125,9 @@ import {
   handleMapTap,
   openWingPalette,
   captainActive,
-  captainRescuer,
   wingmanPaletteActions,
   paletteWingmen,
   pressWingPalette,
-  refreshStarterCircuit,
 } from "./game/circuitPlay";
 import { renderWorld, worldFromCanvas } from "./game/render";
 import {
@@ -156,29 +136,26 @@ import {
   sortHandoffUrl,
   toExploreResult,
   returnKindFromWorld,
-  exploreReturnPayload,
   wreckResultHtml,
   recoveredCircuitResultHtml,
 } from "./game/outcome";
-import { settleFriendlyFireOnce } from "./game/friendlyFireHistory";
-import { sortieIdForWorld } from "./game/outcome";
-import { saveSortieResultToHub, type DirectSaveResult } from "./game/hubDirectSave";
-import { checkpointSortieSearch, resortiePlan, resortieSearch } from "./game/resortie";
-import { refillBeforeSortie } from "./game/preSortieAmmo";
+import { type DirectSaveResult } from "./game/hubDirectSave";
+import { checkpointSortieSearch, resortieSearch } from "./game/resortie";
+import {
+  bootExploreSession,
+  directSaveNoteText,
+  ensureDirectSave as ensureDirectSaveFor,
+  leaderLoadHud,
+  makeExploreWorld,
+  resolveExploreEntry,
+  resortieFrom,
+  sortieEquipmentNote as sortieEquipmentNoteFor,
+  type ExploreBoot,
+} from "./game/exploreBoot";
 
 prepareRequestedShieldFixture();
 applyPendingLabCircuits();
 const root = document.querySelector<HTMLDivElement>("#app")!;
-/** 項目4-1 C8: the captain's 「積載 n/2・速度 N」 in the existing captain HUD line. */
-function leaderLoadHud(world: World): string {
-  // 項目4-2 N2: carrying the captain's wreck, the map tap drives that wingman.
-  const rescuer = captainRescuer(world);
-  if (rescuer) return `${rescuer.name}を操作中（${world.leader.alive ? "隊長機" : "隊長機の残骸"}を積載）・${loadLineJa(world, rescuer)}${shieldHudText(world, rescuer) ? `・${shieldHudText(world, rescuer)}` : ""}`;
-  const activity = effectiveActivity(world, world.leader);
-  const line = loadLineJa(world, world.leader) + (shieldHudText(world, world.leader) ? `・${shieldHudText(world, world.leader)}` : "") + (activity == null ? "" : `・活動量 ${Number(activity.toFixed(1))}`);
-  return inCampAura(world, world.leader) && unitLoad(world, world.leader) <= 0 ? `${line}・軽装キャンプ圏` : line;
-}
-
 let cachedRepairRows: LogRow[] = [];
 
 /** HubSave as it is now (null without a save / storage). */
@@ -194,59 +171,23 @@ function freshHub(): HubSnapshot | null {
   }
 }
 
+/** Briefing guard line (exploreBoot.ts); empty = 出撃 allowed. */
+function sortieEquipmentNote(): string {
+  return sortieEquipmentNoteFor(world, freshHub(), entrySaveRefused);
+}
 /**
  * Deploy query this page was opened with; 再出撃 replaces it with one rebuilt from HubSave.
  * An Invade sortie link (sector only) takes the hangar's sortie selection along (invadeSquad.ts).
  */
-function sortieEquipmentNote(): string {
-  const hub = freshHub();
-  if (entrySaveRefused) return "戦場情報を保存できませんでした。保存を許可して再読込してください。";
-  if (!hub) return DEBUG_FIXTURE_ACTIVE ? "" : "出撃機の保存データがありません。格納庫で新規ゲームを開始してください。";
-  const introError = DEBUG_FIXTURE_ACTIVE ? "" : firstSortieError(hub, world.leader.instanceId);
-  if (introError) return introError;
-  const ids = world.deployedInstanceIds.length ? world.deployedInstanceIds : resolveSortieSelection(hub);
-  const error = squadEquipmentError(hub, ids);
-  return error === "squad_full" ? "出撃部隊の回路上限を超えています。格納庫で装備か出撃機を変更してください。" : error === "category_full" ? "武器種・特殊弾・盾回路・P盾回路は各機体に各1枚までです。格納庫で装備を変更してください。" : "";
-}
-const entryCheckpoint = readSortieCheckpoint();
-let entrySaveRefused = false;
-let entrySearch = window.location.search;
-if (entryCheckpoint.status === "absent" || (entryCheckpoint.status === "ok" && entryCheckpoint.record.kind === "done")) {
-  try { entrySearch = directFieldEntryFromStorage(entrySearch) ?? entrySearch; }
-  catch { entrySaveRefused = true; }
-}
-let bootSearch = invadeSquadSearch(entrySearch, freshHub()) ?? entrySearch;
+const entry = resolveExploreEntry(window.location.search, freshHub);
+const entrySaveRefused = entry.entrySaveRefused;
+let bootSearch = entry.bootSearch;
 /** M8: shortage line shown by the briefing 出撃 button (Explore-built squads only). */
-let preSortieAmmoNote = "";
-{
-  // M3: an Invade sortie link (squad from HubSave) is a new sortie — top the
-  // squad up from the stock first. Not on a 5-3 resume (checkpoint present).
-  const hub0 = freshHub();
-  if (hub0 && bootSearch !== entrySearch && readSortieCheckpoint().status === "absent") {
-    const ids = parseTradeToExploreSearch(bootSearch)?.deployedInstanceIds ?? [];
-    const filled = refillBeforeSortie(hub0, ids);
-    preSortieAmmoNote = filled.line;
-    bootSearch = invadeSquadSearch(entrySearch, filled.hub) ?? bootSearch;
-  }
-}
-const boot = bootstrapFromSearch(bootSearch);
+let preSortieAmmoNote = entry.preSortieAmmoNote;
+const boot = entry.boot;
 /** New world + this front cell's left-behind mechs from HubSave (lostMechs.ts). */
-function makeWorld(b: ReturnType<typeof bootstrapFromSearch>): World {
-  let hub = freshHub();
-  const mode = resolveCommandUnlockMode();
-  // Q2: a captain with no circuit gets the false 1×1 (both modes; existing circuits never move).
-  if (hub) {
-    const next = refreshStarterCircuit(hub);
-    if (next !== hub) {
-      saveHubSaveToLocalStorage(normalizeHubSnapshot(next));
-      hub = normalizeHubSnapshot(next);
-    }
-  }
-  const world = attachLostMechContext(createWorld(b), hub);
-  // Circuit effects are live in both modes; release-only extras follow `mode` (Q1/Q3c).
-  attachCircuitPlay(world, hub, mode === "release");
-  attachFieldPersistence(world, hub);
-  return world;
+function makeWorld(b: ExploreBoot): World {
+  return makeExploreWorld(b, freshHub);
 }
 if (boot.invadeSector != null) {
   const cleaned = stripHandoffParams(
@@ -259,37 +200,8 @@ if (boot.invadeSector != null) {
     history.replaceState(null, "", cleaned);
   }
 }
-function bootExploreSession(): { world: World; paused: boolean; leaveForHub: boolean } {
-  const read = readSortieCheckpoint();
-  if (read.status === "unreadable") {
-    discardSortieCheckpoint();
-    return { world: makeWorld(boot), paused: false, leaveForHub: true };
-  }
-  const decision = exploreBootFromCheckpoint(read);
-  if (decision.action === "hub") {
-    return { world: makeWorld(boot), paused: false, leaveForHub: true };
-  }
-  if (decision.action === "continue") {
-    return { world: makeWorld(boot), paused: false, leaveForHub: false };
-  }
-  const restored = worldFromCheckpointBody(decision.body);
-  if (!restored) {
-    discardSortieCheckpoint();
-    return { world: makeWorld(boot), paused: false, leaveForHub: true };
-  }
-  bootSearch = checkpointSortieSearch(bootSearch, restored.invadeSector);
-  if (decision.action === "sortie") {
-    restored.phase = "sortie";
-    return { world: restored, paused: true, leaveForHub: false };
-  }
-  restored.phase = "result";
-  restored.enemies = [];
-  restored.bullets = [];
-  restored.coverObjects = [];
-  return { world: restored, paused: false, leaveForHub: false };
-}
-
-const exploreSession = bootExploreSession();
+const exploreSession = bootExploreSession(boot, bootSearch, makeWorld);
+bootSearch = exploreSession.bootSearch;
 let world: World = exploreSession.world;
 installMechGaugeTap();
 mountShieldDebugConsole(() => inspectShieldFixture(world),createAlphaLabHost(()=>world,next=>{
@@ -917,24 +829,7 @@ let resortieNote = "";
 let rescueConfirm = false;
 
 function ensureDirectSave(): DirectSaveResult | null {
-  if (world.phase !== "result") return null;
-  try { settleFriendlyFireOnce(world, sortieIdForWorld(world, returnKindFromWorld(world)), window.localStorage); } catch { /* storage denied: keep checkpoint counters */ }
-  const done = directSaves.get(world);
-  if (done) return done;
-  const res = saveSortieResultToHub(world);
-  directSaves.set(world, res);
-  const status = res.status === "skipped" ? res.reason : res.status;
-  markDoneIfZeroContainersSaved(toExploreResult(world).salvagedContainers, status);
-  return res;
-}
-
-function directSaveNoteText(res: DirectSaveResult | null): string {
-  if (!res) return "";
-  if (res.status === "saved") return "出撃結果を HubSave に保存しました（格納庫で再適用はしません）。";
-  if (res.status === "already_applied") return "出撃結果は HubSave に保存済みです。";
-  if (res.reason === "no_save") return "HubSave がないため保存していません（格納庫へ の帰還 URL で反映されます）。";
-  if (res.reason === "write_refused") return "HubSave に保存できませんでした（新しい版のセーブ）。";
-  return "";
+  return ensureDirectSaveFor(world, directSaves, () => window.localStorage);
 }
 
 function renderDom(): void {
@@ -1096,25 +991,15 @@ function renderDom(): void {
       // 再出撃 (案 A + item 15): rebuild the squad from HubSave — the hangar's
       // saved sortie selection (deployable only, no size limit), with saved ammo /
       // durability / battery. No save → the previous sortie's mechs.
-      const payload = exploreReturnPayload(world);
-      if (payload && world.deployedInstanceIds.length > 0) {
-        const plan = resortiePlan(bootSearch, world, payload);
-        // M3: 再出撃 from the save tops the squad up from the stock first.
-        const filled = plan.fromSave ? refillBeforeSortie(plan.hub, plan.ids) : { hub: plan.hub, line: "" };
-        const next = resortieSearch(bootSearch, filled.hub, plan.ids);
-        if (!next) {
-          const error = squadEquipmentError(filled.hub, plan.ids);
-          resortieNote = error ? "回路の装備制限により再出撃できません。格納庫で装備か出撃機を変更してください。" : "再出撃できる機体がありません（格納庫で修理・受領してください）。";
-          renderDom();
-          return;
-        }
-        bootSearch = next.search;
-        preSortieAmmoNote = filled.line;
-        world = makeWorld(bootstrapFromSearch(next.search));
-      } else {
-        // No deployed mechs (Explore opened without a deploy URL): as before.
-        world = makeWorld(boot);
+      const next = resortieFrom(world, bootSearch, boot, makeWorld, preSortieAmmoNote);
+      if (next.kind === "refused") {
+        resortieNote = next.note;
+        renderDom();
+        return;
       }
+      bootSearch = next.bootSearch;
+      preSortieAmmoNote = next.preSortieAmmoNote;
+      world = next.world;
       resortieNote = "";
       needsDom = true;
       renderDom();

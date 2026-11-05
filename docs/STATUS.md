@@ -1,9 +1,16 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-5a：探索の土台（2026-11-05）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 探索を同じアプリ・同じ canvas のシーンに（`/canvas/explore/`、直接開いたときだけ＝X2）。起動・再出撃・結果の保存の規則を `exploreBoot.ts` に切り出し、既存のページと共有 → [CANVAS_UNIFIED_V0.md §14.4](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「全て★でOK」（U-5 の計画と X1〜X5、2026-11-05）
+- Scope: U-5a（準備画面・出撃中の地図と HUD と操作・キー・結果・戻る・途中保存・プレイ記録）。回路の指示・僚機パレット・重なった対象の選択は前倒しで入れた。僚機カード・シールドの欄・バリケード・剥ぎ取り・ログ・キーの説明・Alpha Lab は U-5b。探索の規則・セーブ形式・受け渡しの契約は変更なし
+- Status: ブランチ `claude/canvas-unified`（#350 の上）。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 全モジュールの 1 ページ・1 canvas 統合 U-5：探索（2026-11-05・着手、計画）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: 探索の canvas 化の計画（U-5a 土台・U-5b 出撃中の残り）と細部 CANVAS-X1〜X5 → [CANVAS_UNIFIED_V0.md §14](CANVAS_UNIFIED_V0.md)
 - Why: 神宮「U-5も始めてください」（2026-11-05）
 - Scope: 計画と細部の問い。実装はこのあと U-5a から。ブランチ `claude/canvas-unified`（#350 の上）
-- Status: 細部 CANVAS-X1〜X5 はすべて★のとおり神宮決定（2026-11-05）。U-5a を実装中。マージ・デプロイなし
+- Status: 細部 CANVAS-X1〜X5 はすべて★のとおり神宮決定（2026-11-05）。U-5a は上の項。マージ・デプロイなし
   - X1 URL = `/canvas/explore/`／X2 U-5b まで canvas 版の「探索へ」等は既存版へ・canvas の探索は直接開いたときだけ／X3 地図 = 720:420 のまま幅（横向きは高さ）に合わせる／X4 配置 = 上 HUD・中央地図・下ボタン／X5 キー操作 = 既存のまま（すべて神宮決定 2026-11-05）
 
 ## canvas 統合 #349 への追加指摘の修正（2026-11-05）

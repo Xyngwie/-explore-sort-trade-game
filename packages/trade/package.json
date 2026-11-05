@@ -15,7 +15,8 @@
     "@estg/shared": "*",
     "@estg/sort": "*",
     "@estg/restore": "*",
-    "@estg/invade": "*"
+    "@estg/invade": "*",
+    "@estg/explore": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
