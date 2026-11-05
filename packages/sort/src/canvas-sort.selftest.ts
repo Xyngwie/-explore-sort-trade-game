@@ -101,4 +101,32 @@ assert.equal(ui.debugRegions().some((r) => r.id === "sort:test-play"), false, "n
 assert.ok(ui.debugRegions().some((r) => r.id === "sort:demo"));
 intro.dispose();
 
+// --- landscape briefing with extra HUB containers: every button reachable (docs §13) ------
+{
+  const hub = { ...createNewGameHub(), newGameIntro: undefined, unopenedContainers: 5 };
+  store.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(createHubSave(hub as Parameters<typeof createHubSave>[0])));
+  const went2: string[] = [];
+  const sc = new SortScene({ ...host, go: (u: string) => went2.push(u) });
+  assert.equal(sc.state.phase, "briefing");
+  const ui2 = new CanvasUI({ blocked: () => false });
+  const fieldL = { x: 0, y: 32, w: 844, h: 302 };
+  const frameL = { width: 844, height: 390, dpr: 3, insets: { top: 0, right: 0, bottom: 0, left: 0 } };
+  const drawL = () => { ui2.beginFrame(ctx, 844, 390); sc.draw(ui2, frameL, fieldL); ui2.endFrame(); };
+  drawL(); drawL();
+  const ids = ["sort:start", "sort:test-play", "sort:add-one", "sort:add-all", "sort:skip-cargo"];
+  const seen = new Set<string>();
+  for (let i = 0; i < 40; i++) {
+    for (const r of ui2.debugRegions()) if (ids.includes(r.id) && r.visible && r.h >= 43.9 && r.y >= fieldL.y && r.y + r.h <= fieldL.y + fieldL.h) seen.add(r.id);
+    ui2.wheel({ x: 422, y: 180 }, 60); drawL();
+  }
+  assert.deepEqual([...seen].sort(), [...ids].sort(), "every briefing button can be scrolled fully into the field");
+  // ＋ALL is tappable after scrolling (it spends the HUB containers and opens the bigger Sort query).
+  const all = ui2.debugRegions().find((r) => r.id === "sort:add-all")!;
+  if (!(all.visible && all.h >= 43.9)) { ui2.wheel({ x: 422, y: 180 }, -10_000); drawL(); for (let i = 0; i < 40; i++) { const a = ui2.debugRegions().find((r) => r.id === "sort:add-all")!; if (a.visible && a.h >= 43.9) break; ui2.wheel({ x: 422, y: 180 }, 40); drawL(); } }
+  const a = ui2.debugRegions().find((r) => r.id === "sort:add-all")!;
+  ui2.pointerDown(50, { x: a.x + a.w / 2, y: a.y + a.h / 2 }); ui2.pointerUp(50, { x: a.x + a.w / 2, y: a.y + a.h / 2 });
+  assert.match(went2.at(-1) ?? "", /salvagedContainers=7/, "＋ALL opened 2+5 containers");
+  sc.dispose();
+}
+
 console.log("canvas-sort selftest: OK");

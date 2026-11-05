@@ -1,3 +1,10 @@
+## canvas 統合 #349 への追加指摘の修正（2026-11-05）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: (1) ボタンと盤の接触を 1 か所で管理（INVADE の二本指のすり抜け）。(2) SORT の準備画面などのパネルを、盤の範囲に入らないときはスクロール（横向きスマホで「＋ALL」「格納庫へ」が画面外） → [CANVAS_UNIFIED_V0.md §13](CANVAS_UNIFIED_V0.md)
+- Why: #349 の監査（2026-11-05）で 2 件を再現。神宮「U-5も始めてください」
+- Scope: 共通基盤の入力の振り分けと SORT のパネルだけ。各モジュールの規則・セーブ形式は変更なし
+- Status: 新しい PR（`claude/check-write-permissions-gexhrr`、最新 main から）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 全モジュールの 1 ページ・1 canvas 統合 U-4：INVADE（2026-11-05・神宮決定）＋ #348 追加指摘の修正
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: INVADE を同じアプリ・同じ canvas のシーンに（`/canvas/invade/`）。盤の入力は既存の `BoardGesture` をそのまま使う（閾値・タイミングは変更なし） → [CANVAS_UNIFIED_V0.md §11](CANVAS_UNIFIED_V0.md)

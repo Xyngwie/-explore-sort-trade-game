@@ -207,6 +207,49 @@ const CONFIGS = [
       // intro.opening.result is renamed to sort.result in the same step (existing main.ts order).
       for (const k of ["container.open", "sort.play", "sort.result", "handoff.ingest"]) assert.ok(kinds.includes(k), `${k} in ${kinds.join(",")}`);
       assert.equal(new Set((await entries()).map((e) => e.op)).size, (await entries()).length, "no duplicated operations");
+      // ---- normal briefing with extra HUB containers: ＋1 / ＋ALL / 格納庫へ reachable on every screen ----
+      {
+        const credits = (await hub()).credits;
+        assert.ok(credits >= 45, `${cfg.name}: credits for 3 boxes (${credits})`);
+        {
+          await reveal("dock:unopened:step:1");
+          await tap("dock:unopened:step:1"); await tap("dock:unopened:step:1"); // ×3
+          await reveal("dock:unopened:buy");
+          await tap("dock:unopened:buy");
+          await tap("dock:confirm:ok");
+          await settle();
+          assert.equal((await hub()).unopenedContainers, 3, "bought 3 boxes");
+          await reveal("dock:unopened:sort:-1");
+          await tap("dock:unopened:sort:-1"); await tap("dock:unopened:sort:-1"); // 仕分数 1
+          await reveal("dock:unopened:sort:go");
+          await tap("dock:unopened:sort:go");
+          await settle();
+          assert.equal(await scene(), "sort");
+          assert.equal(new URL(p.url()).searchParams.get("salvagedContainers"), "1");
+          // Scroll inside the field (centre of the screen) until each button is fully on screen.
+          const reach = async (id) => {
+            for (let i = 0; i < 40; i++) {
+              const r = await region(id);
+              if (r && r.visible && r.h >= 43 && r.top >= 30 && r.bottom <= cfg.viewport.height - 60) return r;
+              await p.mouse.move(cfg.viewport.width / 2, cfg.viewport.height / 2);
+              await p.mouse.wheel(0, r && r.cy < cfg.viewport.height / 2 ? -80 : 80);
+              await p.waitForTimeout(40);
+            }
+            throw new Error(`${cfg.name}: ${id} cannot be reached`);
+          };
+          for (const id of ["sort:start", "sort:add-one", "sort:add-all", "sort:skip-cargo"]) await reach(id);
+          const all = await reach("sort:add-all");
+          await tapAt(all.cx, all.cy);
+          await settle();
+          assert.equal(new URL(p.url()).searchParams.get("salvagedContainers"), "3", `${cfg.name}: ＋ALL reachable and works`);
+          await reach("sort:skip-cargo");
+          await tap("sort:skip-cargo");
+          await settle();
+          assert.equal(await scene(), "dock", "格納庫へ (預ける) reachable and works");
+          assert.equal((await hub()).unopenedContainers, 3, "deposited back as 未開封");
+          console.log(`landscape-briefing-check ${cfg.name}: ran`);
+        }
+      }
       // ---- replaying a resource URL without the token grants nothing -----------------
       const ammo1 = h1.inventory.ammo ?? 0;
       await p.goto(local + "canvas/?fromSort=1&yieldBag=ammo%3A50");
