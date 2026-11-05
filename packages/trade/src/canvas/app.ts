@@ -53,7 +53,7 @@ export const CANVAS_RESTORE_PATH = "restore/";
 /** The INVADE page of this app (same app, own path like the existing /invade/ page). */
 export const CANVAS_INVADE_PATH = "invade/";
 /**
- * The 探索 page of this app (U-5). CANVAS-X2 → CANVAS-Y6 (暫定 ★): with U-5b,
+ * The 探索 page of this app (U-5). CANVAS-X2 → CANVAS-Y6 (神宮決定 2026-11-05): with U-5b,
  * 探索へ / the SORTIE tab / INVADE sorties open it in place.
  */
 export const CANVAS_EXPLORE_PATH = "explore/";
