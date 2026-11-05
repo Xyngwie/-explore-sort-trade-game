@@ -12,7 +12,8 @@
     "test": "npm run typecheck && npm run selftest"
   },
   "dependencies": {
-    "@estg/shared": "*"
+    "@estg/shared": "*",
+    "@estg/sort": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

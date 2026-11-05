@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "selftest": "tsx src/refine.selftest.ts && tsx src/resource-model.selftest.ts && tsx src/refine-canonical.selftest.ts && tsx src/four-resource-contract.selftest.ts && tsx src/legacy-vocabulary.guard.ts && tsx src/back-guard.selftest.ts",
+    "selftest": "tsx src/refine.selftest.ts && tsx src/resource-model.selftest.ts && tsx src/refine-canonical.selftest.ts && tsx src/four-resource-contract.selftest.ts && tsx src/legacy-vocabulary.guard.ts && tsx src/back-guard.selftest.ts && tsx src/canvas-sort.selftest.ts",
     "test": "npm run typecheck && npm run selftest"
   },
   "dependencies": {
@@ -18,5 +18,8 @@
     "tsx": "^4.23.13",
     "typescript": "^5.6.0",
     "vite": "^5.4.0"
+  },
+  "exports": {
+    "./canvas": "./src/canvas-api.ts"
   }
 }

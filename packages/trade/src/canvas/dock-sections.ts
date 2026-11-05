@@ -179,13 +179,14 @@ export class DockSections {
   scrollRequest: string | null = null;
   private lastMoneyAt = -Infinity;
   private gaugeShown = new Map<string, number>();
-  private sortQty = 1;
+  /** null = the existing default (the whole stock, like `input-sort-unopened`). */
+  private sortQty: number | null = null;
   private craftSide: number | null = null;
   private equipCircuit: string | null = null;
   private equipMech: string | null = null;
   guardDismissed = false;
-  constructor(readonly env: DockEnv, private readonly onHubChanged: () => void, private readonly redraw: () => void) {
-    this.state = createInitialHangar(env.storage);
+  constructor(readonly env: DockEnv, private readonly onHubChanged: () => void, private readonly redraw: () => void, initial?: HangarState) {
+    this.state = initial ?? createInitialHangar(env.storage);
     this.ensureCaptainCircuit();
   }
   /**
@@ -390,7 +391,7 @@ export class DockSections {
   private drawUnopened(f: Flow, hi: boolean): void {
     const hub = this.state.hub;
     const stock = Math.max(0, Math.floor(hub.unopenedContainers ?? 0));
-    this.sortQty = Math.max(1, Math.min(Math.max(1, stock), this.sortQty));
+    const q = Math.max(1, Math.min(Math.max(1, stock), this.sortQty ?? stock));
     f.mark(DOCK_ANCHOR.unopened);
     f.card("unopened", (c) => {
       c.heading("未開封コンテナ");
@@ -398,13 +399,12 @@ export class DockSections {
       if (resume) c.buttons([{ id: "dock:unopened:resume", label: "開封作業へ戻る", variant: "primary", onActivate: () => { if (!playLogBlocked()) this.env.navigate(resume); } }]).gap(6);
       c.text("探索を経由せず仕分（Module 2）へ送れる在庫。購入は下の物資市場。", { color: CANVAS_THEME.muted, size: 12 });
       c.kv(`在庫 ${stock}`, "").gap(4);
-      const q = this.sortQty;
       c.buttons([
         { id: "dock:unopened:sort:-1", label: "−1", w: 52, disabled: stock < 1 || q <= 1, onActivate: () => { this.sortQty = Math.max(1, q - 1); } },
         { id: "dock:unopened:sort:qty", label: `×${q}`, w: 60, disabled: true },
         { id: "dock:unopened:sort:+1", label: "+1", w: 52, disabled: stock < 1 || q >= stock, onActivate: () => { this.sortQty = Math.min(stock, q + 1); } },
         { id: "dock:unopened:sort:all", label: "全部", w: 64, disabled: stock < 1 || q >= stock, onActivate: () => { this.sortQty = stock; } },
-        { id: "dock:unopened:sort:go", label: CTA_COPY.toSort, variant: "primary", disabled: stock < 1, onActivate: () => this.goSort(this.sortQty) },
+        { id: "dock:unopened:sort:go", label: CTA_COPY.toSort, variant: "primary", disabled: stock < 1, onActivate: () => this.goSort(q) },
       ]);
       if (stock < 1) c.gap(4).text("仕分出庫できる未開封がありません", { color: CANVAS_THEME.muted, size: 12 });
     }, { highlight: hi });

@@ -1,3 +1,10 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-2：SORT（2026-11-05・暫定 ★）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: SORT を同じページ・同じ canvas のシーンに。DOCK → SORT → DOCK はページの読み込みなし（同じページの履歴）。URL のクエリ・トークン・#332 の照合は既存のまま → [CANVAS_UNIFIED_V0.md §9](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「★を先に作ってから U-2」（2026-11-05）
+- Scope: DOCK ⇔ SORT だけ。探索 → SORT・RESTORE・INVADE・探索は既存版のページ。受け渡しの部品は既存のファイルから副作用のない関数に切り出し、既存のページもそれを呼ぶ（動きは同じ）。セーブ形式・価格・SORT の規則は変更なし
+- Status: 細部 CANVAS-S1〜S6 は ★推奨で仮実装（暫定）。PR #349 に続けて積んだ（draft）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 全モジュールの 1 ページ・1 canvas 統合 U-1：DOCK の残り（2026-11-04、細部は 2026-11-05 神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: canvas 版 DOCK に全欄（次の出撃・未開封・売却・ハンガー・在庫・署名表示・回路・装備・作成/購入・履歴/ログ・検証用・ツリー・導入ガイド・出撃ガード）と下部タブ。共通部品（Flow・確認／一覧ダイアログ・トグル・機体ゲージ）を `canvas-ui` に追加 → [CANVAS_UNIFIED_V0.md](CANVAS_UNIFIED_V0.md)

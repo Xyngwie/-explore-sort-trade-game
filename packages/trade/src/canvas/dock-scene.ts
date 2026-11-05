@@ -12,8 +12,8 @@ import {
   Flow,
   confirmModal,
   pickerModal,
-  formatHudNumber,
-  hudItems,
+  drawResourceHud,
+  drawShellTabs,
   signedDelta,
   type CanvasUI,
   type FrameInfo,
@@ -27,6 +27,7 @@ import {
 } from "./market";
 import { DockSections, DOCK_ANCHOR, type DockEnv } from "./dock-sections";
 import { dockTabs, type DockTab } from "./tabs";
+import type { HangarState } from "../hangar";
 
 /** Phone/PC breakpoint already decided for the shell (§13-1). */
 export const CANVAS_MOBILE_MAX_W = 600;
@@ -119,6 +120,8 @@ export type DockSceneOptions = {
   /** Bottom tab tapped (enabled tabs only). */
   onTab?: (tab: DockTab) => void;
   redraw?: () => void;
+  /** Hangar state after a Sort→HUB ingest (else read from the save). */
+  initialState?: HangarState;
 };
 
 export class DockScene {
@@ -133,7 +136,7 @@ export class DockScene {
   readonly anchors = new Map<string, number>();
   constructor(private readonly opts: DockSceneOptions = {}) {
     this.deps = opts.deps ?? browserMarketDeps;
-    this.sections = opts.env ? new DockSections(opts.env, () => this.reloadMarket(), () => opts.redraw?.()) : null;
+    this.sections = opts.env ? new DockSections(opts.env, () => this.reloadMarket(), () => opts.redraw?.(), opts.initialState) : null;
     this.hub = this.deps.read();
   }
   private reloadMarket(): void {
@@ -235,43 +238,14 @@ export class DockScene {
   }
 
   private drawTabs(ui: CanvasUI, L: DockLayout): void {
-    const ctx = ui.context;
-    const t = L.tabs;
-    ctx.fillStyle = CANVAS_THEME.bg;
-    ctx.fillRect(t.x, t.y, t.w, t.h + 64);
-    ctx.fillStyle = CANVAS_THEME.panelEdge;
-    ctx.fillRect(t.x, t.y, t.w, 1);
-    const tabs = dockTabs(this.sections?.state.hub ?? this.hub);
-    const w = t.w / tabs.length;
-    tabs.forEach((tab, i) => {
-      const r: Rect = { x: t.x + w * i + 2, y: t.y + 4, w: w - 4, h: t.h - 8 };
-      if (tab.active) {
-        ui.panel(r, { fill: "#1f6feb33", edge: CANVAS_THEME.primary, radius: 8 });
-        ui.text(tab.id, r.x + r.w / 2, r.y + r.h / 2, { size: 13, weight: 700, align: "center", color: "#ffffff", maxW: r.w - 4 });
-        ui.region(`tab:${tab.id}`, r, { disabled: true });
-      } else {
-        ui.button(`tab:${tab.id}`, r, tab.id, { disabled: !tab.enabled, fontSize: 13, onActivate: () => {
-          if (tab.id === "SORT") this.goAnchor(DOCK_ANCHOR.unopened); // §5-1: SORT tab = DOCK 未開封
-          else this.opts.onTab?.(tab);
-        } });
-      }
+    drawShellTabs(ui, L.tabs, dockTabs(this.sections?.state.hub ?? this.hub), (tab) => {
+      if (tab.id === "SORT") this.goAnchor(DOCK_ANCHOR.unopened); // §5-1: SORT tab = DOCK 未開封
+      else this.opts.onTab?.(tab);
     });
   }
 
   private drawHud(ui: CanvasUI, L: DockLayout, mobile: boolean): void {
-    const ctx = ui.context;
-    ctx.fillStyle = CANVAS_THEME.panel;
-    ctx.fillRect(L.hud.x, L.hud.y, L.hud.w, L.hud.h);
-    ctx.fillStyle = CANVAS_THEME.panelEdge;
-    ctx.fillRect(L.hud.x, L.hud.y + L.hud.h - 1, L.hud.w, 1);
-    const items = hudItems(this.hub);
-    const cellW = L.hud.w / items.length;
-    items.forEach((it, i) => {
-      const cx = L.hud.x + cellW * i + 10;
-      const cy = L.hud.y + L.hud.h / 2;
-      ui.text(it.label, cx, cy, { size: 12, weight: 700, color: it.value === 0 ? CANVAS_THEME.faint : it.color });
-      ui.text(formatHudNumber(it.value, mobile), cx + (it.label.length > 1 ? 22 : 16), cy, { size: 13, weight: 600, color: it.value === 0 ? CANVAS_THEME.faint : CANVAS_THEME.text, maxW: cellW - 30 });
-    });
+    drawResourceHud(ui, L.hud, this.sections?.state.hub ?? this.hub, mobile);
   }
 
   private drawRow(ui: CanvasUI, row: DockLayout["rows"][number], sh: (r: Rect) => Rect, wide: boolean): void {

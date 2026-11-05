@@ -13,6 +13,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@estg/shared": path.resolve(__dirname, "../shared/src/index.ts"),
+      "@estg/sort/canvas": path.resolve(__dirname, "../sort/src/canvas-api.ts"),
     },
   },
   server: { port: 5175 },

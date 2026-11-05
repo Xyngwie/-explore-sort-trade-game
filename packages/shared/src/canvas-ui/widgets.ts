@@ -5,6 +5,8 @@
  */
 import { CANVAS_THEME, fontSpec, roundRectPath, wrapText, type ButtonVariant, type CanvasUI, type Rect } from "./core";
 import { MECH_GAUGE_COLORS, type MechGaugeModel } from "../mech-gauge";
+import { formatHudNumber, hudItems, type ShellTabState } from "../fullscreen-shell";
+import type { HubSnapshot } from "../hub-save";
 
 export type FlowButton = {
   id: string;
@@ -244,4 +246,41 @@ export function drawMechGauge(ui: CanvasUI, m: MechGaugeModel, x: number, y: num
     ctx.beginPath(); ctx.arc(cx, cy, c - 1 - barW / 2, 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
   }
+}
+
+/** Shell HUD (FULLSCREEN_SHELL_V0 §6): Cr・弾・装・電・箱, 0 in grey, short numbers on phones. Display only. */
+export function drawResourceHud(ui: CanvasUI, r: Rect, hub: HubSnapshot | null, mobile: boolean): void {
+  const ctx = ui.context;
+  ctx.fillStyle = CANVAS_THEME.panel;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.fillStyle = CANVAS_THEME.panelEdge;
+  ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
+  const items = hudItems(hub);
+  const cellW = r.w / items.length;
+  items.forEach((it, i) => {
+    const cx = r.x + cellW * i + 10;
+    const cy = r.y + r.h / 2;
+    ui.text(it.label, cx, cy, { size: 12, weight: 700, color: it.value === 0 ? CANVAS_THEME.faint : it.color });
+    ui.text(formatHudNumber(it.value, mobile), cx + (it.label.length > 1 ? 22 : 16), cy, { size: 13, weight: 600, color: it.value === 0 ? CANVAS_THEME.faint : CANVAS_THEME.text, maxW: cellW - 30 });
+  });
+}
+
+/** Bottom tabs (FULLSCREEN_SHELL_V0 §4). The active tab is drawn highlighted and is not a button. */
+export function drawShellTabs(ui: CanvasUI, r: Rect, tabs: readonly ShellTabState[], onTap: (tab: ShellTabState) => void): void {
+  const ctx = ui.context;
+  ctx.fillStyle = CANVAS_THEME.bg;
+  ctx.fillRect(r.x, r.y, r.w, r.h + 64);
+  ctx.fillStyle = CANVAS_THEME.panelEdge;
+  ctx.fillRect(r.x, r.y, r.w, 1);
+  const w = r.w / tabs.length;
+  tabs.forEach((tab, i) => {
+    const b: Rect = { x: r.x + w * i + 2, y: r.y + 4, w: w - 4, h: r.h - 8 };
+    if (tab.active) {
+      ui.panel(b, { fill: "#1f6feb33", edge: CANVAS_THEME.primary, radius: 8 });
+      ui.text(tab.id, b.x + b.w / 2, b.y + b.h / 2, { size: 13, weight: 700, align: "center", color: "#ffffff", maxW: b.w - 4 });
+      ui.region(`tab:${tab.id}`, b, { disabled: true });
+    } else {
+      ui.button(`tab:${tab.id}`, b, tab.id, { disabled: !tab.enabled, fontSize: 13, onActivate: () => onTap(tab) });
+    }
+  });
 }

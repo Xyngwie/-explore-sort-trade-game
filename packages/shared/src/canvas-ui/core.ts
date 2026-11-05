@@ -86,6 +86,8 @@ type Region = {
   onActivate?: () => void;
   /** Modal backdrop: swallows input; activation = dismiss. */
   backdrop?: boolean;
+  /** Drag region: release reports start and end (wherever it ends). */
+  onDrag?: (start: Point, end: Point) => void;
 };
 type ScrollArea = { id: string; rect: Rect; layer: number; contentH: number };
 
@@ -280,6 +282,15 @@ export class CanvasUI {
     const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
     this.building.push({ id, rect, clip, layer: this.layer, disabled: !!opts.disabled, onActivate: opts.onActivate });
   }
+  /**
+   * A region that reports the whole gesture on release (e.g. a puzzle board's
+   * swipe), wherever the pointer ends. Never inside a scroll area. A cancel,
+   * a second finger or a modal opening drops the gesture.
+   */
+  dragRegion(id: string, rect: Rect, onDrag: (start: Point, end: Point) => void): void {
+    const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
+    this.building.push({ id, rect, clip, layer: this.layer, disabled: false, onDrag });
+  }
   isPressed(id: string): boolean {
     return !!this.press && this.press.mode === "press" && this.press.regionId === id && this.press.inside;
   }
@@ -386,7 +397,8 @@ export class CanvasUI {
     const s = this.press;
     if (!s || s.pointerId !== pointerId) return;
     const dy = p.y - s.start.y, dx = p.x - s.start.x;
-    if (s.mode !== "scroll" && s.scrollId && Math.abs(dy) > CANVAS_SCROLL_SLOP_PX && Math.abs(dy) >= Math.abs(dx)) {
+    const dragging = !!s.regionId && !!this.regions.find((x) => x.id === s.regionId)?.onDrag;
+    if (!dragging && s.mode !== "scroll" && s.scrollId && Math.abs(dy) > CANVAS_SCROLL_SLOP_PX && Math.abs(dy) >= Math.abs(dx)) {
       s.mode = "scroll"; // a scroll never activates the button it started on
       s.regionId = null;
     }
@@ -406,6 +418,14 @@ export class CanvasUI {
     this.opts.invalidate?.();
     if (s.mode !== "press" || !s.regionId) return false;
     if (s.layer !== this.topLayerFrame) return false; // a modal opened/closed meanwhile
+    const drag = this.regions.find((x) => x.id === s.regionId && x.onDrag);
+    if (drag) {
+      if (this.opts.blocked?.()) return false;
+      this.activations++;
+      drag.onDrag!(s.start, p);
+      this.opts.invalidate?.();
+      return true;
+    }
     const r = this.hitTest(p);
     if (!r || r.id !== s.regionId || r.disabled) return false;
     if (this.opts.blocked?.()) return false;
