@@ -3,7 +3,16 @@
 - What: (1) ボタンと盤の接触を 1 か所で管理（INVADE の二本指のすり抜け）。(2) SORT の準備画面などのパネルを、盤の範囲に入らないときはスクロール（横向きスマホで「＋ALL」「格納庫へ」が画面外） → [CANVAS_UNIFIED_V0.md §13](CANVAS_UNIFIED_V0.md)
 - Why: #349 の監査（2026-11-05）で 2 件を再現。神宮「U-5も始めてください」
 - Scope: 共通基盤の入力の振り分けと SORT のパネルだけ。各モジュールの規則・セーブ形式は変更なし
-- Status: 新しい PR（`claude/check-write-permissions-gexhrr`、最新 main から）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+- Status: PR #350（`claude/check-write-permissions-gexhrr`、最新 main から）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
+## 風紀委員 / 井戸・外殻・居住区の世界観記録（2026-11-05）
+
+- Who: Codex / inspector（風紀委員）
+- What: 神宮との会話で確定した設定を [WORLD_WELLS_AND_SHELL.md](WORLD_WELLS_AND_SHELL.md) に記録し、PRODUCT_VISION.md §2.1 を同期。
+- Why: 神宮の「mainに設定を書き込み。その後アートワークとして作画」の直接指示。
+- Scope: 赤道上の軌道エレベーターと外殻の形成、ナノマシンによる取り込み、砲身外側の管理階段の街、地表からの供給とコンテナ射出、跳ね橋・マスドライバーでの出発、回路経由のキャリア帰還。機能コード・セーブ・帰還や救助の数値は変更しない。
+- Status: 確定設定の文書化。PR経由でmainへ反映する。文書のみのためデプロイは NOT_TRIGGERED、プレビュー操作は NOT_RUN。アートワークは設定反映後に作画する。
+- 直近のコード公開: #349 は 048ab194ab4d9790cf691c4a25b9db0c14d34087 としてマージ済み。Deploy Modules Preview run 42013828074 は PASS。以下の #349 提出時の「draft・未マージ」等は履歴である。
 
 ## 全モジュールの 1 ページ・1 canvas 統合 U-4：INVADE（2026-11-05・神宮決定）＋ #348 追加指摘の修正
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
