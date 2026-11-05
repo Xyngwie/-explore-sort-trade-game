@@ -1,3 +1,10 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-5：探索（2026-11-05・着手、計画）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 探索の canvas 化の計画（U-5a 土台・U-5b 出撃中の残り）と細部 CANVAS-X1〜X5 → [CANVAS_UNIFIED_V0.md §14](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「U-5も始めてください」（2026-11-05）
+- Scope: 計画と細部の問い。実装はこのあと U-5a から。ブランチ `claude/canvas-unified`（#350 の上）
+- Status: 計画のみ。マージ・デプロイなし
+
 ## canvas 統合 #349 への追加指摘の修正（2026-11-05）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: (1) ボタンと盤の接触を 1 か所で管理（INVADE の二本指のすり抜け）。(2) SORT の準備画面などのパネルを、盤の範囲に入らないときはスクロール（横向きスマホで「＋ALL」「格納庫へ」が画面外） → [CANVAS_UNIFIED_V0.md §13](CANVAS_UNIFIED_V0.md)
