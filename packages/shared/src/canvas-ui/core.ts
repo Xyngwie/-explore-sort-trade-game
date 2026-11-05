@@ -66,6 +66,21 @@ export type Ctx2D = Pick<
   globalAlpha: number;
 };
 
+/** A pointer event as a board with its own gesture rules needs it (canvas CSS px). */
+export type RawPointerSample = { id: number; type: string; button: number; buttons: number; x: number; y: number; ctrl: boolean };
+/**
+ * Region that takes raw pointer input (pointer type, buttons, Ctrl, several
+ * fingers) for a board that keeps its own gesture rules. The surface routes
+ * every event of a pointer that started in it, plus further touches, here.
+ */
+export type RawPointerHandler = {
+  down(s: RawPointerSample): void;
+  move(s: RawPointerSample): void;
+  up(s: RawPointerSample): void;
+  cancel(): void;
+  wheel?(p: Point, deltaY: number): void;
+};
+
 export type ButtonVariant = "normal" | "primary" | "danger";
 export type ButtonOpts = {
   disabled?: boolean;
@@ -92,6 +107,7 @@ type Region = {
   onDragMove?: (start: Point, current: Point) => void;
 };
 type ScrollArea = { id: string; rect: Rect; layer: number; contentH: number };
+type RawArea = { id: string; rect: Rect; clip: Rect; layer: number; handler: RawPointerHandler };
 
 type Press = {
   pointerId: number;
@@ -171,6 +187,8 @@ export class CanvasUI {
   /** Regions of the last completed frame (used for input). */
   private regions: Region[] = [];
   private scrolls: ScrollArea[] = [];
+  private buildingRaw: RawArea[] = [];
+  private raws: RawArea[] = [];
   private topLayerFrame = 0;
   private layer = 0;
   private clipStack: Rect[] = [];
@@ -189,6 +207,7 @@ export class CanvasUI {
     this.height = height;
     this.building = [];
     this.buildingScroll = [];
+    this.buildingRaw = [];
     this.layer = 0;
     this.clipStack = [{ x: 0, y: 0, w: width, h: height }];
     this.scrollStack = [];
@@ -196,6 +215,7 @@ export class CanvasUI {
   endFrame(): void {
     this.regions = this.building;
     this.scrolls = this.buildingScroll;
+    this.raws = this.buildingRaw;
     this.topLayerFrame = this.regions.reduce((m, r) => Math.max(m, r.layer), 0);
     for (const s of this.scrolls) this.setScroll(s.id, this.getScroll(s.id), s);
     this.ctx = null;
@@ -292,6 +312,20 @@ export class CanvasUI {
   dragRegion(id: string, rect: Rect, onDrag: (start: Point, end: Point) => void, onDragMove?: (start: Point, current: Point) => void): void {
     const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
     this.building.push({ id, rect, clip, layer: this.layer, disabled: false, onDrag, onDragMove });
+  }
+  /** Register a raw-input region (see RawPointerHandler). */
+  rawRegion(id: string, rect: Rect, handler: RawPointerHandler): void {
+    const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
+    this.buildingRaw.push({ id, rect, clip, layer: this.layer, handler });
+  }
+  /** Raw region under `p` in the active layer (a modal above it wins). */
+  rawAt(p: Point): RawPointerHandler | null {
+    const top = this.topLayerFrame;
+    for (let i = this.raws.length - 1; i >= 0; i--) {
+      const r = this.raws[i];
+      if (r.layer === top && rectContains(r.clip, p) && rectContains(r.rect, p)) return r.handler;
+    }
+    return null;
   }
   isPressed(id: string): boolean {
     return !!this.press && this.press.mode === "press" && this.press.regionId === id && this.press.inside;

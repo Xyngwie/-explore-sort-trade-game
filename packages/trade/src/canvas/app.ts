@@ -22,6 +22,9 @@ import {
   SHELL_MAX_WIDTH_PX,
   bindEditorNameInput,
   computeShellModel,
+  confirmModal,
+  pickerModal,
+  stripHandoffParams,
   Flow,
   isPerfectCircuitDebugContext,
   drawResourceHud,
@@ -35,6 +38,7 @@ import {
 } from "@estg/shared";
 import { SortScene, armSortBackTrap, sortPopstateAction } from "@estg/sort/canvas";
 import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } from "@estg/restore/canvas";
+import { InvadeScene } from "@estg/invade/canvas";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
 import { browserDockEnv, DOCK_ANCHOR } from "./dock-sections";
 import { tabUrl } from "./tabs";
@@ -42,12 +46,16 @@ import { StartScene, layoutStart } from "./start-scene";
 import { clearHandoffFromUrl, createInitialHangar, ingestLocationSearch, loadCraftSignature } from "../hangar";
 import { captureSortYieldFromHandoff, clearPendingSort, gateSortHandoff, hasSortHandoff, restorePendingSortOnBack } from "../sort-return-core";
 
-export type SceneId = "start" | "dock" | "sort" | "restore";
+export type SceneId = "start" | "dock" | "sort" | "restore" | "invade";
 /** The RESTORE page of this app (same app, own path like the existing /restore/ page). */
 export const CANVAS_RESTORE_PATH = "restore/";
-/** `/…/canvas/` for both `/…/canvas/` and `/…/canvas/restore/`. */
+/** The INVADE page of this app (same app, own path like the existing /invade/ page). */
+export const CANVAS_INVADE_PATH = "invade/";
+const MODULE_PATHS = [CANVAS_RESTORE_PATH, CANVAS_INVADE_PATH];
+/** `/…/canvas/` for `/…/canvas/`, `/…/canvas/restore/` and `/…/canvas/invade/`. */
 export function canvasRootPath(pathname: string): string {
-  return pathname.endsWith("/" + CANVAS_RESTORE_PATH) ? pathname.slice(0, -CANVAS_RESTORE_PATH.length) : pathname;
+  for (const m of MODULE_PATHS) if (pathname.endsWith("/" + m)) return pathname.slice(0, -m.length);
+  return pathname;
 }
 
 /**
@@ -66,13 +74,14 @@ const stripQuery = (u: string) => { const x = new URL(u); return x.origin + x.pa
  * A module URL that this page shows itself → the same query on this page.
  * Anything else (modules not on canvas yet) → null (leave the page).
  */
-export function inPageUrl(url: string, canvasBase: string, sortBase: string, tradeBase: string, restoreBase?: string): string | null {
+export function inPageUrl(url: string, canvasBase: string, sortBase: string, tradeBase: string, restoreBase?: string, invadeBase?: string): string | null {
   let u: URL;
   try { u = new URL(url, canvasBase); } catch { return null; }
   const at = u.origin + u.pathname;
   const root = stripQuery(canvasBase);
   if (at === root || at === stripQuery(sortBase) || at === stripQuery(tradeBase)) return root + u.search;
   if (at === root + CANVAS_RESTORE_PATH || (restoreBase && at === stripQuery(restoreBase))) return root + CANVAS_RESTORE_PATH + u.search;
+  if (at === root + CANVAS_INVADE_PATH || (invadeBase && at === stripQuery(invadeBase))) return root + CANVAS_INVADE_PATH + u.search;
   return null;
 }
 
@@ -85,16 +94,20 @@ export function mountCanvasApp(doc: Document = document): void {
   let sort: SortScene | null = null;
   let restore: RestoreScene | null = null;
   let restoreLoading = 0;
+  let invade: InvadeScene | null = null;
   let sortSearch = "";
   const canvasBase = () => win.location.origin + canvasRootPath(win.location.pathname);
   const sortBase = stripQuery(new URL(resolveModuleBaseUrl("sort"), win.location.href).toString());
   const tradeBase = stripQuery(new URL(resolveModuleBaseUrl("trade"), win.location.href).toString());
   const restoreBase = stripQuery(new URL(resolveModuleBaseUrl("restore"), win.location.href).toString());
   const onRestorePage = () => win.location.pathname.endsWith("/" + CANVAS_RESTORE_PATH);
+  const invadeBase = stripQuery(new URL(resolveModuleBaseUrl("invade"), win.location.href).toString());
+  const exploreBase = new URL(resolveModuleBaseUrl("explore"), win.location.href).toString();
+  const onInvadePage = () => win.location.pathname.endsWith("/" + CANVAS_INVADE_PATH);
 
   /** Open a URL: in place when this page shows it, else through the play log. */
   const go = (url: string) => {
-    const inPage = inPageUrl(url, canvasBase(), sortBase, tradeBase, restoreBase);
+    const inPage = inPageUrl(url, canvasBase(), sortBase, tradeBase, restoreBase, invadeBase);
     if (!inPage) { playLogNavigate(url); return; }
     win.history.pushState({}, "", inPage);
     enter();
@@ -161,12 +174,32 @@ export function mountCanvasApp(doc: Document = document): void {
     if (restoreLoading) { surface.invalidate(); win.requestAnimationFrame(() => setTimeout(build, 0)); }
     else build();
   };
+  const enterInvade = () => {
+    invade = new InvadeScene({
+      search: win.location.search,
+      hubBase: canvasBase(),
+      exploreBase,
+      go,
+      redraw: () => surface.invalidate(),
+      history: win.history,
+      href: () => win.location.href,
+    });
+    // Existing main.ts: the trade→invade keys are read once, then removed from the URL.
+    if (invade.inbound != null) {
+      const cleaned = stripHandoffParams(win.location.href, HANDOFF_QUERY_KEYS.tradeToInvade);
+      if (cleaned !== win.location.pathname + win.location.search + win.location.hash) win.history.replaceState(null, "", cleaned);
+    }
+    current = "invade";
+  };
   const enter = () => {
     sort?.dispose();
     sort = null;
     restore?.dispose();
     restore = null;
-    if (onRestorePage()) enterRestore();
+    invade?.dispose();
+    invade = null;
+    if (onInvadePage()) enterInvade();
+    else if (onRestorePage()) enterRestore();
     else if (sceneForSearch(win.location.search) === "sort") enterSort();
     else enterDock();
     surface.invalidate();
@@ -243,10 +276,37 @@ export function mountCanvasApp(doc: Document = document): void {
     });
   };
 
+  const drawInvade = (ui: CanvasUI, frame: FrameInfo, scene: InvadeScene) => {
+    const ctx = ui.context;
+    const L = layoutDock(frame, false);
+    ctx.fillStyle = CANVAS_THEME.bg;
+    ctx.fillRect(0, 0, frame.width, frame.height);
+    const hub = loadHubSaveFromLocalStorage()?.hub ?? null;
+    drawResourceHud(ui, L.hud, hub, frame.width <= CANVAS_MOBILE_MAX_W);
+    const top = L.hud.y + L.hud.h;
+    const area = { x: L.column.x, y: top, w: L.column.w, h: L.tabs.y - top };
+    ui.scrollArea("invade", area, "auto", (off) => {
+      const originY = area.y - off;
+      const f = new Flow(ui, area.x + 12, originY + 12, area.w - 24, originY);
+      scene.draw(ui, f, area.h);
+      f.gap(12);
+      return f.y - originY;
+    });
+    drawShellTabs(ui, L.tabs, computeShellModel({ current: "invade", hub, handoffInProgress: false }).tabs, (tab) => {
+      if (playLogBlocked()) return;
+      if (tab.id === "SORT") { go(canvasBase()); dock?.goAnchor(DOCK_ANCHOR.unopened); } // §5-1: SORT tab = DOCK 未開封
+      else go(tabUrl(tab));
+    });
+    if (scene.confirm) confirmModal(ui, L.column, frame.height, scene.confirm, frame.insets.top);
+    if (scene.picker) pickerModal(ui, L.column, frame.height, scene.picker, frame.insets.top, frame.insets.bottom);
+    if (scene.animating()) surface.invalidate();
+  };
+
   const surface = new CanvasSurface(canvas, {
     blocked: () => playLogBlocked(),
     draw: (ui, frame) => {
-      if (current === "restore") drawRestore(ui, frame);
+      if (current === "invade" && invade) drawInvade(ui, frame, invade);
+      else if (current === "restore") drawRestore(ui, frame);
       else if (current === "sort" && sort) drawSort(ui, frame, sort);
       else if (current === "dock" && dock) dock.draw(ui, frame);
       else start.draw(ui, frame);
@@ -269,6 +329,8 @@ export function mountCanvasApp(doc: Document = document): void {
 
   win.addEventListener("popstate", () => {
     if (current === "start") return; // the URL is read when 開始 is pressed
+    // Existing main.ts: during a forced-combat lock, back is swallowed (the trap is re-armed).
+    if (current === "invade" && invade && invade.onPopstate()) return;
     if (current === "sort" && sortPopstateAction().block) { armSortBackTrap(win.history, win.location.href); return; }
     // Popping the trap entry lands on the same Sort URL: the existing page stays as it is.
     if (current === "sort" && sort && sceneForSearch(win.location.search) === "sort" && sortSearch === win.location.search) return;
@@ -293,6 +355,9 @@ export function mountCanvasApp(doc: Document = document): void {
     frames: () => surface.frameCount,
     activations: () => surface.ui.activationCount,
     pressing: () => surface.ui.pressing,
+    invade: () => (invade ? { locked: invade.forcedLockActive(), status: invade.board.status, hitMine: invade.board.hitMine, selected: invade.selected, scale: invade.view.scale, x: invade.view.x, y: invade.view.y, reversed: invade.reversedTouch, open: invade.board.cells.flat().filter((c) => c.open).length, flagged: invade.board.cells.flat().filter((c) => c.flagged).length, log: invade.lastBoardLog, inbound: invade.inbound } : null),
+    invadeCell: (sx: number, sy: number) => invade?.cellRect({ sx, sy }) ?? null,
+    invadeFind: (kind: string) => invade?.board.cells.flat().find((c) => !c.blocked && (kind === "closed-safe" ? !c.open && !c.mine && !c.flagged && Math.max(Math.abs(c.sx), Math.abs(c.sy)) <= 3 : kind === "closed-any" ? !c.open && !c.mine && !c.flagged : kind === "mine" ? c.mine && !c.open : kind === "number" ? c.open && !c.mine && c.adjacent > 0 : false)) ?? null,
     restoreEdge: (i: number) => restore?.debugEdgeCenter(i) ?? null,
     restore: () => (restore ? { source: restore.session.source, cols: restore.session.puzzle.cols, rows: restore.session.puzzle.rows, locked: restore.locked, outcome: restore.play().outcome, marks: restore.marks.join(""), zoom: restore.zoomMode, persist: restore.persist, editor: restore.editorName } : null),
     sort: () => (sort ? { phase: sort.state.phase, playMode: sort.state.playMode, movesLeft: sort.state.movesLeft, selected: sort.state.selected, cols: sort.state.cols, rows: sort.state.rows } : null),

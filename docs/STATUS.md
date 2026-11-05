@@ -1,3 +1,10 @@
+## 全モジュールの 1 ページ・1 canvas 統合 U-4：INVADE（2026-11-05・暫定 ★）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: INVADE を同じアプリ・同じ canvas のシーンに（`/canvas/invade/`）。盤の入力は既存の `BoardGesture` をそのまま使う（閾値・タイミングは変更なし） → [CANVAS_UNIFIED_V0.md §11](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「Rは★　それを作業してから　U-4へ」（2026-11-05）
+- Scope: INVADE だけ。探索は既存版のページ。INVADE の規則・セーブ形式・受け渡しの契約は変更なし
+- Status: 細部 CANVAS-I1〜I6 は ★推奨で仮実装（暫定）。PR #349 に続けて積んだ（draft）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 全モジュールの 1 ページ・1 canvas 統合 U-3：RESTORE（2026-11-05・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: RESTORE を同じアプリ・同じ canvas のシーンに（`/canvas/restore/`）。DOCK → RESTORE → DOCK はページの読み込みなし。刻印名は開始画面の名前を自動で使う（CANVAS-Q1） → [CANVAS_UNIFIED_V0.md §10](CANVAS_UNIFIED_V0.md)
