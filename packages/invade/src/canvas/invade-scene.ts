@@ -126,6 +126,8 @@ export class InvadeScene {
     this.armForcedLockIfNeeded();
   }
   private now(): number { return this.host.now?.() ?? performance.now(); }
+  /** The board viewport as last drawn (verification scripts). */
+  get boardViewport(): Rect | null { return this.viewport; }
   dispose(): void { this.gesture.cancel(); }
 
   /* ------------------------------ rules (main.ts) ----------------------------- */

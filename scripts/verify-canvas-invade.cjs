@@ -44,7 +44,8 @@ const CONFIGS = [
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", args: ["--no-sandbox"] });
   const results = [];
   try {
-    for (const cfg of CONFIGS) {
+    // VERIFY_CONFIGS=name1,name2 runs only those configurations.
+    for (const cfg of CONFIGS.filter((c) => !process.env.VERIFY_CONFIGS || process.env.VERIFY_CONFIGS.split(",").includes(c.name))) {
       const ctx = await b.newContext({ viewport: cfg.viewport, deviceScaleFactor: cfg.dpr, isMobile: cfg.touch, hasTouch: cfg.touch });
       await ctx.addInitScript(() => {
         const n = localStorage, ss = sessionStorage;
@@ -184,7 +185,7 @@ const CONFIGS = [
       assert.equal((await inv()).inbound.fromHub, true);
       assert.deepEqual(await visibleHtmlControls(), ["canvas#wl-canvas"], `${cfg.name}: only the canvas`);
       // ---- a closed safe cell near HQ -------------------------------------------------
-      const safe = await p.evaluate(() => window.__wlCanvas.invadeFind("closed-safe"));
+      const safe = await p.evaluate(() => window.__wlCanvas.invadeFind("closed-safe") ?? window.__wlCanvas.invadeFind("closed-any"));
       let c = await showCell(safe.sx, safe.sy);
       const open0 = (await inv()).open;
       if (cfg.touch) {
@@ -228,6 +229,29 @@ const CONFIGS = [
         await revealI("invade:home");
         await tap("invade:home");
         assert.equal((await inv()).scale, 1, "拠点へ resets the zoom");
+      }
+      // ---- one finger on a button, a second on the board, the first lifts: nothing fires (docs §13) ----
+      if (cfg.touch) {
+        const tm = await revealI("invade:touch-mode");
+        const vp = await p.evaluate(() => window.__wlCanvas.invadeViewport());
+        const boardPt = { x: vp.x + vp.w / 2, y: Math.max(vp.y + 10, Math.min(vp.y + vp.h - 10, tm.y - 80)), id: 2 };
+        assert.ok(boardPt.y > 40 && boardPt.y >= vp.y && boardPt.y <= vp.y + vp.h, `${cfg.name}: a board point on screen`);
+        const before = await inv();
+        const A = { x: tm.cx, y: tm.cy, id: 1 };
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [A, boardPt] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [boardPt] }); // finger 1 lifts
+        await p.waitForTimeout(400);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await p.waitForTimeout(400);
+        await settle();
+        const after = await inv();
+        assert.equal(after.reversed, before.reversed, `${cfg.name}: the button did not fire`);
+        assert.equal(after.flagged, before.flagged, "the board did not mark");
+        assert.equal(after.open, before.open, "the board did not open");
+        await tapAt(tm.cx, tm.cy);
+        assert.notEqual((await inv()).reversed, before.reversed, "a single tap afterwards works");
+        await tapAt(tm.cx, tm.cy);
       }
       // ---- reload restores the front progress --------------------------------------------
       await settle();

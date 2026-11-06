@@ -356,6 +356,7 @@ export function mountCanvasApp(doc: Document = document): void {
     activations: () => surface.ui.activationCount,
     pressing: () => surface.ui.pressing,
     invade: () => (invade ? { locked: invade.forcedLockActive(), status: invade.board.status, hitMine: invade.board.hitMine, selected: invade.selected, scale: invade.view.scale, x: invade.view.x, y: invade.view.y, reversed: invade.reversedTouch, open: invade.board.cells.flat().filter((c) => c.open).length, flagged: invade.board.cells.flat().filter((c) => c.flagged).length, log: invade.lastBoardLog, inbound: invade.inbound } : null),
+    invadeViewport: () => invade?.boardViewport ?? null,
     invadeCell: (sx: number, sy: number) => invade?.cellRect({ sx, sy }) ?? null,
     invadeFind: (kind: string) => invade?.board.cells.flat().find((c) => !c.blocked && (kind === "closed-safe" ? !c.open && !c.mine && !c.flagged && Math.max(Math.abs(c.sx), Math.abs(c.sy)) <= 3 : kind === "closed-any" ? !c.open && !c.mine && !c.flagged : kind === "mine" ? c.mine && !c.open : kind === "number" ? c.open && !c.mine && c.adjacent > 0 : false)) ?? null,
     restoreEdge: (i: number) => restore?.debugEdgeCenter(i) ?? null,

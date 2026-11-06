@@ -1,6 +1,6 @@
 /** Canvas UI core selftest (docs/CANVAS_SHELL_V0.md §3). */
 import assert from "node:assert/strict";
-import { CanvasUI, CANVAS_SCROLL_SLOP_PX, ellipsize, wrapText, backingSize, clientToCanvas, type Rect } from "./canvas-ui";
+import { CanvasUI, CANVAS_SCROLL_SLOP_PX, ContactRouter, ellipsize, wrapText, backingSize, clientToCanvas, type RawPointerHandler, type Rect } from "./canvas-ui";
 import { createStubCtx } from "./canvas-ui/test-ctx";
 
 const ctx = createStubCtx();
@@ -178,5 +178,79 @@ const cut = ellipsize(ctx, "あいうえおかきくけこ", 45);
 assert.ok(cut.endsWith("…") && ctx.measureText(cut).width <= 45, cut);
 assert.deepEqual(wrapText(ctx, "あいうえお", 20), ["あい", "うえ", "お"]);
 assert.deepEqual(wrapText(ctx, "a\nb", 100), ["a", "b"]);
+
+// --- one contact owner for buttons and raw boards (docs/CANVAS_UNIFIED_V0.md §13) -------
+{
+  const fired: string[] = [];
+  const boardLog: string[] = [];
+  const boardRect: Rect = { x: 0, y: 200, w: 400, h: 100 };
+  const btn: Rect = { x: 10, y: 10, w: 100, h: 44 };
+  const board: RawPointerHandler = {
+    down: (e) => boardLog.push(`down:${e.id}`), move: (e) => boardLog.push(`move:${e.id}`),
+    up: (e) => boardLog.push(`up:${e.id}`), cancel: () => boardLog.push("cancel"),
+  };
+  const u = new CanvasUI({ blocked: () => false });
+  const f = () => { u.beginFrame(ctx, 400, 300); u.button("btn", btn, "B", { onActivate: () => fired.push("btn") }); u.rawRegion("board", boardRect, board); u.endFrame(); };
+  f();
+  const r = new ContactRouter(u);
+  const t = (id: number, pt: { x: number; y: number }, primary = false) => ({ id, type: "touch", button: 0, buttons: 1, x: pt.x, y: pt.y, ctrl: false, primary });
+  const onBtn = center(btn), onBoard = { x: 200, y: 250 };
+  // The reported case: finger 1 presses the button, finger 2 lands on the board, finger 1 lifts.
+  r.down(t(1, onBtn, true)); r.down(t(2, onBoard)); r.up({ ...t(1, onBtn), buttons: 0 });
+  assert.deepEqual(fired, [], "button + board: lifting the first finger does not fire");
+  assert.deepEqual(boardLog, [], "the board never saw the mixed finger");
+  r.up({ ...t(2, onBoard), buttons: 0 });
+  assert.deepEqual(boardLog, [], "nor its release");
+  // Board first, then a button: the second finger joins the board (pinch), the button is not pressed.
+  r.down(t(3, onBoard, true)); r.down(t(4, onBtn)); r.up({ ...t(4, onBtn), buttons: 0 }); r.up({ ...t(3, onBoard), buttons: 0 });
+  assert.deepEqual(fired, []);
+  assert.deepEqual(boardLog, ["down:3", "down:4", "up:4", "up:3"], "board-first fingers stay the board's (pinch)");
+  boardLog.length = 0;
+  // Button, then another button: cancelled, nothing fires.
+  r.down(t(5, onBtn, true)); r.down(t(6, onBtn)); r.up({ ...t(6, onBtn), buttons: 0 }); r.up({ ...t(5, onBtn), buttons: 0 });
+  assert.deepEqual(fired, []);
+  // A board gesture in progress is cancelled when a button finger is already down... (button first) covered above;
+  // and a board gesture is cancelled if a finger lands while a button finger is down on top of it:
+  r.down(t(7, onBoard, true)); r.down(t(8, onBoard)); // pinch
+  r.up({ ...t(8, onBoard), buttons: 0 }); r.up({ ...t(7, onBoard), buttons: 0 });
+  boardLog.length = 0;
+  // After all contacts are lifted, a single tap works again.
+  r.down(t(9, onBtn, true)); r.up({ ...t(9, onBtn), buttons: 0 });
+  assert.deepEqual(fired, ["btn"], "single tap after everything is lifted");
+  // A release that never arrived: the next primary touch forgets it.
+  r.down(t(10, onBtn, true)); // lost
+  r.down(t(11, onBtn, true)); r.up({ ...t(11, onBtn), buttons: 0 });
+  assert.deepEqual(fired, ["btn", "btn"], "primary touch clears stale contacts");
+  // Mouse right button on a button: ignored; a left click works.
+  const m = (b: number, bs: number) => ({ id: 1, type: "mouse", button: b, buttons: bs, x: onBtn.x, y: onBtn.y, ctrl: false, primary: true });
+  r.down(m(2, 2)); r.up(m(2, 0));
+  assert.equal(fired.length, 2, "right click on a button does nothing");
+  r.down(m(0, 1)); r.up(m(0, 0));
+  assert.equal(fired.length, 3, "left click works");
+  // Mouse on the board: every button goes to the board (left / right / chord stay the board's rules).
+  r.down({ ...m(2, 2), x: onBoard.x, y: onBoard.y }); r.up({ ...m(2, 0), x: onBoard.x, y: onBoard.y });
+  assert.deepEqual(boardLog, ["down:1", "up:1"]);
+  // #350 review: the primary cleanup cancels what the stale contact still holds.
+  // Left held on a button, then another primary mouse down (right / middle): the press is cancelled, not orphaned.
+  r.down(m(0, 1));
+  assert.equal(u.pressing, true, "left press held");
+  r.down(m(2, 3));
+  assert.equal(u.pressing, false, "stale press cancelled by the next primary down");
+  r.up(m(0, 0));
+  assert.equal(fired.length, 3, "the cancelled press does not fire");
+  r.down(m(0, 1)); r.up(m(0, 0));
+  assert.equal(fired.length, 4, "a click works right after");
+  // A board touch whose release never arrived: the next primary touch cancels the board gesture first.
+  boardLog.length = 0;
+  r.down(t(20, onBoard, true)); // release lost
+  r.down(t(21, onBoard, true));
+  assert.deepEqual(boardLog, ["down:20", "cancel", "down:21"], "stale board touch cancelled, the new touch is a fresh tap (not a pinch)");
+  r.up({ ...t(21, onBoard), buttons: 0 });
+  boardLog.length = 0;
+  // cancelAll (blur / hidden) clears every contact.
+  r.down(t(12, onBtn, true)); r.cancelAll(); r.up({ ...t(12, onBtn), buttons: 0 });
+  assert.equal(fired.length, 4, "cancelled press does not fire");
+  assert.equal(r.size, 0);
+}
 
 console.log("canvas-ui selftest: OK");

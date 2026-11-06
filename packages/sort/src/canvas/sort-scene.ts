@@ -466,17 +466,24 @@ export class SortScene {
     const wrapped = lines.map((l) => { ctx.font = fontSpec(l.size ?? 14, l.weight ?? 400); return wrapText(ctx, l.text, w - 32); });
     wrapped.forEach((ls, i) => { h += ls.length * Math.round((lines[i].size ?? 14) * 1.5) + 4; });
     h += 8 + buttons.length * 54 + 8;
-    const box: Rect = { x, y: Math.min(top, Math.max(L.field.y + 8, L.field.y + L.field.h - h - 8)), w, h };
-    ui.panel(box, { radius: 12, edge: s.phase === "result" ? "#2ea043" : s.phase === "blocked" && !isEmptyCargoEntry(s) ? "#f85149" : "#484f58" });
-    let y = box.y + 16;
-    if (kicker) { ui.text(kicker, box.x + 16, y + 6, { size: 11, weight: 700, color: s.phase === "blocked" && !isEmptyCargoEntry(s) ? "#ffa198" : CANVAS_THEME.muted }); y += 18; }
-    ui.text(title, box.x + 16, y + 12, { size: 18, weight: 700, maxW: w - 32 }); y += 30;
-    wrapped.forEach((ls, i) => {
-      const l = lines[i], lh = Math.round((l.size ?? 14) * 1.5);
-      ls.forEach((t, k) => ui.text(t, box.x + 16, y + lh * k + lh / 2, { size: l.size ?? 14, weight: l.weight, color: l.color }));
-      y += ls.length * lh + 4;
-    });
-    y += 8;
-    for (const b of buttons) y = btn(b.id, b.label, b, y);
+    const drawBox = (boxY: number) => {
+      const box: Rect = { x, y: boxY, w, h };
+      ui.panel(box, { radius: 12, edge: s.phase === "result" ? "#2ea043" : s.phase === "blocked" && !isEmptyCargoEntry(s) ? "#f85149" : "#484f58" });
+      let y = box.y + 16;
+      if (kicker) { ui.text(kicker, box.x + 16, y + 6, { size: 11, weight: 700, color: s.phase === "blocked" && !isEmptyCargoEntry(s) ? "#ffa198" : CANVAS_THEME.muted }); y += 18; }
+      ui.text(title, box.x + 16, y + 12, { size: 18, weight: 700, maxW: w - 32 }); y += 30;
+      wrapped.forEach((ls, i) => {
+        const l = lines[i], lh = Math.round((l.size ?? 14) * 1.5);
+        ls.forEach((t, k) => ui.text(t, box.x + 16, y + lh * k + lh / 2, { size: l.size ?? 14, weight: l.weight, color: l.color }));
+        y += ls.length * lh + 4;
+      });
+      y += 8;
+      for (const b of buttons) y = btn(b.id, b.label, b, y);
+    };
+    // The panel fits the field when it can; when the field is too short (landscape phones), it
+    // scrolls inside the field so every button stays reachable (docs/CANVAS_UNIFIED_V0.md §13).
+    const avail: Rect = { x: L.field.x, y: L.field.y + 8, w: L.field.w, h: Math.max(0, L.field.h - 16) };
+    if (h <= avail.h) drawBox(Math.min(top, Math.max(avail.y, avail.y + avail.h - h)));
+    else ui.scrollArea("sort:overlay", avail, h, (off) => drawBox(avail.y - off));
   }
 }
