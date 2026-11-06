@@ -1,3 +1,10 @@
+## canvas #350 の Bugbot 指摘の修正（2026-11-06）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: `ContactRouter` の最初の指の掃除で、古い接触を捨てる前にボタンの押下と盤の操作を取り消す → [CANVAS_UNIFIED_V0.md §13.1](CANVAS_UNIFIED_V0.md)
+- Why: 神宮決定（2026-11-06）「マージ前に、Bugbot のこの 1 点だけ直してください」
+- Scope: `canvas-ui/contacts.ts` と selftest だけ。#351 は触らない
+- Status: PR #350（`1c00e4f` として main にマージ済み、2026-11-06）
+
 ## 全モジュールの 1 ページ・1 canvas 統合 U-5b：探索の残り（2026-11-05・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: 探索の canvas シーンに僚機カードと機体ゲージ、シールドの欄、残骸盾・屹立、ログ、キー操作の説明（PC）、回路ロックの DEBUG 切り替え。canvas 版の「探索へ」・SORTIE タブ・INVADE からの出撃を同じページの canvas の探索へ → [CANVAS_UNIFIED_V0.md §14.5](CANVAS_UNIFIED_V0.md)
