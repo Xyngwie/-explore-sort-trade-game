@@ -1,3 +1,10 @@
+## canvas の検証用の欄（canvas の下、2026-11-06・神宮決定）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 本来の流れではない検証用の機能（DOCK の検証用ボタン・デモ初期化・プレイ記録のパネル・Alpha Lab・探索の回路ロック切り替え・SORT のテストプレイ）を canvas から外し、canvas の下の HTML の欄にまとめた → [CANVAS_UNIFIED_V0.md §16](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「デバッグ関係は canvas 外の下にまとめて置いてくれる？」（2026-11-06）。出す場所は開発版だけ（localhost か `?debug=1`）、行き方は DOCK のボタン、新規ゲームは欄の中だけ（すべて神宮決定）
+- Scope: canvas 版の配置だけ。既存版のページ・各機能の処理・セーブ形式は変更なし
+- Status: 実装中。暫定 ★ は CANVAS-Z3（新規ゲーム後は canvas の DOCK）・Z4（パレットは移植しない）・Z6（INVADE の再生成はゲーム内に残す）
+
 ## canvas #351 の Bugbot 指摘 2 件の修正（2026-11-06）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: (1) 同じページのまま探索を離れるとき、`pagehide` と同じ途中保存を書く。(2) 一時停止の覆いを最上層にし、ボタン・地図・対象選択のどれへのタップも再開だけにする → [CANVAS_UNIFIED_V0.md §14.6](CANVAS_UNIFIED_V0.md)

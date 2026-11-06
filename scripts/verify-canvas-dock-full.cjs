@@ -138,8 +138,16 @@ const CONFIGS = [
       await settle();
       assert.equal(await scene(), "dock");
       // Seed (the existing debug seed, logged as debug.playtest-seed).
-      await reveal("dock:debug:seed");
-      await tap("dock:debug:seed");
+      // Test tools live in the HTML debug area under the canvas (localhost = debug mode, 神宮決定 2026-11-06).
+      await reveal("dock:debug:open");
+      await tap("dock:debug:open");
+      assert.equal(await p.evaluate(() => document.getElementById("wl-debug")?.hidden), false, "debug area opened");
+      assert.ok(await p.evaluate(() => !!document.querySelector("#wl-debug #play-log-panel") && !!document.querySelector("#wl-debug #btn-reset") && !!document.querySelector("#wl-debug #shield-debug-console")), "play log panel, デモ初期化 and Alpha Lab are in the debug area");
+      await p.click("#wl-debug-seed");
+      await settle();
+      await p.click("#wl-debug-close");
+      await settle();
+      assert.equal(await p.evaluate(() => document.getElementById("wl-debug").hidden && window.scrollY === 0), true, "debug area closed, back to the game");
       await settle();
       const seeded = await hub();
       assert.ok(seeded.fleet.length >= 3, `${cfg.name}: seeded fleet`);

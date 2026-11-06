@@ -135,3 +135,12 @@ export class CanvasSurface {
     c.ownerDocument.addEventListener("visibilitychange", () => { if (c.ownerDocument.hidden) router.cancelAll(); else this.ui.pointerCancel(); });
   }
 }
+
+/**
+ * Debug area of the canvas page (神宮決定 2026-11-06): only on a local dev
+ * server or when the page was opened with `?debug=1`. Read once at load.
+ */
+export function canvasDebugEnabled(search: string, hostname: string): boolean {
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+  try { return new URLSearchParams(search).get("debug") === "1"; } catch { return false; }
+}

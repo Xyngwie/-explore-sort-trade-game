@@ -1,6 +1,6 @@
 /** Canvas UI core selftest (docs/CANVAS_SHELL_V0.md §3). */
 import assert from "node:assert/strict";
-import { CanvasUI, CANVAS_SCROLL_SLOP_PX, ContactRouter, ellipsize, wrapText, backingSize, clientToCanvas, type RawPointerHandler, type Rect } from "./canvas-ui";
+import { CanvasUI, CANVAS_SCROLL_SLOP_PX, ContactRouter, canvasDebugEnabled, ellipsize, wrapText, backingSize, clientToCanvas, type RawPointerHandler, type Rect } from "./canvas-ui";
 import { createStubCtx } from "./canvas-ui/test-ctx";
 
 const ctx = createStubCtx();
@@ -252,5 +252,13 @@ assert.deepEqual(wrapText(ctx, "a\nb", 100), ["a", "b"]);
   assert.equal(fired.length, 4, "cancelled press does not fire");
   assert.equal(r.size, 0);
 }
+
+// Debug area (神宮決定 2026-11-06): local dev server or ?debug=1 only.
+assert.equal(canvasDebugEnabled("", "localhost"), true);
+assert.equal(canvasDebugEnabled("", "127.0.0.1"), true);
+assert.equal(canvasDebugEnabled("", "xyngwie.github.io"), false, "public: hidden");
+assert.equal(canvasDebugEnabled("?debug=1", "xyngwie.github.io"), true, "public with ?debug=1");
+assert.equal(canvasDebugEnabled("?debug=0&x=1", "xyngwie.github.io"), false);
+assert.equal(canvasDebugEnabled("?debug_fixture=shield", "xyngwie.github.io"), false, "the Alpha Lab fixture query is a different switch");
 
 console.log("canvas-ui selftest: OK");

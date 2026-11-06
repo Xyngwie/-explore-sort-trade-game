@@ -649,7 +649,6 @@ export class ExploreScene {
       if (Object.values(w.mechBattery).some((b) => b.activity <= 0)) c.gap(6).text("活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。", { color: "#d29922" });
       if (this.preSortieAmmoNote) c.gap(6).text(this.preSortieAmmoNote, { color: "#d29922" });
       c.gap(8).text(briefingHelpText(this.cmdLocked), { size: 12, color: CANVAS_THEME.muted });
-      this.drawDebugBar(c);
     });
     void ui;
   }
@@ -853,7 +852,6 @@ export class ExploreScene {
     this.drawWingPalette(f);
     this.drawSquadOrders(f);
     f.gap(8).text(sortieHelpText(this.cmdLocked), { size: 11, color: CANVAS_THEME.muted });
-    this.drawDebugBar(f);
     this.drawWingPanel(ui, f);
     this.drawLog(ui, f);
     this.drawKeys(f);
@@ -934,21 +932,25 @@ export class ExploreScene {
     }
   }
 
-  /** DEBUG circuit-lock toggle (preview builds only, existing debug-unlock-bar). */
-  private drawDebugBar(f: Flow): void {
-    if (!isDebugUnlockToggleVisible()) return;
+  /**
+   * DEBUG circuit-lock toggle (preview builds only, existing debug-unlock-bar).
+   * Shown in the page's debug area, not on the canvas (神宮決定 2026-11-06).
+   */
+  debugUnlock(): { mode: string; next: string } | null {
+    if (!isDebugUnlockToggleVisible()) return null;
     const mode = this.world.commandUnlock.mode;
     const next = mode === "release" ? "all_unlocked" : "release";
-    f.gap(8).text(`DEBUG 回路ロック: ${COMMAND_UNLOCK_MODE_LABEL[mode]}`, { size: 12, color: "#d29922", weight: 600 });
-    f.gap(2).buttons([{ id: "explore:debug-unlock", label: `→ ${COMMAND_UNLOCK_MODE_LABEL[next]}`, onActivate: () => {
-      if (this.inputLocked()) return;
-      writeDebugCommandUnlockMode(next);
-      const w = this.world;
-      w.commandUnlock.mode = next;
-      if (w.circuitPlay) w.circuitPlay.release = next === "release";
-      else attachCircuitPlay(w, this.readHub(), next === "release");
-      this.host.redraw();
-    } }]);
+    return { mode: COMMAND_UNLOCK_MODE_LABEL[mode], next: COMMAND_UNLOCK_MODE_LABEL[next] };
+  }
+  toggleDebugUnlock(): void {
+    if (this.inputLocked() || !isDebugUnlockToggleVisible()) return;
+    const w = this.world;
+    const next = w.commandUnlock.mode === "release" ? "all_unlocked" : "release";
+    writeDebugCommandUnlockMode(next);
+    w.commandUnlock.mode = next;
+    if (w.circuitPlay) w.circuitPlay.release = next === "release";
+    else attachCircuitPlay(w, this.readHub(), next === "release");
+    this.host.redraw();
   }
 
   /** Existing #wing-panel: one card per wingman (gauge, status, load, orders). Tapping a card opens the palette. */

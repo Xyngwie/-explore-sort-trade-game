@@ -3,3 +3,4 @@
  * listeners, no CSS. docs/CANVAS_UNIFIED_V0.md §14.
  */
 export { ExploreScene, EXPLORE_MAP_ASPECT, layoutExploreSortie, type ExploreHost, type ExploreSortieLayout } from "./canvas/explore-scene";
+export { inspectShieldFixture } from "./debug/shieldFixture";

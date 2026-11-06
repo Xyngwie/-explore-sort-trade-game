@@ -57,7 +57,9 @@ for (let i = 0; i < 20; i++) draw();
 assert.equal(store.writes, w0, "redraw never saves");
 const reg = (id: string) => ui.debugRegions().find((r) => r.id === id)!;
 const tap = (id: string) => { const r = reg(id); assert.ok(r, id); ui.pointerDown(1, { x: r.x + r.w / 2, y: r.y + r.h / 2 }); ui.pointerUp(1, { x: r.x + r.w / 2, y: r.y + r.h / 2 }); draw(); };
-assert.ok(reg("sort:test-play"), "test play outside the intro");
+// Test-only buttons live in the page's debug area, never on the canvas (神宮決定 2026-11-06).
+assert.equal(ui.debugRegions().some((r) => r.id === "sort:test-play"), false, "no test play on the canvas");
+assert.deepEqual(scene.debugActions().map((a) => a.id), ["sort-test-play"], "test play offered to the debug area outside the intro");
 tap("sort:start");
 assert.equal(scene.state.phase, "play");
 const L = layoutSort(field, scene.state.cols, scene.state.rows);
@@ -97,8 +99,8 @@ scene.dispose();
 const intro = new SortScene({ ...host, search: "?salvagedContainers=10&totalStockPieces=250&isExtracted=1&introOpening=gone" });
 assert.equal(intro.state.phase, "blocked");
 ui.beginFrame(ctx, 390, 844); intro.draw(ui, frame, field); ui.endFrame();
-assert.equal(ui.debugRegions().some((r) => r.id === "sort:test-play"), false, "no test play during the intro");
-assert.ok(ui.debugRegions().some((r) => r.id === "sort:demo"));
+assert.equal(ui.debugRegions().some((r) => r.id === "sort:test-play" || r.id === "sort:demo"), false, "no test buttons on the canvas");
+assert.deepEqual(intro.debugActions().map((a) => a.id), ["sort-demo"], "intro: no test play; demo query in the debug area");
 intro.dispose();
 
 // --- landscape briefing with extra HUB containers: every button reachable (docs §13) ------
@@ -113,7 +115,7 @@ intro.dispose();
   const frameL = { width: 844, height: 390, dpr: 3, insets: { top: 0, right: 0, bottom: 0, left: 0 } };
   const drawL = () => { ui2.beginFrame(ctx, 844, 390); sc.draw(ui2, frameL, fieldL); ui2.endFrame(); };
   drawL(); drawL();
-  const ids = ["sort:start", "sort:test-play", "sort:add-one", "sort:add-all", "sort:skip-cargo"];
+  const ids = ["sort:start", "sort:add-one", "sort:add-all", "sort:skip-cargo"];
   const seen = new Set<string>();
   for (let i = 0; i < 40; i++) {
     for (const r of ui2.debugRegions()) if (ids.includes(r.id) && r.visible && r.h >= 43.9 && r.y >= fieldL.y && r.y + r.h <= fieldL.y + fieldL.h) seen.add(r.id);

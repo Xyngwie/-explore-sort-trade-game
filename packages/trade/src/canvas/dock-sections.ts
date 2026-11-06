@@ -137,6 +137,10 @@ export type DockEnv = {
   isDev: boolean;
   envRate: string | null;
   newId: (prefix: string) => string;
+  /** Debug area available (localhost or ?debug=1, 神宮決定 2026-11-06). */
+  debug?: boolean;
+  /** Open the HTML debug area under the canvas. */
+  openDebug?: () => void;
 };
 
 export function browserDockEnv(): DockEnv {
@@ -654,21 +658,33 @@ export class DockSections {
     });
   }
 
+  /** Debug mode only: the test tools are in the HTML debug area under the canvas (神宮決定 2026-11-06). */
   private drawDebug(f: Flow): void {
-    const showInjectionDetails = isPerfectCircuitDebugContext({ search: this.env.search, hostname: this.env.hostname, isDev: this.env.isDev });
+    if (!this.env.debug) return;
     f.card("debug", (c) => {
       c.heading("検証用");
-      c.text("シード・デモ操作は検証用データの付与・置換です。通常の新規ゲームの支給とは別です。「デモ初期化」と記録の書き出しは既存版で行います。", { color: CANVAS_THEME.muted, size: 12 }).gap(6);
-      c.buttons([
-        { id: "dock:debug:seed", label: "検証用シード読込", onActivate: () => this.act("btn-seed", {}, (st) => loadPlaytestSeed(st, { injectRate: resolveHangarPerfectInjectRate({ search: this.env.search, hostname: this.env.hostname, isDev: this.env.isDev, envRate: this.env.envRate }), showInjectionDetails })) },
-        { id: "dock:debug:grant", label: "デモ機体を受領", onActivate: () => this.act("btn-grant", {}, grantStarterFleet) },
-        { id: "dock:debug:inv", label: "デモ物資", onActivate: () => this.act("btn-inv", {}, grantDemoInventory) },
-        { id: "dock:debug:true", label: "検証用真盤", onActivate: () => this.act("btn-verify-true", {}, grantVerifyTrueCircuit) },
-        { id: "dock:debug:perfect", label: "検証用・完璧", onActivate: () => this.act("btn-verify-perfect", {}, grantVerifyPerfectLockedCircuit) },
-      ]).gap(6);
-      c.text("シミュ帰還", { color: CANVAS_THEME.muted, size: 12 });
-      c.buttons((["extract", "abort", "fail"] as const).map((k) => ({ id: `dock:debug:sim:${k}`, label: k === "extract" ? "帰還" : k === "abort" ? "撤退" : "失敗", onActivate: () => this.act(`sim-${k}`, { sim: k }, (st) => simulateReturn(st, k)) })));
+      c.text("シード・デモ操作・デモ初期化・プレイ記録・Alpha Lab など、本来の流れではない検証用の機能は、canvas の下の「検証用の欄」にまとめています。", { color: CANVAS_THEME.muted, size: 12 }).gap(6);
+      c.buttons([{ id: "dock:debug:open", label: "検証用の欄へ ▼", onActivate: () => this.env.openDebug?.() }]);
     });
+  }
+
+  /**
+   * The DOCK test actions for the debug area (same functions, same play-log
+   * operation names as the existing DOCK's 検証用 buttons).
+   */
+  debugActions(): Array<{ id: string; label: string; group: string; run: () => void }> {
+    const showInjectionDetails = isPerfectCircuitDebugContext({ search: this.env.search, hostname: this.env.hostname, isDev: this.env.isDev });
+    const sim = (k: "extract" | "abort" | "fail") => () => this.act(`sim-${k}`, { sim: k }, (st) => simulateReturn(st, k));
+    return [
+      { id: "seed", group: "DOCK", label: "検証用シード読込", run: () => this.act("btn-seed", {}, (st) => loadPlaytestSeed(st, { injectRate: resolveHangarPerfectInjectRate({ search: this.env.search, hostname: this.env.hostname, isDev: this.env.isDev, envRate: this.env.envRate }), showInjectionDetails })) },
+      { id: "grant", group: "DOCK", label: "デモ機体を受領", run: () => this.act("btn-grant", {}, grantStarterFleet) },
+      { id: "inv", group: "DOCK", label: "デモ物資", run: () => this.act("btn-inv", {}, grantDemoInventory) },
+      { id: "verify-true", group: "DOCK", label: "検証用真盤", run: () => this.act("btn-verify-true", {}, grantVerifyTrueCircuit) },
+      { id: "verify-perfect", group: "DOCK", label: "検証用・完璧", run: () => this.act("btn-verify-perfect", {}, grantVerifyPerfectLockedCircuit) },
+      { id: "sim-extract", group: "シミュ帰還", label: "帰還", run: sim("extract") },
+      { id: "sim-abort", group: "シミュ帰還", label: "撤退", run: sim("abort") },
+      { id: "sim-fail", group: "シミュ帰還", label: "失敗", run: sim("fail") },
+    ];
   }
 }
 

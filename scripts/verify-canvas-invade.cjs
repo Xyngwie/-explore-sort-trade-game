@@ -171,8 +171,14 @@ const CONFIGS = [
       };
       await p.goto(local + "canvas/");
       await startGame();
-      await reveal("dock:debug:seed");
-      await tap("dock:debug:seed");
+      // Test tools live in the HTML debug area under the canvas (localhost = debug mode, 神宮決定 2026-11-06).
+      await reveal("dock:debug:open");
+      await tap("dock:debug:open");
+      await p.click("#wl-debug-seed");
+      await settle();
+      await p.click("#wl-debug-close");
+      await settle();
+      assert.equal(await p.evaluate(() => document.getElementById("wl-debug").hidden && window.scrollY === 0), true, "debug area closed, back to the game");
       await settle();
       const marker = await p.evaluate(() => (window.__marker = Math.random()));
       await reveal("dock:sortie:invade");

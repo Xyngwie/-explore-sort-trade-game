@@ -242,6 +242,18 @@ export class SortScene {
 
   /* --------------------------------- actions -------------------------------- */
   start(): void { this.flash("bag", 2800); this.setState(startRefine(this.state)); }
+  /**
+   * Test-only actions, shown in the page's debug area (神宮決定 2026-11-06), never
+   * on the canvas: the existing 「コンテナ100でテストプレイ」 (briefing / blocked,
+   * not during the intro) and 「デモクエリで開く」 (blocked, not empty cargo).
+   */
+  debugActions(): Array<{ id: string; label: string; run: () => void }> {
+    const s = this.state;
+    const out: Array<{ id: string; label: string; run: () => void }> = [];
+    if ((s.phase === "briefing" || s.phase === "blocked") && !this.introOpeningId) out.push({ id: "sort-test-play", label: `SORT：コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ`, run: () => this.testPlay() });
+    if (s.phase === "blocked" && !isEmptyCargoEntry(s)) out.push({ id: "sort-demo", label: "SORT：デモクエリで開く", run: () => this.host.go(this.host.sortModuleBase + demoQueryExample()) });
+    return out;
+  }
   testPlay(): void {
     if (this.introOpeningId) return;
     this.clearTimer();
@@ -427,7 +439,6 @@ export class SortScene {
       lines.push({ text: `ジャンクまで ${budget}（${budget >= capacity ? `盤 ${capacity} 埋めたあと袋に ${budget - capacity}` : `盤を埋める有効 ${budget} · 不足は開始後ジャンク`}）`, size: 12, color: CANVAS_THEME.muted });
       lines.push({ text: "盤は開始時に埋まります。上下左右にスワップして 3 つ以上そろえると消去→ゆっくり落下補充。落下中もスワップしてアクティブ連鎖。idle でマッチしないスワップは即終了。有効が尽きたらオジャマのみ。", size: 12 });
       buttons.push({ id: "sort:start", label: "精製開始", variant: "primary", onActivate: () => this.start() });
-      if (!this.introOpeningId) buttons.push({ id: "sort:test-play", label: `コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ`, onActivate: () => this.testPlay() });
       if (isExploreHandoffQuery(this.host.search)) {
         const remaining = readHubUnopenedContainers(this.host.search);
         if (remaining > 0) {
@@ -448,9 +459,7 @@ export class SortScene {
       } else {
         kicker = "BLOCKED"; title = "開始できません";
         lines.push({ text: s.blockReason ?? "開始不可", color: "#ffa198" });
-        buttons.push({ id: "sort:demo", label: "デモクエリで開く", onActivate: () => this.host.go(this.host.sortModuleBase + demoQueryExample()) });
       }
-      if (!this.introOpeningId) buttons.push({ id: "sort:test-play", label: `コンテナ${TEST_PLAY_CONTAINERS}でテストプレイ`, onActivate: () => this.testPlay() });
     } else if (s.phase === "result") {
       kicker = ""; title = "仕分完了！";
       const result = toCraftingResult(s);

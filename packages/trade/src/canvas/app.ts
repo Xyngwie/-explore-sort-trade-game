@@ -17,6 +17,9 @@
 import {
   CANVAS_THEME,
   CanvasSurface,
+  canvasDebugEnabled,
+  mountShieldDebugConsole,
+  setPlayLogNewGameDestination,
   HANDOFF_QUERY_KEYS,
   HUB_SAVED_EVENT,
   SHELL_MAX_WIDTH_PX,
@@ -39,7 +42,8 @@ import {
 import { SortScene, armSortBackTrap, sortPopstateAction } from "@estg/sort/canvas";
 import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } from "@estg/restore/canvas";
 import { InvadeScene } from "@estg/invade/canvas";
-import { ExploreScene } from "@estg/explore/canvas";
+import { ExploreScene, inspectShieldFixture } from "@estg/explore/canvas";
+import { mountDebugPanel, type DebugAction } from "./debug-panel";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
 import { browserDockEnv, DOCK_ANCHOR } from "./dock-sections";
 import { tabUrl } from "./tabs";
@@ -113,6 +117,10 @@ export function mountCanvasApp(doc: Document = document): void {
   const exploreBase = new URL(resolveModuleBaseUrl("explore"), win.location.href).toString();
   const onInvadePage = () => win.location.pathname.endsWith("/" + CANVAS_INVADE_PATH);
   const onExplorePage = () => win.location.pathname.endsWith("/" + CANVAS_EXPLORE_PATH);
+  // Debug area (神宮決定 2026-11-06): localhost or ?debug=1, read once at load.
+  const debug = canvasDebugEnabled(win.location.search, win.location.hostname);
+  // 新規ゲーム (play log) comes back to this page's DOCK, not the existing one.
+  if (debug) setPlayLogNewGameDestination(canvasBase());
 
   /** Open a URL: in place when this page shows it, else through the play log. */
   const go = (url: string) => {
@@ -132,7 +140,7 @@ export function mountCanvasApp(doc: Document = document): void {
     if (ingested.consumed) clearHandoffFromUrl();
     dock = new DockScene({
       navigateLegacy: () => playLogNavigate(resolveModuleBaseUrl("trade")),
-      env: { ...browserDockEnv(), navigate: go },
+      env: { ...browserDockEnv(), navigate: go, debug, openDebug: () => debugPanel?.open() },
       onTab: (tab) => { if (!playLogBlocked()) go(tabUrl(tab)); },
       redraw: () => surface.invalidate(),
       initialState: ingested.state,
@@ -245,6 +253,7 @@ export function mountCanvasApp(doc: Document = document): void {
     else if (onRestorePage()) enterRestore();
     else if (sceneForSearch(win.location.search) === "sort") enterSort();
     else enterDock();
+    debugPanel?.refresh();
     surface.invalidate();
   };
 
@@ -393,6 +402,28 @@ export function mountCanvasApp(doc: Document = document): void {
       placeInput(frame);
     },
   });
+
+  // The HTML debug area under the canvas (debug mode only).
+  let alphaLab: HTMLElement | null = null;
+  const debugPanel = debug ? mountDebugPanel({
+    doc,
+    dockActions: () => (current === "dock" && dock?.sections ? dock.sections.debugActions() : null),
+    sceneActions: () => {
+      const out: DebugAction[] = [];
+      if (current === "sort" && sort) out.push(...sort.debugActions());
+      const unlock = current === "explore" ? explore?.debugUnlock() : null;
+      if (unlock) out.push({ id: "explore-unlock", label: `探索：回路ロック ${unlock.mode} → ${unlock.next}`, run: () => explore?.toggleDebugUnlock() });
+      return out;
+    },
+    alphaLab: () => {
+      if (!alphaLab) {
+        mountShieldDebugConsole(() => (explore ? inspectShieldFixture(explore.world) : null));
+        alphaLab = doc.getElementById("shield-debug-console");
+      }
+      return alphaLab;
+    },
+    redraw: () => surface.invalidate(),
+  }) : null;
 
   const composing = bindEditorNameInput(input, (v) => { start.draft = v; });
   input.addEventListener("keydown", (e) => {

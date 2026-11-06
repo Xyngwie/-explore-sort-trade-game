@@ -79,7 +79,26 @@ frame = { ...frame, width: 1280, height: 900 }; for (let i = 0; i < 10; i++) dra
 frame = { ...frame, width: 844, height: 390 }; for (let i = 0; i < 10; i++) draw();
 frame = { ...frame, width: 390, height: 844 }; draw(); draw();
 assert.equal(store.writes, w0, "redraw / resize never saves");
-for (const s of ["次の出撃", "未開封コンテナ", "物資市場（購入）", "資源の売却", "ハンガー", "型付き在庫", "署名（刻印）", "保有回路", "回路装備", "回路作成", "資源履歴", "検証用"]) assert.ok(ctx.texts.includes(s), s);
+for (const s of ["次の出撃", "未開封コンテナ", "物資市場（購入）", "資源の売却", "ハンガー", "型付き在庫", "署名（刻印）", "保有回路", "回路装備", "回路作成", "資源履歴"]) assert.ok(ctx.texts.includes(s), s);
+// Test tools are not on the canvas without debug mode (神宮決定 2026-11-06: localhost / ?debug=1 only, in the HTML area).
+assert.equal(ctx.texts.includes("検証用"), false, "no 検証用 card without debug mode");
+assert.equal(ui.debugRegions().some((r) => r.id.startsWith("dock:debug")), false, "no test buttons on the canvas");
+{
+  let opened = 0;
+  const dbgScene = new DockScene({ env: { ...env, debug: true, openDebug: () => { opened++; } }, redraw: () => {} });
+  const dui = new CanvasUI({ blocked: () => false });
+  const dctx = createStubCtx();
+  const ddraw = () => { dui.beginFrame(dctx, 390, 844); dbgScene.draw(dui, { width: 390, height: 844, dpr: 1, insets: { top: 0, right: 0, bottom: 0, left: 0 } }); dui.endFrame(); };
+  ddraw(); ddraw();
+  const ids = dui.debugRegions().filter((r) => r.id.startsWith("dock:debug")).map((r) => r.id);
+  assert.deepEqual(ids, ["dock:debug:open"], "debug mode: only 「検証用の欄へ」 on the canvas");
+  assert.deepEqual(dbgScene.sections!.debugActions().map((a) => a.id), ["seed", "grant", "inv", "verify-true", "verify-perfect", "sim-extract", "sim-abort", "sim-fail"], "the test actions go to the HTML area");
+  dui.scrollTo("dock", 1e9); ddraw(); ddraw();
+  const r = dui.debugRegions().find((x) => x.id === "dock:debug:open")!;
+  const p = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  dui.pointerDown(1, p, true); dui.pointerUp(1, p);
+  assert.equal(opened, 1, "「検証用の欄へ」 opens the HTML area");
+}
 
 // Every enabled control is a ≥44px target.
 // Every enabled control is a ≥44px target, also on a 320px phone (whole list scrolled through).

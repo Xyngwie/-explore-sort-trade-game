@@ -28,7 +28,7 @@ import {
   exportPlayGame,
   listPlayGames,
 } from "./play-log-db";
-import { installPlayLogHooks } from "./play-log-hooks";
+import { installPlayLogHooks, playLogNewGameDestination } from "./play-log-hooks";
 declare const __GAME_VERSION__: string;
 const build =
   typeof __GAME_VERSION__ === "undefined" ? "development" : __GAME_VERSION__;
@@ -651,7 +651,7 @@ export async function bootPlayLog(
         settlement: () => {},
       });
       cache();
-      go(resolveModuleBaseUrl("trade"));
+      go(playLogNewGameDestination() ?? resolveModuleBaseUrl("trade"));
     } catch (e) {
       flushing = false;
       failed = true;
