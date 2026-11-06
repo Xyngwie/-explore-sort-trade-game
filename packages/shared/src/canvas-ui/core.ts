@@ -106,7 +106,8 @@ type Region = {
   /** Drag region: every move while pressed (same `start` object for one gesture). */
   onDragMove?: (start: Point, current: Point) => void;
 };
-type ScrollArea = { id: string; rect: Rect; layer: number; contentH: number };
+/** `clip`: visible part (an area nested in another scroll area is cut by it). */
+type ScrollArea = { id: string; rect: Rect; clip: Rect; layer: number; contentH: number };
 type RawArea = { id: string; rect: Rect; clip: Rect; layer: number; handler: RawPointerHandler };
 
 type Press = {
@@ -271,11 +272,11 @@ export class CanvasUI {
     const ctx = this.context;
     const autoKey = `scroll:${id}:h`;
     if (contentH === "auto") contentH = this.memo.get(autoKey) ?? rect.h;
-    const area: ScrollArea = { id, rect, layer: this.layer, contentH };
+    const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
+    const area: ScrollArea = { id, rect, clip, layer: this.layer, contentH };
     this.buildingScroll.push(area);
     this.setScroll(id, this.getScroll(id), area);
     const off = this.getScroll(id);
-    const clip = intersectRect(this.clipStack[this.clipStack.length - 1], rect);
     ctx.save();
     ctx.beginPath();
     ctx.rect(clip.x, clip.y, clip.w, clip.h);
@@ -406,7 +407,7 @@ export class CanvasUI {
     const top = this.topLayerFrame;
     for (let i = this.scrolls.length - 1; i >= 0; i--) {
       const s = this.scrolls[i];
-      if (s.layer === top && rectContains(s.rect, p)) return s;
+      if (s.layer === top && rectContains(s.clip, p) && rectContains(s.rect, p)) return s;
     }
     return null;
   }

@@ -6,7 +6,7 @@ type Hooks = {
   navigate(url: string, replace: boolean): void;
   sortie(world: LogJSON): void;
   settlement(nonce: string, payload: LogJSON): void;
-  provider(fn: () => LogJSON): void;
+  provider(fn: (() => LogJSON) | null): void;
 };
 let hooks: Hooks | null = null;
 export function installPlayLogHooks(next: Hooks): void {
@@ -28,6 +28,13 @@ export function recordPlayLogSettlement(nonce: string, payload: unknown): void {
 }
 export function setPlayLogCheckpointProvider(fn: () => unknown): void {
   hooks?.provider(() => JSON.parse(JSON.stringify(fn())) as LogJSON);
+}
+/**
+ * The canvas page leaves its Explore scene without a page load: drop the
+ * provider so the other scenes behave like the existing pages (which never had one).
+ */
+export function clearPlayLogCheckpointProvider(): void {
+  hooks?.provider(null);
 }
 export function setPlayLogOperation(
   kind: string,
