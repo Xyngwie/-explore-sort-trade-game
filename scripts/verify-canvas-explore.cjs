@@ -309,7 +309,8 @@ const CONFIGS = [
       await tapAt(ts.cx, ts.cy);
       await settle();
       assert.equal(await scene(), "sort", `${cfg.name}: 仕分へ opens SORT`);
-      // #351 review: leaving in place writes the pagehide checkpoint → the earlier sortie checkpoint is gone.
+      // #351 review: after leaving in place no sortie checkpoint is left (the app writes the pagehide
+      // checkpoint; the play log's checkpoint provider also writes the result back on its next record).
       await settle();
       const cpAfter = await p.evaluate(() => JSON.parse(localStorage.getItem("estg.sortieCheckpoint") || "null"));
       assert.ok(!cpAfter || cpAfter.kind !== "sortie", `${cfg.name}: no sortie checkpoint left after 仕分へ ` + JSON.stringify(cpAfter && cpAfter.kind));
