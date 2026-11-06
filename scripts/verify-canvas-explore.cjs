@@ -296,16 +296,22 @@ const CONFIGS = [
       assert.ok(ops.includes("sortie.start"), `${cfg.name}: play log has the sortie start ` + JSON.stringify(ops));
       // ---- 仕分へ → SORT in place ---------------------------------------------------------------------
       // #351 review: with 1+ containers no done mark is written, so the sortie checkpoint from the earlier
-      // hide is what a later 探索 visit would resume. Recreate that state (this run may have salvaged 0).
-      const cpResult = await p.evaluate(() => JSON.parse(window.__native().getItem("estg.sortieCheckpoint") || "null"));
-      if (!cpResult || cpResult.kind === "done") await p.evaluate((rec) => window.__native().setItem("estg.sortieCheckpoint", JSON.stringify(rec)), cp);
-      assert.equal((await p.evaluate(() => JSON.parse(window.__native().getItem("estg.sortieCheckpoint") || "null"))).kind, cpResult && cpResult.kind !== "done" ? cpResult.kind : "sortie");
+      // hide is what a later 探索 visit would resume. Recreate that state (this run may have salvaged 0),
+      // through the page's storage (the play-log facade the game reads), then let the record settle.
+      const cpKey = "estg.sortieCheckpoint";
+      const cpResult = await p.evaluate((k) => JSON.parse(localStorage.getItem(k) || "null"), cpKey);
+      if (!cpResult || cpResult.kind === "done") {
+        await p.evaluate(([k, rec]) => localStorage.setItem(k, JSON.stringify(rec)), [cpKey, cp]);
+        await settle();
+      }
+      assert.notEqual((await p.evaluate((k) => JSON.parse(localStorage.getItem(k) || "null"), cpKey)).kind, "done", "no done mark before leaving");
       const ts = await revealE("explore:to-sort");
       await tapAt(ts.cx, ts.cy);
       await settle();
       assert.equal(await scene(), "sort", `${cfg.name}: 仕分へ opens SORT`);
       // #351 review: leaving in place writes the pagehide checkpoint → the earlier sortie checkpoint is gone.
-      const cpAfter = await p.evaluate(() => JSON.parse(window.__native().getItem("estg.sortieCheckpoint") || "null"));
+      await settle();
+      const cpAfter = await p.evaluate(() => JSON.parse(localStorage.getItem("estg.sortieCheckpoint") || "null"));
       assert.ok(!cpAfter || cpAfter.kind !== "sortie", `${cfg.name}: no sortie checkpoint left after 仕分へ ` + JSON.stringify(cpAfter && cpAfter.kind));
       assert.ok(new URL(p.url()).pathname.endsWith("/canvas/"), "SORT on the canvas root");
       assert.ok(new URL(p.url()).searchParams.has("salvagedContainers"), "Sort handoff query");
