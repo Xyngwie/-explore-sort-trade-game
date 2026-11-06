@@ -423,6 +423,8 @@ export class ExploreScene {
   }
 
   /* ---------------- commands ---------------- */
+  /** Saving (play log) or paused mid-sortie: actions do nothing (the pause cover only resumes). */
+  private inputLocked(): boolean { return playLogBlocked() || (this.paused && this.world.phase === "sortie"); }
   private cmdLocked = (id: ExploreCommandId, wingId?: string): boolean => !isExploreCommandAvailable(this.world, id, wingId);
   private afterCommand(outcome: ExploreCommandOutcome): void {
     this.stripTargetPending = false;
@@ -433,7 +435,7 @@ export class ExploreScene {
     this.host.redraw();
   }
   private run(req: ExploreCommandRequest): void {
-    if (playLogBlocked()) return;
+    if (this.inputLocked()) return;
     this.afterCommand(executeExploreCommand(this.world, req));
   }
   private toggleKeys(): void {
@@ -498,7 +500,7 @@ export class ExploreScene {
   }
   private readonly mapHandler: RawPointerHandler = {
     down: (s: RawPointerSample) => {
-      if (this.world.phase !== "sortie" || playLogBlocked()) return;
+      if (this.world.phase !== "sortie" || this.inputLocked()) return;
       // Map the tap with the zoom on screen BEFORE this pointer (Q3: a double tap's 2nd tap is still a map tap).
       const { kind, tapZoom } = gestureDownForTap(this.currentGesture(), s.id, s.x, s.y, this.now());
       this.host.redraw();
@@ -576,6 +578,7 @@ export class ExploreScene {
     this.host.redraw();
   }
   private pickTarget(choice: string): void {
+    if (this.inputLocked()) return;
     const pick = this.mapTargetPick;
     this.mapTargetPick = null;
     this.picker = null;
@@ -637,7 +640,7 @@ export class ExploreScene {
       if (note) {
         c.gap(6).text(note, { color: "#d29922" });
         c.gap(4).buttons([{ id: "explore:guard-hub", label: "格納庫へ", onActivate: () => {
-          if (playLogBlocked()) return;
+          if (this.inputLocked()) return;
           // Sortie-guard guidance（神宮決定 2026-11-01）: HUB shows where to fix it.
           try { this.host.session().setItem(SORTIE_GUARD_RETURN_KEY, "1"); } catch { /* private mode: no banner */ }
           this.host.go(resolveModuleBaseUrl("trade"));
@@ -752,9 +755,25 @@ export class ExploreScene {
       ui.panel(r, { fill: "#000000cc", edge: CANVAS_THEME.panelEdge, radius: 8 });
       ui.text(this.toast, r.x + r.w / 2, r.y + r.h / 2, { size: 13, weight: 600, align: "center", maxW: r.w - 12 });
     }
-    // Paused: the next tap anywhere only resumes (existing capture listener).
     if (this.paused && this.world.phase === "sortie") {
-      ui.rawRegion("explore:resume", { x: 0, y: 0, w: area.x * 2 + area.w, h: area.y + area.h + 200 }, {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(L.map.x, L.map.y, L.map.w, L.map.h);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /**
+   * Paused: the next tap anywhere only resumes (the existing page's capture
+   * listener). Drawn last, in its own top layer, so no button, map, scroll or
+   * target picker under it receives that tap.
+   */
+  drawPauseCover(ui: CanvasUI, width: number, height: number): void {
+    if (!(this.paused && this.world.phase === "sortie")) return;
+    const full: Rect = { x: 0, y: 0, w: width, h: height };
+    const map = this.mapRect;
+    ui.modal("explore:pause", () => {
+      ui.rawRegion("explore:resume", full, {
         down: () => {
           if (playLogBlocked()) return;
           this.paused = sortiePausedAfter("tap", this.paused);
@@ -763,12 +782,8 @@ export class ExploreScene {
         },
         move: () => {}, up: () => {}, cancel: () => {},
       });
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(L.map.x, L.map.y, L.map.w, L.map.h);
-      ctx.globalAlpha = 1;
-      ui.text(SORTIE_PAUSE_LABEL, L.map.x + L.map.w / 2, L.map.y + L.map.h / 2, { size: 16, weight: 700, align: "center", maxW: L.map.w - 16 });
-    }
+      ui.text(SORTIE_PAUSE_LABEL, map.x + map.w / 2, map.y + map.h / 2, { size: 16, weight: 700, align: "center", maxW: Math.max(120, map.w - 16) });
+    });
   }
 
   private drawMap(ui: CanvasUI, r: Rect, dpr: number): void {
@@ -819,18 +834,18 @@ export class ExploreScene {
       disabled: barricadeWorking(w, w.leader.id),
       onActivate: () => this.buildBarricade(),
     });
-    for (const b of circuitButtons(w)) btns.push({ id: `explore:circuit:${b.id}`, label: b.label, onActivate: () => { if (playLogBlocked()) return; beginCircuitButton(this.world, b.id); this.host.redraw(); } });
+    for (const b of circuitButtons(w)) btns.push({ id: `explore:circuit:${b.id}`, label: b.label, onActivate: () => { if (this.inputLocked()) return; beginCircuitButton(this.world, b.id); this.host.redraw(); } });
     for (const g of GATED_BUTTONS) {
       if (this.cmdLocked(g.cmd)) continue; // C20-a: locked commands are not shown
       btns.push({ id: `explore:${g.id}`, label: g.label, disabled: timedOut, onActivate: () => this.run({ id: g.cmd }) });
     }
-    btns.push({ id: "explore:cover", label: w.leader.inCover ? "カバー解除" : "カバー", variant: w.leader.inCover ? "primary" : "normal", onActivate: () => { if (!playLogBlocked()) this.toggleCover(); } });
-    if (retreatButtonShown(w.leader.alive) && !this.rescueConfirm) btns.push({ id: "explore:rescue", label: "救助撤退", variant: "danger", onActivate: () => { this.rescueConfirm = true; this.host.redraw(); } });
+    btns.push({ id: "explore:cover", label: w.leader.inCover ? "カバー解除" : "カバー", variant: w.leader.inCover ? "primary" : "normal", onActivate: () => { if (!this.inputLocked()) this.toggleCover(); } });
+    if (retreatButtonShown(w.leader.alive) && !this.rescueConfirm) btns.push({ id: "explore:rescue", label: "救助撤退", variant: "danger", onActivate: () => { if (this.inputLocked()) return; this.rescueConfirm = true; this.host.redraw(); } });
     f.buttons(btns);
     if (retreatButtonShown(w.leader.alive) && this.rescueConfirm) {
       f.gap(6).text(rescueConfirmCopy(previewHeldCredits()), { color: "#d29922" });
       f.gap(4).buttons([
-        { id: "explore:rescue-yes", label: "撤退", variant: "danger", onActivate: () => { if (playLogBlocked()) return; this.rescueConfirm = false; rescueAbortFromHub(this.world); this.host.redraw(); } },
+        { id: "explore:rescue-yes", label: "撤退", variant: "danger", onActivate: () => { if (this.inputLocked()) return; this.rescueConfirm = false; rescueAbortFromHub(this.world); this.host.redraw(); } },
         { id: "explore:rescue-no", label: "やめる", onActivate: () => { this.rescueConfirm = false; this.host.redraw(); } },
       ]);
     }
@@ -847,7 +862,7 @@ export class ExploreScene {
   /** 残骸盾 (existing btn-strip). */
   private toggleStrip(): void {
     const w = this.world;
-    if (playLogBlocked() || !canStripWreck(w)) return;
+    if (this.inputLocked() || !canStripWreck(w)) return;
     interruptStripping(w, w.leader.id); interruptBarricade(w, w.leader.id);
     this.stripTargetPending = !this.stripTargetPending;
     if (w.circuitPlay) { w.circuitPlay.pending = null; w.circuitPlay.wingSelect = null; }
@@ -856,7 +871,7 @@ export class ExploreScene {
   }
   /** 屹立 (existing btn-barricade). */
   private buildBarricade(): void {
-    if (playLogBlocked()) return;
+    if (this.inputLocked()) return;
     if (startBarricade(this.world, this.world.leader)) {
       this.input.clickMove = null; this.input.fire = false; this.input.interact = false; this.stripTargetPending = false;
       this.host.redraw();
@@ -876,7 +891,7 @@ export class ExploreScene {
         for (const key of ground) {
           const owner = shieldReservedBy(w, key), own = owner === leader.id;
           c.gap(4).buttons([{ id: `explore:shield-pick:${key}`, label: own ? "回収中" : "回収", sub: `盾 ${hp(key)}${owner ? "・回収中" : ""}`, disabled: own, w: 160, onActivate: () => {
-            if (playLogBlocked()) return;
+            if (this.inputLocked()) return;
             this.stripTargetPending = false;
             if (this.world.circuitPlay) { this.world.circuitPlay.pending = null; this.world.circuitPlay.wingSelect = null; }
             const result = startShieldPickup(this.world, this.world.leader, key);
@@ -896,7 +911,7 @@ export class ExploreScene {
         for (const h of held) {
           const locked = w.shieldState?.exchanges?.[leader.id]?.key === h.key;
           c.gap(4).buttons([{ id: `explore:shield-drop:${h.key}`, label: "投棄", sub: `${h.label} ${hp(h.key)}${locked ? "・交換中" : ""}`, disabled: locked, w: 160, onActivate: () => {
-            if (playLogBlocked()) return;
+            if (this.inputLocked()) return;
             dropOwnedShield(this.world, this.world.leader, h.key);
             this.host.redraw();
           } }]);
@@ -912,7 +927,7 @@ export class ExploreScene {
       f.gap(8).card("explore:barricade-panel", (c) => {
         c.text(`設置盾 ${Number(item.hp.toFixed(1))}/${Number(item.maxHp.toFixed(1))}`, { weight: 700 });
         c.gap(4).buttons([{ id: "explore:barricade-dismantle", label: "撤去", disabled, onActivate: () => {
-          if (playLogBlocked()) return;
+          if (this.inputLocked()) return;
           if (startDismantle(this.world, key)) { this.input.clickMove = null; this.input.fire = false; this.input.interact = false; this.host.redraw(); }
         } }]);
       });
@@ -926,7 +941,7 @@ export class ExploreScene {
     const next = mode === "release" ? "all_unlocked" : "release";
     f.gap(8).text(`DEBUG 回路ロック: ${COMMAND_UNLOCK_MODE_LABEL[mode]}`, { size: 12, color: "#d29922", weight: 600 });
     f.gap(2).buttons([{ id: "explore:debug-unlock", label: `→ ${COMMAND_UNLOCK_MODE_LABEL[next]}`, onActivate: () => {
-      if (playLogBlocked()) return;
+      if (this.inputLocked()) return;
       writeDebugCommandUnlockMode(next);
       const w = this.world;
       w.commandUnlock.mode = next;
@@ -953,7 +968,7 @@ export class ExploreScene {
         if (selectable.has(u.id)) {
           const h = ui.memo.get(`card:explore:wing:${u.id}:h`) ?? 60;
           ui.region(`explore:wing-card:${u.id}`, { x: c.x - 12, y: top - 12, w: c.w + 24, h }, { onActivate: () => {
-            if (playLogBlocked()) return;
+            if (this.inputLocked()) return;
             if (openWingPalette(this.world, [u.id])) this.host.redraw();
           } });
         }
@@ -1050,14 +1065,14 @@ export class ExploreScene {
     if (eligible.length === 0) return;
     const sel = p.wingSelect ?? null;
     const allOn = !!sel && eligible.every((id) => sel.ids.includes(id)) && sel.ids.length > 1;
-    const btns: FlowButton[] = [{ id: "explore:wing-all", label: "全僚機", variant: allOn ? "primary" : "normal", onActivate: () => { if (playLogBlocked()) return; openWingPalette(this.world, paletteWingmen(this.world)); this.host.redraw(); } }];
+    const btns: FlowButton[] = [{ id: "explore:wing-all", label: "全僚機", variant: allOn ? "primary" : "normal", onActivate: () => { if (this.inputLocked()) return; openWingPalette(this.world, paletteWingmen(this.world)); this.host.redraw(); } }];
     f.gap(8);
     if (sel) {
       const names = sel.ids.map((id) => w.wingmen.find((u) => u.id === id)?.name ?? id).join("・");
       f.text(`僚機：${names}`, { size: 12, color: CANVAS_THEME.muted });
       if (p.pending?.kind === "wing_move") f.text("地図をタップして地点を指定", { size: 12, color: "#d29922" });
       else if (p.pending?.kind === "wing_recover") f.text("回収する機体・残骸・コンテナをタップ", { size: 12, color: "#d29922" });
-      else for (const a of wingmanPaletteActions(w, sel.ids)) btns.push({ id: `explore:wing-act:${a.id}`, label: a.label, onActivate: () => { if (playLogBlocked()) return; pressWingPalette(this.world, a.id); this.host.redraw(); } });
+      else for (const a of wingmanPaletteActions(w, sel.ids)) btns.push({ id: `explore:wing-act:${a.id}`, label: a.label, onActivate: () => { if (this.inputLocked()) return; pressWingPalette(this.world, a.id); this.host.redraw(); } });
     }
     f.gap(4).buttons(btns);
   }

@@ -158,12 +158,16 @@ const CONFIGS = [
           const m = await toClient({ x: (await ex()).map.x, y: (await ex()).map.y + (await ex()).map.h });
           const st = await p.evaluate(() => window.__wlCanvas.scroll("explore:controls"));
           void st;
-          const side = r && r.left > m.x + 10 && r.top < m.y;
-          await p.mouse.move(side ? r.cx : cfg.viewport.width / 2, side ? r.cy : Math.min(cfg.viewport.height - 10, m.y + 30));
-          await p.mouse.wheel(0, r && r.cy < cfg.viewport.height / 2 ? -150 : 150);
+          const mapR = await toClient({ x: (await ex()).map.x + (await ex()).map.w, y: 0 });
+          const side = !!r && r.left >= mapR.x; // landscape: the controls are right of the map
+          // The controls' left margin: inside the controls, outside the nested log (which scrolls on its own).
+          await p.mouse.move(side ? Math.min(cfg.viewport.width - 2, r.right + 4) : Math.max(1, m.x - 4), side ? Math.max(4, Math.min(cfg.viewport.height - 4, r.cy)) : Math.min(cfg.viewport.height - 10, m.y + 30));
+          // Clipped above the controls (height 0 at their top edge, just under the map) → scroll up.
+          const above = r && (side ? r.cy < cfg.viewport.height / 2 && !r.visible : r.cy <= m.y + 8); // controls start 6px under the map
+          await p.mouse.wheel(0, above || (r && r.visible && r.cy < cfg.viewport.height / 2) ? -150 : 150);
           await p.waitForTimeout(40);
         }
-        throw new Error(`${cfg.name}: cannot reveal ${id}`);
+        throw new Error(`${cfg.name}: cannot reveal ${id} ` + JSON.stringify([await region(id), await p.evaluate(() => [window.__wlCanvas.scroll("explore:controls"), window.__wlCanvas.explore().map, window.__wlCanvas.explore().paused])]));
       };
 
       await p.goto(local + "canvas/");
@@ -246,6 +250,7 @@ const CONFIGS = [
       assert.equal((await ex()).phase, "sortie");
       assert.equal(await p.evaluate(() => window.__marker), marker, "same page");
       // ---- hide → checkpoint + pause; a tap only resumes -------------------------------------------
+      const extBtn = await revealC("explore:extract"); // revealed first: nothing scrolls while paused
       await p.evaluate(() => {
         Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
         document.dispatchEvent(new Event("visibilitychange"));
@@ -259,9 +264,11 @@ const CONFIGS = [
       await p.waitForTimeout(300);
       assert.equal((await ex()).timeLeft, t0, "paused: time stands");
       const cm0 = (await ex()).clickMove;
-      await tapAt(mc.x, mc.y);
+      // #351 review: a tap on 帰還要請 while paused only resumes (the cover is over every button).
+      await tapAt(extBtn.cx, extBtn.cy);
       e = await ex();
       assert.equal(e.paused, false, `${cfg.name}: tap resumes`);
+      assert.equal(e.boarding, false, `${cfg.name}: the resume tap did not request boarding`);
       assert.deepEqual(e.clickMove, cm0, "the resume tap is not a map tap");
       // ---- reload resumes the sortie (paused) from the checkpoint ------------------------------------
       await p.evaluate(() => {
@@ -288,10 +295,18 @@ const CONFIGS = [
       const ops = (await entries()).map((x) => x.kind);
       assert.ok(ops.includes("sortie.start"), `${cfg.name}: play log has the sortie start ` + JSON.stringify(ops));
       // ---- 仕分へ → SORT in place ---------------------------------------------------------------------
+      // #351 review: with 1+ containers no done mark is written, so the sortie checkpoint from the earlier
+      // hide is what a later 探索 visit would resume. Recreate that state (this run may have salvaged 0).
+      const cpResult = await p.evaluate(() => JSON.parse(window.__native().getItem("estg.sortieCheckpoint") || "null"));
+      if (!cpResult || cpResult.kind === "done") await p.evaluate((rec) => window.__native().setItem("estg.sortieCheckpoint", JSON.stringify(rec)), cp);
+      assert.equal((await p.evaluate(() => JSON.parse(window.__native().getItem("estg.sortieCheckpoint") || "null"))).kind, cpResult && cpResult.kind !== "done" ? cpResult.kind : "sortie");
       const ts = await revealE("explore:to-sort");
       await tapAt(ts.cx, ts.cy);
       await settle();
       assert.equal(await scene(), "sort", `${cfg.name}: 仕分へ opens SORT`);
+      // #351 review: leaving in place writes the pagehide checkpoint → the earlier sortie checkpoint is gone.
+      const cpAfter = await p.evaluate(() => JSON.parse(window.__native().getItem("estg.sortieCheckpoint") || "null"));
+      assert.ok(!cpAfter || cpAfter.kind !== "sortie", `${cfg.name}: no sortie checkpoint left after 仕分へ ` + JSON.stringify(cpAfter && cpAfter.kind));
       assert.ok(new URL(p.url()).pathname.endsWith("/canvas/"), "SORT on the canvas root");
       assert.ok(new URL(p.url()).searchParams.has("salvagedContainers"), "Sort handoff query");
       assert.deepEqual(errors, [], `${cfg.name}: no page errors`);

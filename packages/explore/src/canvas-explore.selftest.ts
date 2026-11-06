@@ -1,6 +1,6 @@
 /** Canvas 探索 scene selftest (docs/CANVAS_UNIFIED_V0.md §14, U-5a). */
 import assert from "node:assert/strict";
-import { CanvasUI, Flow, HUB_SAVE_STORAGE_KEY, EXPLORE_SORTIE_BACK_TRAP, SORTIE_PAUSE_LABEL, historyTrapIsCurrent, createHubSave, createNewGameHub, normalizeHubSnapshot, readSortieCheckpoint, serializeHubSave, type RawPointerSample } from "@estg/shared";
+import { CanvasUI, Flow, pickerModal, HUB_SAVE_STORAGE_KEY, EXPLORE_SORTIE_BACK_TRAP, SORTIE_PAUSE_LABEL, historyTrapIsCurrent, createHubSave, createNewGameHub, discardSortieCheckpoint, normalizeHubSnapshot, readSortieCheckpoint, serializeHubSave, type RawPointerSample } from "@estg/shared";
 import { createStubCtx } from "../../shared/src/canvas-ui/test-ctx";
 import { ExploreScene, EXPLORE_MAP_ASPECT, layoutExploreSortie, type ExploreHost } from "./canvas-api";
 import { executeExploreCommand } from "./game/commands";
@@ -76,7 +76,7 @@ let H = 844;
 const draw = () => {
   ctx.texts.length = 0;
   ui.beginFrame(ctx, W, H);
-  if (scene.phase === "sortie") scene.drawSortie(ui, { x: 0, y: 0, w: W, h: H }, 1);
+  if (scene.phase === "sortie") { scene.drawSortie(ui, { x: 0, y: 0, w: W, h: H }, 1); scene.drawPauseCover(ui, W, H); }
   else ui.scrollArea("page", { x: 0, y: 0, w: W, h: H - 56 }, "auto", (off) => { const f = new Flow(ui, 12, 12 - off, W - 24, -off); scene.drawPage(ui, f); return f.y + off; });
   ui.endFrame();
 };
@@ -223,6 +223,38 @@ const tp = scene.world.timeLeft;
 now += 16; scene.frame(now);
 assert.equal(scene.world.timeLeft, tp, "paused: no tick");
 assert.equal(scene.keyDown("w", false), false, "paused: keys ignored");
+// #351 review: the pause cover is the top layer — a button under it does not act.
+{
+  draw(); draw();
+  const r = ui.debugRegions().find((x) => x.id === "explore:extract")!;
+  assert.ok(r, "extract button drawn");
+  const p = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  assert.ok(ui.rawAt(p), "the pause cover is over the buttons");
+  assert.equal(ui.hitTest(p)?.id, "explore:pause:backdrop", "buttons are below the pause layer");
+  ui.pointerDown(1, p, true); ui.pointerUp(1, p);
+  assert.equal(scene.world.boarding, null, "帰還要請 under the pause cover does nothing");
+  assert.equal(scene.paused, true, "still paused (only the cover's tap resumes)");
+}
+// …and the target picker (a modal above the controls) is under it too: its rows do not act.
+{
+  let picked = false;
+  scene.picker = { id: "t:pick", title: "対象を選択", options: [{ key: "move", label: "この地点へ移動" }], onPick: () => { picked = true; }, onCancel: () => {} };
+  const drawWithPicker = () => {
+    ui.beginFrame(ctx, W, H);
+    scene.drawSortie(ui, { x: 0, y: 0, w: W, h: H }, 1);
+    pickerModal(ui, { x: 0, w: W }, H, scene.picker!);
+    scene.drawPauseCover(ui, W, H);
+    ui.endFrame();
+  };
+  drawWithPicker(); drawWithPicker();
+  const opt = ui.debugRegions().find((x) => x.id === "t:pick:opt:move")!;
+  assert.ok(opt, "picker row drawn");
+  const p = { x: opt.x + opt.w / 2, y: opt.y + opt.h / 2 };
+  assert.ok(ui.rawAt(p), "the pause cover is over the picker");
+  ui.pointerDown(1, p, true); ui.pointerUp(1, p);
+  assert.equal(picked, false, "a picker row under the pause cover does nothing");
+  scene.picker = null;
+}
 const resume = ui.rawAt({ x: 5, y: H - 5 });
 assert.ok(resume, "pause covers the screen");
 resume.down(touch(9, 5, H - 5));
@@ -243,6 +275,15 @@ assert.ok(ctx.texts.includes("作戦結果"));
 assert.equal(scene.onPopstate(), false, "result: back is not trapped");
 press("explore:to-sort");
 assert.ok(/salvagedContainers=/.test(went[went.length - 1] ?? ""), "仕分へ = Sort handoff URL");
+// #351 review: leaving in place (the app calls persistOnHide(false) before dispose)
+// replaces the sortie checkpoint written on the earlier hide.
+{
+  const before = readSortieCheckpoint();
+  assert.equal(before.status === "ok" && before.record.kind, "sortie", "the earlier hide left a sortie checkpoint");
+  scene.persistOnHide(false);
+  const after = readSortieCheckpoint();
+  assert.ok(!(after.status === "ok" && after.record.kind === "sortie"), "leaving the result: no sortie checkpoint left to resume");
+}
 press("explore:again");
 assert.equal(scene.phase, "briefing", "再出撃 → briefing");
 
@@ -254,6 +295,7 @@ assert.equal(frames.length, n, "no frames after dispose");
 
 // --- boot from a sortie checkpoint: resume paused in the sortie --------------------------
 {
+  discardSortieCheckpoint(); // the result checkpoint left by the leave above
   const s1 = new ExploreScene(host(""));
   s1.start();
   assert.equal(s1.phase, "sortie");

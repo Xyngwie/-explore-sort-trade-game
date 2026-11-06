@@ -229,6 +229,9 @@ export function mountCanvasApp(doc: Document = document): void {
     current = "explore";
   };
   const enter = () => {
+    // Leaving 探索 in place fires no pagehide: write the same hide checkpoint the
+    // existing page writes on pagehide (a finished sortie must never resume).
+    explore?.persistOnHide(false);
     explore?.dispose();
     explore = null;
     sort?.dispose();
@@ -356,6 +359,7 @@ export function mountCanvasApp(doc: Document = document): void {
     if (scene.phase === "sortie") {
       scene.drawSortie(ui, { x: L.column.x, y: top, w: L.column.w, h: bottom - top }, frame.dpr);
       if (scene.picker) pickerModal(ui, L.column, frame.height, scene.picker, frame.insets.top, frame.insets.bottom);
+      scene.drawPauseCover(ui, frame.width, frame.height); // last: the pause tap reaches nothing else
       return;
     }
     const briefing = scene.phase === "briefing";
