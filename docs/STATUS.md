@@ -10,7 +10,7 @@
 - What: 探索の canvas シーンに僚機カードと機体ゲージ、シールドの欄、残骸盾・屹立、ログ、キー操作の説明（PC）、回路ロックの DEBUG 切り替え。canvas 版の「探索へ」・SORTIE タブ・INVADE からの出撃を同じページの canvas の探索へ → [CANVAS_UNIFIED_V0.md §14.5](CANVAS_UNIFIED_V0.md)
 - Why: 神宮「U-5bも始めてください」（2026-11-05）
 - Scope: 探索の canvas シーンと行き先。Alpha Lab の帯は既存版だけ。探索の規則・セーブ形式・受け渡しの契約は変更なし
-- Status: 細部 CANVAS-Y1〜Y6 はすべて★のとおり神宮決定（2026-11-05「全部★」）。PR #351（draft、`claude/canvas-unified`、#350 の上）。
+- Status: 細部 CANVAS-Y1〜Y6 はすべて★のとおり神宮決定（2026-11-05「全部★」）。PR #351（draft、`claude/canvas-unified`、base = main。#350 は main にマージ済み）。
   - Y1 僚機カード = 操作ボタンの下／Y2 ログ = 欄で最新を追う・新着ボタン・修復の行はタップでコピー／Y3 ログの高さ = 180px／Y4 キーの説明 = PC だけ欄の最後に表／Y5 = DEBUG 切り替えは canvas、Alpha Lab は既存版だけ／Y6 = U-5b で行き先を canvas の探索へマージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
 
 ## 全モジュールの 1 ページ・1 canvas 統合 U-5a：探索の土台（2026-11-05）
@@ -18,7 +18,7 @@
 - What: 探索を同じアプリ・同じ canvas のシーンに（`/canvas/explore/`、直接開いたときだけ＝X2）。起動・再出撃・結果の保存の規則を `exploreBoot.ts` に切り出し、既存のページと共有 → [CANVAS_UNIFIED_V0.md §14.4](CANVAS_UNIFIED_V0.md)
 - Why: 神宮「全て★でOK」（U-5 の計画と X1〜X5、2026-11-05）
 - Scope: U-5a（準備画面・出撃中の地図と HUD と操作・キー・結果・戻る・途中保存・プレイ記録）。回路の指示・僚機パレット・重なった対象の選択は前倒しで入れた。僚機カード・シールドの欄・バリケード・剥ぎ取り・ログ・キーの説明・Alpha Lab は U-5b。探索の規則・セーブ形式・受け渡しの契約は変更なし
-- Status: ブランチ `claude/canvas-unified`（#350 の上）。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+- Status: ブランチ `claude/canvas-unified`（PR #351、base = main）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
 
 ## 全モジュールの 1 ページ・1 canvas 統合 U-5：探索（2026-11-05・着手、計画）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
