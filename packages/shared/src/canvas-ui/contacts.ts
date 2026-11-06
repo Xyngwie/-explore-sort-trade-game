@@ -23,8 +23,19 @@ export class ContactRouter {
   kindOf(id: number): Kind | null { return this.contacts.get(id)?.kind ?? null; }
 
   down(s: ContactSample): void {
-    // isPrimary: the browser says no other pointer of this type is down → forget stale ones of that type.
-    if (s.primary) for (const [id, c] of this.contacts) if (c.type === s.type) this.contacts.delete(id);
+    // isPrimary: the browser says no other pointer of this type is down → forget stale ones of that type,
+    // cancelling what they still hold first (a button press stays drawn and blocks the wheel; a board
+    // would read the next touch as a pinch).
+    if (s.primary) {
+      let boardStale = false;
+      for (const [id, c] of this.contacts) {
+        if (c.type !== s.type) continue;
+        if (c.kind === "ui") this.ui.pointerCancel(id);
+        else if (c.kind === "raw") boardStale = true;
+        this.contacts.delete(id);
+      }
+      if (boardStale) this.board?.cancel();
+    }
     if (this.board && ![...this.contacts.values()].some((c) => c.kind === "raw")) this.board = null;
     const p: Point = { x: s.x, y: s.y };
     if (this.contacts.size === 0) {

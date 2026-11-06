@@ -1,3 +1,10 @@
+## canvas #350 の Bugbot 指摘の修正（2026-11-06）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: `ContactRouter` の最初の指の掃除で、古い接触を捨てる前にボタンの押下と盤の操作を取り消す → [CANVAS_UNIFIED_V0.md §13.1](CANVAS_UNIFIED_V0.md)
+- Why: 神宮決定（2026-11-06）「マージ前に、Bugbot のこの 1 点だけ直してください」
+- Scope: `canvas-ui/contacts.ts` と selftest だけ。#351 は触らない
+- Status: PR #350 に push。CI の結果待ち。マージ・デプロイはオーケストレーター側
+
 ## canvas 統合 #349 への追加指摘の修正（2026-11-05）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: (1) ボタンと盤の接触を 1 か所で管理（INVADE の二本指のすり抜け）。(2) SORT の準備画面などのパネルを、盤の範囲に入らないときはスクロール（横向きスマホで「＋ALL」「格納庫へ」が画面外） → [CANVAS_UNIFIED_V0.md §13](CANVAS_UNIFIED_V0.md)

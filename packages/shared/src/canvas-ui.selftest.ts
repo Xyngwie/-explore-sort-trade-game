@@ -230,9 +230,26 @@ assert.deepEqual(wrapText(ctx, "a\nb", 100), ["a", "b"]);
   // Mouse on the board: every button goes to the board (left / right / chord stay the board's rules).
   r.down({ ...m(2, 2), x: onBoard.x, y: onBoard.y }); r.up({ ...m(2, 0), x: onBoard.x, y: onBoard.y });
   assert.deepEqual(boardLog, ["down:1", "up:1"]);
+  // #350 review: the primary cleanup cancels what the stale contact still holds.
+  // Left held on a button, then another primary mouse down (right / middle): the press is cancelled, not orphaned.
+  r.down(m(0, 1));
+  assert.equal(u.pressing, true, "left press held");
+  r.down(m(2, 3));
+  assert.equal(u.pressing, false, "stale press cancelled by the next primary down");
+  r.up(m(0, 0));
+  assert.equal(fired.length, 3, "the cancelled press does not fire");
+  r.down(m(0, 1)); r.up(m(0, 0));
+  assert.equal(fired.length, 4, "a click works right after");
+  // A board touch whose release never arrived: the next primary touch cancels the board gesture first.
+  boardLog.length = 0;
+  r.down(t(20, onBoard, true)); // release lost
+  r.down(t(21, onBoard, true));
+  assert.deepEqual(boardLog, ["down:20", "cancel", "down:21"], "stale board touch cancelled, the new touch is a fresh tap (not a pinch)");
+  r.up({ ...t(21, onBoard), buttons: 0 });
+  boardLog.length = 0;
   // cancelAll (blur / hidden) clears every contact.
   r.down(t(12, onBtn, true)); r.cancelAll(); r.up({ ...t(12, onBtn), buttons: 0 });
-  assert.equal(fired.length, 3, "cancelled press does not fire");
+  assert.equal(fired.length, 4, "cancelled press does not fire");
   assert.equal(r.size, 0);
 }
 
