@@ -119,7 +119,7 @@ export function mountCanvasApp(doc: Document = document): void {
   const onExplorePage = () => win.location.pathname.endsWith("/" + CANVAS_EXPLORE_PATH);
   // Debug area (神宮決定 2026-11-06): localhost or ?debug=1, read once at load.
   const debug = canvasDebugEnabled(win.location.search, win.location.hostname);
-  // 新規ゲーム (play log) comes back to this page's DOCK, not the existing one.
+  // 新規ゲーム (play log) comes back to this page's DOCK, not the existing one (CANVAS-Z3).
   if (debug) setPlayLogNewGameDestination(canvasBase());
 
   /** Open a URL: in place when this page shows it, else through the play log. */

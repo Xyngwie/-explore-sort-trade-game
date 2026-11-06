@@ -3,7 +3,7 @@
 - What: 本来の流れではない検証用の機能（DOCK の検証用ボタン・デモ初期化・プレイ記録のパネル・Alpha Lab・探索の回路ロック切り替え・SORT のテストプレイ）を canvas から外し、canvas の下の HTML の欄にまとめた → [CANVAS_UNIFIED_V0.md §16](CANVAS_UNIFIED_V0.md)
 - Why: 神宮「デバッグ関係は canvas 外の下にまとめて置いてくれる？」（2026-11-06）。出す場所は開発版だけ（localhost か `?debug=1`）、行き方は DOCK のボタン、新規ゲームは欄の中だけ（すべて神宮決定）
 - Scope: canvas 版の配置だけ。既存版のページ・各機能の処理・セーブ形式は変更なし
-- Status: 実装中。暫定 ★ は CANVAS-Z3（新規ゲーム後は canvas の DOCK）・Z4（パレットは移植しない）・Z6（INVADE の再生成はゲーム内に残す）
+- Status: 細部 CANVAS-Z3・Z4・Z6 はすべて★のとおり神宮決定（2026-11-06「Zは全部★」）：Z3 新規ゲーム後は canvas の DOCK／Z4 パレットは移植しない／Z6 INVADE の再生成はゲーム内に残す。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
 
 ## canvas #351 の Bugbot 指摘 2 件の修正（2026-11-06）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）

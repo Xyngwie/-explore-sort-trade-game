@@ -47,7 +47,8 @@ export function playLogRecording(): boolean {
 }
 /**
  * Where the play log's 新規ゲーム goes once the new record exists. The canvas
- * page sets its own DOCK; other pages keep the existing trade page (null).
+ * page sets its own DOCK (CANVAS-Z3, 神宮決定 2026-11-06); other pages keep the
+ * existing trade page (null).
  */
 let newGameDestination: string | null = null;
 export function setPlayLogNewGameDestination(url: string | null): void {
