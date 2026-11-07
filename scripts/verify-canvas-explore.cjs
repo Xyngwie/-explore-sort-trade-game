@@ -247,6 +247,40 @@ const CONFIGS = [
         e = await ex();
         assert.ok(e.leader.y < y0, `${cfg.name}: W moves the captain up`);
         assert.equal(e.clickMove, null, "keys clear the tap target");
+        const moved = y0 - e.leader.y;
+        // #353 B5: debug area open — game keys do not apply, and Space scrolls the page.
+        const opener = await revealC("explore:debug-open");
+        await tapAt(opener.cx, opener.cy);
+        await p.waitForFunction(() => { const d = document.getElementById("wl-debug"); return !!d && !d.hidden; });
+        await p.evaluate(() => {
+          window.scrollTo(0, 0);
+          window.__keyPrevented = [];
+          window.addEventListener("keydown", (ev) => {
+            if (ev.key === " " || ev.key === "w" || ev.key === "W") window.__keyPrevented.push(ev.defaultPrevented);
+          });
+        });
+        const yOpen = (await ex()).leader.y;
+        await p.keyboard.press("Space");
+        await p.keyboard.down("w"); await p.waitForTimeout(400); await p.keyboard.up("w");
+        const openKeys = await p.evaluate(() => ({ y: window.scrollY, prevented: window.__keyPrevented }));
+        const dyOpen = yOpen - (await ex()).leader.y;
+        assert.ok(dyOpen < moved / 2, `${cfg.name}: open area: W does not move the captain (open ${dyOpen}, closed ${moved})`);
+        assert.ok(openKeys.y > 0, `${cfg.name}: open area: Space scrolls the page`);
+        assert.ok(openKeys.prevented.length >= 2 && openKeys.prevented.every((v) => v === false), `${cfg.name}: open area: Space and W are not preventDefault ` + JSON.stringify(openKeys));
+        await p.click("#wl-debug-close");
+        await p.waitForFunction(() => document.getElementById("wl-debug").hidden && window.scrollY === 0);
+        const yAgain = (await ex()).leader.y;
+        await p.keyboard.down("w"); await p.waitForTimeout(400); await p.keyboard.up("w");
+        assert.ok((await ex()).leader.y < yAgain, `${cfg.name}: closed again: W moves the captain`);
+        // The opener sits at the bottom of the controls. Put that list back at the top for the later buttons.
+        for (let i = 0; i < 40; i++) {
+          const st = await p.evaluate(() => window.__wlCanvas.scroll("explore:controls"));
+          if (!st || st.y <= 1) break;
+          const m = await toClient({ x: (await ex()).map.x, y: (await ex()).map.y + (await ex()).map.h });
+          await p.mouse.move(Math.max(1, m.x - 4), Math.min(cfg.viewport.height - 10, m.y + 30));
+          await p.mouse.wheel(0, -500);
+          await p.waitForTimeout(20);
+        }
       }
       // ---- back during the sortie is swallowed -----------------------------------------------------
       const url0 = p.url();

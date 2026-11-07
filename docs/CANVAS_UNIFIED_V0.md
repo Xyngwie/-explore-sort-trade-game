@@ -395,8 +395,15 @@
    - 閉じている間は今までどおり（ページはスクロールせず、canvas が入力を取る）。
    - CSS は欄の部品が入れるので、canvas の 4 つのページすべてに効く。
 4. **B4**：`debug-panel.ts` の見出しの節番号を §16 に直した。
+5. **B5 欄を開いていても、キーがゲームに届いていた**：`inert` はポインタとホイールだけを止めていて、window の keydown / keyup は canvas のキーと探索・SORT のキーに届いていた。探索は Space などで preventDefault するので、欄を開いた出撃中も移動と射撃が入り、Space でページをスクロールできなかった。直した後：
+   - 欄が開いている間は、canvas（`CanvasSurface` の `inert`）も探索・SORT（`routeGameKey`）もキーを受け取らない。preventDefault もしない。Space はページのスクロールに残る。
+   - 開くときは、押したままの探索のキーを離す（`releaseHeldKeys`）。keyup は欄が開いている間は届かないので、離しておかないと移動と射撃が残る。
+   - 閉じている間は今までどおり（Escape はモーダルを閉じる。探索のキー、SORT の矢印は今までどおり取る）。
 
 検証：
-- `canvas-ui.selftest`：新規ゲームの移動先（公開版 `?debug=1` → `?debug=1` だけを残す、ほかのクエリは付けない、素の URL・localhost はそのまま）。
+- `canvas-ui.selftest`：新規ゲームの移動先（公開版 `?debug=1` → `?debug=1` だけを残す、ほかのクエリは付けない、素の URL・localhost はそのまま）。欄が開いている間は window のキーが canvas に届かず、Space も Escape も止めない。閉じている間は Escape がモーダルを閉じ、Space は canvas のキーではない。
+- `canvas-game-keys.selftest`：欄が開いている間は探索の keyDown / keyUp と SORT の key を呼ばず、preventDefault しない（Space・WASD・F・矢印）。閉じている間は今までどおり（名前欄では探索のキーを取らない。保存中は SORT のキーを取らない）。
+- `canvas-explore.selftest`：出撃中に押したままの W は、`releaseHeldKeys` のあと移動を続けない。
+- `verify-canvas-explore`（PC）：欄を開いている間は W で隊長が動かず、Space は preventDefault されずページがスクロールする。閉じると W は再び動く。
 - `canvas-sort.selftest`・`canvas-explore.selftest`：欄があるときだけ「検証用の欄へ」が出て、押すと欄が開く。検証用の操作は canvas に無い。
 - `verify-canvas-dock-full`（5 構成）：欄を開いたあと、canvas の上でページを上へスクロールでき（PC はホイール、タッチの構成は指のドラッグ）、canvas の上から下へスクロールして「▲ ゲームへ」に届く。修正前のコードでは、この確認が落ちることを確かめた。

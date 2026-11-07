@@ -411,6 +411,17 @@ export class ExploreScene {
     return prevent;
   }
   keyUp(key: string): void { this.keys.delete(key.toLowerCase()); }
+  /**
+   * Drop movement and fire that are still held. The debug area takes the
+   * keyboard while it is open, and keyup is not delivered to the game then,
+   * so a key that was already down must be released here or it keeps applying.
+   */
+  releaseHeldKeys(): void {
+    this.keys.clear();
+    this.input.move = { x: 0, y: 0 };
+    this.input.fire = false;
+    this.input.interact = false;
+  }
   private syncMoveFromKeys(): void {
     const keys = this.keys;
     let x = 0, y = 0;

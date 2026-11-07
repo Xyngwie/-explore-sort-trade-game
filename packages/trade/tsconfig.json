@@ -28,6 +28,7 @@
     "src/hub-tree.selftest.ts",
     "src/hub-columns.selftest.ts",
     "src/canvas-dock.selftest.ts",
-    "src/canvas-dock-full.selftest.ts"
+    "src/canvas-dock-full.selftest.ts",
+    "src/canvas-game-keys.selftest.ts"
   ]
 }

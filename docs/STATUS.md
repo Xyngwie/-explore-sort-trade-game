@@ -1,3 +1,10 @@
+## canvas #353 Bugbot「Inert canvas still takes keys」（2026-11-07）
+- Who: Cursor Cloud Agent（Grok。神宮の直接指示の続き。Automations は起動していない）
+- What: 検証用の欄が開いている間は、canvas・探索・SORT のキーを取らず、Space の preventDefault もしない。開くときに押したままの探索のキーを離す → [CANVAS_UNIFIED_V0.md §16.6](CANVAS_UNIFIED_V0.md) の B5
+- Why: PR #353 の Bugbot medium（discussion r4499292799）。欄を開いた出撃中も移動と射撃が入り、Space でページをスクロールできなかった
+- Scope: 欄が開いている間のキーだけ。閉じている間のキー、ゲームの規則、セーブ形式、既存版のページ、§16 の Z 決定は変更なし。B1–B3 は戻さない
+- Status: PR #353 に push。ready for review。マージ・デプロイはしない
+
 ## canvas #353 の監査の修正（2026-11-07）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: B1 新規ゲームのあとも `?debug=1` を残す。B2 SORT・探索にも「検証用の欄へ」。B3 欄を開いている間は、canvas の上でもページがスクロールする。B4 節番号の誤り → [CANVAS_UNIFIED_V0.md §16.6](CANVAS_UNIFIED_V0.md)

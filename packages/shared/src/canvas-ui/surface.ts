@@ -29,8 +29,9 @@ export type CanvasSurfaceOptions = {
   blocked?: () => boolean;
   /**
    * True while the page around the canvas must scroll (the debug area under the
-   * canvas is open): the canvas then takes no pointer or wheel input and never
-   * prevents the page's own pan / wheel scroll. False = game input as usual.
+   * canvas is open): the canvas then takes no pointer, wheel, or key input and
+   * never prevents the page's own pan / wheel / key scroll (Space included).
+   * False = game input as usual.
    */
   inert?: () => boolean;
   draw: DrawFn;
@@ -143,7 +144,10 @@ export class CanvasSurface {
     }, { passive: false });
     c.addEventListener("contextmenu", (e) => e.preventDefault());
     c.addEventListener("auxclick", (e) => e.preventDefault());
-    win.addEventListener("keydown", (e) => { if (this.ui.key(e.key)) e.preventDefault(); });
+    win.addEventListener("keydown", (e) => {
+      if (this.inert()) return; // debug area open: the page keeps the key (Space scrolls)
+      if (this.ui.key(e.key)) e.preventDefault();
+    });
     win.addEventListener("blur", () => router.cancelAll());
     c.ownerDocument.addEventListener("visibilitychange", () => { if (c.ownerDocument.hidden) router.cancelAll(); else this.ui.pointerCancel(); });
   }

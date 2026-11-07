@@ -1,6 +1,6 @@
 /** Canvas UI core selftest (docs/CANVAS_SHELL_V0.md §3). */
 import assert from "node:assert/strict";
-import { CanvasUI, CANVAS_SCROLL_SLOP_PX, ContactRouter, canvasDebugEnabled, canvasNewGameDestination, ellipsize, wrapText, backingSize, clientToCanvas, type RawPointerHandler, type Rect } from "./canvas-ui";
+import { CanvasUI, CanvasSurface, CANVAS_SCROLL_SLOP_PX, ContactRouter, canvasDebugEnabled, canvasNewGameDestination, ellipsize, wrapText, backingSize, clientToCanvas, type RawPointerHandler, type Rect } from "./canvas-ui";
 import { createStubCtx } from "./canvas-ui/test-ctx";
 
 const ctx = createStubCtx();
@@ -268,5 +268,61 @@ assert.equal(canvasNewGameDestination(base, "?debug=1&debug_fixture=shield&salva
 assert.equal(canvasNewGameDestination(base, "", "xyngwie.github.io"), base);
 assert.equal(canvasNewGameDestination("http://localhost:5175/canvas/", "", "localhost"), "http://localhost:5175/canvas/", "localhost is debug by host");
 assert.equal(canvasNewGameDestination("http://127.0.0.1:5175/canvas/", "?debug=1", "127.0.0.1"), "http://127.0.0.1:5175/canvas/");
+
+// #353: while inert (debug area open), window keys do not reach CanvasUI and do not preventDefault.
+{
+  const listeners = new Map<string, Array<(e: { key: string; preventDefault: () => void }) => void>>();
+  const win = {
+    devicePixelRatio: 1,
+    innerWidth: 390,
+    innerHeight: 844,
+    addEventListener(type: string, fn: (e: { key: string; preventDefault: () => void }) => void) {
+      const list = listeners.get(type) ?? [];
+      list.push(fn);
+      listeners.set(type, list);
+    },
+    getComputedStyle: () => ({ paddingTop: "0", paddingRight: "0", paddingBottom: "0", paddingLeft: "0" }),
+    requestAnimationFrame: () => 1,
+  };
+  const doc = {
+    body: { appendChild() {} },
+    hidden: false,
+    defaultView: win,
+    createElement: () => ({ setAttribute() {}, style: { cssText: "" } }),
+    addEventListener() {},
+  };
+  const canvas = {
+    ownerDocument: doc,
+    width: 0,
+    height: 0,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }),
+    getContext: () => createStubCtx(),
+    addEventListener() {},
+  };
+  let inert = false;
+  let open = true;
+  new CanvasSurface(canvas as unknown as HTMLCanvasElement, {
+    inert: () => inert,
+    draw: (ui) => {
+      if (open) ui.modal("m", () => { ui.region("m:box", { x: 10, y: 10, w: 40, h: 40 }); }, () => { open = false; });
+    },
+  });
+  const press = (key: string) => {
+    let prevented = false;
+    const e = { key, preventDefault() { prevented = true; } };
+    for (const fn of listeners.get("keydown") ?? []) fn(e);
+    return prevented;
+  };
+  assert.equal(open, true, "a modal is up");
+  inert = true;
+  assert.equal(press(" "), false, "inert: Space is not prevented");
+  assert.equal(press("Escape"), false, "inert: Escape is not prevented");
+  assert.equal(open, true, "inert: Escape does not reach the canvas modal");
+  inert = false;
+  assert.equal(press(" "), false, "closed: Space is still not a canvas-ui key");
+  assert.equal(open, true, "closed: Space does not dismiss");
+  assert.equal(press("Escape"), true, "closed: Escape is taken");
+  assert.equal(open, false, "closed: Escape dismisses the modal");
+}
 
 console.log("canvas-ui selftest: OK");

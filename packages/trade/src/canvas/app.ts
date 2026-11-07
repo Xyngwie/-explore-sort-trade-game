@@ -45,6 +45,7 @@ import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } fr
 import { InvadeScene } from "@estg/invade/canvas";
 import { ExploreScene, inspectShieldFixture } from "@estg/explore/canvas";
 import { mountDebugPanel, type DebugAction } from "./debug-panel";
+import { routeGameKey } from "./game-keys";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
 import { browserDockEnv, DOCK_ANCHOR } from "./dock-sections";
 import { tabUrl } from "./tabs";
@@ -428,7 +429,8 @@ export function mountCanvasApp(doc: Document = document): void {
       return alphaLab;
     },
     redraw: () => surface.invalidate(),
-    beforeOpen: () => surface.cancelInput(),
+    // Keys already down would keep moving and firing: keyup is not applied while the area is open.
+    beforeOpen: () => { surface.cancelInput(); explore?.releaseHeldKeys(); },
   }) : null;
 
   const composing = bindEditorNameInput(input, (v) => { start.draft = v; });
@@ -440,12 +442,15 @@ export function mountCanvasApp(doc: Document = document): void {
     }
   });
   // SORT keys: arrows swap with the selected neighbour, Shift+arrow moves the selection.
-  win.addEventListener("keydown", (e) => {
-    if (current === "sort" && sort && !playLogBlocked() && sort.key(e.key, e.shiftKey)) e.preventDefault();
-    // 探索: the existing page's keys (CANVAS-X5), not while typing in the name field.
-    if (current === "explore" && explore && e.target !== input && explore.keyDown(e.key, e.repeat, e.shiftKey)) e.preventDefault();
+  // 探索: the existing page's keys (CANVAS-X5), not while typing in the name field.
+  // Debug area open: neither runs, and nothing calls preventDefault (Space scrolls the page).
+  const onGameKey = (e: KeyboardEvent, type: "keydown" | "keyup") => routeGameKey({
+    type, key: e.key, repeat: e.repeat, shiftKey: e.shiftKey, targetIsNameField: e.target === input,
+  }, {
+    debugOpen: !!debugPanel?.isOpen, scene: current, playLogBlocked: playLogBlocked(), sort, explore,
   });
-  win.addEventListener("keyup", (e) => { if (current === "explore" && explore) explore.keyUp(e.key); });
+  win.addEventListener("keydown", (e) => { if (onGameKey(e, "keydown")) e.preventDefault(); });
+  win.addEventListener("keyup", (e) => { onGameKey(e, "keyup"); });
   // Existing main.ts: hidden → checkpoint + pause; pagehide → checkpoint.
   doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden" && current === "explore") explore?.persistOnHide(true); });
   win.addEventListener("pagehide", () => { if (current === "explore") explore?.persistOnHide(false); });
