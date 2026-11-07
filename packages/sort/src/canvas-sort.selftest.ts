@@ -102,6 +102,20 @@ ui.beginFrame(ctx, 390, 844); intro.draw(ui, frame, field); ui.endFrame();
 assert.equal(ui.debugRegions().some((r) => r.id === "sort:test-play" || r.id === "sort:demo"), false, "no test buttons on the canvas");
 assert.deepEqual(intro.debugActions().map((a) => a.id), ["sort-demo"], "intro: no test play; demo query in the debug area");
 intro.dispose();
+// #353 B2: in debug mode SORT itself offers 「検証用の欄へ」 (its tabs are off); the test actions stay off the canvas.
+{
+  let opened = 0;
+  const dbg = new SortScene({ ...host, search: "?salvagedContainers=10&totalStockPieces=250&isExtracted=1&introOpening=gone", openDebug: () => { opened++; } });
+  ui.beginFrame(ctx, 390, 844); dbg.draw(ui, frame, field); ui.endFrame();
+  ui.beginFrame(ctx, 390, 844); dbg.draw(ui, frame, field); ui.endFrame();
+  const ids = ui.debugRegions().map((r) => r.id);
+  assert.ok(ids.includes("sort:debug-open"), "debug mode: opener on SORT");
+  assert.equal(ids.some((id) => id === "sort:test-play" || id === "sort:demo"), false, "the test actions are still not on the canvas");
+  const r = ui.debugRegions().find((x) => x.id === "sort:debug-open")!;
+  ui.pointerDown(1, { x: r.x + r.w / 2, y: r.y + r.h / 2 }, true); ui.pointerUp(1, { x: r.x + r.w / 2, y: r.y + r.h / 2 });
+  assert.equal(opened, 1, "the opener opens the debug area");
+  dbg.dispose();
+}
 
 // --- landscape briefing with extra HUB containers: every button reachable (docs §13) ------
 {

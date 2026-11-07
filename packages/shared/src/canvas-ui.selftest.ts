@@ -1,6 +1,6 @@
 /** Canvas UI core selftest (docs/CANVAS_SHELL_V0.md §3). */
 import assert from "node:assert/strict";
-import { CanvasUI, CANVAS_SCROLL_SLOP_PX, ContactRouter, canvasDebugEnabled, ellipsize, wrapText, backingSize, clientToCanvas, type RawPointerHandler, type Rect } from "./canvas-ui";
+import { CanvasUI, CANVAS_SCROLL_SLOP_PX, ContactRouter, canvasDebugEnabled, canvasNewGameDestination, ellipsize, wrapText, backingSize, clientToCanvas, type RawPointerHandler, type Rect } from "./canvas-ui";
 import { createStubCtx } from "./canvas-ui/test-ctx";
 
 const ctx = createStubCtx();
@@ -260,5 +260,13 @@ assert.equal(canvasDebugEnabled("", "xyngwie.github.io"), false, "public: hidden
 assert.equal(canvasDebugEnabled("?debug=1", "xyngwie.github.io"), true, "public with ?debug=1");
 assert.equal(canvasDebugEnabled("?debug=0&x=1", "xyngwie.github.io"), false);
 assert.equal(canvasDebugEnabled("?debug_fixture=shield", "xyngwie.github.io"), false, "the Alpha Lab fixture query is a different switch");
+
+// #353 B1: 新規ゲーム keeps ?debug=1 when debug came from the URL (public host), and nothing else.
+const base = "https://xyngwie.github.io/-explore-sort-trade-game/canvas/";
+assert.equal(canvasNewGameDestination(base, "?debug=1", "xyngwie.github.io"), base + "?debug=1");
+assert.equal(canvasNewGameDestination(base, "?debug=1&debug_fixture=shield&salvagedContainers=3", "xyngwie.github.io"), base + "?debug=1", "only debug=1 is carried");
+assert.equal(canvasNewGameDestination(base, "", "xyngwie.github.io"), base);
+assert.equal(canvasNewGameDestination("http://localhost:5175/canvas/", "", "localhost"), "http://localhost:5175/canvas/", "localhost is debug by host");
+assert.equal(canvasNewGameDestination("http://127.0.0.1:5175/canvas/", "?debug=1", "127.0.0.1"), "http://127.0.0.1:5175/canvas/");
 
 console.log("canvas-ui selftest: OK");

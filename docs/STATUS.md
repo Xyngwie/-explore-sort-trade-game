@@ -1,3 +1,10 @@
+## canvas #353 の監査の修正（2026-11-07）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: B1 新規ゲームのあとも `?debug=1` を残す。B2 SORT・探索にも「検証用の欄へ」。B3 欄を開いている間は、canvas の上でもページがスクロールする。B4 節番号の誤り → [CANVAS_UNIFIED_V0.md §16.6](CANVAS_UNIFIED_V0.md)
+- Why: Grok Bot の監査（#353、changes_required、2026-11-07）
+- Scope: 検証用の欄と、その開き方・スクロールだけ。欄を閉じている間の canvas の入力・ゲームの規則・セーブ形式は変更なし
+- Status: PR #353 に push。再監査待ち。マージ・デプロイはオーケストレーター側
+
 ## canvas の検証用の欄（canvas の下、2026-11-06・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: 本来の流れではない検証用の機能（DOCK の検証用ボタン・デモ初期化・プレイ記録のパネル・Alpha Lab・探索の回路ロック切り替え・SORT のテストプレイ）を canvas から外し、canvas の下の HTML の欄にまとめた → [CANVAS_UNIFIED_V0.md §16](CANVAS_UNIFIED_V0.md)

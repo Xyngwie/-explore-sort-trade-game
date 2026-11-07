@@ -88,6 +88,8 @@ export type SortHost = {
   redraw: () => void;
   now?: () => number;
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
+  /** Debug mode only: open the HTML debug area under the canvas (#353 B2). */
+  openDebug?: () => void;
 };
 
 export type SortLayout = { field: Rect; rail: Rect; board: Rect; cell: number; footer: Rect; finish: Rect; landscape: boolean };
@@ -469,6 +471,10 @@ export class SortScene {
       buttons.push({ id: "sort:to-hangar", label: CTA_COPY.toHangar, variant: "primary", onActivate: () => { const u = this.resultHubUrl(); if (u) this.toHub(u); } });
       if (!this.introOpeningId) buttons.push({ id: "sort:again", label: CTA_COPY.again, onActivate: () => this.again() });
     }
+    // Debug mode only: reach the debug area from SORT too (its tabs are off during a handoff, #332).
+    // The test actions themselves stay in the HTML area, never on the canvas.
+    const openDebug = this.host.openDebug;
+    if (openDebug) buttons.push({ id: "sort:debug-open", label: "検証用の欄へ ▼", onActivate: () => openDebug() });
     // Measure: kicker + title + lines + buttons.
     const ctx = ui.context;
     let h = 16 + (kicker ? 18 : 0) + 30;

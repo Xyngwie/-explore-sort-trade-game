@@ -27,6 +27,12 @@ export function clientToCanvas(clientX: number, clientY: number, rect: { left: n
 
 export type CanvasSurfaceOptions = {
   blocked?: () => boolean;
+  /**
+   * True while the page around the canvas must scroll (the debug area under the
+   * canvas is open): the canvas then takes no pointer or wheel input and never
+   * prevents the page's own pan / wheel scroll. False = game input as usual.
+   */
+  inert?: () => boolean;
   draw: DrawFn;
 };
 
@@ -40,9 +46,11 @@ export class CanvasSurface {
   private frames = 0;
   private readonly probe: HTMLDivElement;
   private draw: DrawFn;
+  private readonly inert: () => boolean;
 
   constructor(readonly canvas: HTMLCanvasElement, opts: CanvasSurfaceOptions) {
     this.draw = opts.draw;
+    this.inert = opts.inert ?? (() => false);
     this.ui = new CanvasUI({ blocked: opts.blocked, invalidate: () => this.invalidate() });
     const doc = canvas.ownerDocument;
     this.probe = doc.createElement("div");
@@ -102,6 +110,9 @@ export class CanvasSurface {
     return clientToCanvas(clientX, clientY, this.canvas.getBoundingClientRect(), this.cssW, this.cssH);
   }
 
+  /** Drop every contact and press (e.g. before the canvas turns inert). */
+  cancelInput(): void { this.contacts?.cancelAll(); this.ui.pointerCancel(); }
+
   /** Every contact goes through one router (buttons and raw boards share it). */
   private contacts: ContactRouter | null = null;
   private sample(e: PointerEvent): ContactSample {
@@ -113,6 +124,7 @@ export class CanvasSurface {
     const c = this.canvas;
     const router = (this.contacts = new ContactRouter(this.ui));
     c.addEventListener("pointerdown", (e) => {
+      if (this.inert()) return; // the page scrolls; the game takes nothing
       e.preventDefault();
       try { c.setPointerCapture(e.pointerId); } catch { /* synthetic pointers */ }
       router.down(this.sample(e));
@@ -123,6 +135,7 @@ export class CanvasSurface {
     c.addEventListener("pointercancel", (e) => { router.cancel(e.pointerId); this.invalidate(); });
     c.addEventListener("lostpointercapture", (e) => router.lostCapture(e.pointerId));
     c.addEventListener("wheel", (e) => {
+      if (this.inert()) return; // page wheel scroll passes through
       e.preventDefault();
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.cssH : 1;
       router.wheel(this.toCanvas(e.clientX, e.clientY), e.deltaY * unit);
@@ -143,4 +156,16 @@ export class CanvasSurface {
 export function canvasDebugEnabled(search: string, hostname: string): boolean {
   if (hostname === "localhost" || hostname === "127.0.0.1") return true;
   try { return new URLSearchParams(search).get("debug") === "1"; } catch { return false; }
+}
+/**
+ * Where the play log's 新規ゲーム / デモ初期化 return to (CANVAS-Z3): this page's
+ * canvas DOCK. When debug mode came from `?debug=1` (not from a local host),
+ * keep `?debug=1` so the debug area is still there after the reload. No other
+ * query key is carried (e.g. `debug_fixture`).
+ */
+export function canvasNewGameDestination(base: string, search: string, hostname: string): string {
+  const local = hostname === "localhost" || hostname === "127.0.0.1";
+  let fromQuery = false;
+  try { fromQuery = new URLSearchParams(search).get("debug") === "1"; } catch { /* no query */ }
+  return !local && fromQuery ? `${base}?debug=1` : base;
 }

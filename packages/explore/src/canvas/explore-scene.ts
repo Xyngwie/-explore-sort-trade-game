@@ -171,6 +171,8 @@ export type ExploreHost = {
   requestFrame?: (fn: (now: number) => void) => number;
   cancelFrame?: (id: number) => void;
   setTimer?: (fn: () => void, ms: number) => unknown;
+  /** Debug mode only: open the HTML debug area under the canvas (#353 B2). */
+  openDebug?: () => void;
   /** Coarse pointer (phone / tablet): the key table is not shown (CANVAS-Y4). */
   touch?: boolean;
   /** Clipboard (repair-log rows copy their details, as on the existing page). */
@@ -649,6 +651,7 @@ export class ExploreScene {
       if (Object.values(w.mechBattery).some((b) => b.activity <= 0)) c.gap(6).text("活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。", { color: "#d29922" });
       if (this.preSortieAmmoNote) c.gap(6).text(this.preSortieAmmoNote, { color: "#d29922" });
       c.gap(8).text(briefingHelpText(this.cmdLocked), { size: 12, color: CANVAS_THEME.muted });
+      this.drawDebugOpener(c);
     });
     void ui;
   }
@@ -855,6 +858,17 @@ export class ExploreScene {
     this.drawWingPanel(ui, f);
     this.drawLog(ui, f);
     this.drawKeys(f);
+    this.drawDebugOpener(f);
+  }
+
+  /**
+   * Debug mode only: reach the debug area from 探索 (tabs are hidden in the sortie).
+   * The circuit-lock toggle itself stays in the HTML area, never on the canvas.
+   */
+  private drawDebugOpener(f: Flow): void {
+    const open = this.host.openDebug;
+    if (!open) return;
+    f.gap(12).buttons([{ id: "explore:debug-open", label: "検証用の欄へ ▼", onActivate: () => { if (!this.inputLocked()) open(); } }]);
   }
 
   /** 残骸盾 (existing btn-strip). */

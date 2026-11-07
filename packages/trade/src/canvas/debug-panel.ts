@@ -1,5 +1,5 @@
 /**
- * The debug area under the canvas (神宮決定 2026-11-06, docs/CANVAS_UNIFIED_V0.md §15).
+ * The debug area under the canvas (神宮決定 2026-11-06, docs/CANVAS_UNIFIED_V0.md §16).
  *
  * Every test-only tool that is not part of the game's own flow lives here, as
  * HTML, never on the canvas: the DOCK test buttons and デモ初期化, the play-log
@@ -19,6 +19,8 @@ export type DebugPanelDeps = {
   alphaLab: () => HTMLElement | null;
   /** Ask the canvas to redraw after an action. */
   redraw: () => void;
+  /** Called before the area opens (the canvas drops its contacts and turns inert). */
+  beforeOpen?: () => void;
 };
 
 export type DebugPanel = { open: () => void; close: () => void; refresh: () => void; readonly isOpen: boolean };
@@ -32,7 +34,11 @@ const CSS = `
 #wl-debug button{min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;font:600 14px system-ui,sans-serif}
 #wl-debug button.danger{background:#da3633;border-color:#da3633;color:#fff}
 #wl-debug .muted{color:#8b949e;font-size:12px}
-html.wl-debug-open,html.wl-debug-open body{overflow-y:auto!important;height:auto!important}
+/* Open: only the root scrolls (body as its own scroll container plus the page's overscroll-behavior:none would stop wheel / pan from reaching the page). */
+html.wl-debug-open{overflow-y:auto!important;height:auto!important;overscroll-behavior:auto!important}
+html.wl-debug-open body{overflow:visible!important;height:auto!important;overscroll-behavior:auto!important}
+/* Open: the canvas lets the page pan / wheel through (every canvas page); closed: untouched. */
+html.wl-debug-open #wl-canvas{touch-action:pan-y!important}
 `;
 
 export function mountDebugPanel(deps: DebugPanelDeps): DebugPanel {
@@ -96,6 +102,7 @@ export function mountDebugPanel(deps: DebugPanelDeps): DebugPanel {
     if (lab) { const h = doc.createElement("h2"); h.textContent = "Alpha Lab"; section.append(h, lab); }
   }
   function openPanel(): void {
+    deps.beforeOpen?.();
     open = true;
     section.hidden = false;
     doc.documentElement.classList.add("wl-debug-open");

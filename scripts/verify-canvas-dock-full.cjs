@@ -143,6 +143,49 @@ const CONFIGS = [
       await tap("dock:debug:open");
       assert.equal(await p.evaluate(() => document.getElementById("wl-debug")?.hidden), false, "debug area opened");
       assert.ok(await p.evaluate(() => !!document.querySelector("#wl-debug #play-log-panel") && !!document.querySelector("#wl-debug #btn-reset") && !!document.querySelector("#wl-debug #shield-debug-console")), "play log panel, デモ初期化 and Alpha Lab are in the debug area");
+      // #353 B3: while open, the page scrolls both ways over the canvas (it no longer eats pan / wheel),
+      // and 「▲ ゲームへ」 stays reachable after the canvas came back into view.
+      {
+        const sy = () => p.evaluate(() => window.scrollY);
+        const y0 = await sy();
+        assert.ok(y0 > 0, `${cfg.name}: opening scrolled to the area`);
+        const canvasPoint = () => p.evaluate(() => { const r = document.getElementById("wl-canvas").getBoundingClientRect(); return { x: r.left + r.width / 2, top: Math.max(4, r.top + 4), bottom: Math.min(innerHeight - 4, r.bottom - 4) }; });
+        // Up over the canvas: first bring part of the canvas into view (wheel over the area), then pan / wheel on the canvas itself.
+        await p.mouse.move(cfg.viewport.width / 2, cfg.viewport.height / 2);
+        await p.mouse.wheel(0, -Math.ceil(cfg.viewport.height * 0.6));
+        await p.waitForTimeout(150);
+        let cp = await canvasPoint();
+        assert.ok(cp.bottom - cp.top > 40, `${cfg.name}: part of the canvas is in view`);
+        const yMid = await sy();
+        if (cdp) {
+          const a = { x: cp.x, y: cp.top + 10 }, z = { x: cp.x, y: Math.min(cfg.viewport.height - 10, cp.top + 10 + 260) };
+          await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [a] });
+          for (let i = 1; i <= 8; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: a.x, y: a.y + ((z.y - a.y) * i) / 8 }] });
+          await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        } else {
+          await p.mouse.move(cp.x, (cp.top + cp.bottom) / 2);
+          await p.mouse.wheel(0, -260);
+        }
+        await p.waitForTimeout(300);
+        assert.ok((await sy()) < yMid, `${cfg.name}: the page scrolls up over the canvas (${yMid} → ${await sy()})`);
+        // Back down to the area over the canvas.
+        cp = await canvasPoint();
+        for (let i = 0; i < 12 && !(await p.evaluate(() => { const r = document.getElementById("wl-debug-close").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })); i++) {
+          if (cdp) {
+            const a = { x: cp.x, y: Math.min(cfg.viewport.height - 20, cp.bottom - 10) }, z = { x: cp.x, y: Math.max(20, a.y - 260) };
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [a] });
+            for (let k = 1; k <= 8; k++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: a.x, y: a.y + ((z.y - a.y) * k) / 8 }] });
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+          } else {
+            await p.mouse.move(cp.x, Math.max(cp.top + 2, Math.min(cp.bottom - 2, cfg.viewport.height / 2)));
+            await p.mouse.wheel(0, 300);
+          }
+          await p.waitForTimeout(250);
+          cp = await canvasPoint();
+          if (cp.bottom - cp.top < 20) cp = { x: cfg.viewport.width / 2, top: 20, bottom: cfg.viewport.height - 20 };
+        }
+        assert.ok(await p.evaluate(() => { const r = document.getElementById("wl-debug-close").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), `${cfg.name}: 「▲ ゲームへ」 reachable again by scrolling`);
+      }
       await p.click("#wl-debug-seed");
       await settle();
       await p.click("#wl-debug-close");

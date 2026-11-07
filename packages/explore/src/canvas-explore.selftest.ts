@@ -90,6 +90,22 @@ const press = (id: string) => {
 };
 draw(); draw();
 assert.ok(ctx.texts.includes("出撃"), "briefing shows 出撃");
+assert.equal(ui.debugRegions().some((r) => r.id === "explore:debug-open"), false, "no debug opener without debug mode");
+// #353 B2: in debug mode 探索 offers 「検証用の欄へ」 in the briefing and the sortie (tabs are hidden there).
+{
+  let opened = 0;
+  const dbg = new ExploreScene({ ...host(""), openDebug: () => { opened++; } });
+  const dui = new CanvasUI({ blocked: () => false });
+  const dctx = createStubCtx();
+  const dd = () => { dui.beginFrame(dctx, 390, 2400); dui.scrollArea("page", { x: 0, y: 0, w: 390, h: 2400 }, "auto", (off) => { const f = new Flow(dui, 12, 12 - off, 366, -off); dbg.drawPage(dui, f); return f.y + off; }); dui.endFrame(); };
+  dd(); dd();
+  const r = dui.debugRegions().find((x) => x.id === "explore:debug-open");
+  assert.ok(r, "debug mode: opener in the briefing");
+  dui.pointerDown(1, { x: r!.x + r!.w / 2, y: r!.y + r!.h / 2 }, true); dui.pointerUp(1, { x: r!.x + r!.w / 2, y: r!.y + r!.h / 2 });
+  assert.equal(opened, 1, "the opener opens the debug area");
+  assert.equal(dui.debugRegions().some((x) => x.id === "explore:debug-unlock"), false, "the circuit-lock toggle is not on the canvas");
+  dbg.dispose();
+}
 const w0 = store.writes;
 for (let i = 0; i < 10; i++) draw();
 assert.equal(store.writes, w0, "redraw never saves (briefing)");

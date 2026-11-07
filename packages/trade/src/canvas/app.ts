@@ -18,6 +18,7 @@ import {
   CANVAS_THEME,
   CanvasSurface,
   canvasDebugEnabled,
+  canvasNewGameDestination,
   mountShieldDebugConsole,
   setPlayLogNewGameDestination,
   HANDOFF_QUERY_KEYS,
@@ -120,7 +121,7 @@ export function mountCanvasApp(doc: Document = document): void {
   // Debug area (神宮決定 2026-11-06): localhost or ?debug=1, read once at load.
   const debug = canvasDebugEnabled(win.location.search, win.location.hostname);
   // 新規ゲーム (play log) comes back to this page's DOCK, not the existing one (CANVAS-Z3).
-  if (debug) setPlayLogNewGameDestination(canvasBase());
+  if (debug) setPlayLogNewGameDestination(canvasNewGameDestination(canvasBase(), win.location.search, win.location.hostname));
 
   /** Open a URL: in place when this page shows it, else through the play log. */
   const go = (url: string) => {
@@ -157,6 +158,7 @@ export function mountCanvasApp(doc: Document = document): void {
       href: () => win.location.href,
       go,
       redraw: () => surface.invalidate(),
+      openDebug: debug ? () => debugPanel?.open() : undefined,
     });
     current = "sort";
   };
@@ -225,6 +227,7 @@ export function mountCanvasApp(doc: Document = document): void {
       setTimer: (fn, ms) => win.setTimeout(fn, ms),
       touch: win.matchMedia?.("(pointer: coarse)").matches ?? false,
       copy: (text) => win.navigator.clipboard.writeText(text),
+      openDebug: debug ? () => debugPanel?.open() : undefined,
     });
     if (scene.leaveForHub) {
       // Existing main.ts: no save / unreadable checkpoint / done → the hub (replace).
@@ -392,6 +395,8 @@ export function mountCanvasApp(doc: Document = document): void {
 
   const surface = new CanvasSurface(canvas, {
     blocked: () => playLogBlocked(),
+    // Debug area open: the page scrolls between the canvas and the area (#353 B3).
+    inert: () => !!debugPanel?.isOpen,
     draw: (ui, frame) => {
       if (current === "explore" && explore) drawExplore(ui, frame, explore);
       else if (current === "invade" && invade) drawInvade(ui, frame, invade);
@@ -423,6 +428,7 @@ export function mountCanvasApp(doc: Document = document): void {
       return alphaLab;
     },
     redraw: () => surface.invalidate(),
+    beforeOpen: () => surface.cancelInput(),
   }) : null;
 
   const composing = bindEditorNameInput(input, (v) => { start.draft = v; });
