@@ -1,3 +1,10 @@
+## 風紀委員 / 世界観アートワーク収録（2026-11-07）
+- Who: Codex / inspector（風紀委員）
+- What: [世界観アートワーク集](artwork/README.md) に「砲身を囲む街」のPNG原本と、先にローカル保存していた神宮提供の参考画像3枚を収録。井戸・外殻の設定資料から参照できるようにした。
+- Why: 神宮の「その絵も設定資料集に入れておいて」「了解。すすめて」。転送障害で未完了だった保存を再開。
+- Scope: 画像原本・索引・設定資料の参照のみ。機能コード・ゲームルールは変更しない。
+- Status: 原本一致と相対リンクを確認。PR経由でmainへ反映する。文書・画像のみのためデプロイはNOT_TRIGGERED、プレビュー操作はNOT_RUN。
+
 ## canvas #353 Bugbot「Inert canvas still takes keys」（2026-11-07）
 - Who: Cursor Cloud Agent（Grok。神宮の直接指示の続き。Automations は起動していない）
 - What: 検証用の欄が開いている間は、canvas・探索・SORT のキーを取らず、Space の preventDefault もしない。開くときに押したままの探索のキーを離す → [CANVAS_UNIFIED_V0.md §16.6](CANVAS_UNIFIED_V0.md) の B5
