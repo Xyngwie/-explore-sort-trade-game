@@ -17,6 +17,10 @@
 import {
   CANVAS_THEME,
   CanvasSurface,
+  canvasDebugEnabled,
+  canvasNewGameDestination,
+  mountShieldDebugConsole,
+  setPlayLogNewGameDestination,
   HANDOFF_QUERY_KEYS,
   HUB_SAVED_EVENT,
   SHELL_MAX_WIDTH_PX,
@@ -39,7 +43,9 @@ import {
 import { SortScene, armSortBackTrap, sortPopstateAction } from "@estg/sort/canvas";
 import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } from "@estg/restore/canvas";
 import { InvadeScene } from "@estg/invade/canvas";
-import { ExploreScene } from "@estg/explore/canvas";
+import { ExploreScene, inspectShieldFixture } from "@estg/explore/canvas";
+import { mountDebugPanel, type DebugAction } from "./debug-panel";
+import { routeGameKey } from "./game-keys";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
 import { browserDockEnv, DOCK_ANCHOR } from "./dock-sections";
 import { tabUrl } from "./tabs";
@@ -113,6 +119,10 @@ export function mountCanvasApp(doc: Document = document): void {
   const exploreBase = new URL(resolveModuleBaseUrl("explore"), win.location.href).toString();
   const onInvadePage = () => win.location.pathname.endsWith("/" + CANVAS_INVADE_PATH);
   const onExplorePage = () => win.location.pathname.endsWith("/" + CANVAS_EXPLORE_PATH);
+  // Debug area (神宮決定 2026-11-06): localhost or ?debug=1, read once at load.
+  const debug = canvasDebugEnabled(win.location.search, win.location.hostname);
+  // 新規ゲーム (play log) comes back to this page's DOCK, not the existing one (CANVAS-Z3).
+  if (debug) setPlayLogNewGameDestination(canvasNewGameDestination(canvasBase(), win.location.search, win.location.hostname));
 
   /** Open a URL: in place when this page shows it, else through the play log. */
   const go = (url: string) => {
@@ -132,7 +142,7 @@ export function mountCanvasApp(doc: Document = document): void {
     if (ingested.consumed) clearHandoffFromUrl();
     dock = new DockScene({
       navigateLegacy: () => playLogNavigate(resolveModuleBaseUrl("trade")),
-      env: { ...browserDockEnv(), navigate: go },
+      env: { ...browserDockEnv(), navigate: go, debug, openDebug: () => debugPanel?.open() },
       onTab: (tab) => { if (!playLogBlocked()) go(tabUrl(tab)); },
       redraw: () => surface.invalidate(),
       initialState: ingested.state,
@@ -149,6 +159,7 @@ export function mountCanvasApp(doc: Document = document): void {
       href: () => win.location.href,
       go,
       redraw: () => surface.invalidate(),
+      openDebug: debug ? () => debugPanel?.open() : undefined,
     });
     current = "sort";
   };
@@ -217,6 +228,7 @@ export function mountCanvasApp(doc: Document = document): void {
       setTimer: (fn, ms) => win.setTimeout(fn, ms),
       touch: win.matchMedia?.("(pointer: coarse)").matches ?? false,
       copy: (text) => win.navigator.clipboard.writeText(text),
+      openDebug: debug ? () => debugPanel?.open() : undefined,
     });
     if (scene.leaveForHub) {
       // Existing main.ts: no save / unreadable checkpoint / done → the hub (replace).
@@ -245,6 +257,7 @@ export function mountCanvasApp(doc: Document = document): void {
     else if (onRestorePage()) enterRestore();
     else if (sceneForSearch(win.location.search) === "sort") enterSort();
     else enterDock();
+    debugPanel?.refresh();
     surface.invalidate();
   };
 
@@ -383,6 +396,8 @@ export function mountCanvasApp(doc: Document = document): void {
 
   const surface = new CanvasSurface(canvas, {
     blocked: () => playLogBlocked(),
+    // Debug area open: the page scrolls between the canvas and the area (#353 B3).
+    inert: () => !!debugPanel?.isOpen,
     draw: (ui, frame) => {
       if (current === "explore" && explore) drawExplore(ui, frame, explore);
       else if (current === "invade" && invade) drawInvade(ui, frame, invade);
@@ -394,6 +409,30 @@ export function mountCanvasApp(doc: Document = document): void {
     },
   });
 
+  // The HTML debug area under the canvas (debug mode only).
+  let alphaLab: HTMLElement | null = null;
+  const debugPanel = debug ? mountDebugPanel({
+    doc,
+    dockActions: () => (current === "dock" && dock?.sections ? dock.sections.debugActions() : null),
+    sceneActions: () => {
+      const out: DebugAction[] = [];
+      if (current === "sort" && sort) out.push(...sort.debugActions());
+      const unlock = current === "explore" ? explore?.debugUnlock() : null;
+      if (unlock) out.push({ id: "explore-unlock", label: `探索：回路ロック ${unlock.mode} → ${unlock.next}`, run: () => explore?.toggleDebugUnlock() });
+      return out;
+    },
+    alphaLab: () => {
+      if (!alphaLab) {
+        mountShieldDebugConsole(() => (explore ? inspectShieldFixture(explore.world) : null));
+        alphaLab = doc.getElementById("shield-debug-console");
+      }
+      return alphaLab;
+    },
+    redraw: () => surface.invalidate(),
+    // Keys already down would keep moving and firing: keyup is not applied while the area is open.
+    beforeOpen: () => { surface.cancelInput(); explore?.releaseHeldKeys(); },
+  }) : null;
+
   const composing = bindEditorNameInput(input, (v) => { start.draft = v; });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !composing.isComposing() && !e.isComposing && !playLogBlocked()) {
@@ -403,12 +442,15 @@ export function mountCanvasApp(doc: Document = document): void {
     }
   });
   // SORT keys: arrows swap with the selected neighbour, Shift+arrow moves the selection.
-  win.addEventListener("keydown", (e) => {
-    if (current === "sort" && sort && !playLogBlocked() && sort.key(e.key, e.shiftKey)) e.preventDefault();
-    // 探索: the existing page's keys (CANVAS-X5), not while typing in the name field.
-    if (current === "explore" && explore && e.target !== input && explore.keyDown(e.key, e.repeat, e.shiftKey)) e.preventDefault();
+  // 探索: the existing page's keys (CANVAS-X5), not while typing in the name field.
+  // Debug area open: neither runs, and nothing calls preventDefault (Space scrolls the page).
+  const onGameKey = (e: KeyboardEvent, type: "keydown" | "keyup") => routeGameKey({
+    type, key: e.key, repeat: e.repeat, shiftKey: e.shiftKey, targetIsNameField: e.target === input,
+  }, {
+    debugOpen: !!debugPanel?.isOpen, scene: current, playLogBlocked: playLogBlocked(), sort, explore,
   });
-  win.addEventListener("keyup", (e) => { if (current === "explore" && explore) explore.keyUp(e.key); });
+  win.addEventListener("keydown", (e) => { if (onGameKey(e, "keydown")) e.preventDefault(); });
+  win.addEventListener("keyup", (e) => { onGameKey(e, "keyup"); });
   // Existing main.ts: hidden → checkpoint + pause; pagehide → checkpoint.
   doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden" && current === "explore") explore?.persistOnHide(true); });
   win.addEventListener("pagehide", () => { if (current === "explore") explore?.persistOnHide(false); });

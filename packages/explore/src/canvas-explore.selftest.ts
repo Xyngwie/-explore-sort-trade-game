@@ -90,6 +90,22 @@ const press = (id: string) => {
 };
 draw(); draw();
 assert.ok(ctx.texts.includes("出撃"), "briefing shows 出撃");
+assert.equal(ui.debugRegions().some((r) => r.id === "explore:debug-open"), false, "no debug opener without debug mode");
+// #353 B2: in debug mode 探索 offers 「検証用の欄へ」 in the briefing and the sortie (tabs are hidden there).
+{
+  let opened = 0;
+  const dbg = new ExploreScene({ ...host(""), openDebug: () => { opened++; } });
+  const dui = new CanvasUI({ blocked: () => false });
+  const dctx = createStubCtx();
+  const dd = () => { dui.beginFrame(dctx, 390, 2400); dui.scrollArea("page", { x: 0, y: 0, w: 390, h: 2400 }, "auto", (off) => { const f = new Flow(dui, 12, 12 - off, 366, -off); dbg.drawPage(dui, f); return f.y + off; }); dui.endFrame(); };
+  dd(); dd();
+  const r = dui.debugRegions().find((x) => x.id === "explore:debug-open");
+  assert.ok(r, "debug mode: opener in the briefing");
+  dui.pointerDown(1, { x: r!.x + r!.w / 2, y: r!.y + r!.h / 2 }, true); dui.pointerUp(1, { x: r!.x + r!.w / 2, y: r!.y + r!.h / 2 });
+  assert.equal(opened, 1, "the opener opens the debug area");
+  assert.equal(dui.debugRegions().some((x) => x.id === "explore:debug-unlock"), false, "the circuit-lock toggle is not on the canvas");
+  dbg.dispose();
+}
 const w0 = store.writes;
 for (let i = 0; i < 10; i++) draw();
 assert.equal(store.writes, w0, "redraw never saves (briefing)");
@@ -201,6 +217,24 @@ for (let i = 0; i < 20; i++) { now += 16; scene.frame(now); }
 scene.keyUp("w");
 assert.ok(scene.world.leader.pos.y < y0, "W moves the captain up");
 assert.equal(scene.clickMove, null, "key move clears the tap target");
+// Opening the debug area releases keys already held (#353). keyup is not delivered while it is open.
+{
+  const origin = { x: scene.world.leader.pos.x, y: scene.world.leader.pos.y };
+  const sample = (release: boolean) => {
+    scene.world.leader.pos = { x: origin.x, y: origin.y };
+    assert.equal(scene.keyDown("w", false), true);
+    if (release) scene.releaseHeldKeys();
+    const y = scene.world.leader.pos.y;
+    for (let i = 0; i < 8; i++) { now += 16; scene.frame(now); }
+    const dy = scene.world.leader.pos.y - y;
+    scene.keyUp("w");
+    return dy;
+  };
+  const held = sample(false);
+  const dropped = sample(true);
+  assert.ok(held < -1, `W held across frames moves up (${held})`);
+  assert.ok(dropped > held / 2, `releaseHeldKeys does not keep W applied (held ${held}, dropped ${dropped})`);
+}
 {
   const c = getCoverObjects(scene.world)[0];
   assert.ok(c, "map has cover");

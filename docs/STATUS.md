@@ -1,3 +1,24 @@
+## canvas #353 Bugbot「Inert canvas still takes keys」（2026-11-07）
+- Who: Cursor Cloud Agent（Grok。神宮の直接指示の続き。Automations は起動していない）
+- What: 検証用の欄が開いている間は、canvas・探索・SORT のキーを取らず、Space の preventDefault もしない。開くときに押したままの探索のキーを離す → [CANVAS_UNIFIED_V0.md §16.6](CANVAS_UNIFIED_V0.md) の B5
+- Why: PR #353 の Bugbot medium（discussion r4499292799）。欄を開いた出撃中も移動と射撃が入り、Space でページをスクロールできなかった
+- Scope: 欄が開いている間のキーだけ。閉じている間のキー、ゲームの規則、セーブ形式、既存版のページ、§16 の Z 決定は変更なし。B1–B3 は戻さない
+- Status: PR #353 に push。ready for review。マージ・デプロイはしない
+
+## canvas #353 の監査の修正（2026-11-07）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: B1 新規ゲームのあとも `?debug=1` を残す。B2 SORT・探索にも「検証用の欄へ」。B3 欄を開いている間は、canvas の上でもページがスクロールする。B4 節番号の誤り → [CANVAS_UNIFIED_V0.md §16.6](CANVAS_UNIFIED_V0.md)
+- Why: Grok Bot の監査（#353、changes_required、2026-11-07）
+- Scope: 検証用の欄と、その開き方・スクロールだけ。欄を閉じている間の canvas の入力・ゲームの規則・セーブ形式は変更なし
+- Status: PR #353 に push。再監査待ち。マージ・デプロイはオーケストレーター側
+
+## canvas の検証用の欄（canvas の下、2026-11-06・神宮決定）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 本来の流れではない検証用の機能（DOCK の検証用ボタン・デモ初期化・プレイ記録のパネル・Alpha Lab・探索の回路ロック切り替え・SORT のテストプレイ）を canvas から外し、canvas の下の HTML の欄にまとめた → [CANVAS_UNIFIED_V0.md §16](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「デバッグ関係は canvas 外の下にまとめて置いてくれる？」（2026-11-06）。出す場所は開発版だけ（localhost か `?debug=1`）、行き方は DOCK のボタン、新規ゲームは欄の中だけ（すべて神宮決定）
+- Scope: canvas 版の配置だけ。既存版のページ・各機能の処理・セーブ形式は変更なし
+- Status: 細部 CANVAS-Z3・Z4・Z6 はすべて★のとおり神宮決定（2026-11-06「Zは全部★」）：Z3 新規ゲーム後は canvas の DOCK／Z4 パレットは移植しない／Z6 INVADE の再生成はゲーム内に残す。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## canvas #351 の Bugbot 指摘 2 件の修正（2026-11-06）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: (1) 同じページのまま探索を離れるとき、`pagehide` と同じ途中保存を書く。(2) 一時停止の覆いを最上層にし、ボタン・地図・対象選択のどれへのタップも再開だけにする → [CANVAS_UNIFIED_V0.md §14.6](CANVAS_UNIFIED_V0.md)

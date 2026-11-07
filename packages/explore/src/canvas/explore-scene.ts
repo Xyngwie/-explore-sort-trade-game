@@ -171,6 +171,8 @@ export type ExploreHost = {
   requestFrame?: (fn: (now: number) => void) => number;
   cancelFrame?: (id: number) => void;
   setTimer?: (fn: () => void, ms: number) => unknown;
+  /** Debug mode only: open the HTML debug area under the canvas (#353 B2). */
+  openDebug?: () => void;
   /** Coarse pointer (phone / tablet): the key table is not shown (CANVAS-Y4). */
   touch?: boolean;
   /** Clipboard (repair-log rows copy their details, as on the existing page). */
@@ -409,6 +411,17 @@ export class ExploreScene {
     return prevent;
   }
   keyUp(key: string): void { this.keys.delete(key.toLowerCase()); }
+  /**
+   * Drop movement and fire that are still held. The debug area takes the
+   * keyboard while it is open, and keyup is not delivered to the game then,
+   * so a key that was already down must be released here or it keeps applying.
+   */
+  releaseHeldKeys(): void {
+    this.keys.clear();
+    this.input.move = { x: 0, y: 0 };
+    this.input.fire = false;
+    this.input.interact = false;
+  }
   private syncMoveFromKeys(): void {
     const keys = this.keys;
     let x = 0, y = 0;
@@ -649,7 +662,7 @@ export class ExploreScene {
       if (Object.values(w.mechBattery).some((b) => b.activity <= 0)) c.gap(6).text("活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。", { color: "#d29922" });
       if (this.preSortieAmmoNote) c.gap(6).text(this.preSortieAmmoNote, { color: "#d29922" });
       c.gap(8).text(briefingHelpText(this.cmdLocked), { size: 12, color: CANVAS_THEME.muted });
-      this.drawDebugBar(c);
+      this.drawDebugOpener(c);
     });
     void ui;
   }
@@ -853,10 +866,20 @@ export class ExploreScene {
     this.drawWingPalette(f);
     this.drawSquadOrders(f);
     f.gap(8).text(sortieHelpText(this.cmdLocked), { size: 11, color: CANVAS_THEME.muted });
-    this.drawDebugBar(f);
     this.drawWingPanel(ui, f);
     this.drawLog(ui, f);
     this.drawKeys(f);
+    this.drawDebugOpener(f);
+  }
+
+  /**
+   * Debug mode only: reach the debug area from 探索 (tabs are hidden in the sortie).
+   * The circuit-lock toggle itself stays in the HTML area, never on the canvas.
+   */
+  private drawDebugOpener(f: Flow): void {
+    const open = this.host.openDebug;
+    if (!open) return;
+    f.gap(12).buttons([{ id: "explore:debug-open", label: "検証用の欄へ ▼", onActivate: () => { if (!this.inputLocked()) open(); } }]);
   }
 
   /** 残骸盾 (existing btn-strip). */
@@ -934,21 +957,25 @@ export class ExploreScene {
     }
   }
 
-  /** DEBUG circuit-lock toggle (preview builds only, existing debug-unlock-bar). */
-  private drawDebugBar(f: Flow): void {
-    if (!isDebugUnlockToggleVisible()) return;
+  /**
+   * DEBUG circuit-lock toggle (preview builds only, existing debug-unlock-bar).
+   * Shown in the page's debug area, not on the canvas (神宮決定 2026-11-06).
+   */
+  debugUnlock(): { mode: string; next: string } | null {
+    if (!isDebugUnlockToggleVisible()) return null;
     const mode = this.world.commandUnlock.mode;
     const next = mode === "release" ? "all_unlocked" : "release";
-    f.gap(8).text(`DEBUG 回路ロック: ${COMMAND_UNLOCK_MODE_LABEL[mode]}`, { size: 12, color: "#d29922", weight: 600 });
-    f.gap(2).buttons([{ id: "explore:debug-unlock", label: `→ ${COMMAND_UNLOCK_MODE_LABEL[next]}`, onActivate: () => {
-      if (this.inputLocked()) return;
-      writeDebugCommandUnlockMode(next);
-      const w = this.world;
-      w.commandUnlock.mode = next;
-      if (w.circuitPlay) w.circuitPlay.release = next === "release";
-      else attachCircuitPlay(w, this.readHub(), next === "release");
-      this.host.redraw();
-    } }]);
+    return { mode: COMMAND_UNLOCK_MODE_LABEL[mode], next: COMMAND_UNLOCK_MODE_LABEL[next] };
+  }
+  toggleDebugUnlock(): void {
+    if (this.inputLocked() || !isDebugUnlockToggleVisible()) return;
+    const w = this.world;
+    const next = w.commandUnlock.mode === "release" ? "all_unlocked" : "release";
+    writeDebugCommandUnlockMode(next);
+    w.commandUnlock.mode = next;
+    if (w.circuitPlay) w.circuitPlay.release = next === "release";
+    else attachCircuitPlay(w, this.readHub(), next === "release");
+    this.host.redraw();
   }
 
   /** Existing #wing-panel: one card per wingman (gauge, status, load, orders). Tapping a card opens the palette. */
