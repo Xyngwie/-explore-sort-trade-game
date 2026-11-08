@@ -186,7 +186,7 @@ export class DockScene {
     }
   }
 
-  /** HUB (H) wide layout: CANVAS-PR2 (暫定 ★A) — 1200px and up, 3:2, at most 1440px. */
+  /** HUB (H) wide layout: CANVAS-PR2 (神宮決定 2026-11-08) — 1200px and up, 3:2, at most 1440px. */
   static readonly HUB_TWO_COL_MIN_W = 1200;
   static readonly HUB_TWO_COL_MAX_W = 1440;
 

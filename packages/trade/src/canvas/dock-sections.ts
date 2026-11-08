@@ -339,7 +339,7 @@ export class DockSections {
       case "M": return this.choices(f, [{ to: "MM", label: "機体" }, { to: "C", label: "回路" }]);
       case "MM": return this.choices(f, [
         { to: "MN" }, { to: "EQ" }, { to: "MD", label: "処分" },
-        // CANVAS-PR8 (暫定 ★A): the existing repair / revive / charge work, as children of 機体整備.
+        // CANVAS-PR8 (神宮決定 2026-11-08): the existing repair / revive / charge work, as children of 機体整備.
         { to: "MR", label: "修理", sub: `${this.repairable().length}機` },
         { to: "MV", label: "残骸復活", sub: `${this.wrecks().length}機` },
         { to: "MQ", label: "充電" },
@@ -366,6 +366,8 @@ export class DockSections {
       case "EQ": return this.drawEquip(f);
       case "I": return this.drawInvadeChoice(f);
       case "IT": return this.drawSquad(ui, f);
+      case "ITD": return this.drawSquadDetail(f);
+      case "EQS": return this.drawEquipStatus(f);
       case "A": return this.choices(f, [{ to: "AI" }, { to: "AH" }, { to: "AL" }, { to: "AS" }]);
       case "AI": return this.drawInventory(f);
       case "AH": return this.drawHistory(f);
@@ -398,7 +400,7 @@ export class DockSections {
         c.text(`初期支給の開封済み ${intro.initialOpened}/10個。初期支給分は購入分と別に開封します。`, { color: CANVAS_THEME.muted });
       }).gap(8);
     }
-    // Sortie-guard banner (§16): only after Explore's 格納庫へ. CANVAS-PR3 (暫定 ★A): the button opens the palette for the cause.
+    // Sortie-guard banner (§16): only after Explore's 格納庫へ. CANVAS-PR3 (神宮決定 2026-11-08): the button opens the palette for the cause.
     const flagged = !this.guardDismissed && this.env.session?.getItem(SORTIE_GUARD_RETURN_KEY) === "1" && !DEBUG_FIXTURE_ACTIVE;
     const guard = flagged ? sortieGuardGuide(hub, ready.selectedIds) : null;
     if (flagged && !guard) { try { this.env.session?.removeItem(SORTIE_GUARD_RETURN_KEY); } catch { /* */ } }
@@ -412,7 +414,7 @@ export class DockSections {
         ]);
       }, { fill: "#3d1d1d", edge: "#f85149" }).gap(8);
     }
-    // 所持資産の表示 — CANVAS-PR7 (暫定 ★A): this card is the way into 所持資産の詳細 (A).
+    // 所持資産の表示 — CANVAS-PR7 (神宮決定 2026-11-08): this card is the way into 所持資産の詳細 (A).
     f.card("assets", (c) => {
       const top = c.y;
       const h = ui.memo.get("card:assets:h") ?? 120;
@@ -434,7 +436,7 @@ export class DockSections {
     g.gap(8);
     this.drawDebug(g);
   }
-  /** CANVAS-PR3 (暫定 ★A): where the guard's button leads. */
+  /** CANVAS-PR3 (神宮決定 2026-11-08): where the guard's button leads. */
   private goGuard(code: string): void {
     if (code === "first_leader") return this.goPalette("IT");
     if (code === "first_circuit_unrepaired") {
@@ -470,22 +472,16 @@ export class DockSections {
     const circuits = formatCircuitHubBrief(hubVisibleCircuits(hub), s.lastCircuit);
     const active = circuits.lines.find((l) => l.active) ?? circuits.lines[0] ?? null;
     const ammoShort = sortieAmmoShortLineJa(hub, ready.selectedIds);
+    // CANVAS-G8 (神宮決定 2026-11-08): readiness + the warnings to act on here; the rest is 次の出撃の詳細 (ITD).
     f.card("sortie", (c) => {
       c.kv("次の出撃", ready.readinessLabelJa, { weight: 700, size: 16, lineH: 26 });
       c.text(`出撃部隊の回路 ${squadCircuitUsage(hub, ready.selectedIds)}/${squadCircuitLimit(hub)}枚`);
       if (equipmentNote) c.text(equipmentNote, { color: "#ffa198" });
       if (emptyActivity.length) c.text(`出撃部隊に活動量0の機体が${emptyActivity.length}機あります。出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。`, { color: "#ffa198" });
-      c.gap(4).text(`探索: ${digest.exploreJa}`, { color: s.lastExploreReturn ? "#aff5b4" : CANVAS_THEME.muted });
-      c.text(`戦線: ${digest.invadeJa}`, { color: s.lastInvadeSector ? "#aff5b4" : CANVAS_THEME.muted });
-      c.text(`回路: ${digest.restoreJa}`, { color: hubVisibleCircuits(hub).length ? "#aff5b4" : CANVAS_THEME.muted });
-      c.text(`回路効果値 ${active?.effectJa ?? "効果 —"}`);
-      c.text(`回路ボーナス: ${formatCircuitBonusesJa(hubCircuitBonuses(hub))}`, { color: CANVAS_THEME.muted });
-      const lost = lostMechCountLineJa(hub), wreck = wreckCountLineJa(hub);
-      if (lost) c.text(lost, { color: CANVAS_THEME.muted });
-      if (wreck) c.text(wreck, { color: CANVAS_THEME.muted });
-      c.text(ready.needsRepair === 0 ? "修理待ちなし — 出撃可" : `要修理 ${ready.needsRepair}機 — 整備の修理 / 処分へ`, { color: ready.needsRepair === 0 ? "#aff5b4" : "#ffa198" });
       if (ammoShort) c.text(ammoShort, { color: "#ffa198" });
     }).gap(8);
+    this.choices(f, [{ to: "ITD", label: "次の出撃の詳細" }]);
+    f.gap(8);
     const bulletin = bulletinUnlockedLineHtml(hub).replace(/<[^>]+>/g, "").trim();
     if (bulletin) f.text(bulletin, { color: CANVAS_THEME.muted });
     f.buttons([{ id: "dock:hangar:all", label: "出撃可能な全機体", onActivate: () => this.act("btn-select-all", {}, selectAllDeployable) }]).gap(6);
@@ -499,6 +495,44 @@ export class DockSections {
         toggleAt(ui, `dock:mech:${m.instanceId}:select`, { x: r.x + r.w - 92, y: top, w: 92, h: 44 }, "出撃", checked, !deployable,
           () => this.act("select", { act: "select", id: m.instanceId }, (st) => setDeploySelection(st, m.instanceId, !checked)));
       }, m.instanceId === leaderId ? "隊長機" : undefined);
+    }
+  }
+
+  /** ITD: the rest of the existing 次の出撃 information (display only). */
+  private drawSquadDetail(f: Flow): void {
+    const s = this.state, hub = s.hub;
+    const ready = buildNextSortieReadiness(s);
+    const digest = buildNextSortieReturnDigest(s);
+    const circuits = formatCircuitHubBrief(hubVisibleCircuits(hub), s.lastCircuit);
+    const active = circuits.lines.find((l) => l.active) ?? circuits.lines[0] ?? null;
+    f.text(`探索: ${digest.exploreJa}`, { color: s.lastExploreReturn ? "#aff5b4" : CANVAS_THEME.muted });
+    f.text(`戦線: ${digest.invadeJa}`, { color: s.lastInvadeSector ? "#aff5b4" : CANVAS_THEME.muted });
+    f.text(`回路: ${digest.restoreJa}`, { color: hubVisibleCircuits(hub).length ? "#aff5b4" : CANVAS_THEME.muted });
+    f.text(`回路効果値 ${active?.effectJa ?? "効果 —"}`);
+    f.text(`回路ボーナス: ${formatCircuitBonusesJa(hubCircuitBonuses(hub))}`, { color: CANVAS_THEME.muted });
+    f.gap(4).text("配備予定", { weight: 700 });
+    if (ready.selectedIds.length === 0) f.text("配備対象なし — 健在機を修理するか受領してください。", { color: CANVAS_THEME.muted });
+    for (const id of ready.selectedIds) {
+      const m = hub.fleet.find((x) => x.instanceId === id);
+      if (m) f.text(`${m.catalogId}　耐久 ${m.durability}/${m.durabilityMax} (${Math.round((m.durability / m.durabilityMax) * 100)}%)`);
+    }
+    const lost = lostMechCountLineJa(hub), wreck = wreckCountLineJa(hub);
+    if (lost) f.text(lost, { color: CANVAS_THEME.muted });
+    if (wreck) f.text(wreck, { color: CANVAS_THEME.muted });
+    f.text(ready.needsRepair === 0 ? "修理待ちなし — 出撃可" : `要修理 ${ready.needsRepair}機 — 整備の修理 / 処分へ`, { color: ready.needsRepair === 0 ? "#aff5b4" : "#ffa198" });
+  }
+  /** EQS: the existing 現在の装備状況 and the shield explanations (display only). */
+  private drawEquipStatus(f: Flow): void {
+    const hub = this.state.hub;
+    const circuits = hubVisibleCircuits(hub);
+    const equipped = circuits.filter((x) => x.equippedTo != null);
+    if (circuits.some((x) => x.effectKey === "shield")) f.text(`盾：${SHIELD_CIRCUIT_DESCRIPTION_JA}`, { color: CANVAS_THEME.muted, size: 12 });
+    if (circuits.some((x) => x.effectKey === "p_shield")) f.text(`P盾：${P_SHIELD_CIRCUIT_DESCRIPTION_JA}`, { color: CANVAS_THEME.muted, size: 12 });
+    f.gap(4).text(`現在の装備状況（${equipped.length}枚）`, { weight: 700 });
+    f.text(`出撃部隊の回路：${squadCircuitUsage(hub, resolveSortieSelection(hub))}/${squadCircuitLimit(hub)}枚。武器種・特殊弾・盾回路・P盾回路は各機体に各1枚まで。`, { size: 12 });
+    for (const m of hub.fleet ?? []) {
+      const mine = circuits.filter((x) => x.equippedTo === m.instanceId);
+      f.text(`${m.catalogId}：${mine.length === 0 ? "なし" : mine.map((x) => `${x.circuitId}（${circuitKindPrefix(x)}${circuitRestoreStateLabelJa(x.restoreState)}）`).join("、")}`, { size: 12, color: CANVAS_THEME.muted });
     }
   }
 
@@ -601,7 +635,7 @@ export class DockSections {
     }), { h: 52 });
   }
 
-  /** VR: rare items only, one at a time. CANVAS-PR4 (暫定 ★A): confirm like every other sale (Q9). */
+  /** VR: rare items only, one at a time. CANVAS-PR4 (神宮決定 2026-11-08): confirm like every other sale (Q9). */
   private drawRareSell(f: Flow): void {
     const rares = this.rareEntries();
     f.text("レアのみ売却可。仮価格（バランス未調整）：" + RARE_SELL_PRICE_TABLE.map((r) => `${labelYield(r.id)} ${r.credits}c`).join("・"), { color: CANVAS_THEME.muted, size: 12 }).gap(6);
@@ -731,8 +765,6 @@ export class DockSections {
     const cRec = circuits.find((c) => c.circuitId === cid);
     const mRec = fleet.find((m) => m.instanceId === mid);
     f.text("HUBでのみ付け替え可能。装備・取り外しは無料です。", { color: CANVAS_THEME.muted, size: 12 });
-    if (circuits.some((x) => x.effectKey === "shield")) f.text(`盾：${SHIELD_CIRCUIT_DESCRIPTION_JA}`, { color: CANVAS_THEME.muted, size: 12 });
-    if (circuits.some((x) => x.effectKey === "p_shield")) f.text(`P盾：${P_SHIELD_CIRCUIT_DESCRIPTION_JA}`, { color: CANVAS_THEME.muted, size: 12 });
     f.gap(6);
     if (circuits.length === 0) f.text("回路がありません。", { color: CANVAS_THEME.muted });
     else if (fleet.length === 0) f.text("装備先の機体がありません。", { color: CANVAS_THEME.muted });
@@ -747,13 +779,10 @@ export class DockSections {
       ]).gap(6);
       f.buttons([{ id: "dock:equip:equip", label: "装備", variant: "primary", w: f.w, onActivate: () => this.equip("equip", cid, mid) }]).gap(8);
     }
+    // CANVAS-G8 (神宮決定 2026-11-08): the status list and shield explanations are 装備状況 (EQS).
     const equipped = circuits.filter((x) => x.equippedTo != null);
-    f.text(`現在の装備状況（${equipped.length}枚）`, { color: CANVAS_THEME.muted, size: 12 });
-    f.text(`出撃部隊の回路：${squadCircuitUsage(hub, resolveSortieSelection(hub))}/${squadCircuitLimit(hub)}枚。武器種・特殊弾・盾回路・P盾回路は各機体に各1枚まで。`, { size: 12 });
-    for (const m of fleet) {
-      const mine = circuits.filter((x) => x.equippedTo === m.instanceId);
-      f.text(`${m.catalogId}：${mine.length === 0 ? "なし" : mine.map((x) => `${x.circuitId}（${circuitKindPrefix(x)}${circuitRestoreStateLabelJa(x.restoreState)}）`).join("、")}`, { size: 12, color: CANVAS_THEME.muted });
-    }
+    f.gap(8);
+    this.choices(f, [{ to: "EQS", label: "装備状況", sub: `${equipped.length}枚装備中 · 出撃部隊の回路 ${squadCircuitUsage(hub, resolveSortieSelection(hub))}/${squadCircuitLimit(hub)}枚` }]);
     if (equipped.length) f.gap(8).buttons([{ id: "dock:nav:CU", label: "取り外す →", w: f.w, onActivate: () => this.openPalette("CU") }]);
   }
   private equip(kind: "equip" | "unequip", cid: string | null, mid: string | null): void {
