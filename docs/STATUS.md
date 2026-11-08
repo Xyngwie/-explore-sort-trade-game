@@ -1,3 +1,10 @@
+## canvas 改修計画：パレット組み直し（2026-11-08）
+- Who: Cursor Cloud Agent（Grok。神宮の直接依頼。Automations は起動していない）
+- What: canvas 版の情報設計を [CANVAS_PALETTE_RESTRUCTURE.md](CANVAS_PALETTE_RESTRUCTURE.md) に置いた。この台帳と [CANVAS_UNIFIED_V0.md](CANVAS_UNIFIED_V0.md) にはその文書へのポインタだけ
+- Why: 神宮が、canvas の改修計画を main に `.md` で置くよう依頼した
+- Scope: 計画文書とポインタのみ。ゲームコード・テスト・HTML・既存の神宮決定は変更しない
+- Status: PR で提出。文書のみのためデプロイは NOT_TRIGGERED。プレビュー操作は NOT_RUN。マージしない。細部9問は未決定
+
 ## 風紀委員 / 残骸から盾を切り出すアートワーク（2026-11-07）
 - Who: Codex / inspector（風紀委員）
 - What: [世界観アートワーク集](artwork/README.md) に、左側のアームに合わせて左右反転した2枚目のPNG原本を収録。
