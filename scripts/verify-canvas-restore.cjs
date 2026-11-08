@@ -135,6 +135,12 @@ const CONFIGS = [
         await tap("start:go");
         await settle();
       };
+      /** Palette tree (docs/CANVAS_PALETTE_RESTRUCTURE.md): back to HUB, then tap through the palettes. */
+      const nav = async (...path) => {
+        for (let i = 0; i < 8 && (await region("dock:nav:back")); i++) { if (await region("dock:nav:home")) await tap("dock:nav:home"); else await tap("dock:nav:back"); }
+        for (const id of path) { await reveal(`dock:nav:${id}`); await tap(`dock:nav:${id}`); }
+        assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), path.at(-1) ?? "H", `palette ${path.join(">")}`);
+      };
       await p.goto(local + "canvas/");
       await startGame();
       // Test tools live in the HTML debug area under the canvas (localhost = debug mode, 神宮決定 2026-11-06).
@@ -147,8 +153,15 @@ const CONFIGS = [
       assert.equal(await p.evaluate(() => document.getElementById("wl-debug").hidden && window.scrollY === 0), true, "debug area closed, back to the game");
       await settle();
       const marker = await p.evaluate(() => (window.__marker = Math.random()));
-      await reveal("dock:sortie:restore");
-      await tap("dock:sortie:restore");
+      // RESTORE from the palette tree: 整備 → 回路 → 所持回路 → (a circuit) → 回路詳細 → 修復へ.
+      await nav("M", "C", "CI");
+      // The circuit the old HUB 「修復へ」 opened: the selected one (lastCircuit).
+      const cid = await p.evaluate(() => window.__wlCanvas.selectedCircuit() ?? window.__wlCanvas.regions().find((r) => /^dock:circuit:.+:select$/.test(r.id)).id.split(":").slice(2, -1).join(":"));
+      await reveal(`dock:circuit:${cid}:select`);
+      await tap(`dock:circuit:${cid}:select`);
+      assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), "CD");
+      await reveal(`dock:circuit:${cid}:open`);
+      await tap(`dock:circuit:${cid}:open`);
       await settle();
       assert.equal(await scene(), "restore", `${cfg.name}: RESTORE opened`);
       assert.equal(await p.evaluate(() => window.__marker), marker, "same page (no load)");

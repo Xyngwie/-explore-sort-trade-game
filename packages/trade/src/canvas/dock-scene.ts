@@ -26,6 +26,7 @@ import {
   type Delta, type MarketDeps, type MarketItem,
 } from "./market";
 import { DockSections, DOCK_ANCHOR, type DockEnv } from "./dock-sections";
+import { PALETTE_TITLE } from "./palette-tree";
 import { dockTabs, type DockTab } from "./tabs";
 import type { HangarState } from "../hangar";
 
@@ -52,10 +53,10 @@ const GAP = 4;
 const ROW_GAP = 8;
 
 /** Market rows starting at (x, y), `inner` wide. */
-export function layoutMarketRows(x0: number, y0: number, inner: number, wide: boolean): { rows: MarketRow[]; height: number } {
+export function layoutMarketRows(x0: number, y0: number, inner: number, wide: boolean, items: readonly MarketItem[] = MARKET_ITEMS): { rows: MarketRow[]; height: number } {
   let y = y0;
   const rows: MarketRow[] = [];
-  for (const item of MARKET_ITEMS) {
+  for (const item of items) {
     // Every control keeps the 44px minimum (CANVAS_MIN_TARGET_PX). When the buy button
     // (≥ 88px) does not fit beside the quantity buttons, it moves to its own line.
     const T = CANVAS_MIN_TARGET_PX;
@@ -137,8 +138,11 @@ export class DockScene {
   constructor(private readonly opts: DockSceneOptions = {}) {
     this.deps = opts.deps ?? browserMarketDeps;
     this.sections = opts.env ? new DockSections(opts.env, () => this.reloadMarket(), () => opts.redraw?.(), opts.initialState) : null;
+    if (this.sections) this.sections.onNavigate = () => { this.scrollReset = true; this.delta = null; this.notice = null; this.opts.redraw?.(); };
     this.hub = this.deps.read();
   }
+  /** The next frame starts the (new) palette at its top. */
+  private scrollReset = false;
   private reloadMarket(): void {
     this.hub = this.deps.read();
     for (const item of MARKET_ITEMS) this.qty[item] = clampQty(this.qty[item], maxBuy(this.hub, item));
@@ -148,7 +152,7 @@ export class DockScene {
     this.reloadMarket();
     this.sections?.reloadHub();
   }
-  /** Scroll to a section (SORT tab = 未開封, tree nodes, guard banner). */
+  /** Open the palette that holds an old section (SORT tab = 未開封 → 仕分). */
   goAnchor(id: string): void {
     if (this.sections) this.sections.goAnchor(id);
     else this.opts.redraw?.();
@@ -182,56 +186,78 @@ export class DockScene {
     }
   }
 
+  /** HUB (H) wide layout: CANVAS-PR2 (暫定 ★A) — 1200px and up, 3:2, at most 1440px. */
+  static readonly HUB_TWO_COL_MIN_W = 1200;
+  static readonly HUB_TWO_COL_MAX_W = 1440;
+
   draw(ui: CanvasUI, frame: FrameInfo): void {
     const ctx = ui.context;
     const L = layoutDock(frame, !!this.notice);
     ctx.fillStyle = CANVAS_THEME.bg;
     ctx.fillRect(0, 0, frame.width, frame.height);
     this.drawHud(ui, L, frame.width <= CANVAS_MOBILE_MAX_W);
-    // Header
-    ui.text("DOCK", L.header.x + PAD, L.header.y + L.header.h / 2, { size: 18, weight: 700 });
-    ui.text("BASE HUB", L.header.x + PAD + 64, L.header.y + L.header.h / 2, { size: 13, color: CANVAS_THEME.muted, maxW: L.header.w - PAD * 2 - 64 });
+    const sc = this.sections;
+    const nav = sc?.nav;
+    const cur = nav?.current ?? "H";
+    // Header: the palette's name, 「‹ 親」 one step back, and 「HUB」 straight home when deeper.
+    const hx = L.header.x + PAD, hy = L.header.y;
+    if (nav && nav.depth > 1) {
+      const parent = nav.parent!;
+      ui.button("dock:nav:back", { x: L.header.x + 4, y: hy, w: 112, h: 44 }, `‹ ${PALETTE_TITLE[parent]}`, { fontSize: 13, onActivate: () => sc!.backPalette() });
+      ui.text(PALETTE_TITLE[cur], L.header.x + 124, hy + L.header.h / 2, { size: 16, weight: 700, maxW: L.header.w - 124 - (nav.depth > 2 ? 80 : 12) });
+      if (nav.depth > 2) ui.button("dock:nav:home", { x: L.header.x + L.header.w - 72, y: hy, w: 68, h: 44 }, "HUB", { fontSize: 13, onActivate: () => sc!.homePalette() });
+    } else {
+      ui.text("DOCK", hx, hy + L.header.h / 2, { size: 18, weight: 700 });
+      ui.text("BASE HUB", hx + 64, hy + L.header.h / 2, { size: 13, color: CANVAS_THEME.muted, maxW: L.header.w - PAD * 2 - 64 });
+    }
     ctx.fillStyle = CANVAS_THEME.rowEdge;
     ctx.fillRect(L.header.x, L.header.y + L.header.h - 1, L.header.w, 1);
 
-    // A pending scroll-to-section from the previous frame's anchors.
-    const req = this.sections?.scrollRequest;
-    if (req && this.anchors.has(req)) { ui.scrollTo("dock", Math.max(0, this.anchors.get(req)! - 8)); this.sections!.scrollRequest = null; }
-
-    ui.scrollArea("dock", L.scroll, "auto", (off) => {
-      const originY = L.scroll.y - off;
-      const f = new Flow(ui, L.column.x + PAD, originY + PAD, L.column.w - PAD * 2, originY, this.anchors);
+    if (this.scrollReset) { ui.scrollTo("dock", 0); this.scrollReset = false; }
+    const twoCol = !!sc && cur === "H" && frame.width >= DockScene.HUB_TWO_COL_MIN_W;
+    const avail = Math.max(0, frame.width - frame.insets.left - frame.insets.right);
+    const cw = twoCol ? Math.min(avail, DockScene.HUB_TWO_COL_MAX_W) : L.column.w;
+    const cx = twoCol ? frame.insets.left + (avail - cw) / 2 : L.column.x;
+    const area: Rect = { x: cx, y: L.scroll.y, w: cw, h: L.scroll.h };
+    ui.scrollArea("dock", area, "auto", (off) => {
+      const originY = area.y - off;
+      const inner = cw - PAD * 2;
+      const leftW = twoCol ? Math.floor((inner - PAD) * 0.6) : inner;
+      const f = new Flow(ui, cx + PAD, originY + PAD, leftW, originY, this.anchors);
+      const side = twoCol ? new Flow(ui, cx + PAD + leftW + PAD, originY + PAD, inner - leftW - PAD, originY, this.anchors) : undefined;
       if (this.notice) {
         const warn = this.notice;
         f.card("market-notice", (c) => c.text(warn, { color: "#ffdcd7" }), { fill: "#3d1d1d", edge: "#f85149" }).gap(8);
       }
-      const drawMarket = (mf: Flow) => this.drawMarket(ui, mf, L.wide);
-      if (this.sections) this.sections.draw(ui, f, drawMarket);
-      else drawMarket(f);
-      f.gap(8);
-      f.card("unported", (c) => {
-        c.text(UNPORTED_TITLE, { weight: 700, color: CANVAS_THEME.muted, size: 14 });
-        c.text(`${UNPORTED_LIST}は、既存版で操作します。`, { color: CANVAS_THEME.muted }).gap(8);
-        c.buttons([{ id: "dock:legacy", label: "既存版の DOCK を開く", onActivate: () => this.opts.navigateLegacy?.() }]);
-      });
+      const drawMarket = (mf: Flow, items: readonly MarketItem[]) => this.drawMarket(ui, mf, mf.w >= WIDE_ROW_MIN_W, items);
+      if (sc) sc.drawPalette(ui, f, drawMarket, side);
+      else drawMarket(f, MARKET_ITEMS);
+      if (!sc || cur === "H") {
+        const g = side ?? f;
+        g.gap(8);
+        g.card("unported", (c) => {
+          c.text(UNPORTED_TITLE, { weight: 700, color: CANVAS_THEME.muted, size: 14 });
+          c.text(`${UNPORTED_LIST}は、既存版で操作します。`, { color: CANVAS_THEME.muted }).gap(8);
+          c.buttons([{ id: "dock:legacy", label: "既存版の DOCK を開く", onActivate: () => this.opts.navigateLegacy?.() }]);
+        });
+      }
       f.gap(PAD);
-      return f.y - originY;
+      return Math.max(f.y, side?.y ?? 0) - originY;
     });
 
     this.drawTabs(ui, L);
     if (this.confirm) this.drawConfirm(ui, frame, L);
-    const sc = this.sections;
     if (sc?.confirm) confirmModal(ui, L.column, frame.height, sc.confirm, frame.insets.top);
     if (sc?.picker) pickerModal(ui, L.column, frame.height, sc.picker, frame.insets.top, frame.insets.bottom);
   }
 
   /** 物資市場（購入）: title + rows at the flow position. */
-  private drawMarket(ui: CanvasUI, f: Flow, wide: boolean): void {
+  private drawMarket(ui: CanvasUI, f: Flow, wide: boolean, items: readonly MarketItem[] = MARKET_ITEMS): void {
     const cr = Math.max(0, Math.floor(Number(this.hub?.credits) || 0));
-    ui.text("物資市場（購入）", f.x, f.y + 14, { size: 15, weight: 700 });
+    ui.text(items.length === 1 && items[0] === "unopened" ? "未開封コンテナ" : "物資市場（購入）", f.x, f.y + 14, { size: 15, weight: 700 });
     ui.text(`所持 Cr ${cr.toLocaleString("en-US")}`, f.x + f.w, f.y + 14, { size: 13, color: CANVAS_THEME.muted, align: "right" });
     f.y += 32;
-    const { rows, height } = layoutMarketRows(f.x, f.y, f.w, wide);
+    const { rows, height } = layoutMarketRows(f.x, f.y, f.w, wide, items);
     const id = (r: Rect) => r;
     for (const row of rows) this.drawRow(ui, row, id, wide);
     f.y += height;
