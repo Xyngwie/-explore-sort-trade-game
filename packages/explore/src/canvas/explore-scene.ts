@@ -222,6 +222,14 @@ export class ExploreScene {
   /** Map target picker (overlapping targets) — same choices as the existing panel. */
   picker: PickerSpec | null = null;
   rescueConfirm = false;
+  /**
+   * CANVAS-G1 (神宮決定 2026-11-08): the sortie controls are a small palette —
+   * 帰還要請・カバー always, the rest behind 部隊・キャンプ・盾・残骸・回路・情報.
+   * Only the controls column switches; the map and the clock keep running (G2).
+   */
+  controlsTab: "root" | "squad" | "camp" | "shield" | "circuit" | "info" = "root";
+  /** CANVAS-G3: the briefing / result show the essentials; the rest is 詳細. */
+  pageDetail = false;
   resortieNote = "";
   toast = "";
   private toastUntil = 0;
@@ -366,6 +374,8 @@ export class ExploreScene {
         ensureDirectSave(this.world, this.directSaves, this.host.storage);
       }
       if (changedTo !== "sortie") this.onLeaveSortie();
+      this.pageDetail = false;
+      this.controlsTab = "root";
       changed = true;
     }
     if (this.world.phase === "sortie") {
@@ -473,6 +483,8 @@ export class ExploreScene {
     recordPlayLogSortie(snapshotSortieWorld(this.world));
     this.armBack();
     this.phaseWatch.markRendered(this.world.phase);
+    this.pageDetail = false;
+    this.controlsTab = "root";
     this.last = this.now();
     this.host.redraw();
   }
@@ -487,6 +499,8 @@ export class ExploreScene {
     this.resortieNote = "";
     this.input.clickMove = null;
     this.phaseWatch.markRendered(this.world.phase);
+    this.pageDetail = false;
+    this.controlsTab = "root";
     this.host.redraw();
   }
   /** HubSave changed elsewhere (storage event): refresh the repair rows, as the existing page does. */
@@ -561,14 +575,16 @@ export class ExploreScene {
     }
     const wall = wallEntries(world).find(([, b]) => squadSees(world, b.pos) && wallCircleOverlap(b, pt, radius));
     this.selectedBarricadeKey = wall?.[0] ?? null;
-    if (wall && !world.circuitPlay?.pending) { this.host.redraw(); return; }
+    if (wall && !world.circuitPlay?.pending) { this.controlsTab = "shield"; this.host.redraw(); return; }
     const shieldGroup = shieldGroupAt(world, pt, radius);
-    if (shieldGroup && !world.circuitPlay?.pending) { this.selectedShieldPosition = { ...shieldGroup.pos }; this.host.redraw(); return; }
+    if (shieldGroup && !world.circuitPlay?.pending) { this.selectedShieldPosition = { ...shieldGroup.pos }; this.controlsTab = "shield"; this.host.redraw(); return; }
     this.selectedShieldPosition = null;
     // Enemy PR1 (F1 = B): a tap near a seen enemy shows 「所属不明」; the tap still does what it did before.
     const tapped = enemyAt(world, pt, radius, (en) => isEnemySeen(world, en));
     if (tapped) noteEnemyTap(world, tapped.id);
     const tap = handleMapTap(world, pt, radius);
+    // A wingman picked on the map shows 部隊 (its palette) in the controls.
+    if (tap === "selected") this.controlsTab = "squad";
     if (tap !== "move") { this.input.clickMove = null; this.host.redraw(); return; }
     noteCollectTap(world, pt);
     this.input.clickMove = pt;
@@ -604,9 +620,9 @@ export class ExploreScene {
       const old = pick.targets[Number(choice)];
       const target = old && mapTargetsAt(world, pick.point, pick.radius).find((t) => t.kind === old.kind && t.key === old.key);
       if (!target || world.circuitPlay?.pending || this.stripTargetPending) this.flash("対象が変わりました。もう一度タップしてください");
-      else if (target.kind === "wall") this.selectedBarricadeKey = target.key;
-      else if (target.kind === "ground") this.selectedShieldPosition = { ...target.pos };
-      else if (target.kind === "wing") openWingPalette(world, [target.key]);
+      else if (target.kind === "wall") { this.selectedBarricadeKey = target.key; this.controlsTab = "shield"; }
+      else if (target.kind === "ground") { this.selectedShieldPosition = { ...target.pos }; this.controlsTab = "shield"; }
+      else if (target.kind === "wing") { openWingPalette(world, [target.key]); this.controlsTab = "squad"; }
       else {
         const result = startStrippingAt(world, target.pos, this.readHub(), 0, target.key);
         if (result === "started") { this.input.clickMove = null; this.input.fire = false; this.input.interact = false; }
@@ -623,48 +639,57 @@ export class ExploreScene {
     else this.drawBriefing(ui, f);
   }
 
+  /** CANVAS-G3: open / close the 詳細 of the briefing or the result (display only). */
+  setPageDetail(on: boolean): void { this.pageDetail = on; this.host.redraw(); }
+  private detailHeader(f: Flow, back: string): void {
+    f.buttons([{ id: "explore:detail-back", label: `‹ ${back}`, w: 140, onActivate: () => this.setPageDetail(false) }]).gap(8);
+  }
+
   private drawBriefing(ui: CanvasUI, f: Flow): void {
     const w = this.world;
-    f.text("MODULE 1 · EXPLORE · BEHAVIOR v0", { size: 11, color: CANVAS_THEME.muted });
-    f.heading("WRECKLINE 探索（振る舞い垂直スライス）", { size: 17 });
-    f.card("explore:briefing", (c) => {
-      if (w.note) c.text(w.note, { color: CANVAS_THEME.muted });
-      const banner = invadeIntelBannerText(w.invadeSector);
-      if (banner) c.gap(4).text(banner, { color: "#d29922" });
-      c.gap(6);
+    if (this.pageDetail) {
+      this.detailHeader(f, "出撃準備");
+      f.heading("出撃準備の詳細");
+      if (w.note) f.text(w.note, { color: CANVAS_THEME.muted });
+      f.gap(6);
       const leaderAmmo = w.leader.instanceId == null ? "—" : (w.currentAmmo[w.leader.instanceId] == null ? "—" : String(usableAmmo(w, w.leader)));
-      c.kv("僚機", String(w.wingmen.length));
-      c.kv("積載上限", "2（コンテナ 1・残骸 2）");
-      c.kv("実弾", String(w.ammoStock));
-      c.kv("隊長の携行弾", leaderAmmo);
-      c.kv("活動限界", `${w.maxOperationTimeSec}s`);
-      c.kv("I/O v2 ids", w.deployedInstanceIds.length ? w.deployedInstanceIds.join(", ") : "（なし・件数互換）");
-      c.kv("戦線セクター", w.invadeSector ? `(${w.invadeSector.sectorX},${w.invadeSector.sectorY})` : "（なし・直接出撃）");
-      c.kv("density", w.invadeSector ? w.invadeSector.density.toFixed(3) : "—（基準脅威）");
-      c.kv("脅威", `敵 ${w.densityThreat.enemyCount} · 距離 ${Math.round(w.densityThreat.spawnDist)} · 速度×${w.densityThreat.enemySpeedMul.toFixed(2)}`);
+      f.kv("僚機", String(w.wingmen.length));
+      f.kv("積載上限", "2（コンテナ 1・残骸 2）");
+      f.kv("実弾", String(w.ammoStock));
+      f.kv("隊長の携行弾", leaderAmmo);
+      f.kv("活動限界", `${w.maxOperationTimeSec}s`);
+      f.kv("I/O v2 ids", w.deployedInstanceIds.length ? w.deployedInstanceIds.join(", ") : "（なし・件数互換）");
+      f.kv("戦線セクター", w.invadeSector ? `(${w.invadeSector.sectorX},${w.invadeSector.sectorY})` : "（なし・直接出撃）");
+      f.kv("density", w.invadeSector ? w.invadeSector.density.toFixed(3) : "—（基準脅威）");
+      f.kv("脅威", `敵 ${w.densityThreat.enemyCount} · 距離 ${Math.round(w.densityThreat.spawnDist)} · 速度×${w.densityThreat.enemySpeedMul.toFixed(2)}`);
       const engage = w.invadeSector?.engage;
-      if (engage) c.kv("交戦", `${engage === "forced" ? "強制交戦・周囲引き込み" : engage === "raid" ? "任意侵入" : engage}（engage=${engage}）`);
+      if (engage) f.kv("交戦", `${engage === "forced" ? "強制交戦・周囲引き込み" : engage === "raid" ? "任意侵入" : engage}（engage=${engage}）`);
       const cells = w.invadeSector?.enemyCells;
-      if (cells && cells.length > 0) c.kv("enemyCells", `${cells.map((x) => `${x.sx},${x.sy}`).join("; ")}（${cells.length}）`);
-      if (w.invadeSector && w.invadeSector.intelFlags.length > 0) c.kv("intelFlags", w.invadeSector.intelFlags.join(", "));
-      c.gap(8);
-      const note = this.equipmentNote();
-      c.buttons([{ id: "explore:start", label: "出撃", variant: "primary", disabled: !!note, w: 120, onActivate: () => this.start() }]);
-      if (note) {
-        c.gap(6).text(note, { color: "#d29922" });
-        c.gap(4).buttons([{ id: "explore:guard-hub", label: "格納庫へ", onActivate: () => {
-          if (this.inputLocked()) return;
-          // Sortie-guard guidance（神宮決定 2026-11-01）: HUB shows where to fix it.
-          try { this.host.session().setItem(SORTIE_GUARD_RETURN_KEY, "1"); } catch { /* private mode: no banner */ }
-          this.host.go(resolveModuleBaseUrl("trade"));
-        } }]);
-      }
-      if (Object.values(w.mechBattery).some((b) => b.activity <= 0)) c.gap(6).text("活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。", { color: "#d29922" });
-      if (this.preSortieAmmoNote) c.gap(6).text(this.preSortieAmmoNote, { color: "#d29922" });
-      c.gap(8).text(briefingHelpText(this.cmdLocked), { size: 12, color: CANVAS_THEME.muted });
-      this.drawDebugOpener(c);
-    });
-    void ui;
+      if (cells && cells.length > 0) f.kv("enemyCells", `${cells.map((x) => `${x.sx},${x.sy}`).join("; ")}（${cells.length}）`);
+      if (w.invadeSector && w.invadeSector.intelFlags.length > 0) f.kv("intelFlags", w.invadeSector.intelFlags.join(", "));
+      f.gap(8).text(briefingHelpText(this.cmdLocked), { size: 12, color: CANVAS_THEME.muted });
+      void ui;
+      return;
+    }
+    f.heading("出撃準備", { size: 17 });
+    const banner = invadeIntelBannerText(w.invadeSector);
+    if (banner) f.text(banner, { color: "#d29922" }).gap(4);
+    f.text(`僚機 ${w.wingmen.length}機 · 活動限界 ${w.maxOperationTimeSec}s · ${w.invadeSector ? `戦線 (${w.invadeSector.sectorX},${w.invadeSector.sectorY})` : "直接出撃"}`, { size: 12, color: CANVAS_THEME.muted }).gap(8);
+    const note = this.equipmentNote();
+    f.buttons([{ id: "explore:start", label: "出撃", variant: "primary", disabled: !!note, w: f.w, onActivate: () => this.start() }]);
+    if (note) {
+      f.gap(6).text(note, { color: "#d29922" });
+      f.gap(4).buttons([{ id: "explore:guard-hub", label: "格納庫へ", w: f.w, onActivate: () => {
+        if (this.inputLocked()) return;
+        // Sortie-guard guidance（神宮決定 2026-11-01）: HUB shows where to fix it.
+        try { this.host.session().setItem(SORTIE_GUARD_RETURN_KEY, "1"); } catch { /* private mode: no banner */ }
+        this.host.go(resolveModuleBaseUrl("trade"));
+      } }]);
+    }
+    if (Object.values(w.mechBattery).some((b) => b.activity <= 0)) f.gap(6).text("活動量0の機体は出撃すると残骸になります。格納庫の各機体の「充電」で電力パーツを使って充電してください。", { color: "#d29922" });
+    if (this.preSortieAmmoNote) f.gap(6).text(this.preSortieAmmoNote, { color: "#d29922" });
+    f.gap(10).buttons([{ id: "explore:detail", label: "詳細", sub: "部隊・弾・脅威・操作の説明", w: f.w, onActivate: () => this.setPageDetail(true) }]);
+    this.drawDebugOpener(f);
   }
 
   private drawResult(ui: CanvasUI, f: Flow): void {
@@ -673,10 +698,9 @@ export class ExploreScene {
     const res = this.directSaves.get(w) ?? null;
     const sortUrl = sortHandoffUrl(w);
     const wearUrl = hubWearHandoffUrl(w);
-    f.text("MODULE 1 · RESULT", { size: 11, color: CANVAS_THEME.muted });
-    f.heading("作戦結果", { size: 17 });
-    f.card("explore:result", (c) => {
-      c.text(resultHeading(w) ?? (result.isExtracted ? "生還" : `失敗（${w.failReason ?? "abort"}）`), { size: 15, weight: 700, color: result.isExtracted ? CANVAS_THEME.gain : "#d29922" });
+    if (this.pageDetail) {
+      this.detailHeader(f, "作戦結果");
+      f.heading("作戦結果の詳細");
       const fate = leftBehindFateLine(w);
       const lines = [
         ...rescueResultLines(w),
@@ -685,33 +709,36 @@ export class ExploreScene {
         ...wreckResultLines(w),
         ...recoveredCircuitResultLines(w),
       ];
-      for (const l of lines) c.text(`・${l}`);
-      c.gap(6);
-      c.kv("returnKind", returnKindFromWorld(w));
-      c.kv("isExtracted", String(result.isExtracted));
-      c.kv("salvagedContainers", String(result.salvagedContainers));
-      c.kv("totalStockPieces", String(result.totalStockPieces));
-      c.kv("ammoStock", String(result.ammoStock));
+      for (const l of lines) f.text(`・${l}`);
+      f.gap(6);
+      f.kv("returnKind", returnKindFromWorld(w));
+      f.kv("isExtracted", String(result.isExtracted));
+      f.kv("salvagedContainers", String(result.salvagedContainers));
+      f.kv("totalStockPieces", String(result.totalStockPieces));
+      f.kv("ammoStock", String(result.ammoStock));
       const outcome = buildSortieOutcome(w);
       if (outcome && outcome.mechWear.length > 0) {
-        c.gap(6).text("機体摩耗 (MechWearReport)", { weight: 700 });
-        for (const m of outcome.mechWear) c.kv(m.instanceId, `${m.durabilityBefore} → ${m.durabilityAfter}（-${m.wearApplied}）${m.statusAfter}`, { size: 12 });
+        f.gap(6).text("機体摩耗 (MechWearReport)", { weight: 700 });
+        for (const m of outcome.mechWear) f.kv(m.instanceId, `${m.durabilityBefore} → ${m.durabilityAfter}（-${m.wearApplied}）${m.statusAfter}`, { size: 12 });
       }
-      c.gap(8);
-      const btns: FlowButton[] = [
-        { id: "explore:to-sort", label: CTA_COPY.toSort, variant: "primary", onActivate: () => { if (!playLogBlocked()) this.host.go(sortUrl); } },
-        { id: "explore:to-hangar", label: CTA_COPY.toHangar, sub: wearUrl ? CTA_CHIP.wearReport : undefined, onActivate: () => { if (!playLogBlocked()) this.host.go(wearUrl ?? resolveModuleBaseUrl("trade")); } },
-        { id: "explore:again", label: CTA_COPY.sortieAgain, onActivate: () => this.again() },
-      ];
-      c.buttons(btns);
-      if (res?.status === "saved" && res.ammoShort?.length) c.gap(6).text(ammoShortLineJa(res.ammoShort, w.deployedInstanceIds), { color: "#d29922" });
       const saveNote = directSaveNoteText(res);
-      if (saveNote) c.gap(6).text(saveNote, { size: 12, color: CANVAS_THEME.muted });
-      if (this.resortieNote) c.gap(6).text(this.resortieNote, { color: "#d29922" });
-      c.gap(6).text(sortUrl, { size: 11, color: CANVAS_THEME.faint });
-      if (wearUrl) c.text(wearUrl, { size: 11, color: CANVAS_THEME.faint });
-    });
-    void ui;
+      if (saveNote) f.gap(6).text(saveNote, { size: 12, color: CANVAS_THEME.muted });
+      f.gap(6).text(sortUrl, { size: 11, color: CANVAS_THEME.faint });
+      if (wearUrl) f.text(wearUrl, { size: 11, color: CANVAS_THEME.faint });
+      void ui;
+      return;
+    }
+    f.heading("作戦結果", { size: 17 });
+    f.text(resultHeading(w) ?? (result.isExtracted ? "生還" : `失敗（${w.failReason ?? "abort"}）`), { size: 16, weight: 700, color: result.isExtracted ? CANVAS_THEME.gain : "#d29922" });
+    f.text(`回収 ${result.salvagedContainers}`, { size: 14, weight: 600 }).gap(8);
+    f.buttons([
+      { id: "explore:to-sort", label: CTA_COPY.toSort, variant: "primary", w: f.w, onActivate: () => { if (!playLogBlocked()) this.host.go(sortUrl); } },
+      { id: "explore:to-hangar", label: CTA_COPY.toHangar, sub: wearUrl ? CTA_CHIP.wearReport : undefined, w: f.w, onActivate: () => { if (!playLogBlocked()) this.host.go(wearUrl ?? resolveModuleBaseUrl("trade")); } },
+      { id: "explore:again", label: CTA_COPY.sortieAgain, w: f.w, onActivate: () => this.again() },
+    ]);
+    if (res?.status === "saved" && res.ammoShort?.length) f.gap(6).text(ammoShortLineJa(res.ammoShort, w.deployedInstanceIds), { color: "#d29922" });
+    if (this.resortieNote) f.gap(6).text(this.resortieNote, { color: "#d29922" });
+    f.gap(10).buttons([{ id: "explore:detail", label: "詳細", sub: "救助・置き去り・残骸・回路・摩耗・保存", w: f.w, onActivate: () => this.setPageDetail(true) }]);
   }
 
   /* ---------------- drawing: sortie ---------------- */
@@ -821,40 +848,45 @@ export class ExploreScene {
     ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   }
 
+  /** Open one entry of the sortie controls (never pauses; map taps keep working). */
+  openControls(tab: ExploreScene["controlsTab"]): void {
+    if (this.inputLocked()) return;
+    this.controlsTab = tab;
+    this.host.redraw();
+  }
+  private controlEntries(): Array<{ tab: Exclude<ExploreScene["controlsTab"], "root">; label: string; sub?: string }> {
+    const w = this.world;
+    const out: Array<{ tab: Exclude<ExploreScene["controlsTab"], "root">; label: string; sub?: string }> = [];
+    const sel = w.circuitPlay?.wingSelect?.ids ?? [];
+    const squadOpen = w.wingmen.length > 0 || paletteWingmen(w).length > 0;
+    if (squadOpen) out.push({ tab: "squad", label: "部隊", sub: sel.length ? `選択中 ${sel.length}機` : `僚機 ${w.wingmen.filter((u) => u.alive).length}機` });
+    if (GATED_BUTTONS.some((g) => !this.cmdLocked(g.cmd))) out.push({ tab: "camp", label: "キャンプ", sub: campHudText(w, isCampUnlocked(this.cmdLocked)) ?? undefined });
+    const held = !!equippedShield(w, w.leader) || spareShields(w, w.leader).length > 0;
+    if (canStripWreck(w) || canBuildBarricade(w, w.leader) || held || this.selectedShieldPosition || this.selectedBarricadeKey) {
+      out.push({ tab: "shield", label: "盾・残骸", sub: this.stripTargetPending ? "残骸盾：対象選択" : activeStripping(w, w.leader.id) ? "剥離中" : undefined });
+    }
+    const circuits = circuitButtons(w);
+    if (circuits.length) out.push({ tab: "circuit", label: "回路", sub: w.circuitPlay?.pending ? "地点・対象を選択中" : `${circuits.length}` });
+    out.push({ tab: "info", label: "情報", sub: this.log.unread > 0 ? `新着ログ ${this.log.unread}` : "ログ・説明" });
+    return out;
+  }
+
   private drawControls(ui: CanvasUI, f: Flow): void {
     const w = this.world;
     const timedOut = isOperationTimedOut(w);
     const alive = captainActive(w);
-    const btns: FlowButton[] = [];
-    // Q3: return / retreat never need a circuit.
-    btns.push({
+    // An entry that has nothing to show any more falls back to the choice.
+    if (this.controlsTab !== "root" && !this.controlEntries().some((e) => e.tab === this.controlsTab)) this.controlsTab = "root";
+    // Always: 帰還要請・カバー (and 救助撤退 when the captain is down). Q3: never need a circuit.
+    const btns: FlowButton[] = [{
       id: "explore:extract",
       label: !alive ? "大破・帰還要請不可" : w.boarding ? "帰還シーケンス中…" : "帰還要請（搭乗円）",
       variant: "primary",
       disabled: !!w.boarding || timedOut || !alive,
       onActivate: () => this.run({ id: "extract" }),
-    });
-    if (canStripWreck(w)) btns.push({
-      id: "explore:strip",
-      label: `残骸盾${this.stripTargetPending ? "：対象選択" : activeStripping(w, w.leader.id) ? "：剥離中" : ""}`,
-      variant: this.stripTargetPending ? "primary" : "normal",
-      disabled: !w.leader.alive || timedOut || !!wreckCarrierId(w, w.leader.id),
-      onActivate: () => this.toggleStrip(),
-    });
-    if (canBuildBarricade(w, w.leader)) btns.push({
-      id: "explore:barricade",
-      label: w.barricades?.jobs[w.leader.id]?.kind === "build" ? "屹立：作業中" : "屹立",
-      disabled: barricadeWorking(w, w.leader.id),
-      onActivate: () => this.buildBarricade(),
-    });
-    for (const b of circuitButtons(w)) btns.push({ id: `explore:circuit:${b.id}`, label: b.label, onActivate: () => { if (this.inputLocked()) return; beginCircuitButton(this.world, b.id); this.host.redraw(); } });
-    for (const g of GATED_BUTTONS) {
-      if (this.cmdLocked(g.cmd)) continue; // C20-a: locked commands are not shown
-      btns.push({ id: `explore:${g.id}`, label: g.label, disabled: timedOut, onActivate: () => this.run({ id: g.cmd }) });
-    }
-    btns.push({ id: "explore:cover", label: w.leader.inCover ? "カバー解除" : "カバー", variant: w.leader.inCover ? "primary" : "normal", onActivate: () => { if (!this.inputLocked()) this.toggleCover(); } });
+    }, { id: "explore:cover", label: w.leader.inCover ? "カバー解除" : "カバー", variant: w.leader.inCover ? "primary" : "normal", onActivate: () => { if (!this.inputLocked()) this.toggleCover(); } }];
     if (retreatButtonShown(w.leader.alive) && !this.rescueConfirm) btns.push({ id: "explore:rescue", label: "救助撤退", variant: "danger", onActivate: () => { if (this.inputLocked()) return; this.rescueConfirm = true; this.host.redraw(); } });
-    f.buttons(btns);
+    f.buttons(btns, { fill: true });
     if (retreatButtonShown(w.leader.alive) && this.rescueConfirm) {
       f.gap(6).text(rescueConfirmCopy(previewHeldCredits()), { color: "#d29922" });
       f.gap(4).buttons([
@@ -862,14 +894,55 @@ export class ExploreScene {
         { id: "explore:rescue-no", label: "やめる", onActivate: () => { this.rescueConfirm = false; this.host.redraw(); } },
       ]);
     }
-    this.drawShieldPanel(f);
-    this.drawWingPalette(f);
-    this.drawSquadOrders(f);
-    f.gap(8).text(sortieHelpText(this.cmdLocked), { size: 11, color: CANVAS_THEME.muted });
-    this.drawWingPanel(ui, f);
-    this.drawLog(ui, f);
-    this.drawKeys(f);
-    this.drawDebugOpener(f);
+    f.gap(8);
+    const tab = this.controlsTab;
+    if (tab === "root") {
+      // 行動の選択: one entry per kind of order.
+      f.buttons(this.controlEntries().map((e) => ({ id: `explore:ctl:${e.tab}`, label: e.label, sub: e.sub, onActivate: () => this.openControls(e.tab) })), { fill: true, h: 52 });
+      return;
+    }
+    const entry = this.controlEntries().find((e) => e.tab === tab)!;
+    f.buttons([{ id: "explore:ctl:back", label: "‹ 行動", w: 104, onActivate: () => this.openControls("root") }]);
+    f.y -= 44;
+    ui.text(entry.label, f.x + 116, f.y + 22, { size: 15, weight: 700, maxW: f.w - 116 });
+    f.y += 44;
+    f.gap(6);
+    if (tab === "squad") {
+      this.drawWingPalette(f);
+      this.drawSquadOrders(f);
+      this.drawWingPanel(ui, f);
+    } else if (tab === "camp") {
+      const camp: FlowButton[] = [];
+      for (const g of GATED_BUTTONS) {
+        if (this.cmdLocked(g.cmd)) continue; // C20-a: locked commands are not shown
+        camp.push({ id: `explore:${g.id}`, label: g.label, disabled: timedOut, onActivate: () => this.run({ id: g.cmd }) });
+      }
+      f.buttons(camp);
+    } else if (tab === "shield") {
+      const sh: FlowButton[] = [];
+      if (canStripWreck(w)) sh.push({
+        id: "explore:strip",
+        label: `残骸盾${this.stripTargetPending ? "：対象選択" : activeStripping(w, w.leader.id) ? "：剥離中" : ""}`,
+        variant: this.stripTargetPending ? "primary" : "normal",
+        disabled: !w.leader.alive || timedOut || !!wreckCarrierId(w, w.leader.id),
+        onActivate: () => this.toggleStrip(),
+      });
+      if (canBuildBarricade(w, w.leader)) sh.push({
+        id: "explore:barricade",
+        label: w.barricades?.jobs[w.leader.id]?.kind === "build" ? "屹立：作業中" : "屹立",
+        disabled: barricadeWorking(w, w.leader.id),
+        onActivate: () => this.buildBarricade(),
+      });
+      if (sh.length) f.buttons(sh);
+      this.drawShieldPanel(f);
+    } else if (tab === "circuit") {
+      f.buttons(circuitButtons(w).map((b) => ({ id: `explore:circuit:${b.id}`, label: b.label, onActivate: () => { if (this.inputLocked()) return; beginCircuitButton(this.world, b.id); this.host.redraw(); } })));
+    } else if (tab === "info") {
+      f.text(sortieHelpText(this.cmdLocked), { size: 11, color: CANVAS_THEME.muted });
+      this.drawLog(ui, f);
+      this.drawKeys(f);
+      this.drawDebugOpener(f);
+    }
   }
 
   /**

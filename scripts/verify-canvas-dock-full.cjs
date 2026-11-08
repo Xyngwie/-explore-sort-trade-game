@@ -262,6 +262,18 @@ const CONFIGS = [
       await p.goBack();
       await settle();
       assert.equal(await scene(), "dock");
+      // CANVAS-G7: the DOCK-style header 「‹ 親」 on the game screens opens the parent palette.
+      await tap("tab:RESTORE");
+      await settle();
+      await tap("game:nav:back");
+      await settle();
+      assert.equal(await scene(), "dock", `${cfg.name}: ‹ from RESTORE goes to DOCK`);
+      assert.ok(["CD", "C"].includes(await p.evaluate(() => window.__wlCanvas.palette())), "‹ 回路詳細 (or 回路整備)");
+      await tap("tab:INVADE");
+      await settle();
+      await tap("game:nav:back");
+      await settle();
+      assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), "I", `${cfg.name}: ‹ 侵略 from INVADE`);
       // 探索 is on this page since U-5b (CANVAS-Y6): the SORTIE tab opens it in place.
       await tap("tab:SORTIE");
       await settle();

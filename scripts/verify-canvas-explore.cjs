@@ -213,11 +213,19 @@ const CONFIGS = [
       if (cfg.viewport.width > cfg.viewport.height) assert.ok(e.map.h < cfg.viewport.height - 40, "landscape: height wins");
       // ---- U-5b panels -----------------------------------------------------------------------------
       assert.ok(e.wingmen.length >= 1, `${cfg.name}: seeded wingmen ` + JSON.stringify(e));
+      // CANVAS-G1: the controls are a palette — 部隊 holds the wingman cards, 情報 the log and keys.
+      assert.equal(await region(`explore:gauge:${e.wingmen[0]}`), null, `${cfg.name}: no wingman cards on the choice palette`);
+      const sq = await revealC("explore:ctl:squad");
+      await tapAt(sq.cx, sq.cy);
       for (const id of e.wingmen) {
         const g = await revealC(`explore:gauge:${id}`);
         await tapAt(g.cx, g.cy);
       }
       await p.waitForTimeout(200);
+      const bk = await revealC("explore:ctl:back");
+      await tapAt(bk.cx, bk.cy);
+      const inf = await revealC("explore:ctl:info");
+      await tapAt(inf.cx, inf.cy);
       assert.ok((await ex()).log > 0, `${cfg.name}: log has rows`);
       if (cfg.touch) assert.equal(await region("explore:keys"), null, `${cfg.name}: no key table on touch`);
       else assert.ok(await revealC("explore:keys"), `${cfg.name}: key table toggle on PC`);

@@ -239,13 +239,19 @@ const CONFIGS = [
         await p.mouse.wheel(0, -300);
         await p.waitForTimeout(80);
         assert.ok((await inv()).scale > s0, "wheel on the board zooms");
+        // CANVAS-G4: 拠点へ is under 盤の操作.
+        await revealI("invade:panel:ops");
+        await tap("invade:panel:ops");
         await revealI("invade:home");
         await tap("invade:home");
         assert.equal((await inv()).scale, 1, "拠点へ resets the zoom");
+        await revealI("invade:panel-back");
+        await tap("invade:panel-back");
+        assert.equal((await inv()).panel, "main", "‹ 戦線地図 returns to the board");
       }
       // ---- one finger on a button, a second on the board, the first lifts: nothing fires (docs §13) ----
       if (cfg.touch) {
-        const tm = await revealI("invade:touch-mode");
+        const tm = await revealI("invade:panel:ops"); // a button on the board screen (CANVAS-G4)
         const vp = await p.evaluate(() => window.__wlCanvas.invadeViewport());
         const boardPt = { x: vp.x + vp.w / 2, y: Math.max(vp.y + 10, Math.min(vp.y + vp.h - 10, tm.y - 80)), id: 2 };
         assert.ok(boardPt.y > 40 && boardPt.y >= vp.y && boardPt.y <= vp.y + vp.h, `${cfg.name}: a board point on screen`);
@@ -260,11 +266,13 @@ const CONFIGS = [
         await settle();
         const after = await inv();
         assert.equal(after.reversed, before.reversed, `${cfg.name}: the button did not fire`);
+        assert.equal(after.panel, "main", `${cfg.name}: the button did not fire (still the board)`);
         assert.equal(after.flagged, before.flagged, "the board did not mark");
         assert.equal(after.open, before.open, "the board did not open");
         await tapAt(tm.cx, tm.cy);
-        assert.notEqual((await inv()).reversed, before.reversed, "a single tap afterwards works");
-        await tapAt(tm.cx, tm.cy);
+        assert.equal((await inv()).panel, "ops", "a single tap afterwards works (盤の操作 opens)");
+        await revealI("invade:panel-back");
+        await tap("invade:panel-back");
       }
       // ---- reload restores the front progress --------------------------------------------
       await settle();
