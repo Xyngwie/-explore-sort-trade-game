@@ -105,7 +105,7 @@ import {
 } from "../hangar";
 import { hubMechGaugeModel } from "../mech-gauge-hub";
 import { PALETTE_TITLE, PaletteNav, type PaletteId } from "./palette-tree";
-import type { MarketItem } from "./market";
+import { QTY_STEPS, type MarketItem } from "./market";
 import { saveMigrationNotice } from "../save-migration-notice";
 import { equipHubCircuit, equipRefusalMessageJa, unequipHubCircuit } from "../lost-mech-circuits";
 import { backfillPerfectMaxSize, craftJunkCircuit, heldJunk, junkCraftConfirmText, junkCraftMaxSide, junkCraftOptions } from "../junk-craft";
@@ -187,6 +187,30 @@ export class DockSections {
   scrollRequest: string | null = null;
   private lastMoneyAt = -Infinity;
   private gaugeShown = new Map<string, number>();
+  /** 資源売却 dialog with a quantity (神宮 2026-11-09); null = closed. */
+  sell: { id: (typeof RESOURCE_IDS)[number]; qty: number } | null = null;
+  /** The dialog to draw: a plain confirm, or the sale with its quantity row. */
+  confirmSpec(): ConfirmSpec | null {
+    if (this.confirm) return this.confirm;
+    const sell = this.sell;
+    if (!sell) return null;
+    const stock = Math.max(0, Math.floor(this.state.hub.inventory?.[sell.id] ?? 0));
+    const q = Math.max(1, Math.min(stock, sell.qty));
+    return {
+      id: "dock:confirm:sell", title: "売却の確認", text: resourceSellConfirmText(RESOURCE_LABEL_JA[sell.id], q), okLabel: "売却する",
+      qty: { value: q, max: Math.max(1, stock), steps: QTY_STEPS, onChange: (n) => { if (this.sell) this.sell = { ...this.sell, qty: n }; } },
+      onCancel: () => { this.sell = null; },
+      onOk: () => {
+        this.sell = null;
+        const now = loadHubSaveFromLocalStorage(this.env.storage ?? undefined)?.hub;
+        if (!now) return;
+        // Re-read the save just before the sale: never more than the stock it has now.
+        const n = Math.min(q, Math.max(0, Math.floor(now.inventory?.[sell.id] ?? 0)));
+        const next = n > 0 ? applyResourceTrade(now, sell.id, "sell", n) : null;
+        if (next) this.commitHub("resource.sell", { id: sell.id, quantity: n }, next);
+      },
+    };
+  }
   /** null = the existing default (the whole stock, like `input-sort-unopened`). */
   private sortQty: number | null = null;
   private craftSide: number | null = null;
@@ -391,7 +415,8 @@ export class DockSections {
     if (mig) f.card("migration", (c) => c.text(mig, { color: CANVAS_THEME.muted })).gap(8);
     this.noticeCard(f);
     // New-game guide (#332): the first step is 仕分.
-    if (!DEBUG_FIXTURE_ACTIVE && hub.newGameIntro && !hub.newGameIntro.firstSortie) {
+    // 神宮 2026-11-09: only until the 10 initial containers are opened.
+    if (!DEBUG_FIXTURE_ACTIVE && hub.newGameIntro && !hub.newGameIntro.firstSortie && hub.newGameIntro.initialOpened < 10) {
       const intro = hub.newGameIntro;
       f.card("intro", (c) => {
         c.heading("初出撃の準備");
@@ -618,19 +643,12 @@ export class DockSections {
   /** VS: the existing resource sale (1 tap 1 piece, confirm every time). */
   private drawSell(f: Flow): void {
     const hub = this.state.hub;
-    f.text(`Sortで得た4資源を売却（売値 ${RESOURCE_SELL_PRICE}c、毎回確認）。`, { color: CANVAS_THEME.muted, size: 12 }).gap(6);
+    f.text(`Sortで得た4資源を売却（売値 ${RESOURCE_SELL_PRICE}c、毎回確認。個数は確認の画面で選べます）。`, { color: CANVAS_THEME.muted, size: 12 }).gap(6);
     f.buttons(RESOURCE_IDS.map((id) => {
       const n = Math.max(0, Math.floor(hub.inventory?.[id] ?? 0));
       return {
         id: `dock:sell:${id}`, label: `${RESOURCE_LABEL_JA[id]} 売却`, sub: n > 0 ? `在庫 ${n} · +${RESOURCE_SELL_PRICE}c` : "在庫なし", disabled: n < 1, w: f.w,
-        onActivate: () => this.ask({
-          id: "dock:confirm:sell", title: "売却の確認", text: resourceSellConfirmText(RESOURCE_LABEL_JA[id], 1), okLabel: "売却する",
-          onOk: () => {
-            const now = loadHubSaveFromLocalStorage(this.env.storage ?? undefined)?.hub;
-            const next = now ? applyResourceTrade(now, id, "sell", 1) : null;
-            if (next) this.commitHub("resource.sell", { id, quantity: 1 }, next);
-          },
-        }),
+        onActivate: () => { if (!playLogBlocked()) this.sell = { id, qty: 1 }; },
       };
     }), { h: 52 });
   }

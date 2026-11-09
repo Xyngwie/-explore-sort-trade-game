@@ -233,6 +233,15 @@ const CONFIGS = [
       const after = await hub();
       assert.equal(after.credits, before.credits + 5);
       assert.equal(after.inventory.armor, before.inventory.armor - 1);
+      // 神宮 2026-11-09: the dialog picks the quantity (+1 → ×2).
+      await tap("dock:sell:armor");
+      assert.equal((await region("dock:confirm:sell:qty:1"))?.visible, true, "quantity row in the dialog");
+      await tap("dock:confirm:sell:qty:1");
+      await tap("dock:confirm:sell:ok");
+      await settle();
+      const after2 = await hub();
+      assert.equal(after2.credits, after.credits + 10);
+      assert.equal(after2.inventory.armor, after.inventory.armor - 2);
       // SORT tab opens 仕分 (S) inside the canvas.
       await p.mouse.move(cfg.viewport.width / 2, cfg.viewport.height / 2);
       for (let i = 0; i < 40; i++) await p.mouse.wheel(0, -2000);

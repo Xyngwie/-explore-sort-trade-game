@@ -202,6 +202,30 @@ assert.equal(hub().inventory.armor ?? 0, armorBefore, "sell asks first");
 tap("dock:confirm:sell:ok");
 assert.equal(hub().inventory.armor ?? 0, armorBefore - 1);
 assert.equal(hub().credits, crBefore + 5);
+// 神宮 2026-11-09: the confirm dialog chooses the quantity (±1 / ±10, 1..stock); cancel sells nothing.
+{
+  const a0 = hub().inventory.armor ?? 0, c0 = hub().credits;
+  assert.ok(a0 >= 12, `seed has armor to sell (${a0})`);
+  tap("dock:sell:armor");
+  assert.equal(sec().confirmSpec()?.qty?.value, 1, "starts at 1");
+  assert.equal(regions().find((r) => r.id === "dock:confirm:sell:qty:-1")?.disabled, true, "cannot go below 1");
+  tap("dock:confirm:sell:qty:10");
+  tap("dock:confirm:sell:qty:1");
+  assert.equal(sec().confirmSpec()?.qty?.value, 12);
+  assert.match(sec().confirmSpec()!.text, /12/);
+  tap("dock:confirm:sell:cancel");
+  assert.equal(sec().confirmSpec(), null);
+  assert.equal(hub().inventory.armor ?? 0, a0, "cancel sells nothing");
+  tap("dock:sell:armor");
+  assert.equal(sec().confirmSpec()?.qty?.value, 1, "reopens at 1");
+  for (let i = 0; i < Math.ceil(a0 / 10) + 1; i++) tap("dock:confirm:sell:qty:10");
+  assert.equal(sec().confirmSpec()?.qty?.value, a0, "clamped to stock");
+  tap("dock:confirm:sell:qty:-10");
+  assert.equal(sec().confirmSpec()?.qty?.value, a0 - 10);
+  tap("dock:confirm:sell:ok");
+  assert.equal(hub().inventory.armor ?? 0, 10);
+  assert.equal(hub().credits, c0 + (a0 - 10) * 5);
+}
 
 // --- equip (整備 → 機体整備 → 装備回路) through the canvas pickers ----------------------------------------
 const circuitId = hub().circuits[0].circuitId;
@@ -264,6 +288,23 @@ for (const id of ["H", "BR"] as PaletteId[]) {
   assert.equal(store.writes, w, `${id}: blocked → nothing saved`);
   assert.equal(blockedUi.activationCount, 0);
   assert.equal(cur(), id, `${id}: blocked → no palette move`);
+}
+
+// --- 初出撃の準備 (HUB) only until the 10 initial containers are opened (神宮 2026-11-09) -----------------------
+{
+  const introStore = new MemStore();
+  const introShown = (opened: number) => {
+    const h = createNewGameHub();
+    introStore.setItem(HUB_SAVE_STORAGE_KEY, serializeHubSave(createHubSave({ ...h, newGameIntro: { ...h.newGameIntro!, initialOpened: opened } })));
+    const s2 = new DockScene({ env: { ...env, storage: introStore }, redraw: () => {} });
+    const u2 = new CanvasUI({ blocked: () => false });
+    const d2 = () => { u2.beginFrame(createStubCtx(), 390, 844); s2.draw(u2, { width: 390, height: 844, dpr: 1, insets: { top: 0, right: 0, bottom: 0, left: 0 } }); u2.endFrame(); };
+    d2(); d2();
+    return u2.debugRegions().some((r) => r.id === "dock:intro:open");
+  };
+  assert.equal(introShown(0), true, "new game: 初出撃の準備 on HUB");
+  assert.equal(introShown(9), true, "9/10 opened: still shown");
+  assert.equal(introShown(10), false, "all 10 opened: hidden");
 }
 
 console.log("canvas-dock-full selftest: OK");
