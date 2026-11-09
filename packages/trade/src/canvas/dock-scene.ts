@@ -247,7 +247,8 @@ export class DockScene {
 
     this.drawTabs(ui, L);
     if (this.confirm) this.drawConfirm(ui, frame, L);
-    if (sc?.confirm) confirmModal(ui, L.column, frame.height, sc.confirm, frame.insets.top);
+    const spec = sc?.confirmSpec();
+    if (spec) confirmModal(ui, L.column, frame.height, spec, frame.insets.top);
     if (sc?.picker) pickerModal(ui, L.column, frame.height, sc.picker, frame.insets.top, frame.insets.bottom);
   }
 

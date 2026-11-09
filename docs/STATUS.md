@@ -1,3 +1,10 @@
+## canvas 売却個数の選択・初出撃の準備の表示（2026-11-09・神宮の指示）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 資源売却の確認の画面で個数（−10・−1・+1・+10、1〜在庫）を選べるようにした。HUB の「初出撃の準備」は初期支給 10 個を開封し終えたら出さない → [CANVAS_UNIFIED_V0.md §19](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「二枚目のダイアログで売却個数を選択できるように」「初回配布のコンテナを開封後は表示しないで」（2026-11-09）
+- Scope: canvas 版 DOCK の VS の確認画面と HUB の案内カードだけ。売値・保存形式・プレイ記録の名前・レア／回路／残骸の売却・既存版のページは変更なし
+- Status: 実装・selftest・canvas の verify（5 構成）済み。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## canvas ゲーム内も同じ操作感に（2026-11-08・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: 探索の出撃中の操作を「行動の選択」に（帰還要請・カバーは常に、残りは 部隊・キャンプ・盾・残骸・回路・情報）。探索の準備・結果、INVADE、RESTORE、SORT の説明・詳細を「詳細」へ。ゲーム画面に DOCK と同じ「‹ 親」 → [CANVAS_UNIFIED_V0.md §18](CANVAS_UNIFIED_V0.md)

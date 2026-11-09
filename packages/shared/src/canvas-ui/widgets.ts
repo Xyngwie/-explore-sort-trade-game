@@ -135,6 +135,8 @@ export type ConfirmSpec = {
   okLabel?: string;
   cancelLabel?: string;
   okVariant?: ButtonVariant;
+  /** Optional quantity row (e.g. a sale: 神宮 2026-11-09). The caller rebuilds `text` from the value. */
+  qty?: { value: number; max: number; steps: readonly number[]; onChange: (q: number) => void };
   onOk: () => void;
   onCancel: () => void;
 };
@@ -145,13 +147,32 @@ export function confirmModal(ui: CanvasUI, column: { x: number; w: number }, hei
     const w = Math.min(column.w - 32, 380);
     ctx.font = fontSpec(15);
     const lines = wrapText(ctx, spec.text, w - 32);
-    const h = 20 + 26 + lines.length * 22 + 16 + 48 + 20;
+    const qtyRow = spec.qty ? 44 + 14 : 0;
+    const h = 20 + 26 + lines.length * 22 + 16 + qtyRow + 48 + 20;
     const box: Rect = { x: column.x + (column.w - w) / 2, y: Math.max(insetTop + 16, (height - h) / 2), w, h };
     ui.region(`${spec.id}:box`, box);
     ui.panel(box, { radius: 12, edge: "#484f58" });
     ui.text(spec.title, box.x + 16, box.y + 30, { size: 16, weight: 700, maxW: w - 32 });
     ui.paragraph(spec.text, box.x + 16, box.y + 46, w - 32, { size: 15, lineH: 22 });
     const by = box.y + box.h - 20 - 48, bw = (w - 42) / 2;
+    if (spec.qty) {
+      const q = spec.qty, steps = q.steps;
+      const half = Math.ceil(steps.length / 2);
+      const gap = 6, qtyW = 60;
+      const stepW = Math.max(44, Math.min(56, (w - 32 - qtyW - gap * steps.length) / steps.length));
+      const rowW = stepW * steps.length + qtyW + gap * steps.length;
+      let x = box.x + (w - rowW) / 2;
+      const y = by - 14 - 44;
+      steps.forEach((d, i) => {
+        if (i === half) {
+          ui.text(`×${q.value}`, x + qtyW / 2, y + 22, { size: 16, weight: 700, align: "center", maxW: qtyW });
+          x += qtyW + gap;
+        }
+        const next = Math.max(1, Math.min(q.max, q.value + d));
+        ui.button(`${spec.id}:qty:${d}`, { x, y, w: stepW, h: 44 }, d > 0 ? `+${d}` : `−${-d}`, { fontSize: 13, disabled: next === q.value, onActivate: () => q.onChange(next) });
+        x += stepW + gap;
+      });
+    }
     ui.button(`${spec.id}:cancel`, { x: box.x + 16, y: by, w: bw, h: 48 }, spec.cancelLabel ?? "やめる", { onActivate: spec.onCancel });
     ui.button(`${spec.id}:ok`, { x: box.x + 26 + bw, y: by, w: bw, h: 48 }, spec.okLabel ?? "OK", { variant: spec.okVariant ?? "primary", onActivate: spec.onOk });
   }, spec.onCancel);
