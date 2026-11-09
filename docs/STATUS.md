@@ -1,3 +1,10 @@
+## canvas ゲーム内も同じ操作感に（2026-11-08・神宮決定）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 探索の出撃中の操作を「行動の選択」に（帰還要請・カバーは常に、残りは 部隊・キャンプ・盾・残骸・回路・情報）。探索の準備・結果、INVADE、RESTORE、SORT の説明・詳細を「詳細」へ。ゲーム画面に DOCK と同じ「‹ 親」 → [CANVAS_UNIFIED_V0.md §18](CANVAS_UNIFIED_V0.md)
+- Why: 神宮「ゲーム内も同じ操作感で統一していきたい」「全部★」（2026-11-08）
+- Scope: 各ゲーム画面の操作の並べ方だけ。ゲームの規則・保存・受渡し・戻る制限は変更なし
+- Status: CANVAS-G1〜G9 はすべて ★A のとおり神宮決定。PR #358（base = main、#357 はマージ済み）。監査 P1（RESTORE の「‹ 回路詳細」で成果が失われる）を修正（§18.3）。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## canvas パレット組み直し（2026-11-08・神宮決定）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: canvas 版 DOCK の 1 本の長い画面を、HUB（所持資産＋売買・仕分・整備・侵略）から子へ分かれるパレットの木に組み直した。各作業は既存の関数のまま → [CANVAS_UNIFIED_V0.md §17](CANVAS_UNIFIED_V0.md)、計画は [CANVAS_PALETTE_RESTRUCTURE.md](CANVAS_PALETTE_RESTRUCTURE.md)

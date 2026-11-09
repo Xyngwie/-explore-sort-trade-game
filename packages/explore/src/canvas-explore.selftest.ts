@@ -90,6 +90,12 @@ const press = (id: string) => {
 };
 draw(); draw();
 assert.ok(ctx.texts.includes("出撃"), "briefing shows 出撃");
+// CANVAS-G3: the briefing shows 出撃 and the warnings; the table is under 詳細.
+assert.equal(ctx.texts.includes("積載上限"), false, "the table is not on the briefing");
+press("explore:detail"); draw(); draw();
+assert.ok(ctx.texts.includes("積載上限") && ctx.texts.includes("出撃準備の詳細"), "詳細 shows the table");
+press("explore:detail-back"); draw(); draw();
+assert.ok(ctx.texts.includes("出撃") && !ctx.texts.includes("積載上限"), "‹ 出撃準備 returns");
 assert.equal(ui.debugRegions().some((r) => r.id === "explore:debug-open"), false, "no debug opener without debug mode");
 // #353 B2: in debug mode 探索 offers 「検証用の欄へ」 in the briefing and the sortie (tabs are hidden there).
 {
@@ -128,6 +134,15 @@ assert.ok(Math.abs(map.w / map.h - EXPLORE_MAP_ASPECT) < 1e-6, "map rect drawn a
 // --- U-5b: wing cards, gauge tap, per-wingman orders, log, key table -------------------
 {
   H = 4000; // tall frame: every control of the scroll area is on screen
+  // CANVAS-G1: the controls are a palette — 帰還要請・カバー always, the rest behind entries.
+  draw(); draw();
+  const ctlIds = ui.debugRegions().map((r) => r.id);
+  assert.ok(ctlIds.includes("explore:extract") && ctlIds.includes("explore:cover"), "帰還要請・カバー always shown");
+  assert.ok(ctlIds.includes("explore:ctl:squad") && ctlIds.includes("explore:ctl:info"), "entries: 部隊 … 情報");
+  assert.equal(ctlIds.some((id) => id.startsWith("explore:gauge:") || id.startsWith("explore:order:") || id === "explore:keys"), false, "the choice palette shows no orders");
+  press("explore:ctl:squad");
+  assert.equal(scene.controlsTab, "squad");
+  assert.ok(ui.debugRegions().some((r) => r.id === "explore:extract"), "帰還要請 stays reachable inside an entry");
   draw(); draw(); draw();
   const wing = scene.world.wingmen[0];
   assert.ok(wing, "seeded squad has a wingman");
@@ -147,6 +162,10 @@ assert.ok(Math.abs(map.w / map.h - EXPLORE_MAP_ASPECT) < 1e-6, "map rect drawn a
     press(order.id);
     assert.equal(scene.world.wingmen[0].stance, stance, "order button sets the stance");
   }
+  // 情報: log, help line, key table.
+  press("explore:ctl:back");
+  assert.equal(scene.controlsTab, "root", "‹ 行動 returns to the choice");
+  press("explore:ctl:info");
   // log: rows from world.logs, newest at the bottom, following.
   now += 16; scene.frame(now);
   const n0 = scene.log.rows.length;
@@ -167,6 +186,7 @@ assert.ok(Math.abs(map.w / map.h - EXPLORE_MAP_ASPECT) < 1e-6, "map rect drawn a
   draw();
   assert.ok(ctx.texts.includes("カバー切替（障害物付近）"), "キー shows it again");
   assert.ok(ctx.texts.some((t) => t.startsWith("未発見コンテナは非表示")), "help line");
+  scene.openControls("root");
   H = 844;
   draw();
 }

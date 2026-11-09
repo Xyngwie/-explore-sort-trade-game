@@ -39,6 +39,7 @@ import {
   resolveModuleBaseUrl,
   type CanvasUI,
   type FrameInfo,
+  type Rect,
 } from "@estg/shared";
 import { SortScene, armSortBackTrap, sortPopstateAction } from "@estg/sort/canvas";
 import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } from "@estg/restore/canvas";
@@ -48,6 +49,7 @@ import { mountDebugPanel, type DebugAction } from "./debug-panel";
 import { routeGameKey } from "./game-keys";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
 import { browserDockEnv, DOCK_ANCHOR } from "./dock-sections";
+import { PALETTE_TITLE, type PaletteId } from "./palette-tree";
 import { tabUrl } from "./tabs";
 import { StartScene, layoutStart } from "./start-scene";
 import { clearHandoffFromUrl, createInitialHangar, ingestLocationSearch, loadCraftSignature } from "../hangar";
@@ -303,6 +305,27 @@ export function mountCanvasApp(doc: Document = document): void {
     if (scene.animating()) surface.invalidate();
   };
 
+  /**
+   * CANVAS-G7 (神宮決定 2026-11-08): the DOCK-style header on the game screens that
+   * are not board work in progress. 「‹ 親」 opens the parent palette of DOCK.
+   */
+  /**
+   * Leave through the scene's own 「格納庫へ」 URL when it has one (RESTORE result,
+   * Invade→HUB intel, 探索 wear report: the existing ingest runs), then open the
+   * parent palette. #358 P1: never drop a handoff by rebuilding DOCK directly.
+   */
+  const toDockPalette = (p: PaletteId, via: string | null = null) => {
+    if (playLogBlocked()) return;
+    go(via ?? canvasBase());
+    if (p === "CD" && !dock?.sections?.state.lastCircuit) p = "C";
+    dock?.sections?.goPalette(p);
+  };
+  const gameHeader = (ui: CanvasUI, r: Rect, parent: PaletteId, title: string, via: () => string | null) => {
+    ui.button("game:nav:back", { x: r.x + 4, y: r.y, w: 112, h: 44 }, `‹ ${PALETTE_TITLE[parent]}`, { fontSize: 13, onActivate: () => toDockPalette(parent, via()) });
+    ui.text(title, r.x + 124, r.y + 22, { size: 16, weight: 700, maxW: r.w - 132 });
+    ui.context.fillStyle = CANVAS_THEME.rowEdge;
+    ui.context.fillRect(r.x, r.y + 43, r.w, 1);
+  };
   const drawRestore = (ui: CanvasUI, frame: FrameInfo) => {
     const ctx = ui.context;
     const L = layoutDock(frame, false);
@@ -310,7 +333,8 @@ export function mountCanvasApp(doc: Document = document): void {
     ctx.fillRect(0, 0, frame.width, frame.height);
     const hub = loadHubSaveFromLocalStorage()?.hub ?? null;
     drawResourceHud(ui, L.hud, hub, frame.width <= CANVAS_MOBILE_MAX_W);
-    const top = L.hud.y + L.hud.h;
+    gameHeader(ui, { x: L.column.x, y: L.hud.y + L.hud.h, w: L.column.w, h: 44 }, "CD", "回路修復", () => restore?.hubReturnUrl() ?? null);
+    const top = L.hud.y + L.hud.h + 44;
     const area = { x: L.column.x, y: top, w: L.column.w, h: L.tabs.y - top };
     if (!restore) {
       ui.text("生成中…", area.x + 16, area.y + 40, { size: 18, weight: 700 });
@@ -339,7 +363,10 @@ export function mountCanvasApp(doc: Document = document): void {
     ctx.fillRect(0, 0, frame.width, frame.height);
     const hub = loadHubSaveFromLocalStorage()?.hub ?? null;
     drawResourceHud(ui, L.hud, hub, frame.width <= CANVAS_MOBILE_MAX_W);
-    const top = L.hud.y + L.hud.h;
+    // Forced combat: the existing back guard applies, no 「‹ 親」 (G7).
+    const head = !scene.forcedLockActive();
+    if (head) gameHeader(ui, { x: L.column.x, y: L.hud.y + L.hud.h, w: L.column.w, h: 44 }, "I", "戦線マップ", () => scene.hubReturnUrl());
+    const top = L.hud.y + L.hud.h + (head ? 44 : 0);
     const area = { x: L.column.x, y: top, w: L.column.w, h: L.tabs.y - top };
     ui.scrollArea("invade", area, "auto", (off) => {
       const originY = area.y - off;
@@ -376,7 +403,8 @@ export function mountCanvasApp(doc: Document = document): void {
       return;
     }
     const briefing = scene.phase === "briefing";
-    const area = { x: L.column.x, y: top, w: L.column.w, h: (briefing ? L.tabs.y : bottom) - top };
+    gameHeader(ui, { x: L.column.x, y: top, w: L.column.w, h: 44 }, "I", briefing ? "出撃準備" : "作戦結果", () => scene.hubReturnUrl());
+    const area = { x: L.column.x, y: top + 44, w: L.column.w, h: (briefing ? L.tabs.y : bottom) - top - 44 };
     ui.scrollArea(`explore:${scene.phase}`, area, "auto", (off) => {
       const originY = area.y - off;
       const f = new Flow(ui, area.x + 12, originY + 12, area.w - 24, originY);
@@ -489,7 +517,7 @@ export function mountCanvasApp(doc: Document = document): void {
     frames: () => surface.frameCount,
     activations: () => surface.ui.activationCount,
     pressing: () => surface.ui.pressing,
-    invade: () => (invade ? { locked: invade.forcedLockActive(), status: invade.board.status, hitMine: invade.board.hitMine, selected: invade.selected, scale: invade.view.scale, x: invade.view.x, y: invade.view.y, reversed: invade.reversedTouch, open: invade.board.cells.flat().filter((c) => c.open).length, flagged: invade.board.cells.flat().filter((c) => c.flagged).length, log: invade.lastBoardLog, inbound: invade.inbound } : null),
+    invade: () => (invade ? { panel: invade.panel, locked: invade.forcedLockActive(), status: invade.board.status, hitMine: invade.board.hitMine, selected: invade.selected, scale: invade.view.scale, x: invade.view.x, y: invade.view.y, reversed: invade.reversedTouch, open: invade.board.cells.flat().filter((c) => c.open).length, flagged: invade.board.cells.flat().filter((c) => c.flagged).length, log: invade.lastBoardLog, inbound: invade.inbound } : null),
     invadeViewport: () => invade?.boardViewport ?? null,
     explore: () => (explore ? { phase: explore.phase, paused: explore.paused, zoom: explore.zoom, map: explore.map, clickMove: explore.clickMove, leader: { ...explore.world.leader.pos }, alive: explore.world.leader.alive, timeLeft: explore.world.timeLeft, salvaged: explore.world.salvaged, boarding: !!explore.world.boarding, inCover: explore.world.leader.inCover, engage: explore.world.invadeSector?.engage ?? null, deployed: explore.world.deployedInstanceIds, log: explore.log.rows.length, wingmen: explore.world.wingmen.map((u) => u.id), picker: explore.picker?.options.map((o) => o.label) ?? null, toast: explore.toast, note: explore.equipmentNote() } : null),
     exploreToCanvas: (x: number, y: number) => explore?.worldToCanvas(x, y) ?? null,

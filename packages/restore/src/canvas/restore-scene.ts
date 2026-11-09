@@ -176,6 +176,8 @@ export class RestoreScene {
     });
   }
   toHub(): void { if (!playLogBlocked()) this.host.go(this.returnUrl()); }
+  /** The URL the existing 「格納庫へ」 uses: the 「‹ 親」 header leaves through it too (#358 P1). */
+  hubReturnUrl(): string { return this.returnUrl(); }
   nextBoard(): void {
     if (this.session.source !== "demo" || playLogBlocked()) return;
     const href = buildNextLocalBoardHref(`board-${this.now().toString(36)}`, this.host.href());
@@ -230,6 +232,40 @@ export class RestoreScene {
   setZoom(m: ZoomMode): void { this.zoomMode = m; this.panX = 0; this.panY = 0; this.host.redraw(); }
 
   /* --------------------------------- drawing -------------------------------- */
+  /** CANVAS-G5: the board screen keeps the board and the confirm buttons; the rest is here. */
+  detail = false;
+  setDetail(on: boolean): void { this.detail = on; this.host.redraw(); }
+  private drawDetail(f: Flow, preview: ReturnType<typeof previewOutcomeEffects>, c: ReturnType<RestoreScene["play"]>): void {
+    const s = this.session, pz = s.puzzle;
+    f.buttons([{ id: "restore:detail-back", label: "‹ 修復", w: 112, onActivate: () => this.setDetail(false) }]).gap(8);
+    f.heading("修復の詳細");
+    f.text("大半は不完全基板。稀に可解コア。部分修復→Bypass、完全ループ→Fully Awakened（刻印ロック）、放棄→Offline。タイマー圧なし。", { size: 12, color: CANVAS_THEME.muted }).gap(4);
+    f.text("数字＝そのマスの上下左右に接する線の本数。線をつないで閉ループを作り、数字を満たします。", { size: 12 });
+    f.text(`${c.effect.activeLoopEdgeCount > 0 ? `有効ループ ${c.effect.activeLoopEdgeCount}辺${c.effect.loopCount > 1 ? `（${c.effect.loopCount}ループ中の最小）` : ""}` : "ループなし → 効果 0"} · 青白グロー＝採点中の最小閉ループ`, { size: 11, color: CANVAS_THEME.muted });
+    f.text(`${s.note}`, { size: 11, color: CANVAS_THEME.muted });
+    f.text(`puzzleSeed ${pz.puzzleId} · 辺: 空 → 線 → × → 空${s.circuitId ? ` · circuitId ${s.circuitId}` : ""}`, { size: 11, color: CANVAS_THEME.muted }).gap(4);
+    this.drawPreview(f, preview);
+    f.gap(6);
+    f.text(`刻印 ${s.engravedName ?? (sanitizeEditorName(this.editorName) || "—")}（開始画面で確定した名前）`, { size: 12, color: CANVAS_THEME.muted });
+    f.text("判定は digit 充足＋単一ループ。Perfect は Fully Awakened かつ完全充足でロック。制限タイマーなし。", { size: 11, color: CANVAS_THEME.muted });
+    f.gap(8);
+    // Judge details (the existing page's table, as lines).
+    f.card("restore:judge", (k) => {
+      k.text("判定の詳細", { weight: 700, size: 13 });
+      const enc = encodeEdgeState(this.marks);
+      const board = boardFromMarks(pz.cols, pz.rows, this.marks, pz.puzzleId, c.outcome);
+      for (const [a, b] of [
+        ["loop-closed?", c.loopClosed ? "yes" : "no"],
+        ["digit satisfaction", `${c.digits.satisfied}/${c.digits.clueCount} (${(c.digits.rate * 100).toFixed(0)}%)`],
+        ["status", outcomeLabel(c.outcome)],
+        ["perfect / locked", `${c.perfectClearance ? "perfect" : "—"} / ${this.locked || c.perfectClearance ? "locked" : "editable"}`],
+        ["line edges", String(c.lineCount)],
+        ["edgeState", enc || "(empty)"],
+        ["board.outcome", board.outcome ?? "—"],
+      ]) k.kv(a, b, { size: 11 });
+    }).gap(8);
+  }
+
   draw(ui: CanvasUI, f: Flow, viewportH: number): void {
     const s = this.session, pz = s.puzzle;
     const c = this.play();
@@ -240,9 +276,9 @@ export class RestoreScene {
     const canAwaken = !this.locked && c.outcome === "fully_awakened";
     const canBypass = !this.locked && (c.outcome === "bypass" || c.digits.satisfied > 0 || c.loopClosed);
     const large = this.isLarge(f.w - 12);
+    if (this.detail) return this.drawDetail(f, preview, c);
 
     ui.text("精密回路修復", f.x, f.y + 12, { size: 18, weight: 700 }); f.y += 30;
-    if (!large) f.text("大半は不完全基板。稀に可解コア。部分修復→Bypass、完全ループ→Fully Awakened（刻印ロック）、放棄→Offline。タイマー圧なし。", { size: 12, color: CANVAS_THEME.muted }).gap(6);
     if (this.locked) {
       f.card("restore:lock", (k) => {
         k.text("完璧な回路・編集不可", { weight: 700 });
@@ -270,11 +306,7 @@ export class RestoreScene {
       k.text(badges, { size: 12, weight: 700, color: s.rarity === "perfect_rare" ? "#3fb950" : CANVAS_THEME.muted });
       if (large) {
         k.buttons(ZOOM_MODES.map((m) => ({ id: `restore:zoom:${m}`, label: m === "fit" ? "全体" : m === "1" ? "1×" : "1.5×", variant: this.zoomMode === m ? "primary" : "normal", w: 64, onActivate: () => this.setZoom(m) }))).gap(6);
-      } else {
-        k.text(`${s.note}`, { size: 11, color: CANVAS_THEME.muted });
-        k.text(`puzzleSeed ${pz.puzzleId} · 辺: 空 → 線 → × → 空${s.circuitId ? ` · circuitId ${s.circuitId}` : ""}`, { size: 11, color: CANVAS_THEME.muted }).gap(4);
       }
-      k.text("数字＝そのマスの上下左右に接する線の本数。線をつないで閉ループを作り、数字を満たします。", { size: 12 });
       // One reserved status line (noise toast / loop celebration) so the board never moves under the finger.
       const status = this.noiseToast
         ? { text: this.noiseToast, color: "#ff7b72" }
@@ -300,8 +332,6 @@ export class RestoreScene {
       ctx.fillStyle = "#3fb950"; ctx.fillRect(k.x, k.y, k.w * c.digits.rate, 6);
       k.y += 12;
       k.kv("効果値", effectLabel, { weight: 700 });
-      k.text(`${c.effect.activeLoopEdgeCount > 0 ? `有効ループ ${c.effect.activeLoopEdgeCount}辺${c.effect.loopCount > 1 ? `（${c.effect.loopCount}ループ中の最小）` : ""}` : "ループなし → 効果 0"} · 青白グロー＝採点中の最小閉ループ`, { size: 11, color: CANVAS_THEME.muted });
-      if (!large) this.drawPreview(k, preview);
     }).gap(8);
     // Actions.
     f.card("restore:actions", (k) => {
@@ -315,25 +345,9 @@ export class RestoreScene {
       const r: Rect = { x: k.x, y: k.y, w: k.w, h: 44 };
       toggleButton(ui, "restore:persist", r, "この盤の線を保存する（この puzzleId）", this.persist, { disabled: this.locked, onActivate: () => this.setPersist(!this.persist) });
       k.y += 50;
-      k.text(`刻印 ${s.engravedName ?? (sanitizeEditorName(this.editorName) || "—")}（開始画面で確定した名前）`, { size: 12, color: CANVAS_THEME.muted });
-      k.text("判定は digit 充足＋単一ループ。Perfect は Fully Awakened かつ完全充足でロック。制限タイマーなし。", { size: 11, color: CANVAS_THEME.muted });
     }).gap(8);
-    if (large) f.card("restore:preview", (k) => { this.drawPreview(k, preview); k.text(`${s.note}`, { size: 11, color: CANVAS_THEME.muted }); k.text(`puzzleSeed ${pz.puzzleId}${s.circuitId ? ` · circuitId ${s.circuitId}` : ""}`, { size: 11, color: CANVAS_THEME.muted }); }).gap(8);
-    // Judge details (the existing page's table, as lines).
-    f.card("restore:judge", (k) => {
-      k.text("判定の詳細", { weight: 700, size: 13 });
-      const enc = encodeEdgeState(this.marks);
-      const board = boardFromMarks(pz.cols, pz.rows, this.marks, pz.puzzleId, c.outcome);
-      for (const [a, b] of [
-        ["loop-closed?", c.loopClosed ? "yes" : "no"],
-        ["digit satisfaction", `${c.digits.satisfied}/${c.digits.clueCount} (${(c.digits.rate * 100).toFixed(0)}%)`],
-        ["status", outcomeLabel(c.outcome)],
-        ["perfect / locked", `${c.perfectClearance ? "perfect" : "—"} / ${this.locked || c.perfectClearance ? "locked" : "editable"}`],
-        ["line edges", String(c.lineCount)],
-        ["edgeState", enc || "(empty)"],
-        ["board.outcome", board.outcome ?? "—"],
-      ]) k.kv(a, b, { size: 11 });
-    }).gap(8);
+    // CANVAS-G5 (神宮決定 2026-11-08): explanations, preview and the judge details are 詳細.
+    f.buttons([{ id: "restore:detail", label: "詳細", sub: "説明・成果プレビュー・判定の詳細", w: f.w, onActivate: () => this.setDetail(true) }]).gap(8);
     // Return CTA.
     f.card("restore:cta", (k) => {
       k.kv(`成果 ${outcomeLabel(c.outcome)}`, "", { weight: 700, color: OUTCOME_COLOR[c.outcome] }).gap(4);

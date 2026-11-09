@@ -208,6 +208,7 @@ export class InvadeScene {
         this.rankListPage = Math.floor(rank / RANK_PAGE_SIZE);
         this.rankChoice = null; this.retreatChoice = null;
         this.lastBoardLog = `${rank}段の盤を開始`;
+        this.panel = "main"; // the new board is shown
       },
     });
   }
@@ -223,6 +224,7 @@ export class InvadeScene {
         this.adopt(session);
         this.skipped = false;
         this.lastBoardLog = `盤再生成（進捗リセット）— 敵 ${this.board.mineCount} · HQ 開放 · seed ${this.board.seed ?? "—"}`;
+        this.panel = "main";
       },
     });
   }
@@ -297,6 +299,14 @@ export class InvadeScene {
       return withExtras({ tone: "ok", lines: [`このセルから出撃（${sel.sx},${sel.sy}${hint}）`], buttons: [{ id: "invade:to-explore", label: CTA_COPY.toExplore, url: buildInvadeToExploreUrl(base, this.host.exploreBase), variant: "primary" }, hangar] });
     }
     return { tone: "hint", lines: [`セル (${sel.sx},${sel.sy}) を開くか敵位置をマークすると、ここから出撃できます。`], buttons: [] };
+  }
+  /**
+   * The URL the existing 「格納庫へ」 uses (Invade→HUB with the selected sector), or
+   * null when there is none (no cell selected: the board progress is already saved).
+   * The 「‹ 親」 header leaves through it (#358 P1).
+   */
+  hubReturnUrl(): string | null {
+    return this.sortieBar().buttons.find((b) => b.id === "invade:to-hangar")?.url ?? null;
   }
   leave(b: SortieBar["buttons"][number]): void {
     if (playLogBlocked()) return;
@@ -381,11 +391,88 @@ export class InvadeScene {
   }
 
   /* --------------------------------- drawing -------------------------------- */
+  /**
+   * CANVAS-G4 (神宮決定 2026-11-08): the board screen keeps the board, its status
+   * and the sortie bar; the rest is behind 盤の操作・段位・盤の詳細. Panels only
+   * change what is drawn under the title; nothing here saves.
+   */
+  panel: "main" | "ops" | "rank" | "rankUp" | "rankDown" | "detail" = "main";
+  openPanel(p: InvadeScene["panel"]): void {
+    if (playLogBlocked()) return;
+    this.panel = p;
+    this.host.redraw();
+  }
+
   draw(ui: CanvasUI, f: Flow, viewportH: number): void {
     const board = this.board;
     const locked = this.forcedLockActive();
+    const feel = frontProgressFeel(board);
+    const selInfo = this.selected != null ? sectorDensityAt(this.selected.sx, this.selected.sy) : null;
+    if (this.panel !== "main") return this.drawPanel(ui, f, locked);
     ui.text("戦線マップ", f.x, f.y + 12, { size: 18, weight: 700 }); f.y += 30;
-    f.text(`HQ 中心の前線格子そのものがマインスイーパ。空白＝探索済 · 数字＝周囲の敵感知 · 赤三角＝確認された敵（→ Explore）· 壁 d≥${SECTOR_WALL_DISTANCE}。`, { size: 12, color: CANVAS_THEME.muted }).gap(6);
+    if (selInfo != null && !selInfo.blocked && selInfo.distance >= SECTOR_FRONT_DISTANCE)
+      f.card("invade:front-warn", (k) => k.text(`⚠ ルート焦点 d≥${SECTOR_FRONT_DISTANCE} — 高密度帯（遠方ほど敵が濃い）。`, { size: 12, color: "#ffdcd7" }), { fill: "#3d1d1d", edge: "#f85149" }).gap(8);
+    if (board.status === "won") f.card("invade:status", (k) => { k.text("前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。", { size: 12, color: "#aff5b4" }); if (this.firstClearOnThisBoard) k.text(FIRST_CLEAR_DISCOVERY_LINE_JA, { size: 12, color: "#aff5b4", weight: 700 }); }, { fill: "#12261e", edge: "#2ea043" }).gap(8);
+    else if (board.hitMine || board.status === "hazard") f.card("invade:status", (k) => k.text("敵接触（scoutHazard）。強制戦闘ロック — 強制出撃のみ可。", { size: 12, color: "#ffdcd7" }), { fill: "#3d1d1d", edge: "#f85149" }).gap(8);
+    else if (feel.openedMines > 0) f.card("invade:status", (k) => k.text(`交戦解決済の接触マスが ${feel.openedMines} — 「済」セルから再出撃できます（盤操作も再開）。`, { size: 12, color: "#aff5b4" }), { fill: "#12261e", edge: "#2ea043" }).gap(8);
+    // Progress feel (one line + bar).
+    const pct = Math.round(feel.openSafeRatio * 100);
+    f.text(`前線進捗 — ${exploredFeelLabelJa(feel.exploredFeel)}（${pct}%） · 残敵 ${feel.minesRemaining}/${feel.mineCount}`, { size: 12, weight: 700 });
+    const ctx = ui.context;
+    ctx.fillStyle = CANVAS_THEME.panelEdge; ctx.fillRect(f.x, f.y, f.w, 6);
+    ctx.fillStyle = "#58a6ff"; ctx.fillRect(f.x, f.y, f.w * feel.openSafeRatio, 6);
+    f.y += 12;
+    if (this.lastBoardLog) f.text(this.lastBoardLog, { size: 11, color: CANVAS_THEME.muted });
+    // Board viewport.
+    const side = Math.max(200, Math.min(f.w, viewportH - 120));
+    const vp: Rect = { x: f.x + (f.w - side) / 2, y: f.y, w: side, h: side };
+    this.viewport = vp;
+    this.clampView();
+    this.drawBoard(ui, vp, locked);
+    ui.rawRegion("invade:board", vp, this.rawHandler());
+    f.y += side + 8;
+    this.drawSortieBar(f);
+    const progress = invadeRankOf(readStoredHub());
+    f.gap(8).buttons([
+      { id: "invade:panel:ops", label: "盤の操作", sub: "拠点へ・タッチ・焦点・スキップ・再生成", onActivate: () => this.openPanel("ops") },
+      { id: "invade:panel:rank", label: "段位", sub: `挑戦中 ${progress.current}段`, onActivate: () => this.openPanel("rank") },
+      { id: "invade:panel:detail", label: "盤の詳細", sub: "状態・凡例・操作の説明", onActivate: () => this.openPanel("detail") },
+    ], { fill: true, h: 52 });
+    f.gap(8);
+  }
+
+  /** The sub-panels: header 「‹ 親」 then that panel only. */
+  private drawPanel(ui: CanvasUI, f: Flow, locked: boolean): void {
+    const parent = this.panel === "rankUp" || this.panel === "rankDown" ? "rank" : "main";
+    const title = { ops: "盤の操作", rank: "段位", rankUp: "段位：挑む", rankDown: "段位：撤退", detail: "盤の詳細", main: "" }[this.panel];
+    f.buttons([{ id: "invade:panel-back", label: `‹ ${parent === "rank" ? "段位" : "戦線地図"}`, w: 128, onActivate: () => this.openPanel(parent) }]);
+    f.y -= 44;
+    ui.text(title, f.x + 140, f.y + 22, { size: 16, weight: 700, maxW: f.w - 140 });
+    f.y += 52;
+    const board = this.board;
+    const feel = frontProgressFeel(board);
+    const selInfo = this.selected != null ? sectorDensityAt(this.selected.sx, this.selected.sy) : null;
+    if (this.panel === "ops") {
+      f.buttons([
+        { id: "invade:home", label: "拠点へ", w: f.w, onActivate: () => this.home() },
+        { id: "invade:touch-mode", label: `タッチ操作を反転：${this.reversedTouch ? "ON（タップで開く）" : "OFF（タップでマーク）"}`, w: f.w, disabled: locked, onActivate: () => this.toggleTouch() },
+        { id: "invade:clear", label: "焦点クリア", w: f.w, disabled: this.selected == null || locked, onActivate: () => this.clearFocus() },
+        { id: "invade:skip", label: "スキップ（quick-battle・ナビなし）", w: f.w, disabled: locked, onActivate: () => this.skip() },
+        { id: "invade:regen", label: "盤を再生成（進捗リセット）", w: f.w, variant: "danger", disabled: locked, onActivate: () => this.regenerate() },
+      ]);
+      return;
+    }
+    if (this.panel === "rank") {
+      const progress = invadeRankOf(readStoredHub());
+      f.text(`段位：挑戦中 ${progress.current}段 · 解放済み 0〜${unlockedInvadeRank(readStoredHub())}段`, { size: 12, weight: 700 }).gap(6);
+      f.buttons([
+        { id: "invade:panel:rankUp", label: "挑む", sub: "次の段を選んで挑戦", w: f.w, onActivate: () => this.openPanel("rankUp") },
+        { id: "invade:panel:rankDown", label: "撤退", sub: "下の段へ（この盤面を諦める）", w: f.w, onActivate: () => this.openPanel("rankDown") },
+      ], { h: 56 });
+      return;
+    }
+    if (this.panel === "rankUp" || this.panel === "rankDown") { this.drawRanks(f, locked, this.panel === "rankUp" ? "up" : "down"); return; }
+    // detail: the arrival, the board numbers, the legend and the how-to texts (display only).
     f.card("invade:inbound", (k) => {
       k.text("到着（trade→invade）", { weight: 700, size: 13 });
       if (this.inbound == null) k.text("Hub からの到着クエリなし（直接オープン可）。", { size: 12, color: CANVAS_THEME.muted });
@@ -396,58 +483,25 @@ export class InvadeScene {
         k.text("trade→invade 取込済（配備コミットではない）。", { size: 12, color: "#aff5b4" });
       }
     }).gap(8);
-    const selInfo = this.selected != null ? sectorDensityAt(this.selected.sx, this.selected.sy) : null;
-    if (selInfo != null && !selInfo.blocked && selInfo.distance >= SECTOR_FRONT_DISTANCE)
-      f.card("invade:front-warn", (k) => k.text(`⚠ ルート焦点 d≥${SECTOR_FRONT_DISTANCE} — 高密度帯（遠方ほど敵が濃い）。`, { size: 12, color: "#ffdcd7" }), { fill: "#3d1d1d", edge: "#f85149" }).gap(8);
-    const feel = frontProgressFeel(board);
-    if (board.status === "won") f.card("invade:status", (k) => { k.text("前線掃討完了 — sectorCleared。探索へ敵残ゼロのインテルを渡せます。", { size: 12, color: "#aff5b4" }); if (this.firstClearOnThisBoard) k.text(FIRST_CLEAR_DISCOVERY_LINE_JA, { size: 12, color: "#aff5b4", weight: 700 }); }, { fill: "#12261e", edge: "#2ea043" }).gap(8);
-    else if (board.hitMine || board.status === "hazard") f.card("invade:status", (k) => k.text("敵接触（scoutHazard）。強制戦闘ロック — 強制出撃のみ可。", { size: 12, color: "#ffdcd7" }), { fill: "#3d1d1d", edge: "#f85149" }).gap(8);
-    else if (feel.openedMines > 0) f.card("invade:status", (k) => k.text(`交戦解決済の接触マスが ${feel.openedMines} — 「済」セルから再出撃できます（盤操作も再開）。`, { size: 12, color: "#aff5b4" }), { fill: "#12261e", edge: "#2ea043" }).gap(8);
-
-    f.card("invade:board-card", (k) => {
-      k.text(`前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）`, { weight: 700, size: 13 });
-      const status = board.status === "won" ? "前線掃討完了" : board.status === "hazard" || board.hitMine ? "接触（hazard・強制戦闘ロック中）" : feel.openedMines > 0 ? `偵察中（解決済接触 ${feel.openedMines} · 再出撃可）` : `偵察中 — ${exploredFeelLabelJa(feel.exploredFeel)}`;
-      k.kv("状態", status, { size: 12 });
-      k.kv("敵（地雷）", String(board.mineCount), { size: 12 });
-      k.kv("残敵（概算）", String(minesRemaining(board)), { size: 12 });
-      k.kv("推定敵位置", String(countFlagged(board)), { size: 12 });
-      k.kv("ルート焦点", this.selected ? `(${this.selected.sx}, ${this.selected.sy})` : this.skipped ? "—（quick-battle スキップ）" : "未選択", { size: 12 });
-      k.kv("距離 d／仮 density", `${selInfo ? selInfo.distance : "—"} ／ ${selInfo && !selInfo.blocked ? selInfo.density.toFixed(2) : "—"}`, { size: 12 });
-      if (this.lastBoardLog) k.text(this.lastBoardLog, { size: 11, color: CANVAS_THEME.muted });
-      // Progress feel.
-      const pct = Math.round(feel.openSafeRatio * 100);
-      k.gap(4).text(`前線進捗 — ${exploredFeelLabelJa(feel.exploredFeel)}`, { size: 12, weight: 700 });
-      const ctx = ui.context;
-      ctx.fillStyle = CANVAS_THEME.panelEdge; ctx.fillRect(k.x, k.y, k.w, 6);
-      ctx.fillStyle = "#58a6ff"; ctx.fillRect(k.x, k.y, k.w * feel.openSafeRatio, 6);
-      k.y += 10;
-      k.text(`セーフ開放 ${feel.openSafe}/${feel.playableSafe}（${pct}%） · 空白 ${feel.blanksOpen} · マーク ${feel.flagged} · 残敵 ${feel.minesRemaining}/${feel.mineCount} · 解決済接触 ${board.hitMine ? 0 : feel.openedMines}`, { size: 11, color: CANVAS_THEME.muted });
-      k.text(`凡例：白スコープ＝推定敵位置 · 赤三角＝確認された敵 · 済＝解決済・再出撃可 · 右上の灰点＝置き去り機 · 右下の錆点＝残骸 · 左上の橙点＝落とし物 · 未開マスの色＝HQ からの距離帯（${(["near", "mid", "front"] as const).map((b) => `${dangerBandLabelJa(b)} ${dangerBandHintJa(b)}`).join("・")}）`, { size: 11, color: CANVAS_THEME.muted }).gap(6);
-      this.drawRanks(k, locked);
-      // Board viewport.
-      const side = Math.max(200, Math.min(k.w, viewportH - 120));
-      const vp: Rect = { x: k.x + (k.w - side) / 2, y: k.y, w: side, h: side };
-      this.viewport = vp;
-      this.clampView();
-      this.drawBoard(ui, vp, locked);
-      ui.rawRegion("invade:board", vp, this.rawHandler());
-      k.y += side + 8;
-      this.drawSortieBar(k);
-      k.gap(6).buttons([
-        { id: "invade:home", label: "拠点へ", onActivate: () => this.home() },
-        { id: "invade:touch-mode", label: `タッチ操作を反転：${this.reversedTouch ? "ON（タップで開く）" : "OFF（タップでマーク）"}`, disabled: locked, onActivate: () => this.toggleTouch() },
-        { id: "invade:regen", label: "盤を再生成（進捗リセット）", disabled: locked, onActivate: () => this.regenerate() },
-        { id: "invade:clear", label: "焦点クリア", disabled: this.selected == null || locked, onActivate: () => this.clearFocus() },
-        { id: "invade:skip", label: "スキップ（quick-battle・ナビなし）", disabled: locked, onActivate: () => this.skip() },
-      ]).gap(6);
-      k.text(`タッチ：${this.reversedTouch ? "タップで開く／長押しして離すとマーク" : "タップでマーク／長押しして離すと開く"}（未開放マスのみ）。長押しは${BOARD_INPUT.holdMs}msで予告、離すと確定。元のマスを外れるスイープですぐ盤面移動。ピンチでズーム。広域表示のダブルタップでその位置を拡大。「拠点へ」で視点を戻せます。`, { size: 11, color: CANVAS_THEME.muted });
-      k.text("開いた数字をタップ：斥候が感知した周囲の敵数とマーク数が一致した時だけ周囲開放。反転の影響なし。推定が誤っていれば敵に接触し得ます。", { size: 11, color: CANVAS_THEME.muted });
-      k.text("マウス：左クリックで開く／右クリック・Ctrl＋左クリックで敵位置をマーク・マーク解除。数字で左右同時押しはマーク数一致時のみ周囲開放。中ボタンドラッグで移動、ホイールでズーム。マウス長押しはマーク操作になりません。", { size: 11, color: CANVAS_THEME.muted });
-      k.text("開いたマス・マーク・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。報酬はインテルのみ。コンテナ／YieldBag は払わない。", { size: 11, color: CANVAS_THEME.muted });
-    }).gap(8);
+    f.text(`HQ 中心の前線格子そのものがマインスイーパ。空白＝探索済 · 数字＝周囲の敵感知 · 赤三角＝確認された敵（→ Explore）· 壁 d≥${SECTOR_WALL_DISTANCE}。`, { size: 12, color: CANVAS_THEME.muted }).gap(6);
+    f.text(`前線マインスイーパ（${BOARD_SPAN}×${BOARD_SPAN} · 半辺 ${AOI_HALF}）`, { weight: 700, size: 13 });
+    const status = board.status === "won" ? "前線掃討完了" : board.status === "hazard" || board.hitMine ? "接触（hazard・強制戦闘ロック中）" : feel.openedMines > 0 ? `偵察中（解決済接触 ${feel.openedMines} · 再出撃可）` : `偵察中 — ${exploredFeelLabelJa(feel.exploredFeel)}`;
+    f.kv("状態", status, { size: 12 });
+    f.kv("敵（地雷）", String(board.mineCount), { size: 12 });
+    f.kv("残敵（概算）", String(minesRemaining(board)), { size: 12 });
+    f.kv("推定敵位置", String(countFlagged(board)), { size: 12 });
+    f.kv("ルート焦点", this.selected ? `(${this.selected.sx}, ${this.selected.sy})` : this.skipped ? "—（quick-battle スキップ）" : "未選択", { size: 12 });
+    f.kv("距離 d／仮 density", `${selInfo ? selInfo.distance : "—"} ／ ${selInfo && !selInfo.blocked ? selInfo.density.toFixed(2) : "—"}`, { size: 12 });
+    const pct = Math.round(feel.openSafeRatio * 100);
+    f.text(`セーフ開放 ${feel.openSafe}/${feel.playableSafe}（${pct}%） · 空白 ${feel.blanksOpen} · マーク ${feel.flagged} · 残敵 ${feel.minesRemaining}/${feel.mineCount} · 解決済接触 ${board.hitMine ? 0 : feel.openedMines}`, { size: 11, color: CANVAS_THEME.muted });
+    f.text(`凡例：白スコープ＝推定敵位置 · 赤三角＝確認された敵 · 済＝解決済・再出撃可 · 右上の灰点＝置き去り機 · 右下の錆点＝残骸 · 左上の橙点＝落とし物 · 未開マスの色＝HQ からの距離帯（${(["near", "mid", "front"] as const).map((b) => `${dangerBandLabelJa(b)} ${dangerBandHintJa(b)}`).join("・")}）`, { size: 11, color: CANVAS_THEME.muted }).gap(6);
+    f.text(`タッチ：${this.reversedTouch ? "タップで開く／長押しして離すとマーク" : "タップでマーク／長押しして離すと開く"}（未開放マスのみ）。長押しは${BOARD_INPUT.holdMs}msで予告、離すと確定。元のマスを外れるスイープですぐ盤面移動。ピンチでズーム。広域表示のダブルタップでその位置を拡大。「拠点へ」で視点を戻せます。`, { size: 11, color: CANVAS_THEME.muted });
+    f.text("開いた数字をタップ：斥候が感知した周囲の敵数とマーク数が一致した時だけ周囲開放。反転の影響なし。推定が誤っていれば敵に接触し得ます。", { size: 11, color: CANVAS_THEME.muted });
+    f.text("マウス：左クリックで開く／右クリック・Ctrl＋左クリックで敵位置をマーク・マーク解除。数字で左右同時押しはマーク数一致時のみ周囲開放。中ボタンドラッグで移動、ホイールでズーム。マウス長押しはマーク操作になりません。", { size: 11, color: CANVAS_THEME.muted });
+    f.text("開いたマス・マーク・地雷シード・ルート焦点は HubSave.frontProgress に自動保存（リロード後も復元）。報酬はインテルのみ。コンテナ／YieldBag は払わない。", { size: 11, color: CANVAS_THEME.muted });
   }
 
-  private drawRanks(k: Flow, locked: boolean): void {
+  private drawRanks(k: Flow, locked: boolean, mode: "up" | "down"): void {
     const hub = readStoredHub();
     const progress = invadeRankOf(hub);
     const max = unlockedInvadeRank(hub);
@@ -465,17 +519,21 @@ export class InvadeScene {
         { id: "invade:rank-next", label: "次の100段", disabled: start + ranks.length > max, onActivate: () => { this.rankListPage++; } },
       ]).gap(4);
     }
+    if (mode === "up") {
+      if (!won) k.text("前線掃討を完了すると次の段へ挑めます。", { size: 12, color: CANVAS_THEME.muted }).gap(4);
+      k.buttons([
+        { id: "invade:rank-select", label: `次に挑む段：${choice}段`, w: k.w, disabled: locked || !won, onActivate: () => {
+          this.picker = { id: "invade:pick:rank", title: "次に挑む段", options: ranks.map((i) => ({ key: String(i), label: `${i}段`, selected: i === choice })), onPick: (key) => { this.rankChoice = Number(key); this.picker = null; }, onCancel: () => { this.picker = null; } };
+        } },
+        { id: "invade:rank-start", label: "選んだ段に挑む", variant: "primary", w: k.w, disabled: locked || !won, onActivate: () => this.moveToRank(choice, false) },
+      ]).gap(4);
+      return;
+    }
     k.buttons([
-      { id: "invade:rank-select", label: `次に挑む段：${choice}段`, disabled: locked || !won, onActivate: () => {
-        this.picker = { id: "invade:pick:rank", title: "次に挑む段", options: ranks.map((i) => ({ key: String(i), label: `${i}段`, selected: i === choice })), onPick: (key) => { this.rankChoice = Number(key); this.picker = null; }, onCancel: () => { this.picker = null; } };
-      } },
-      { id: "invade:rank-start", label: "選んだ段に挑む", variant: "primary", disabled: locked || !won, onActivate: () => this.moveToRank(choice, false) },
-    ]).gap(4);
-    k.buttons([
-      { id: "invade:retreat-select", label: `撤退先：${retreat != null ? `${retreat}段` : "—"}`, disabled: locked || lower.length === 0, onActivate: () => {
+      { id: "invade:retreat-select", label: `撤退先：${retreat != null ? `${retreat}段` : "—"}`, w: k.w, disabled: locked || lower.length === 0, onActivate: () => {
         this.picker = { id: "invade:pick:retreat", title: "撤退先", options: lower.map((i) => ({ key: String(i), label: `${i}段`, selected: i === retreat })), onPick: (key) => { this.retreatChoice = Number(key); this.picker = null; }, onCancel: () => { this.picker = null; } };
       } },
-      { id: "invade:rank-retreat", label: "この盤面を諦めて下の段へ", disabled: locked || lower.length === 0 || won, onActivate: () => { if (retreat != null) this.moveToRank(retreat, true); } },
+      { id: "invade:rank-retreat", label: "この盤面を諦めて下の段へ", w: k.w, disabled: locked || lower.length === 0 || won, onActivate: () => { if (retreat != null) this.moveToRank(retreat, true); } },
     ]).gap(8);
   }
 

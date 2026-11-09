@@ -256,6 +256,9 @@ export class SortScene {
     if (s.phase === "blocked" && !isEmptyCargoEntry(s)) out.push({ id: "sort-demo", label: "SORT：デモクエリで開く", run: () => this.host.go(this.host.sortModuleBase + demoQueryExample()) });
     return out;
   }
+  /** CANVAS-G6: briefing 詳細 (display only). */
+  detail = false;
+  setDetail(on: boolean): void { this.detail = on; this.host.redraw(); }
   testPlay(): void {
     if (this.introOpeningId) return;
     this.clearTimer();
@@ -433,13 +436,18 @@ export class SortScene {
     const lines: Array<{ text: string; size?: number; color?: string; weight?: 400 | 600 | 700 }> = [];
     const buttons: Array<{ id: string; label: string; variant?: "primary" | "normal"; sub?: string; onActivate: () => void }> = [];
     let kicker = "", title = "";
-    if (s.phase === "briefing") {
+    if (s.phase === "briefing" && this.detail) {
+      // CANVAS-G6 (神宮決定 2026-11-08): the long rules text of the briefing is 詳細.
+      kicker = "BRIEFING"; title = "精製の説明";
+      lines.push({ text: "盤は開始時に埋まります。上下左右にスワップして 3 つ以上そろえると消去→ゆっくり落下補充。落下中もスワップしてアクティブ連鎖。idle でマッチしないスワップは即終了。有効が尽きたらオジャマのみ。", size: 12 });
+      buttons.push({ id: "sort:detail-back", label: "‹ 精製準備", onActivate: () => this.setDetail(false) });
+    } else if (s.phase === "briefing") {
       kicker = "BRIEFING"; title = "精製準備";
       const capacity = SORT_V0_RULES.boardCols * SORT_V0_RULES.boardRows;
       const budget = Math.max(0, s.validPieceBudget);
       lines.push({ text: `コンテナ ${s.inbound.salvagedContainers} · 有効予算 ${s.validPieceBudget} · craft ${(s.inbound.craftMultiplier ?? 1).toFixed(3)}`, weight: 600 });
       lines.push({ text: `ジャンクまで ${budget}（${budget >= capacity ? `盤 ${capacity} 埋めたあと袋に ${budget - capacity}` : `盤を埋める有効 ${budget} · 不足は開始後ジャンク`}）`, size: 12, color: CANVAS_THEME.muted });
-      lines.push({ text: "盤は開始時に埋まります。上下左右にスワップして 3 つ以上そろえると消去→ゆっくり落下補充。落下中もスワップしてアクティブ連鎖。idle でマッチしないスワップは即終了。有効が尽きたらオジャマのみ。", size: 12 });
+      buttons.push({ id: "sort:detail", label: "詳細", sub: "盤・スワップ・連鎖の説明", onActivate: () => this.setDetail(true) });
       buttons.push({ id: "sort:start", label: "精製開始", variant: "primary", onActivate: () => this.start() });
       if (isExploreHandoffQuery(this.host.search)) {
         const remaining = readHubUnopenedContainers(this.host.search);
