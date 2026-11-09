@@ -213,6 +213,25 @@ const CONFIGS = [
       // A HUB board is not saved per edge (保存 off by default, existing rule): the only write is the HUB ingest.
       assert.ok(kinds.includes("handoff.ingest") && !kinds.some((k) => k.startsWith("restore.")), kinds.join(","));
       assert.equal(new Set((await entries()).map((e) => e.op)).size, (await entries()).length, "no duplicated operations");
+      // ---- #358 P1: 「‹ 回路詳細」 hands the result back too (the same ingest as 格納庫へ) ----------
+      await nav("M", "C", "CI");
+      await reveal("dock:circuit:board_demo:select");
+      await tap("dock:circuit:board_demo:select");
+      await reveal("dock:circuit:board_demo:open");
+      await tap("dock:circuit:board_demo:open");
+      await settle();
+      assert.equal(await scene(), "restore", `${cfg.name}: RESTORE from 回路詳細`);
+      await reveal("restore:abandon");
+      await tap("restore:abandon");
+      assert.equal((await rinfo()).outcome, "offline");
+      await p.mouse.move(cfg.viewport.width / 2, cfg.viewport.height / 2);
+      for (let i = 0; i < 10; i++) await p.mouse.wheel(0, -2000);
+      await p.waitForTimeout(80);
+      await tap("game:nav:back");
+      await settle();
+      assert.equal(await scene(), "dock", `${cfg.name}: ‹ 回路詳細 → DOCK`);
+      assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), "CD", "lands on 回路詳細");
+      assert.equal((await hub()).circuits.find((c) => c.circuitId === "board_demo").restoreState, "offline", `${cfg.name}: the result went through the existing ingest`);
       // ---- RESTORE tab = demo board; reload keeps RESTORE; back = DOCK -------------------
       await tap("tab:RESTORE");
       await settle();

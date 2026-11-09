@@ -309,14 +309,19 @@ export function mountCanvasApp(doc: Document = document): void {
    * CANVAS-G7 (神宮決定 2026-11-08): the DOCK-style header on the game screens that
    * are not board work in progress. 「‹ 親」 opens the parent palette of DOCK.
    */
-  const toDockPalette = (p: PaletteId) => {
+  /**
+   * Leave through the scene's own 「格納庫へ」 URL when it has one (RESTORE result,
+   * Invade→HUB intel, 探索 wear report: the existing ingest runs), then open the
+   * parent palette. #358 P1: never drop a handoff by rebuilding DOCK directly.
+   */
+  const toDockPalette = (p: PaletteId, via: string | null = null) => {
     if (playLogBlocked()) return;
-    go(canvasBase());
+    go(via ?? canvasBase());
     if (p === "CD" && !dock?.sections?.state.lastCircuit) p = "C";
     dock?.sections?.goPalette(p);
   };
-  const gameHeader = (ui: CanvasUI, r: Rect, parent: PaletteId, title: string) => {
-    ui.button("game:nav:back", { x: r.x + 4, y: r.y, w: 112, h: 44 }, `‹ ${PALETTE_TITLE[parent]}`, { fontSize: 13, onActivate: () => toDockPalette(parent) });
+  const gameHeader = (ui: CanvasUI, r: Rect, parent: PaletteId, title: string, via: () => string | null) => {
+    ui.button("game:nav:back", { x: r.x + 4, y: r.y, w: 112, h: 44 }, `‹ ${PALETTE_TITLE[parent]}`, { fontSize: 13, onActivate: () => toDockPalette(parent, via()) });
     ui.text(title, r.x + 124, r.y + 22, { size: 16, weight: 700, maxW: r.w - 132 });
     ui.context.fillStyle = CANVAS_THEME.rowEdge;
     ui.context.fillRect(r.x, r.y + 43, r.w, 1);
@@ -328,7 +333,7 @@ export function mountCanvasApp(doc: Document = document): void {
     ctx.fillRect(0, 0, frame.width, frame.height);
     const hub = loadHubSaveFromLocalStorage()?.hub ?? null;
     drawResourceHud(ui, L.hud, hub, frame.width <= CANVAS_MOBILE_MAX_W);
-    gameHeader(ui, { x: L.column.x, y: L.hud.y + L.hud.h, w: L.column.w, h: 44 }, "CD", "回路修復");
+    gameHeader(ui, { x: L.column.x, y: L.hud.y + L.hud.h, w: L.column.w, h: 44 }, "CD", "回路修復", () => restore?.hubReturnUrl() ?? null);
     const top = L.hud.y + L.hud.h + 44;
     const area = { x: L.column.x, y: top, w: L.column.w, h: L.tabs.y - top };
     if (!restore) {
@@ -360,7 +365,7 @@ export function mountCanvasApp(doc: Document = document): void {
     drawResourceHud(ui, L.hud, hub, frame.width <= CANVAS_MOBILE_MAX_W);
     // Forced combat: the existing back guard applies, no 「‹ 親」 (G7).
     const head = !scene.forcedLockActive();
-    if (head) gameHeader(ui, { x: L.column.x, y: L.hud.y + L.hud.h, w: L.column.w, h: 44 }, "I", "戦線マップ");
+    if (head) gameHeader(ui, { x: L.column.x, y: L.hud.y + L.hud.h, w: L.column.w, h: 44 }, "I", "戦線マップ", () => scene.hubReturnUrl());
     const top = L.hud.y + L.hud.h + (head ? 44 : 0);
     const area = { x: L.column.x, y: top, w: L.column.w, h: L.tabs.y - top };
     ui.scrollArea("invade", area, "auto", (off) => {
@@ -398,7 +403,7 @@ export function mountCanvasApp(doc: Document = document): void {
       return;
     }
     const briefing = scene.phase === "briefing";
-    gameHeader(ui, { x: L.column.x, y: top, w: L.column.w, h: 44 }, "I", briefing ? "出撃準備" : "作戦結果");
+    gameHeader(ui, { x: L.column.x, y: top, w: L.column.w, h: 44 }, "I", briefing ? "出撃準備" : "作戦結果", () => scene.hubReturnUrl());
     const area = { x: L.column.x, y: top + 44, w: L.column.w, h: (briefing ? L.tabs.y : bottom) - top - 44 };
     ui.scrollArea(`explore:${scene.phase}`, area, "auto", (off) => {
       const originY = area.y - off;

@@ -300,6 +300,14 @@ export class InvadeScene {
     }
     return { tone: "hint", lines: [`セル (${sel.sx},${sel.sy}) を開くか敵位置をマークすると、ここから出撃できます。`], buttons: [] };
   }
+  /**
+   * The URL the existing 「格納庫へ」 uses (Invade→HUB with the selected sector), or
+   * null when there is none (no cell selected: the board progress is already saved).
+   * The 「‹ 親」 header leaves through it (#358 P1).
+   */
+  hubReturnUrl(): string | null {
+    return this.sortieBar().buttons.find((b) => b.id === "invade:to-hangar")?.url ?? null;
+  }
   leave(b: SortieBar["buttons"][number]): void {
     if (playLogBlocked()) return;
     if (b.forced) markForcedHandoffIntent(); // existing data-forced-handoff

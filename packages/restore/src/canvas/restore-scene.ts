@@ -176,6 +176,8 @@ export class RestoreScene {
     });
   }
   toHub(): void { if (!playLogBlocked()) this.host.go(this.returnUrl()); }
+  /** The URL the existing 「格納庫へ」 uses: the 「‹ 親」 header leaves through it too (#358 P1). */
+  hubReturnUrl(): string { return this.returnUrl(); }
   nextBoard(): void {
     if (this.session.source !== "demo" || playLogBlocked()) return;
     const href = buildNextLocalBoardHref(`board-${this.now().toString(36)}`, this.host.href());

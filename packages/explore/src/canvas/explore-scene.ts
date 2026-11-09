@@ -639,6 +639,14 @@ export class ExploreScene {
     else this.drawBriefing(ui, f);
   }
 
+  /**
+   * The URL the existing 「格納庫へ」 of this page uses (result: the wear report
+   * handoff), or null on the briefing. The 「‹ 親」 header leaves through it (#358 P1).
+   */
+  hubReturnUrl(): string | null {
+    if (this.world.phase !== "result") return null;
+    return hubWearHandoffUrl(this.world) ?? resolveModuleBaseUrl("trade");
+  }
   /** CANVAS-G3: open / close the 詳細 of the briefing or the result (display only). */
   setPageDetail(on: boolean): void { this.pageDetail = on; this.host.redraw(); }
   private detailHeader(f: Flow, back: string): void {

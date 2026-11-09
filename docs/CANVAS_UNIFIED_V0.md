@@ -494,3 +494,14 @@
 - `verify-canvas-dock-full`：RESTORE の「‹」で DOCK の回路詳細（または回路整備）、INVADE の「‹」で侵略。
 - 残りの verify も PASS。
 - スマートフォン実機・公開版 NOT_RUN。
+
+### 18.3 #358 の監査の修正（2026-11-09）
+
+- **P1 RESTORE の「‹ 回路詳細」で修復の成果が失われていた**：見出しの「‹ 親」が `go(canvasBase())` で DOCK を直接作り直していたため、RESTORE の既存の受渡し（`returnUrl()` → DOCK の `ingestLocationSearch()`）を通らず、Commit Fully Awakened／Bypass／Abandon の成果が HubSave に入らなかった。
+- **直した後**：
+  - 「‹ 親」は、その画面の既存の「格納庫へ」と同じ URL で出て（既存の受渡しをそのまま通す）、そのあと親のパレットを開く。新しい受渡し経路は作っていない。
+  - RESTORE：`returnUrl()`。
+  - INVADE：マスを選んでいれば Invade→HUB の URL（選んだセクターのインテル）。選んでいなければ盤の進捗は保存済みなので、そのまま DOCK へ。
+  - 探索の結果：摩耗報告つきの URL（無ければ格納庫）。
+  - 探索の準備：受渡しは無いので、そのまま DOCK へ。
+- **検証**：`verify-canvas-restore` に、回路詳細から RESTORE を開き、Abandon → Offline のあと「‹ 回路詳細」で戻ると、回路が Offline として保存され、回路詳細に着くことを追加した。修正前のコードではこの確認が落ちることを確かめた。
