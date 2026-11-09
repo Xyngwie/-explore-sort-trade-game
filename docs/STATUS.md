@@ -1,3 +1,10 @@
+## canvas パレット組み直し（2026-11-08・神宮決定）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: canvas 版 DOCK の 1 本の長い画面を、HUB（所持資産＋売買・仕分・整備・侵略）から子へ分かれるパレットの木に組み直した。各作業は既存の関数のまま → [CANVAS_UNIFIED_V0.md §17](CANVAS_UNIFIED_V0.md)、計画は [CANVAS_PALETTE_RESTRUCTURE.md](CANVAS_PALETTE_RESTRUCTURE.md)
+- Why: 神宮「こうしてほしいって内容を main に書いたので実装を変えてほしい」（2026-11-08）
+- Scope: canvas 版 DOCK の情報設計だけ。セーブ形式・受渡し・各操作・確認・価格・制限・既存版のページは変更なし
+- Status: 細部 1〜9 と G8 はすべて ★A のとおり神宮決定（2026-11-08「全部★」）。PR #357。ゲーム内の統一（G1〜G7）は #357 の上に積む別 PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## canvas 改修計画：パレット組み直し（2026-11-08）
 - Who: Cursor Cloud Agent（Grok。神宮の直接依頼。Automations は起動していない）
 - What: canvas 版の情報設計を [CANVAS_PALETTE_RESTRUCTURE.md](CANVAS_PALETTE_RESTRUCTURE.md) に置いた。この台帳と [CANVAS_UNIFIED_V0.md](CANVAS_UNIFIED_V0.md) にはその文書へのポインタだけ

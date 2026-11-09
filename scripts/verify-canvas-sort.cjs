@@ -129,11 +129,18 @@ const CONFIGS = [
         await settle();
       };
       // ---- new game: DOCK → SORT (initial 10) in place --------------------------
+      /** Palette tree (docs/CANVAS_PALETTE_RESTRUCTURE.md): back to HUB, then tap through the palettes. */
+      const nav = async (...path) => {
+        for (let i = 0; i < 8 && (await region("dock:nav:back")); i++) { if (await region("dock:nav:home")) await tap("dock:nav:home"); else await tap("dock:nav:back"); }
+        for (const id of path) { await reveal(`dock:nav:${id}`); await tap(`dock:nav:${id}`); }
+        assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), path.at(-1) ?? "H", `palette ${path.join(">")}`);
+      };
       await p.goto(local + "canvas/");
       await startGame();
       assert.equal(await scene(), "dock");
       const h0 = await hub();
       assert.equal(h0.unopenedContainers, 10, "new game: 10 containers");
+      await nav("S");
       await reveal("dock:unopened:sort:go");
       const pageMarker = await p.evaluate(() => (window.__marker = Math.random()));
       await tap("dock:unopened:sort:go");
@@ -212,6 +219,7 @@ const CONFIGS = [
         const credits = (await hub()).credits;
         assert.ok(credits >= 45, `${cfg.name}: credits for 3 boxes (${credits})`);
         {
+          await nav("T", "B", "BC");
           await reveal("dock:unopened:step:1");
           await tap("dock:unopened:step:1"); await tap("dock:unopened:step:1"); // ×3
           await reveal("dock:unopened:buy");
@@ -219,6 +227,7 @@ const CONFIGS = [
           await tap("dock:confirm:ok");
           await settle();
           assert.equal((await hub()).unopenedContainers, 3, "bought 3 boxes");
+          await nav("S");
           await reveal("dock:unopened:sort:-1");
           await tap("dock:unopened:sort:-1"); await tap("dock:unopened:sort:-1"); // 仕分数 1
           await reveal("dock:unopened:sort:go");
@@ -269,6 +278,7 @@ const CONFIGS = [
         await p2.locator("#wl-canvas-name").fill("検証");
         const t2 = async (id) => { for (let i = 0; i < 60; i++) { const r = await p2.evaluate((id) => window.__wlCanvas.regions().find((x) => x.id === id), id); if (r && r.visible && r.h >= 43) { if (cfg.touch) await p2.touchscreen.tap(r.x + r.w / 2, r.y + r.h / 2); else await p2.mouse.click(r.x + r.w / 2, r.y + r.h / 2); await p2.waitForTimeout(60); await p2.waitForFunction(() => !document.getElementById("play-log-blocker") && !window.__pending(), null, { timeout: 15000 }); return; } await p2.mouse.move(cfg.viewport.width / 2, cfg.viewport.height / 2); await p2.mouse.wheel(0, r && r.y < cfg.viewport.height / 2 ? -300 : 300); await p2.waitForTimeout(40); } throw new Error("t2 " + id); };
         await t2("start:go");
+        await t2("dock:nav:S");
         await t2("dock:unopened:sort:go");
         assert.equal(await p2.evaluate(() => window.__wlCanvas.scene()), "sort");
         const mid = await p2.evaluate((k) => JSON.parse(localStorage.getItem(k)).hub, HUB);

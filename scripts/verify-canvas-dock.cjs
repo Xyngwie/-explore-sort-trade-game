@@ -121,6 +121,12 @@ const CONFIGS = [
       }).map((el) => el.tagName.toLowerCase() + (el.id ? "#" + el.id : "")));
 
       // ---- fresh game (the play log creates it), give it credits through the logged storage ----
+      /** Palette tree (docs/CANVAS_PALETTE_RESTRUCTURE.md): back to HUB, then tap through the palettes. */
+      const nav = async (...path) => {
+        for (let i = 0; i < 8 && (await region("dock:nav:back")); i++) { if (await region("dock:nav:home")) await tap("dock:nav:home"); else await tap("dock:nav:back"); }
+        for (const id of path) { await reveal(`dock:nav:${id}`); await tap(`dock:nav:${id}`); }
+        assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), path.at(-1) ?? "H", `palette ${path.join(">")}`);
+      };
       await p.goto(local + "canvas/");
       await ready();
       assert.equal(await scene(), "start");
@@ -151,6 +157,7 @@ const CONFIGS = [
 
       // ---- hit alignment at the edges (coordinate conversion at this DPR) ----
       const h0 = await hub();
+      await nav("T", "B", "BR");
       await reveal("dock:ammo:buy");
       await reveal("dock:ammo:step:1");
       const step = await region("dock:ammo:step:1");
@@ -168,6 +175,7 @@ const CONFIGS = [
 
       // ---- container: confirm dialog, behind-dialog tap, cancel, confirm ----
       // Scroll the box row into view first (small screens).
+      await nav("T", "B", "BC");
       await reveal("dock:unopened:buy");
       const behind = await region("dock:unopened:step:1");
       await tap("dock:unopened:buy");
@@ -191,6 +199,7 @@ const CONFIGS = [
       assert.deepEqual(newOps(e1, e2), ["unopened.buy"]);
 
       // ---- scroll / cancel never buy ----
+      await nav("T", "B", "BR");
       const jb = await reveal("dock:junk:buy");
       {
         await drag({ x: jb.cx, y: jb.cy }, { x: jb.cx, y: jb.cy - 80 });

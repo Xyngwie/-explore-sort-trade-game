@@ -131,6 +131,12 @@ const CONFIGS = [
         return !el.hidden && cs.display !== "none" && cs.visibility !== "hidden" && r.width > 0 && r.height > 0;
       }).map((el) => el.tagName.toLowerCase() + (el.id ? "#" + el.id : "")));
 
+      /** Palette tree (docs/CANVAS_PALETTE_RESTRUCTURE.md): back to HUB, then tap through the palettes. */
+      const nav = async (...path) => {
+        for (let i = 0; i < 8 && (await region("dock:nav:back")); i++) { if (await region("dock:nav:home")) await tap("dock:nav:home"); else await tap("dock:nav:back"); }
+        for (const id of path) { await reveal(`dock:nav:${id}`); await tap(`dock:nav:${id}`); }
+        assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), path.at(-1) ?? "H", `palette ${path.join(">")}`);
+      };
       await p.goto(local + "canvas/");
       await ready();
       await p.locator("#wl-canvas-name").fill("検証");
@@ -198,10 +204,12 @@ const CONFIGS = [
       assert.deepEqual(await visibleHtmlControls(), ["canvas#wl-canvas"], `${cfg.name}: only the canvas`);
       // Repair needs parts: buy armor in the market, then repair.
       const worn = seeded.fleet.find((m) => m.status === "needs_repair");
+      await nav("T", "B", "BR");
       await reveal("dock:armor:step:10");
       for (let i = 0; i < 9; i++) await tap("dock:armor:step:10");
       await tap("dock:armor:buy");
       await settle();
+      await nav("M", "MM", "MR");
       await reveal(`dock:mech:${worn.instanceId}:repair`);
       await tap(`dock:mech:${worn.instanceId}:repair`);
       await settle();
@@ -209,6 +217,7 @@ const CONFIGS = [
       // Scrap asks in a canvas dialog; やめる keeps the mech.
       const victim = (await hub()).fleet.at(-1).instanceId;
       await p.waitForTimeout(650); // #266 money guard
+      await nav("M", "MM", "MD", "MS");
       await reveal(`dock:mech:${victim}:scrap`);
       await tap(`dock:mech:${victim}:scrap`);
       assert.equal((await region("dock:confirm:scrap:ok"))?.visible, true, "scrap dialog");
@@ -216,6 +225,7 @@ const CONFIGS = [
       assert.ok((await hub()).fleet.some((m) => m.instanceId === victim), "やめる keeps the mech");
       // Resource sell asks, then +5c.
       const before = await hub();
+      await nav("T", "V", "VS");
       await reveal("dock:sell:armor");
       await tap("dock:sell:armor");
       await tap("dock:confirm:sell:ok");
@@ -223,13 +233,13 @@ const CONFIGS = [
       const after = await hub();
       assert.equal(after.credits, before.credits + 5);
       assert.equal(after.inventory.armor, before.inventory.armor - 1);
-      // SORT tab scrolls to 未開封 inside the canvas.
+      // SORT tab opens 仕分 (S) inside the canvas.
       await p.mouse.move(cfg.viewport.width / 2, cfg.viewport.height / 2);
       for (let i = 0; i < 40; i++) await p.mouse.wheel(0, -2000);
       await p.waitForTimeout(80);
       await tap("tab:SORT");
       await p.waitForTimeout(80);
-      assert.ok((await p.evaluate(() => window.__wlCanvas.scroll("dock").y)) > 0, "SORT tab scrolled");
+      assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), "S", "SORT tab opens 仕分");
       assert.equal(await scene(), "dock");
       // Reload keeps everything; no new entries.
       const saved = await hub(), n = (await entries()).length;
@@ -261,6 +271,7 @@ const CONFIGS = [
       await settle();
       assert.equal(await scene(), "dock");
       // 探索へ: marks the squad deployed and opens 探索 with the squad (same page).
+      await nav("I");
       const ex = await region("dock:sortie:explore");
       if (ex && !ex.disabled) {
         await reveal("dock:sortie:explore");

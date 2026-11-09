@@ -170,6 +170,12 @@ const CONFIGS = [
         throw new Error(`${cfg.name}: cannot reveal ${id} ` + JSON.stringify([await region(id), await p.evaluate(() => [window.__wlCanvas.scroll("explore:controls"), window.__wlCanvas.explore().map, window.__wlCanvas.explore().paused])]));
       };
 
+      /** Palette tree (docs/CANVAS_PALETTE_RESTRUCTURE.md): back to HUB, then tap through the palettes. */
+      const nav = async (...path) => {
+        for (let i = 0; i < 8 && (await region("dock:nav:back")); i++) { if (await region("dock:nav:home")) await tap("dock:nav:home"); else await tap("dock:nav:back"); }
+        for (const id of path) { await reveal(`dock:nav:${id}`); await tap(`dock:nav:${id}`); }
+        assert.equal(await p.evaluate(() => window.__wlCanvas.palette()), path.at(-1) ?? "H", `palette ${path.join(">")}`);
+      };
       await p.goto(local + "canvas/");
       await startGame();
       // Test tools live in the HTML debug area under the canvas (localhost = debug mode, 神宮決定 2026-11-06).
@@ -183,6 +189,7 @@ const CONFIGS = [
       await settle();
       // ---- CANVAS-Y6: 探索へ opens the canvas 探索 in place (deploy query kept) -----------------
       const marker = await p.evaluate(() => (window.__marker = Math.random()));
+      await nav("I");
       await reveal("dock:sortie:explore");
       await tap("dock:sortie:explore");
       await settle();

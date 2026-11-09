@@ -481,6 +481,8 @@ export function mountCanvasApp(doc: Document = document): void {
   // Read-only hook for scripts/verify-canvas-*.cjs.
   (win as unknown as Record<string, unknown>).__wlCanvas = {
     scene: () => current,
+    palette: () => (current === "dock" ? dock?.sections?.nav.current ?? null : null),
+    selectedCircuit: () => dock?.sections?.state.lastCircuit?.circuitId ?? null,
     regions: () => surface.ui.debugRegions(),
     scroll: (id: string) => ({ y: surface.ui.getScroll(id), max: surface.ui.maxScroll(id) }),
     size: () => surface.cssSize,
