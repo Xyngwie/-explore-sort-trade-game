@@ -66,12 +66,6 @@ import {
   repairMechLabelJa,
   reviveMechCost,
   moneyShortfallJa,
-  sellRareItem,
-  isRareYieldItemId,
-  RARE_SELL_PRICE_CREDITS,
-  RARE_SELL_PRICE_TABLE,
-  RARE_YIELD_ITEM_IDS,
-  rareSellPriceCredits,
   setDeploySelection,
   persistHangar,
   selectAllDeployable,
@@ -540,54 +534,16 @@ assert.ok(ingested.state.log.some((l) => l.includes("帰還ウェア")));
 }
 
 
-// --- rare sell (explicit 仮 price table → credits, HubSave persist) ---
+// --- demo inventory = the four resources only (rare items were removed: 神宮 2026-11-11) ---
 {
   // Earlier blocks swap globalThis.localStorage; restore so persistHangar hits this store.
   (globalThis as unknown as { localStorage: Storage }).localStorage = storage;
-
-  // Table is the single source of truth (TBD placeholders).
-  assert.ok(RARE_SELL_PRICE_TABLE.length >= 1);
-  assert.equal(RARE_SELL_PRICE_TABLE.length, RARE_YIELD_ITEM_IDS.length);
-  for (const row of RARE_SELL_PRICE_TABLE) {
-    assert.equal(row.balance, "TBD", `${row.id} must stay TBD until economy pass`);
-    assert.ok(row.credits > 0, `${row.id} placeholder credits`);
-    assert.equal(RARE_SELL_PRICE_CREDITS[row.id], row.credits);
-    assert.equal(rareSellPriceCredits(row.id), row.credits);
-    assert.ok(isRareYieldItemId(row.id));
-  }
-  const matRow = RARE_SELL_PRICE_TABLE.find((r) => r.id === "mat_circuit");
-  const partRows = RARE_SELL_PRICE_TABLE.filter((r) => r.kind === "part");
-  assert.ok(matRow);
-  assert.ok(partRows.length >= 1);
-  for (const p of partRows) {
-    assert.ok(p.credits > matRow!.credits, "parts 仮価格 > basic rare mat");
-  }
-
-  let s = resetHangar(storage);
-  s = grantDemoInventory(s);
-  assert.ok(isRareYieldItemId("part_actuator"));
-  assert.ok(isRareYieldItemId("mat_circuit"));
-  assert.equal(isRareYieldItemId("mat_scrap"), false);
-  assert.equal(rareSellPriceCredits("mat_scrap"), null);
-  // Four-resource model (#115/#119): legacy rare ids are compatibility-only and
-  // are never stored in HubSave inventory, so the demo bag keeps none of them and
-  // a legacy rare sell cannot succeed (no credits minted from nothing).
+  const s = grantDemoInventory(resetHangar(storage));
   assert.ok(
     Object.keys(s.hub.inventory).every((k) => ["ammo", "armor", "power", "junk"].includes(k)),
     "demo inventory holds only the four resources",
   );
-  const beforeC = s.hub.credits;
-  assert.equal(s.hub.inventory.part_actuator ?? 0, 0);
-  s = sellRareItem(s, "part_actuator", 1);
-  assert.equal(s.hub.credits, beforeC, "no credits without stock");
-  assert.match(s.notice, /不足/);
-  const re = createInitialHangar(storage);
-  assert.equal(re.hub.credits, s.hub.credits);
-  const blocked = sellRareItem(s, "mat_scrap", 1);
-  assert.match(blocked.notice, /レア対象外/);
 }
-
-
 
 // --- craft signature + Perfect Circuit lock ---
 {

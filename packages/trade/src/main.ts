@@ -66,10 +66,6 @@ import {
   lostMechCountLineJa,
   wreckCountLineJa,
   formatCircuitBonusesJa,
-  isRareYieldItemId,
-  rareSellPriceCredits,
-  RARE_SELL_PRICE_TABLE,
-  sellRareItem,
   sellCircuit,
   formatCircuitSellPriceJa,
   circuitSellPerfectSide,
@@ -133,40 +129,19 @@ function inventoryRows(hub: HangarState["hub"]): string {
     ([, n]) => (n ?? 0) > 0,
   ) as Array<[YieldItemId, number]>;
   if (entries.length === 0) {
-    return `<tr><td colspan="3" class="muted">（空）</td></tr>`;
+    return `<tr><td colspan="2" class="muted">（空）</td></tr>`;
   }
   return entries
     .map(([id, n]) => {
-      const rare = isRareYieldItemId(id);
-      const price = rareSellPriceCredits(id);
-      const sellCell =
-        rare && price != null
-          ? `<button type="button" class="secondary sell-rare" data-act="sell-rare" data-id="${escapeHtml(id)}" title="1個売却（仮価格）">売却 仮${price}c</button>`
-          : `<span class="muted">—</span>`;
-      const rareTag = rare
-        ? ` <span class="pill rare-tag">レア</span>`
-        : "";
       return `<tr>
-        <td>${escapeHtml(labelYield(id))}${rareTag}<div class="mono muted">${escapeHtml(id)}</div></td>
+        <td>${escapeHtml(labelYield(id))}<div class="mono muted">${escapeHtml(id)}</div></td>
         <td>${n}</td>
-        <td>${sellCell}</td>
       </tr>`;
     })
     .join("");
 }
 
 
-function rarePriceTableRows(): string {
-  return RARE_SELL_PRICE_TABLE.map((row) => {
-    const label = labelYield(row.id);
-    return `<tr>
-        <td>${escapeHtml(label)} <span class="pill rare-tag">レア</span><div class="mono muted">${escapeHtml(row.id)}</div></td>
-        <td class="mono">${row.kind}</td>
-        <td>仮 ${row.credits}c</td>
-        <td><span class="pill tbd-tag">${escapeHtml(row.balance)}</span></td>
-      </tr>`;
-  }).join("");
-}
 
 const MONEY_CLICK_GUARD_MS = 600;
 let lastMoneyClickAt = -Infinity;
@@ -572,18 +547,9 @@ function render() {
     <div class="card">
       <h2 style="font-size:1rem;margin:0 0 0.5rem">型付き在庫</h2>
       <table>
-        <thead><tr><th>アイテム</th><th>数量</th><th>売却</th></tr></thead>
+        <thead><tr><th>アイテム</th><th>数量</th></tr></thead>
         <tbody>${inventoryRows(state.hub)}</tbody>
       </table>
-      <p class="muted" style="margin-top:0.5rem">レアのみ売却可。</p>
-      <details class="sortie-details">
-        <summary>レア売却 仮価格表 <span class="pill tbd-tag">TBD</span></summary>
-        <p class="muted" style="margin:0.5rem 0">明示テーブル（<span class="mono">RARE_SELL_PRICE_TABLE</span>）。バランス未調整。</p>
-        <table>
-          <thead><tr><th>アイテム</th><th>種別</th><th>仮価格</th><th>状態</th></tr></thead>
-          <tbody>${rarePriceTableRows()}</tbody>
-        </table>
-      </details>
     </div>
 
     <div class="card">
@@ -802,7 +768,6 @@ function render() {
       }
       else if (act === "charge") state = chargeMech(state, id);
       else if (act === "select-circuit") state = selectCircuit(state, id);
-      else if (act === "sell-rare") state = sellRareItem(state, id, 1);
       else if (act === "sell-circuit") {
         const price = el.dataset.price ?? "?";
         const detail = el.dataset.priceDetail ?? "";

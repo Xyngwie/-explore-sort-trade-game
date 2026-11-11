@@ -114,10 +114,6 @@ import {
 } from "./legacy-typed-repair";
 
 import {
-  RARE_SELL_PRICE_CREDITS,
-  isRareYieldItemId,
-} from "./rare-sell-prices";
-import {
   CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
   circuitSellPriceCredits,
@@ -126,17 +122,6 @@ import {
   formatCircuitSellPriceJa,
 } from "./circuit-sell-prices";
 
-export {
-  RARE_SELL_PRICE_TABLE,
-  RARE_SELL_PRICE_CREDITS,
-  RARE_YIELD_ITEM_IDS,
-  isRareYieldItemId,
-  rareSellPriceCredits,
-  rareSellPriceRow,
-  type RareSellPriceRow,
-  type RareYieldItemId,
-  type RareSellBalanceMark,
-} from "./rare-sell-prices";
 
 export {
   CIRCUIT_SELL_BASE_CREDITS,
@@ -1669,43 +1654,6 @@ export function simulateReturn(
   return persistHangar(next);
 }
 
-
-/**
- * Sell rare YieldBag items using {@link RARE_SELL_PRICE_TABLE} unit prices
- * → +credits, −inventory, HubSave persist. Prices are 仮 / TBD.
- */
-export function sellRareItem(
-  state: HangarState,
-  itemId: string,
-  qty = 1,
-): HangarState {
-  if (!isRareYieldItemId(itemId)) {
-    return { ...state, notice: "レア対象外（売却不可）" };
-  }
-  const n = Math.max(1, Math.floor(qty));
-  const have = Math.floor(
-    Number((state.hub.inventory as Record<string, number | undefined>)[itemId] ?? 0) || 0,
-  );
-  if (have < n) {
-    return { ...state, notice: `${itemId} 不足（持 ${have}）` };
-  }
-  const unit = RARE_SELL_PRICE_CREDITS[itemId];
-  const gained = unit * n;
-  const nextInv = spendYieldBag(state.hub.inventory, { [itemId]: n } as Record<string, number> as YieldBag);
-  if (!nextInv) return { ...state, notice: "売却失敗（在庫）" };
-  const hub = normalizeHubSnapshot({
-    ...state.hub,
-    credits: state.hub.credits + gained,
-    inventory: nextInv,
-  });
-  const next: HangarState = {
-    ...state,
-    hub,
-    log: pushLog(state.log, `レア売却 ${itemId}×${n} → +${gained}c（仮）`),
-    notice: `売却 +${gained}c（仮 ${unit}c/${itemId}）`,
-  };
-  return persistHangar(next);
-}
 
 /**
  * Buy unopened containers on HUB at {@link UNOPENED_CONTAINER_PRICE_CREDITS} each (仮).

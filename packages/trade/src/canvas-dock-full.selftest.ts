@@ -80,7 +80,7 @@ const goto = (...path: PaletteId[]) => {
   for (const id of path) tap(`dock:nav:${id}`);
   assert.equal(cur(), path.at(-1) ?? "H", `reached ${path.join("→")}`);
 };
-const ALL: PaletteId[] = ["H", "T", "B", "BR", "BC", "V", "VS", "VR", "S", "M", "MM", "MN", "MC", "MF", "MD", "MS", "MW", "MR", "MV", "MQ", "C", "CI", "CD", "CC", "CB", "CU", "CS", "EQ", "EQS", "I", "IT", "ITD", "A", "AI", "AH", "AL", "AS"];
+const ALL: PaletteId[] = ["H", "T", "B", "BR", "BC", "V", "VS", "S", "M", "MM", "MN", "MC", "MF", "MD", "MS", "MW", "MR", "MV", "MQ", "C", "CI", "CD", "CC", "CB", "CU", "CS", "EQ", "EQS", "I", "IT", "ITD", "A", "AI", "AH", "AL", "AS"];
 
 // --- drawing / resizing / moving between palettes never writes ------------------------------
 draw(); draw();
