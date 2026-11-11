@@ -5,6 +5,13 @@
 - Scope: 納品済みPNG原本の保管と索引。ゲームへの読み込み・描画・グレーディングは変更しない。
 - Status: 21枚の原本一致、サイズ・sRGB・共通帯・全800通りの境界一致を確認。素材と文書のみでデプロイはNOT_TRIGGERED。ゲーム内操作はNOT_RUN。
 
+## 自律学習の後続 S1〜S3（2026-11-11・神宮の TASK_ASSIGNMENT）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: S1 排除で運び終えたコンテナ（中隊功績 `company` 帳簿）、S2 敵の基本報酬 60 の直近 10 出撃の記録と平均（保存のみ）、S3 1×1 完全を付けた隊長の自律（入力が無いあいだ僚機と同じ学習）→ [AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md) の「後続の実装」と「決定済み・実装済み」3 節、[HUB_SAVE_CONTRACT.md](HUB_SAVE_CONTRACT.md) の `mechLearning`
+- Why: 神宮「自律学習の後続 実装指示」（2026-11-11、Issue #326 の後続）
+- Scope: 学習の帳簿・隊長の自律・保存の追加だけ。v0 の点数表・姿勢・盾・`purgeCargo`、五つの基本操作のゲート、小隊長回路、敵の区分、画面・ログ文・ホットキーは変更なし
+- Status: 細部は 2026-11-11 神宮決定（D1 = A、D2 = B、D3 は D2 = B のため使わない、D4 = A、D5 = A）。selftest（新規 `learningFollowups.selftest.ts`、既存の `learning.selftest.ts` を `npm test` に追加）・canvas の verify 済み。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## canvas・格納庫 レア在庫の削除（2026-11-11・神宮の指示）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: どこからも発生しないレア在庫を項目ごと削除。canvas の VR パレット、既存版 DOCK の売却列と仮価格表、`sellRareItem`・`rare-sell-prices.ts` → [CANVAS_UNIFIED_V0.md §20](CANVAS_UNIFIED_V0.md)。CANVAS-S1 は ★A（個数選択は資源だけ）で神宮決定
@@ -391,7 +398,7 @@
 - What: 直近 10 出撃の平均で敵を `normal` 以外に分ける境界は、後回し。平均の式は残す。戦場の敵は v0 と同じく全部 `normal`
 - Why: 神宮が後回しでよいと確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：敵の基本報酬を平均する幅」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み：敵の基本報酬を平均する幅」に反映
 
 ## 風紀委員 / Slack の壁打ちを指示の前に読む（2026-10-25）
 - Who: inspector（風紀委員）
@@ -405,42 +412,42 @@
 - What: 直近 10 出撃について、各出撃で持ち帰った基本報酬 60 の合計を 10 で割る。該当が無い出撃は 0。分類の境界は未決
 - Why: 神宮が確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：敵の基本報酬を平均する幅」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み：敵の基本報酬を平均する幅」に反映
 
 ## 風紀委員 / 1×1 完全の自律は装備した 1 機（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 初クリアの 1×1 完全 1 枚で同時に自律するのは、それを装備した 1 機だけ
 - Why: 神宮が確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない。今のゲームの枚数と開き方は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：三つの回路」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み：三つの回路」に反映
 
 ## 風紀委員 / 1×1 完全は初クリアの 1 枚のまま（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 1×1 完全の枚数は、初クリアで見つかる 1 枚のまま。部隊の各機体に装備できる数は用意しない
 - Why: 神宮が、各機体分を持てるようにすることを否とした（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない。その 1 枚で同時に自律するのが装備機だけか部隊全体かは未決
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：三つの回路」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み：三つの回路」に反映
 
 ## 風紀委員 / 僚機の 1×1 不完全の 2 倍を残す（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 僚機に付けた 1×1 不完全は、`release` のとき攻撃力・射程・視界の 2 倍を残す。隊長機には付かない
 - Why: 神宮が確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない。今のゲームの倍率は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：三つの回路」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み：三つの回路」に反映
 
 ## 風紀委員 / 1×1 不完全が開く五つの基本行動（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 1×1 不完全が解放するマニュアル操作は、隊長の移動・射撃・回収・帰還要請・撤退。今、回路なしで使える五つの基本行動と同じ
 - Why: 神宮が確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない。今のゲームは回路なしでもこの五つが使えるまま。僚機の偽の 1×1 の 2 倍は未決
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：三つの回路」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み：三つの回路」に反映
 
 ## 風紀委員 / 隊長の 1×1 完全は移動命令と航空支援を残す（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 隊長機の 1×1 完全は、僚機への移動の命令と航空支援を残す。そのうえに、その隊長機の自律が乗る
 - Why: 神宮が確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない。今のゲームの開き方は変えていない
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手：三つの回路」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み：三つの回路」に反映
 
 ## 風紀委員 / 三つの回路の役割（2026-10-25）
 - Who: inspector（風紀委員）
@@ -496,14 +503,14 @@
 - What: 持ち帰った基本報酬 60 を部隊で平均するときの「最近」を、直近 10 出撃にする。暫定
 - Why: 神宮が確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない。平均の計算、分類の境界、排除コンテナの +1 は未着手のまま
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み」に反映
 
 ## 風紀委員 / 基本報酬 60 の採点を残す（2026-10-25）
 - Who: inspector（風紀委員）
 - What: 通常コンテナの持ち帰り +8 に対し、回路または残骸を倒して円まで持ち帰った基本報酬 60（撃破 20 + 持ち帰り 40）を暫定のまま残す。置き去り機体の回収には 60 を付けない
 - Why: 神宮がこの比率を適当と確認した（2026-10-25）
 - Scope: 文書のみ。`SPEC_DECISION` は出していない。排除コンテナの +1 と敵評価の平均は未着手のまま
-- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・未着手」に反映
+- Status: `docs/AUTONOMOUS_LEARNING_V0.md` の「決定済み・実装済み」に反映
 
 ## 実装隊長 / Issue #324 誤 revert ブランチ整理（2026-10-24）
 - Who: lead（実装隊長）

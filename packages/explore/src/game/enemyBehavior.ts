@@ -1,4 +1,5 @@
 import { obstacleMove, updateCoverMovement } from "./coverMovement";
+import { tagEliminationContainers } from "./eliminationContainers";
 import { equippedShield } from "./shields";
 import { showCombatFeedback } from "./combatFeedback";
 /** Enemy PR2–PR5. Runtime state is included in the existing sortie checkpoint. */
@@ -327,6 +328,7 @@ export function handleEnemyDeaths(world: World): void {
   for (const e of world.enemies) {
     const s = e.enemyState;
     if (e.alive || e.hp > 0 || !s || s.deathHandled) continue;
+    tagEliminationContainers(world, e); // before this enemy's own cargo drops: only containers there at the moment
     s.deathHandled = true;
     world.enemySupplies.push(...splitSupplyDrops(`supply-${e.id}`, e.pos, s.ammo, s.activity));
     s.ammo = 0;

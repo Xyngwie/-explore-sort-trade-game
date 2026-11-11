@@ -37,7 +37,7 @@ export type Unit = {
   /** Player-issued individual stance; optional for old checkpoints, cleared by the next order or completed recovery. */ individualOrder?: boolean;
   /** C20-b: holding in place after an order it could not follow ("stop"); cleared by the next order. */ holdOrder?: boolean; /** C20-b: seconds left of the 「？」 above the wingman. */ questionT?: number;
 };
-export type Container = { id: string; pos: Vec2; taken: boolean; discovered: boolean; glowT: number; };
+export type Container = { id: string; pos: Vec2; taken: boolean; discovered: boolean; glowT: number; /** 中隊功績 (eliminationContainers.ts): enemies that saw it at their death (runtime; old checkpoints → none). */ eliminationTags?: number; /** Unit whose salvage of this tagged container is running (interruption check). */ eliminationWorkerId?: string; };
 export type Bullet = { alive: boolean; pos: Vec2; vel: Vec2; ttl: number; damage: number; fromEnemy: boolean; ownerId: string; /** Enemy shot target unit id at spawn (runtime only; AUTONOMOUS_LEARNING_V0). */ aimUnitId?: string; /** True when aimUnitId wingman was hit by this bullet (runtime only). */ aimUnitHit?: boolean; homingId?: string; bend?: number; emp?: boolean; empSlow?: number; /** Piercing round: fraction of post-mitigation damage that bypasses to armor (0–0.5). */ pierce?: number; };
 export type LogLine = { t: number; text: string; kind: "tactical" | "battle" };
 export type BoardingState = { center: Vec2; radius: number; requestedAt: number; cargoArrived: boolean; };

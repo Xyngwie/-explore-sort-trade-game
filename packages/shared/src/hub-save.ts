@@ -303,7 +303,11 @@ export type HubSnapshot = {
   mechLearning?: MechLearningState;
 };
 
-export type MechLearningLedger = "survival" | "transport" | "combat";
+/**
+ * `company` = 中隊功績 (AUTONOMOUS_LEARNING_V0 決定済み 2026-10-24/25). Not summed into the
+ * learning expectation. The only named counter today is `eliminatedContainers`; more may follow.
+ */
+export type MechLearningLedger = "survival" | "transport" | "combat" | "company";
 export type MechLearningAction = "drop" | "flee" | "fight" | "carry" | "extract" | "hold";
 export type MechLearningSubject = "none" | "normal" | "container" | "circuit" | "wreck";
 export type MechLearningDistance = "near" | "mid" | "far";
@@ -332,19 +336,34 @@ export type MechLearningCell = {
   kills?: number;
   dodged?: number;
   struck?: number;
+  /** company ledger: containers carried home from an elimination (+1 per enemy that saw it). */
+  eliminatedContainers?: number;
 };
+
+/** One settled sortie's enemy base reward (60 per enemy wreck brought into the circle). */
+export type EnemyBaseRewardEntry = { sortieId: string; total: number };
 
 export type MechLearningState = {
   byMech: Record<string, MechLearningCell[]>;
   settledSortieIds: string[];
+  /**
+   * Newest last, at most {@link MECH_LEARNING_LIMITS.baseRewardWindow}. Sorties with no 60 are 0.
+   * Saved for a later classification boundary; not used for classification or scoring (2026-11-11).
+   */
+  enemyBaseRewards?: EnemyBaseRewardEntry[];
 };
+
+/** Base reward of one enemy wreck brought home (撃破 20 + 持ち帰り 40; 2026-10-25 神宮). */
+export const ENEMY_BASE_REWARD = 60;
 
 export const MECH_LEARNING_LIMITS = {
   maxCellsPerMech: 4096,
   maxSettledSortieIds: 64,
+  /** 「最近」 = the last 10 sorties (provisional, 2026-10-26 神宮). */
+  baseRewardWindow: 10,
 } as const;
 
-const MECH_LEARNING_LEDGERS = new Set<MechLearningLedger>(["survival", "transport", "combat"]);
+const MECH_LEARNING_LEDGERS = new Set<MechLearningLedger>(["survival", "transport", "combat", "company"]);
 const MECH_LEARNING_ACTIONS = new Set<MechLearningAction>(["drop", "flee", "fight", "carry", "extract", "hold"]);
 const MECH_LEARNING_SUBJECTS = new Set<MechLearningSubject>(["none", "normal", "container", "circuit", "wreck"]);
 const MECH_LEARNING_DISTANCES = new Set<MechLearningDistance>(["near", "mid", "far"]);
@@ -421,6 +440,8 @@ function normalizeMechLearningCell(raw: unknown): MechLearningCell | null {
   if (dodged > 0) cell.dodged = dodged;
   const struck = mechLearningCounter(o.struck);
   if (struck > 0) cell.struck = struck;
+  const eliminatedContainers = mechLearningCounter(o.eliminatedContainers);
+  if (eliminatedContainers > 0) cell.eliminatedContainers = eliminatedContainers;
   return cell;
 }
 
@@ -453,7 +474,28 @@ export function normalizeMechLearning(raw: unknown): MechLearningState {
     }
   }
   while (settled.length > MECH_LEARNING_LIMITS.maxSettledSortieIds) settled.shift();
-  return { byMech, settledSortieIds: settled };
+  const rewards: EnemyBaseRewardEntry[] = [];
+  if (Array.isArray(o.enemyBaseRewards)) {
+    for (const item of o.enemyBaseRewards) {
+      if (item == null || typeof item !== "object" || Array.isArray(item)) continue;
+      const r = item as Record<string, unknown>;
+      const sid = sanitizeSortieId(r.sortieId);
+      if (!sid || rewards.some((x) => x.sortieId === sid)) continue;
+      rewards.push({ sortieId: sid, total: mechLearningCounter(r.total) });
+    }
+  }
+  while (rewards.length > MECH_LEARNING_LIMITS.baseRewardWindow) rewards.shift();
+  return { byMech, settledSortieIds: settled, ...(rewards.length > 0 ? { enemyBaseRewards: rewards } : {}) };
+}
+
+/**
+ * Average enemy base reward over the last 10 settled sorties: the sum of their totals / 10.
+ * Missing sorties (fewer than 10 so far, or an old save) count as 0. Not used for
+ * classification yet (the boundary is postponed, 2026-10-25 神宮).
+ */
+export function enemyBaseRewardAverage(state: MechLearningState | undefined): number {
+  const rows = (state?.enemyBaseRewards ?? []).slice(-MECH_LEARNING_LIMITS.baseRewardWindow);
+  return rows.reduce((sum, r) => sum + r.total, 0) / MECH_LEARNING_LIMITS.baseRewardWindow;
 }
 
 export function copyMechLearningForInstance(
@@ -468,6 +510,8 @@ export function settleMechLearningOnHub(
   hub: HubSnapshot,
   workByMech: Record<string, MechLearningCell[]>,
   sortieId: string,
+  /** This sortie's enemy base reward (60 × enemy wrecks brought home). Recorded once per sortieId. */
+  enemyBaseReward = 0,
 ): HubSnapshot {
   const sid = sanitizeSortieId(sortieId);
   if (!sid) return hub;
@@ -481,7 +525,12 @@ export function settleMechLearningOnHub(
   }
   const settledSortieIds = [...prev.settledSortieIds, sid];
   while (settledSortieIds.length > MECH_LEARNING_LIMITS.maxSettledSortieIds) settledSortieIds.shift();
-  return { ...hub, mechLearning: { byMech, settledSortieIds } };
+  const enemyBaseRewards = [
+    ...(prev.enemyBaseRewards ?? []),
+    { sortieId: sid, total: Math.max(0, Math.floor(Number.isFinite(enemyBaseReward) ? enemyBaseReward : 0)) },
+  ];
+  while (enemyBaseRewards.length > MECH_LEARNING_LIMITS.baseRewardWindow) enemyBaseRewards.shift();
+  return { ...hub, mechLearning: { byMech, settledSortieIds, enemyBaseRewards } };
 }
 
 /**
@@ -1273,7 +1322,9 @@ export function normalizeHubSnapshot(
     ...((): { mechLearning?: MechLearningState } => {
       const mechLearning = normalizeMechLearning(rawRec?.mechLearning ?? fallback.mechLearning);
       const empty =
-        Object.keys(mechLearning.byMech).length === 0 && mechLearning.settledSortieIds.length === 0;
+        Object.keys(mechLearning.byMech).length === 0 &&
+        mechLearning.settledSortieIds.length === 0 &&
+        (mechLearning.enemyBaseRewards ?? []).length === 0;
       return empty ? {} : { mechLearning };
     })(),
   };

@@ -11,6 +11,7 @@ import { dropLearningCargoForUnit, rangeMul, visionMul, wingRecoverWantsSalvage 
 import { canTakeContainer, unitLoad, wreckCarrierId } from "./carry";
 import {
   chooseLearningAction,
+  isLearningUnit,
   isLearningWingman,
   LEARNING_DECISION_SEC,
   noteLearningEvent,
@@ -362,7 +363,7 @@ function learningFocusTarget(world: World, unit: Unit): Vec2 | null {
   const shared = (e: Unit) => enemyVisibleToSquad(world, e) || canSee(world, unit, e.pos);
   const enemy = nearestAliveEnemy(unit.pos, world.enemies, undefined, shared);
   if (enemy) return enemy.pos;
-  if (unit.stance === "recover") {
+  if (learningStance(unit) === "recover") {
     const claimed = recoverClaimedContainerIds(world, unit.id);
     const assigned = containerNearWaypoint(world, unit.waypoint);
     const c =
@@ -383,18 +384,27 @@ export function buildLearningStage(world: World, unit: Unit): LearningStage {
   };
 }
 
+/**
+ * S3 暫定 (D4 ★A): the captain has no squad stance, so its menu is the recover menu
+ * (`hold carry fight flee drop extract`).
+ */
+function learningStance(unit: Unit): Unit["stance"] {
+  return unit.kind === "leader" ? "recover" : unit.stance;
+}
+
 function learningPickContext(world: World, unit: Unit): LearningPickContext {
   const shared = (e: Unit) => enemyVisibleToSquad(world, e) || canSee(world, unit, e.pos);
   const seesEnemy = nearestAliveEnemy(unit.pos, world.enemies, undefined, shared) != null;
+  const stance = learningStance(unit);
   const recoverSalvageOk = Boolean(
-    unit.stance === "recover" &&
+    stance === "recover" &&
       (canTakeContainer(world, unit) ||
         !!unit.salvageId ||
         world.containers.some((c) => c.discovered && !c.taken)),
   );
   const carrySubject: LearningSubject = "container";
   return {
-    stance: unit.stance,
+    stance,
     alive: unit.alive,
     timedOut: isOperationTimedOut(world),
     unitLoad: unitLoad(world, unit),
@@ -436,7 +446,7 @@ export function learningActionComplete(world: World, unit: Unit): boolean {
 }
 
 export function refreshLearningDecision(world: World, unit: Unit): void {
-  if (!isLearningWingman(unit) || !unit.alive) return;
+  if (!isLearningUnit(world, unit) || !unit.alive) return;
   const instanceId = unit.instanceId!.trim();
   world.mechLearningWork ??= {};
   const cells = world.mechLearningWork[instanceId] ?? [];
@@ -560,4 +570,59 @@ export function wingmanIntent(world: World, self: Unit, dt: number): WingmanInte
     return { ...intent, fireAt: null };
   }
   return decideWingman(world, self, dt);
+}
+
+/**
+ * S3 (2026-10-25 神宮; D1 ★A 暫定 2026-11-11): the captain with the true 1×1 「4」 is
+ * autonomous. Called only on frames with no manual input (manual input wins). Same learning
+ * selection, scores and ledger as a wingman. Returns null for `hold` (= today's captain with
+ * no input: stays, auto-fires in weapon reach, picks up a container at its feet).
+ *
+ * Captain moves (D4 ★A 暫定): fight = the raid stand-off toward the chosen enemy, firing in
+ * engage range; flee and drop = step back from the nearest seen enemy by weapon range (no
+ * enemy → stay), no fire; extract = to the boarding circle, no fire; carry = to the nearest
+ * discovered container and salvage it, no fire.
+ */
+export function leaderLearningIntent(world: World, self: Unit): WingmanIntent | null {
+  if (!self.alive || !isLearningUnit(world, self) || self.kind !== "leader") return null;
+  refreshLearningDecision(world, self);
+  const action: LearningAction = readLearningAction(self);
+  const b = world.balance;
+  const weaponRange = b.weaponRange * rangeMul(world, self.id);
+  const shared = (e: Unit) => enemyVisibleToSquad(world, e) || canSee(world, self, e.pos);
+  if (action === "hold") return null;
+  if (action === "fight") {
+    const foe =
+      (self.learningFightEnemyId ? world.enemies.find((e) => e.id === self.learningFightEnemyId && e.alive) : null) ??
+      learningFightEnemy(world, self);
+    if (!foe) return null;
+    const dx = foe.pos.x - self.pos.x;
+    const dy = foe.pos.y - self.pos.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const rush = weaponRange * b.raidDefaultRushFrac;
+    return {
+      moveTarget: { x: foe.pos.x - (dx / len) * rush, y: foe.pos.y - (dy / len) * rush },
+      fireAt: len < b.engageRange * b.raidEngageFireMul ? foe : null,
+      trySalvage: false,
+    };
+  }
+  if (action === "flee" || action === "drop") {
+    const foe = nearestAliveEnemy(self.pos, world.enemies, undefined, shared);
+    if (!foe) return { moveTarget: null, fireAt: null, trySalvage: false };
+    const dx = self.pos.x - foe.pos.x;
+    const dy = self.pos.y - foe.pos.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { moveTarget: { x: self.pos.x + (dx / len) * weaponRange, y: self.pos.y + (dy / len) * weaponRange }, fireAt: null, trySalvage: false };
+  }
+  if (action === "extract") {
+    const c = world.boarding?.center ?? world.extract.pos;
+    return { moveTarget: { ...c }, fireAt: null, trySalvage: false };
+  }
+  if (action === "carry") {
+    const target =
+      (self.salvageId ? world.containers.find((c) => c.id === self.salvageId && !c.taken) : null) ??
+      nearestDiscoveredContainer(self.pos, world.containers, recoverClaimedContainerIds(world, self.id), world);
+    return { moveTarget: target ? { ...target.pos } : null, fireAt: null, trySalvage: true };
+  }
+  return null;
 }

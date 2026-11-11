@@ -1,5 +1,5 @@
 import { fieldCellReport } from "./fieldPersistence";
-import { strippingReport } from "./strippingRuntime";
+import { strippingReport, wreckWasStripped } from "./strippingRuntime";
 import { enemyWreckReturns } from "./enemyRecovery";
 import {
   applyDurabilityBufferToWear,
@@ -9,6 +9,7 @@ import {
   createExpeditionState,
   createExploreSortieOutcome,
   createOwnedMech,
+  ENEMY_BASE_REWARD,
   loadHubSaveFromLocalStorage,
   normalizeHubSnapshot,
   resolveModuleBaseUrl,
@@ -27,7 +28,7 @@ import {
 import { buildLearningStage } from "./brain";
 import {
   highestCargoSubjectForUnit,
-  isLearningWingman,
+  isLearningUnit,
   noteLearningEvent,
   readLearningAction,
 } from "./learning";
@@ -268,7 +269,8 @@ export function ensureMechLearningWorld(world: World): void {
   world.mechLearningWork ??= {};
   const loaded = loadHubSaveFromLocalStorage();
   const hub = loaded?.hub ? normalizeHubSnapshot(loaded.hub) : null;
-  for (const w of world.wingmen) {
+  // S3: the captain's ledger is loaded too; it only grows while the captain is autonomous.
+  for (const w of [world.leader, ...world.wingmen]) {
     const id = w.instanceId?.trim() ?? "";
     if (!id) continue;
     world.mechLearningWork[id] =
@@ -302,7 +304,7 @@ export function noteLearningForUnit(
   unit: import("./types").Unit,
   event: Parameters<typeof noteLearningEvent>[3],
 ): void {
-  if (!isLearningWingman(unit)) return;
+  if (!isLearningUnit(world, unit)) return;
   const stage = buildLearningStage(world, unit);
   const action = readLearningAction(unit);
   setMechCells(world, unit, noteLearningEvent(mechCells(world, unit), stage, action, event));
@@ -311,13 +313,13 @@ export function noteLearningForUnit(
 /** In-progress container salvage aborted while `carry` is selected (AUTONOMOUS_LEARNING_V0). */
 export function noteLearningContainerSalvageAbort(world: World, unit: import("./types").Unit): void {
   if (!(unit.salvageId != null || unit.salvageT > 0)) return;
-  if (!isLearningWingman(unit)) return;
+  if (!isLearningUnit(world, unit)) return;
   if (readLearningAction(unit) !== "carry") return;
   noteLearningForUnit(world, unit, { kind: "quizFailure", subject: "container" });
 }
 
 export function trackLearningCargoHeld(world: World, unit: import("./types").Unit): void {
-  if (!isLearningWingman(unit)) return;
+  if (!isLearningUnit(world, unit)) return;
   const subj = highestCargoSubjectForUnit(world, unit);
   if (subj === "container" || subj === "circuit" || subj === "wreck") {
     unit.learningHeldSubjects ??= {};
@@ -329,8 +331,8 @@ export function finalizeMechLearningSortie(world: World): void {
   if (world.mechLearningFinalized) return;
   world.mechLearningFinalized = true;
   const leftIds = new Set((world.leftBehind ?? []).map((e) => e.id));
-  for (const unit of world.wingmen) {
-    if (!isLearningWingman(unit)) continue;
+  for (const unit of [world.leader, ...world.wingmen]) {
+    if (!isLearningUnit(world, unit)) continue;
     const stage = buildLearningStage(world, unit);
     const action = unit.learningAction ?? "hold";
     if (!unit.alive) {
@@ -360,7 +362,22 @@ export function applyMechLearningHubSide(world: World, hub: HubSnapshot): HubSna
   const kind = returnKindFromWorld(world);
   const sortieId = sortieIdForWorld(world, kind);
   finalizeMechLearningSortie(world);
-  return settleMechLearningOnHub(hub, world.mechLearningWork ?? {}, sortieId);
+  return settleMechLearningOnHub(hub, world.mechLearningWork ?? {}, sortieId, enemyBaseRewardOfSortie(world));
+}
+
+/**
+ * S2 (2026-10-25 神宮): 60 for each enemy wreck brought into the boarding circle at lift-off
+ * (撃破 20 + 持ち帰り 40). Wrecks of our own mechs and left-behind mechs never count. A sortie
+ * without lift-off (withdrawal, failure) is 0. Saved only; not used to classify enemies.
+ */
+export function enemyBaseRewardOfSortie(world: World): number {
+  if (!world.extracted) return 0;
+  const ids = new Set((world.recoveredEnemyUnits ?? []).map((e) => e.id));
+  for (const w of world.circuitPlay?.airWrecks ?? []) {
+    if (!w.recovered || wreckWasStripped(world, w.id) || wreckWasStripped(world, `a:${w.id}`)) continue;
+    ids.add(w.id);
+  }
+  return ids.size * ENEMY_BASE_REWARD;
 }
 
 export function exploreReturnPayload(world: World): ExploreToHubWearPayload | null {

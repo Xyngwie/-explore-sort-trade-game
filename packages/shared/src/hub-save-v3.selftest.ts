@@ -34,6 +34,8 @@ import {
   normalizeHubSnapshot,
   normalizeMechLearning,
   settleMechLearningOnHub,
+  enemyBaseRewardAverage,
+  ENEMY_BASE_REWARD,
   copyMechLearningForInstance,
   parseHubSave,
   parseMechCircuitsCompact,
@@ -562,6 +564,28 @@ const v2Text = JSON.stringify(v2Save);
   assert.ok(once.mechLearning!.settledSortieIds.includes("sortie-b"));
   const twice = settleMechLearningOnHub(once, { m1: [{ ...work.m1[0]!, tries: 9 }] }, "sortie-b");
   assert.equal(twice.mechLearning!.byMech.m1![0]!.tries, 2, "duplicate sortieId skipped");
+  // S2 (2026-11-11): enemy base reward of the last 10 settled sorties; missing → 0; once per sortieId.
+  assert.equal(enemyBaseRewardAverage(hub.mechLearning), 0, "old save: no record → average 0");
+  assert.equal(enemyBaseRewardAverage(undefined), 0);
+  let rw = settleMechLearningOnHub(hub, {}, "r-1", 120);
+  assert.equal(enemyBaseRewardAverage(rw.mechLearning), 12, "120 / 10 (missing sorties count as 0)");
+  assert.equal(enemyBaseRewardAverage(settleMechLearningOnHub(rw, {}, "r-1", 600).mechLearning), 12, "same sortieId once");
+  for (let i = 2; i <= 10; i++) rw = settleMechLearningOnHub(rw, {}, `r-${i}`, i === 5 ? 60 : 0);
+  assert.equal(rw.mechLearning!.enemyBaseRewards!.length, 10);
+  assert.equal(enemyBaseRewardAverage(rw.mechLearning), 18, "(120 + 60) / 10");
+  rw = settleMechLearningOnHub(rw, {}, "r-11", 0);
+  assert.equal(rw.mechLearning!.enemyBaseRewards!.length, 10);
+  assert.equal(rw.mechLearning!.enemyBaseRewards![0]!.sortieId, "r-2", "11th sortie drops the oldest");
+  assert.equal(enemyBaseRewardAverage(rw.mechLearning), 6, "the 120 left the window");
+  const rwRead = normalizeHubSnapshot(JSON.parse(JSON.stringify(rw)));
+  assert.deepEqual(rwRead.mechLearning!.enemyBaseRewards, rw.mechLearning!.enemyBaseRewards, "round trip");
+  // company ledger (中隊功績) survives a save round trip; unknown ledgers are still dropped.
+  const companyHub = normalizeHubSnapshot({
+    ...INITIAL_HUB,
+    mechLearning: { byMech: { m9: [{ ledger: "company", action: "carry", subject: "container", distance: "near", circle: "close", hp: "high", cargo: "none", eliminatedContainers: 3 }] }, settledSortieIds: [] },
+  });
+  assert.equal(companyHub.mechLearning!.byMech.m9![0]!.eliminatedContainers, 3);
+  assert.equal(ENEMY_BASE_REWARD, 60);
   const copied = copyMechLearningForInstance(hub.mechLearning, "m1");
   assert.equal(copied[0]!.tries, 1);
   assert.equal(copyMechLearningForInstance(hub.mechLearning, "missing").length, 0);
