@@ -79,7 +79,14 @@ export const TRUE_BOARD_EFFECT_KEYS = [
   "armor_tune",
   "power_tune",
   "p_shield",
+  // 2026-11-11 神宮 (K2・G1・G2): 小隊長. Only a side-10 true board draws it; saved keys are kept.
+  "platoon_leader",
 ] as const;
+
+/** 小隊長回路のサイズ (2026-10-26 神宮). Only this side draws `platoon_leader`. */
+export const PLATOON_LEADER_SIDE = 10;
+/** True-board keys every other side (2..19) draws from: the pool before `platoon_leader`. */
+const TRUE_BOARD_KEYS_WITHOUT_PLATOON = TRUE_BOARD_EFFECT_KEYS.filter((k) => k !== "platoon_leader");
 
 export const CIRCUIT_EFFECT_KEYS = [
   ...FALSE_BOARD_EFFECT_KEYS,
@@ -262,8 +269,12 @@ function hashIndex(circuitId: string, n: number): number {
  * board into a true board leaves a normal-action key behind; that key no
  * longer fits and is replaced once (#270 technical check, 10/12).
  */
-export function keyMatchesBoard(rec: Pick<HubCircuitRecord, "effectKey" | "restoreState">): boolean {
+export function keyMatchesBoard(
+  rec: Pick<HubCircuitRecord, "effectKey" | "restoreState"> & { circuitBoard?: HubCircuitRecord["circuitBoard"] },
+): boolean {
   if (!isCircuitEffectKey(rec.effectKey)) return false;
+  // 小隊長 belongs to the side-10 true board only (2026-11-11). Callers without the board keep the old check.
+  if (rec.effectKey === "platoon_leader" && rec.circuitBoard && squareSide(rec.circuitBoard) !== PLATOON_LEADER_SIDE) return false;
   return rec.restoreState === "fully_awakened" ? TRUE_SET.has(rec.effectKey) : FALSE_SET.has(rec.effectKey);
 }
 
@@ -274,8 +285,23 @@ export function effectKeyForCircuit(rec: HubCircuitRecord): CircuitEffectKey | u
   if (side == null || side < 2 || side > 19) return undefined;
   const effect = activeEffect(rec);
   if (!(effect > 0)) return undefined;
-  const list = rec.restoreState === "fully_awakened" ? TRUE_BOARD_EFFECT_KEYS : FALSE_BOARD_EFFECT_KEYS;
+  const list: readonly CircuitEffectKey[] =
+    rec.restoreState === "fully_awakened"
+      ? side === PLATOON_LEADER_SIDE
+        ? TRUE_BOARD_EFFECT_KEYS
+        : TRUE_BOARD_KEYS_WITHOUT_PLATOON
+      : FALSE_BOARD_EFFECT_KEYS;
   return list[hashIndex(rec.circuitId, list.length)];
+}
+
+/**
+ * 小隊長の指定 (2026-11-11 神宮 K1・G1): a side-10 board, Fully Awakened, key `platoon_leader`,
+ * effect > 0. Bypass / not restored / Offline never designate. The mech also needs an instanceId.
+ */
+export function isPlatoonLeaderCircuit(rec: HubCircuitRecord): boolean {
+  if (rec.restoreState !== "fully_awakened" || rec.effectKey !== "platoon_leader") return false;
+  if (squareSide(rec.circuitBoard) !== PLATOON_LEADER_SIDE) return false;
+  return activeEffect(rec) > 0;
 }
 
 export function assignMissingEffectKeys(circuits: readonly HubCircuitRecord[]): HubCircuitRecord[] {
@@ -524,5 +550,5 @@ export const CIRCUIT_EFFECT_LABEL_JA: Record<string, string> = {
   march: "行進", protect: "保護", scatter: "散開", focus: "集中", pincer: "挟撃", entrench_hold: "陣地防衛",
   forced_march: "強行軍", read_ahead: "先読", squad_haul: "運搬", trench: "塹壕", distribute: "分配",
   lure: "誘引", suppress: "牽制", sort_yield: "資源確保", perfect_rate: "良品確保", gun_tune: "銃器整備",
-  armor_tune: "装甲改良", power_tune: "電源改良",
+  armor_tune: "装甲改良", power_tune: "電源改良", platoon_leader: "小隊長",
 };

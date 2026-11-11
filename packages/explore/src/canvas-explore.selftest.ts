@@ -131,6 +131,28 @@ assert.ok(ctx.texts.includes("帰還要請（搭乗円）"), "extract button");
 const map = scene.map;
 assert.ok(Math.abs(map.w / map.h - EXPLORE_MAP_ASPECT) < 1e-6, "map rect drawn at the world aspect");
 
+// --- 2026-11-11 C2: in release the 小隊方針 bar shows only for a captain-小隊長 -------------------
+{
+  const cp = scene.world.circuitPlay!;
+  const keep = { release: cp.release, pl: cp.platoonLeader, inst: scene.world.leader.instanceId, h: H };
+  H = 4000;
+  cp.release = true;
+  scene.world.leader.instanceId = keep.inst ?? "cap";
+  scene.openControls("squad");
+  cp.platoonLeader = {};
+  draw(); draw();
+  assert.equal(ui.debugRegions().some((r) => r.id === "explore:squad:patrol"), false, "release, no 小隊長: no squad bar");
+  cp.platoonLeader = { [scene.world.leader.id]: true };
+  draw(); draw();
+  const squadIds = ui.debugRegions().map((r) => r.id);
+  for (const s2 of ["escort", "patrol", "recover", "raid"]) assert.ok(squadIds.includes(`explore:squad:${s2}`), `captain-小隊長: ${s2} on the squad bar`);
+  cp.release = keep.release;
+  if (keep.pl) cp.platoonLeader = keep.pl; else delete cp.platoonLeader;
+  scene.world.leader.instanceId = keep.inst;
+  scene.openControls("root");
+  H = keep.h;
+}
+
 // --- U-5b: wing cards, gauge tap, per-wingman orders, log, key table -------------------
 {
   H = 4000; // tall frame: every control of the scroll area is on screen

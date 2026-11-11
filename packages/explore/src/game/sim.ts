@@ -18,6 +18,7 @@ import { tickEnemyTag } from "./enemyIdentity";
 import { leaderLearningIntent, wingmanIntent } from "./brain";
 import { isAutonomousLeader, isLearningUnit } from "./learning";
 import { checkEliminationInterrupts, takeEliminationTags } from "./eliminationContainers";
+import { captainIsPlatoonLeader, finalizeCommandSortie, noteCommandKill, tickPlatoonCommand, trackCommandCargo } from "./platoonCommand";
 import {
   ensureMechLearningWorld,
   finalizeMechLearningSortie,
@@ -261,6 +262,7 @@ export function updateBullets(world: World, dt: number): void {
           if (!b.fromEnemy && shooter && isLearningUnit(world, shooter)) {
             noteLearningForUnit(world, shooter, { kind: "kill", subject: "normal" });
           }
+          if (!b.fromEnemy && shooter) noteCommandKill(world, shooter);
           handleEnemyDeaths(world);
         }
       }else if(!inCamera(world,t.pos) || !inCamera(world,b.pos))reportBattle(world,`${t.name} が被弾 (−${Math.round(hitDmg)})`,t.pos);
@@ -439,7 +441,7 @@ function resolveBoardingLiftOff(world: World): void {
   const recoveredDrops = recoverStrandedDropsAtLiftOff(world, boarding, captainIn);
   if (recoveredDrops.length > 0) pushLog(world, `落とし物の回路を回収：${recoveredDrops.length}件。`);
   noteCircuitExtract(world, captainIn);
-  world.boarding = null; world.camp = null; settleReturnedShields(world); finalizeMechLearningSortie(world); world.phase = "result";
+  world.boarding = null; world.camp = null; settleReturnedShields(world); finalizeMechLearningSortie(world); finalizeCommandSortie(world); world.phase = "result";
   if (captainIn) {
     let circleCrates = 0;
     for (const c of world.containers) {
@@ -469,6 +471,11 @@ function leaderAbortSalvageOnTimeout(world: World): void { for (const u of frien
 
 export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   if (world.phase === "sortie") ensureMechLearningWorld(world);
+  // 2026-11-11 C2: a living captain-小隊長 has no manual move / fire / collect; its controls are the
+  // four missions (plus 帰還要請 and 航空支援). A wrecked captain keeps today's contract (C4).
+  if (world.phase === "sortie" && world.leader.alive && captainIsPlatoonLeader(world)) {
+    input = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: false };
+  }
   tickEnemyTag(world, dt); // Enemy PR1: the 「所属不明」 tag fades out
   if (world.phase !== "sortie") { tickStripping(world,0); return; }
   const livingBeforeTick=friendlyUnits(world).filter(u=>u.alive);
@@ -571,12 +578,14 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       updateSalvage(world, leader, leaderWantSalvage, dt);
     }
   }
+  tickPlatoonCommand(world); // 小隊長 (E1 ★A 暫定): a mission of its own when none was issued for a while
   for (const w of world.wingmen) {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);
     const riding = wreckCarrierId(world, w.id) != null;
     if(barricadeWorking(world,w.id)){w.moveTarget=null;w.vel={x:0,y:0};continue;}
     trackLearningCargoHeld(world, w);
+    trackCommandCargo(world, w);
     const intent = wingmanIntent(world, w, dt);
     const cruise = circuitLocomotion(world, w, intent.moveTarget, world.balance.moveSpeed * unitMoveSpeedMul(w, world) * abilityOf(world, w.id).moveSpeed /* 項目4-1: load 0 is 120 for wingmen too (2026-10-07 7:36 神宮) */);
     const assembly = boardingAssemblyTarget(world, w);

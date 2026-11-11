@@ -1,4 +1,5 @@
 import { interruptBarricade } from "./barricades";
+import { noteCommandIssued } from "./platoonCommand";
 import { interruptStripping } from "./strippingRuntime";
 /**
  * Execution-side gate for player-issued Explore commands.
@@ -9,7 +10,6 @@ import { interruptStripping } from "./strippingRuntime";
  */
 import {
   applyOrder,
-  applyOrderToAllWingmen,
   pickUpFromCamp,
   purgeCargo,
   pushLog,
@@ -142,7 +142,15 @@ export function executeExploreCommand(
             .filter((wing) => isCommandUnlockedFor(world, id, wing.id))
             .map((wing) => wing.id),
         );
-        const result = applyOrderToAllWingmen(world, stance, { allowedWingmanIds });
+        // Same as applyOrderToAllWingmen, one wingman at a time so a 小隊長's mission is
+        // counted once per wingman it reached (2026-11-11 L1・S3).
+        let result = 0;
+        for (const wing of world.wingmen) {
+          if (!wing.alive || !allowedWingmanIds.has(wing.id)) continue;
+          if (applyOrder(world, wing, stance) !== "applied") continue;
+          result += 1;
+          noteCommandIssued(world, wing, stance);
+        }
         // C20-b: each alive wingman that cannot follow (mixed squad) shows 「？」
         // and rolls stop / ignore. No log.
         for (const wing of world.wingmen) {
@@ -154,6 +162,7 @@ export function executeExploreCommand(
       if (!wing) return { status: "done", id, result: "denied" };
       const result =
         req.rally === true ? rallyWingman(world, wing, { individual: true }) : applyOrder(world, wing, stance, { individual: true });
+      if (result === "applied") noteCommandIssued(world, wing, req.rally === true ? "escort" : stance);
       return { status: "done", id, result };
     }
   }

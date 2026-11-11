@@ -42,6 +42,7 @@ import {
   TRENCH_SETUP_SEC,
   addDestroyedGen1,
   classifyCircuit,
+  isPlatoonLeaderCircuit,
   effectRate,
   cargoSlotBonus,
   ensureCaptainFalseOneByOne,
@@ -84,6 +85,8 @@ export type CircuitPlayState = {
   captainTrueOne: boolean;
   wingTrueOne: Record<string, boolean>;
   wingFalseOne: Record<string, boolean>;
+  /** 小隊長 (2026-11-11 K1・G1): unit ids equipping the side-10 Fully Awakened platoon_leader circuit. Absent in old checkpoints. */
+  platoonLeader?: Record<string, boolean>;
   loadout: Record<string, ClassifiedCircuit[]>;
   order: CircuitOrder;
   pending: { kind: string; pick: "enemy" | "ally" | "map" | "none"; unitIds?: string[] } | null;
@@ -390,6 +393,7 @@ export function attachCircuitPlay(world: World, hub: HubSnapshot | null, release
       if (mech?.status === "destroyed") continue;
       const recs = hub.circuits.filter((c) => c.equippedTo === inst);
       play.loadout[unitId] = recs.map(classifyCircuit);
+      if (recs.some(isPlatoonLeaderCircuit)) (play.platoonLeader ??= {})[unitId] = true;
     }
   }
   const leader = play.loadout.leader ?? [];

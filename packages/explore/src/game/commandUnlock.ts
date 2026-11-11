@@ -187,6 +187,7 @@ type CircuitRules = {
   release: boolean;
   captainTrueOne: boolean;
   wingTrueOne: Record<string, boolean>;
+  platoonLeader?: Record<string, boolean>;
   loadout: Record<string, { effectKey: string | null }[]>;
 };
 
@@ -224,6 +225,13 @@ export function isCommandUnlockedFor(
     // unlocks nothing; a true 1×1 「4」 on the captain unlocks wing_mobility
     // (move orders to wingmen) — kept after the captain is wrecked (5-2 9A).
     if (isBasicCommand(commandId)) return true;
+    // 2026-11-11 C2: a captain-小隊長 gives up the manual controls; the four missions are its controls.
+    if (
+      play.platoonLeader?.[holder.leader?.id ?? "leader"] &&
+      (commandId === "wing_escort" || commandId === "wing_patrol" || commandId === "wing_recover" || commandId === "wing_raid")
+    ) {
+      return true;
+    }
     if (commandId === "wing_escort") return livingHasEffect(holder, "escort_range");
     if (commandId === "wing_raid") return livingHasEffect(holder, "raid_attack");
     if (commandId === "wing_mobility") return play.captainTrueOne;
