@@ -53,7 +53,6 @@ import {
   CIRCUIT_SELL_BASE_CREDITS,
   CIRCUIT_SELL_CREDITS_PER_EFFECT,
   MECH_STATUS_LABEL_JA,
-  RARE_SELL_PRICE_TABLE,
   buildDeployUrl,
   buildInvadeUrl,
   buildNextSortieReadiness,
@@ -75,13 +74,11 @@ import {
   grantVerifyTrueCircuit,
   hubCircuitBonuses,
   isCircuitLocked,
-  isRareYieldItemId,
   launchSortFromUnopened,
   loadPlaytestSeed,
   lostMechCountLineJa,
   markDeployed,
   onHangarExploreLink,
-  rareSellPriceCredits,
   repairCost,
   repairMech,
   repairMechLabelJa,
@@ -94,7 +91,6 @@ import {
   selectCircuit,
   sellCircuit,
   sellHangarWreck,
-  sellRareItem,
   setDeploySelection,
   simulateReturn,
   sortieAmmoShortLineJa,
@@ -353,12 +349,10 @@ export class DockSections {
       case "BC": return drawMarket(f, ["unopened"]);
       case "V": return this.choices(f, [
         { to: "VS", label: "資源" },
-        { to: "VR", label: "レア在庫", sub: `${this.rareEntries().length}種` },
         { to: "CS", label: "回路", sub: `${hubVisibleCircuits(this.state.hub).length}枚` },
         { to: "MW", label: "残骸", sub: `${this.wrecks().length}機` },
       ]);
       case "VS": return this.drawSell(f);
-      case "VR": return this.drawRareSell(f);
       case "S": return this.drawUnopened(f);
       case "M": return this.choices(f, [{ to: "MM", label: "機体" }, { to: "C", label: "回路" }]);
       case "MM": return this.choices(f, [
@@ -403,9 +397,6 @@ export class DockSections {
   private stock(): number { return Math.max(0, Math.floor(this.state.hub.unopenedContainers ?? 0)); }
   private wrecks() { return this.state.hub.fleet.filter((m) => reviveMechCost(m)); }
   private repairable() { return this.state.hub.fleet.filter((m) => !reviveMechCost(m) && repairCost(m)); }
-  private rareEntries(): Array<[string, number]> {
-    return (Object.entries(this.state.hub.inventory).filter(([id, n]) => (n ?? 0) > 0 && isRareYieldItemId(id)) as Array<[string, number]>);
-  }
 
   /** H: 所持資産の表示 + 次の行動4モジュール（売買・仕分・整備・侵略）。 */
   private drawHome(ui: CanvasUI, f: Flow, side?: Flow): void {
@@ -653,28 +644,11 @@ export class DockSections {
     }), { h: 52 });
   }
 
-  /** VR: rare items only, one at a time. CANVAS-PR4 (神宮決定 2026-11-08): confirm like every other sale (Q9). */
-  private drawRareSell(f: Flow): void {
-    const rares = this.rareEntries();
-    f.text("レアのみ売却可。仮価格（バランス未調整）：" + RARE_SELL_PRICE_TABLE.map((r) => `${labelYield(r.id)} ${r.credits}c`).join("・"), { color: CANVAS_THEME.muted, size: 12 }).gap(6);
-    if (rares.length === 0) { f.text("売却できるレア在庫がありません。", { color: CANVAS_THEME.muted }); return; }
-    for (const [id, n] of rares) {
-      const price = rareSellPriceCredits(id);
-      if (price == null) continue;
-      f.buttons([{ id: `dock:rare:${id}`, label: `${labelYield(id)} 売却`, sub: `在庫 ${n} · 仮${price}c`, w: f.w, onActivate: () => this.ask({
-        id: "dock:confirm:rare", title: "売却の確認", okLabel: "売却する",
-        text: `${labelYield(id)}を1個売却しますか？\n仮 +${price}c`,
-        onOk: () => this.act("sell-rare", { act: "sell-rare", id }, (st) => sellRareItem(st, id, 1)),
-      }) }], { h: 52 });
-      f.gap(6);
-    }
-  }
-
-  /** AI: the whole typed inventory (display only; rare sale is in 売る → レア在庫). */
+  /** AI: the whole typed inventory (display only). */
   private drawInventory(f: Flow): void {
     const entries = Object.entries(this.state.hub.inventory).filter(([, n]) => (n ?? 0) > 0) as Array<[string, number]>;
     if (entries.length === 0) f.text("（空）", { color: CANVAS_THEME.muted });
-    for (const [id, n] of entries) f.kv(`${labelYield(id)}${isRareYieldItemId(id) ? "（レア）" : ""}`, `${n}`);
+    for (const [id, n] of entries) f.kv(labelYield(id), `${n}`);
   }
   private drawHistory(f: Flow): void {
     const entries = resourceHistoryFromLog(this.state.log);

@@ -8,7 +8,7 @@
  */
 export type PaletteId =
   | "H"
-  | "T" | "B" | "BR" | "BC" | "V" | "VS" | "VR"
+  | "T" | "B" | "BR" | "BC" | "V" | "VS"
   | "S"
   | "M" | "MM" | "MN" | "MC" | "MF" | "MD" | "MS" | "MW" | "MR" | "MV" | "MQ"
   | "C" | "CI" | "CD" | "CC" | "CB" | "CU" | "CS" | "EQ" | "EQS"
@@ -17,7 +17,7 @@ export type PaletteId =
 
 export const PALETTE_TITLE: Record<PaletteId, string> = {
   H: "HUB",
-  T: "売買", B: "買う", BR: "資源購入", BC: "未開封コンテナ購入", V: "売る", VS: "資源売却", VR: "レア在庫売却",
+  T: "売買", B: "買う", BR: "資源購入", BC: "未開封コンテナ購入", V: "売る", VS: "資源売却",
   S: "仕分",
   M: "整備", MM: "機体整備", MN: "新規機体", MC: "新品機体購入", MF: "新規機体製作", MD: "機体処分", MS: "機体分解", MW: "機体売却（残骸）", MR: "機体修理", MV: "残骸復活", MQ: "機体充電",
   C: "回路整備", CI: "所持回路", CD: "回路詳細", CC: "回路製作", CB: "回路購入", CU: "回路取り外し", CS: "回路売却", EQ: "装備回路", EQS: "装備状況",
@@ -27,7 +27,7 @@ export const PALETTE_TITLE: Record<PaletteId, string> = {
 
 /** Default parent (used when a palette is opened directly, e.g. from a tab or a guide). */
 export const PALETTE_PARENT: Record<Exclude<PaletteId, "H">, PaletteId> = {
-  T: "H", B: "T", BR: "B", BC: "B", V: "T", VS: "V", VR: "V",
+  T: "H", B: "T", BR: "B", BC: "B", V: "T", VS: "V",
   S: "H",
   M: "H", MM: "M", MN: "MM", MC: "MN", MF: "MN", MD: "MM", MS: "MD", MW: "MD", MR: "MM", MV: "MM", MQ: "MM",
   C: "M", CI: "C", CD: "CI", CC: "C", CB: "C", CU: "C", CS: "C", EQ: "MM", EQS: "EQ",

@@ -1,3 +1,10 @@
+## canvas・格納庫 レア在庫の削除（2026-11-11・神宮の指示）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: どこからも発生しないレア在庫を項目ごと削除。canvas の VR パレット、既存版 DOCK の売却列と仮価格表、`sellRareItem`・`rare-sell-prices.ts` → [CANVAS_UNIFIED_V0.md §20](CANVAS_UNIFIED_V0.md)。CANVAS-S1 は ★A（個数選択は資源だけ）で神宮決定
+- Why: 神宮「Aだよ。レア資源は随分前の要素で今はどこからも発生しない仕組みになっているので項目ごと消しておいて」（2026-11-11）
+- Scope: レア在庫の売却と表示だけ。4 資源の売買・回路売却・残骸売却・保存形式・資源履歴の古いログ表示・回路のレアリティ（設計）は変更なし
+- Status: 実装・selftest・verify 済み。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## canvas 売却個数の選択・初出撃の準備の表示（2026-11-09・神宮の指示）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: 資源売却の確認の画面で個数（−10・−1・+1・+10、1〜在庫）を選べるようにした。HUB の「初出撃の準備」は初期支給 10 個を開封し終えたら出さない → [CANVAS_UNIFIED_V0.md §19](CANVAS_UNIFIED_V0.md)

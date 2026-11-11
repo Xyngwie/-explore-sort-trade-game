@@ -75,19 +75,11 @@ td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .fleet-list { max-height: 70vh; overflow-y: auto; }
 label.check { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
 
-.rare-tag { background: #3d2a1a; color: #d29922; margin-left: 0.25rem; }
-button.sell-rare {
-  font-size: 0.7rem;
-  padding: 0.35rem 0.55rem;
-  font-weight: 600;
-}
 th { text-align: left; font-size: 0.75rem; color: #9aa0a6; font-weight: 600; padding: 0.25rem 0; border-bottom: 1px solid #2a313c; }
 th:nth-child(2), th:nth-child(3), td:nth-child(2), td:nth-child(3) { text-align: right; }
 
 .engraved { color: #f0c674; font-weight: 600; }
 .lock-tag { color: #d29922; border: 1px solid #d29922; background: #21262d; }
-
-.tbd-tag { background: #3d2a1a; color: #d29922; }
 
 /* Next-sortie hub panel */
 .sortie-card {
