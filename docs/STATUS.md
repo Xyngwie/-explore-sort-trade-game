@@ -1,3 +1,10 @@
+## 風紀委員 / 本番用地面テクスチャ保管（2026-11-11）
+- Who: Codex / inspector（風紀委員）
+- What: [assets/textures/explore/ground/](../assets/textures/explore/ground/) を新設。地面20パターンと共通48px外周帯、manifest・検証結果を収録。
+- Why: 神宮の「出来たものは本番用のテクスチャ用フォルダを作って入れておいてください」。
+- Scope: 納品済みPNG原本の保管と索引。ゲームへの読み込み・描画・グレーディングは変更しない。
+- Status: 21枚の原本一致、サイズ・sRGB・共通帯・全800通りの境界一致を確認。素材と文書のみでデプロイはNOT_TRIGGERED。ゲーム内操作はNOT_RUN。
+
 ## 自律学習の後続 S1〜S3（2026-11-11・神宮の TASK_ASSIGNMENT）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: S1 排除で運び終えたコンテナ（中隊功績 `company` 帳簿）、S2 敵の基本報酬 60 の直近 10 出撃の記録と平均（保存のみ）、S3 1×1 完全を付けた隊長の自律（入力が無いあいだ僚機と同じ学習）→ [AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md) の「後続の実装」と「決定済み・実装済み」3 節、[HUB_SAVE_CONTRACT.md](HUB_SAVE_CONTRACT.md) の `mechLearning`

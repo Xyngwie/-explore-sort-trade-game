@@ -1,0 +1,306 @@
+{
+  "version": "0.1",
+  "reference": "docs/artwork/13357.jpg",
+  "tiles": [
+    {
+      "file": "explore-ground-01.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "10748831b84703db9ad1ab715cdb45f5fa5d7881c09dcf76d7b257cf0139db44",
+      "design": "One soft diagonal tracked-vehicle impression, from upper-left interior to lower-right interior, fading before the perimeter; sparse rusty nuts and a bent washer near lower-left interior.",
+      "white_point_adjustment_rgb": [
+        2.0,
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "file": "explore-ground-02.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "01c10cc79d42f795164a612adf40254ea0855d2e8d02cb86ec50567cb578ec82",
+      "design": "Two offset short vertical tread impressions centered inside the tile, interrupted by granular white crust; three small rusty bolt heads and one short broken strip near upper-right interior.",
+      "white_point_adjustment_rgb": [
+        -1.0,
+        0.0,
+        -1.0
+      ]
+    },
+    {
+      "file": "explore-ground-03.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "cd24b1c17b3cf80eba88ce2bbc9697ba57e3e1c35dbf93ee4235887955c2356f",
+      "design": "A broad curved track arc across the central lower half, shallow and worn, with one half-buried crescent-shaped rusty plate and tiny screws near center-left.",
+      "white_point_adjustment_rgb": [
+        1.0,
+        3.0,
+        2.0
+      ]
+    },
+    {
+      "file": "explore-ground-04.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "c837b81c04fe9aabb0d4f64e673b0a3cf6d3ac2419c99a46f15bc1e52ccd5b41",
+      "design": "A darker horizontal tread segment confined to the center, a small cluster of corroded washers, a short spring and a narrow iron shard near lower-right interior.",
+      "white_point_adjustment_rgb": [
+        3.0,
+        4.0,
+        3.0
+      ]
+    },
+    {
+      "file": "explore-ground-05.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "fa55264264fe35cd9d624846dd44c5c9e4ba069c15c1d0bb86fc4336a69fee22",
+      "design": "A Y-shaped cluster of deep central fractures, very sparse metal: just two small rusted nuts and a rivet. No obvious track impression.",
+      "white_point_adjustment_rgb": [
+        1.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "file": "explore-ground-06.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "8b781e8745dcfa404e49d82b3f02e1b9042d99fa73a905fdca9bf145e8ed106f",
+      "design": "A star-like irregular fracture junction slightly right of center, pale flaking ground, a small bent rusted angle bracket and scattered pin-sized fragments. No tread.",
+      "white_point_adjustment_rgb": [
+        -1.0,
+        0.0,
+        -1.0
+      ]
+    },
+    {
+      "file": "explore-ground-07.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "f68f73f1b50fcde31b635f05abfcbed1ef69f0211a2c9ad1c92f272a7b9f60e7",
+      "design": "A network of long branching diagonal cracks and a small oval charcoal abrasion patch at upper-left interior; a handful of widely spaced bolts. No tread.",
+      "white_point_adjustment_rgb": [
+        0.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "file": "explore-ground-08.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "03566c00ab930336b006273321076b96392839bf3b155ffd1eb02e16c8e526f9",
+      "design": "A relatively intact broad central slab with hairline crazing, one localized rust stain around two washers and one tiny torn steel fragment; quiet low-density variant.",
+      "white_point_adjustment_rgb": [
+        0.0,
+        1.0,
+        -1.0
+      ]
+    },
+    {
+      "file": "explore-ground-09.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "ebbcc990bf595642ac0915b50d4488de0403db962f10ae320e959f30d18f5e2f",
+      "design": "A partial paired tread print angled up-right, with one track stronger than the other; a rusted circular flange fragment and two bent pins in opposite central quadrants.",
+      "white_point_adjustment_rgb": [
+        0.0,
+        1.0,
+        -1.0
+      ]
+    },
+    {
+      "file": "explore-ground-10.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "03c755318eb378a98a88a7acdd058614abdef4aafeccab51020c712aadd3d19f",
+      "design": "Two crossing shallow tread segments near center, one diagonal and one almost horizontal, with a few flat rectangular rusty fragments separated widely.",
+      "white_point_adjustment_rgb": [
+        0.0,
+        2.0,
+        2.0
+      ]
+    },
+    {
+      "file": "explore-ground-11.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "db2527aa4d264ab7e385e972ef906a89efe01b89616fe569de4f56267dfa3a4c",
+      "design": "A single short curved tread print at upper-right interior; clustered corroded rings, washers and rounded bolt heads around lower-left interior, surrounded by chipped white crust.",
+      "white_point_adjustment_rgb": [
+        0.0,
+        0.0,
+        -1.0
+      ]
+    },
+    {
+      "file": "explore-ground-12.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "1405e8a90c0ea433ccc54f5ea0fdc0f3deb63eecab99fa9c9c7e29a57da9ba4e",
+      "design": "A faded near-vertical track in center-left; a shallow oblique central fissure; a small crushed perforated steel strip and a few rusty screw heads center-right.",
+      "white_point_adjustment_rgb": [
+        4.0,
+        5.0,
+        4.0
+      ]
+    },
+    {
+      "file": "explore-ground-13.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "0fa44b861f19231006588f30824466d2a668b9064e1cb1d95f110978a365e5e6",
+      "design": "Scrap-focused: irregular torn rusted steel plate pieces and small rivets in two loose interior clusters, with a thin jagged central fissure. No obvious tread.",
+      "white_point_adjustment_rgb": [
+        -1.0,
+        0.0,
+        -1.0
+      ]
+    },
+    {
+      "file": "explore-ground-14.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "5459003ffd2e56039b001820b3ab5dc113462a32b49c043c85ae4eae520fbac5",
+      "design": "Scrap-focused: a broken circular bearing ring, a few washers and two bent rods all well inside the center, lightly dusted with white mineral crust. Very faint short tread scuff.",
+      "white_point_adjustment_rgb": [
+        1.0,
+        2.0,
+        1.0
+      ]
+    },
+    {
+      "file": "explore-ground-15.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "3ff6a2786301c50cd5573da0d83658b8906da942e90a9d3d2a8e8decc125e4aa",
+      "design": "Scrap-focused: short angular iron brackets, bolt shanks and one narrow curved metal shard, scattered asymmetrically around an open white central patch. No tread.",
+      "white_point_adjustment_rgb": [
+        -3.0,
+        -2.0,
+        -4.0
+      ]
+    },
+    {
+      "file": "explore-ground-16.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "aff47750c29b958595c0e950d3cbba34cf0fc14e27befa4c6a50b6d2cbedf1fc",
+      "design": "Scrap-focused: a small partly buried gear fragment, flat corroded strips and tiny reddish flakes concentrated center-bottom, fine cracks fanning upward. No tread.",
+      "white_point_adjustment_rgb": [
+        3.0,
+        5.0,
+        5.0
+      ]
+    },
+    {
+      "file": "explore-ground-17.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "dc00ae92809f9f77175018a8835dda6cfede1074322e54d6c28e6eeaca17668c",
+      "design": "An elongated charcoal-black abrasion or old scorch at upper-right interior, a short fading diagonal tread below center, two orange-rust washers near center-left.",
+      "white_point_adjustment_rgb": [
+        2.0,
+        4.0,
+        3.0
+      ]
+    },
+    {
+      "file": "explore-ground-18.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "2b1578c805b66e9c1f777ec8421cd9f4661543b702846adea1c2427ab5bba5e6",
+      "design": "Multiple isolated dark dusty scuffs, a curved hairline crack enclosing a central slab, one small bent metal hook and several small bolts; no dominant tread.",
+      "white_point_adjustment_rgb": [
+        -1.0,
+        0.0,
+        -1.0
+      ]
+    },
+    {
+      "file": "explore-ground-19.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "9447ca5b7acef8abf172a21833d71ace03ed9c700dcfe7874e2f26061f9b9b5e",
+      "design": "A densely crazed central patch of chipped white ceramic with a modest mix of rusty screws, tiny flat scraps and a broken ring; a very faint horizontal tread remnant.",
+      "white_point_adjustment_rgb": [
+        3.0,
+        4.0,
+        3.0
+      ]
+    },
+    {
+      "file": "explore-ground-20.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "color_space": "sRGB",
+      "sha256": "fc39d415323ebb39d9b900e38ea9b60022d94e6775f6d96deadcddb006d6345d",
+      "design": "A broad S-shaped irregular central fissure with two short incomplete tread segments on different sides, sparse rusty nuts and a bent strip near the central lower half.",
+      "white_point_adjustment_rgb": [
+        4.0,
+        5.0,
+        4.0
+      ]
+    }
+  ]
+}
