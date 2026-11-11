@@ -1,9 +1,16 @@
+## 小隊長 E1〜E6 の決定を文書へ書く（2026-11-11・文書のみ）
+- Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
+- What: 「小隊長の完全自律と指揮学習」の Status、[AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md)、[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) の後続。E1〜E6 を ★A（神宮決定 2026-11-11）として記録し、#363 が draft で未マージだという文言を、マージとデプロイ成功の記録に直す
+- Why: 神宮の指示。コードは既に E1〜E6 = ★A と一致している。文書だけが回答待ちと draft のまま残っていた
+- Scope: 文書の文言だけ。ゲームのコード、テスト、HTML、素材は変更しない。#361 以前の STATUS の古い draft 表記は直さない。v0 の点数の大きさ、直近 10 出撃の幅、排除コンテナ +1 の「予定のまま」は変えない
+- Status: PR #364。文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN
+
 ## 小隊長の完全自律と指揮学習（2026-11-11・神宮の TASK_ASSIGNMENT）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: 効果キー `platoon_leader`（「小隊長」、一辺 10 の真盤だけ）、小隊長の指定、隊長が小隊長のときの手動停止と 4 方針の操作、出した任務ごとの指揮セル（`ledger: "command"`）と想定による任務の選択 → [AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md) の「小隊長の指揮学習」
-- Why: 神宮「小隊長の完全自律と指揮学習 実装指示」（2026-11-11、決定 P1〜P4・C1〜C4・L1〜L2・S1〜S4・K1〜K2・G1〜G3）
+- Why: 神宮「小隊長の完全自律と指揮学習 実装指示」（2026-11-11、決定 P1〜P4・C1〜C4・L1〜L2・S1〜S4・K1〜K2・G1〜G3、細部 E1〜E6 = ★A）
 - Scope: 回路キー・小隊長の指揮・保存の追加だけ。通信距離、複数小隊長の分担、僚機の小隊長の任務、敵の区分、ほかの点数、本番の解放表、新しい入手経路・画面・ログ文・ホットキーは変更なし
-- Status: 細部 E1〜E6 は ★ で暫定実装（神宮の回答待ち）。selftest（新規 `platoonCommand.selftest.ts`、canvas の小隊方針バー）・canvas の verify 済み。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+- Status: 細部 E1〜E6 はすべて ★A（神宮決定 2026-11-11）。selftest（新規 `platoonCommand.selftest.ts`、canvas の小隊方針バー）・canvas の verify 済み。PR #363 をマージ（merge `b719298d4a32fc4ce40d2fb963197cac11ba21c6`、監査 head `9986009ca4ca8e89dfb7621b057271338373a2a2`）。Deploy Modules Preview run 43001498644 は success（19:12 JST。created 10:11:25Z、completed 10:12:25Z）。公開 canvas https://xyngwie.github.io/-explore-sort-trade-game/canvas/ を更新済み。スマートフォン実機 NOT_RUN
 
 ## 風紀委員 / 本番用地面テクスチャ保管（2026-11-11）
 - Who: Codex / inspector（風紀委員）
