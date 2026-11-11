@@ -1,3 +1,10 @@
+## 自律学習の後続 S1〜S3（2026-11-11・神宮の TASK_ASSIGNMENT）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: S1 排除で運び終えたコンテナ（中隊功績 `company` 帳簿）、S2 敵の基本報酬 60 の直近 10 出撃の記録と平均（保存のみ）、S3 1×1 完全を付けた隊長の自律（入力が無いあいだ僚機と同じ学習）→ [AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md) の「後続の実装」と「決定済み・実装済み」3 節、[HUB_SAVE_CONTRACT.md](HUB_SAVE_CONTRACT.md) の `mechLearning`
+- Why: 神宮「自律学習の後続 実装指示」（2026-11-11、Issue #326 の後続）
+- Scope: 学習の帳簿・隊長の自律・保存の追加だけ。v0 の点数表・姿勢・盾・`purgeCargo`、五つの基本操作のゲート、小隊長回路、敵の区分、画面・ログ文・ホットキーは変更なし
+- Status: 細部 D1〜D5 は ★ で暫定実装（神宮の回答待ち）。selftest（新規 `learningFollowups.selftest.ts`、既存の `learning.selftest.ts` を `npm test` に追加）・canvas の verify 済み。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## canvas・格納庫 レア在庫の削除（2026-11-11・神宮の指示）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: どこからも発生しないレア在庫を項目ごと削除。canvas の VR パレット、既存版 DOCK の売却列と仮価格表、`sellRareItem`・`rare-sell-prices.ts` → [CANVAS_UNIFIED_V0.md §20](CANVAS_UNIFIED_V0.md)。CANVAS-S1 は ★A（個数選択は資源だけ）で神宮決定

@@ -156,6 +156,7 @@ export function upsertCellCounter(
     else if (field === "kills") row.kills = cur + delta;
     else if (field === "dodged") row.dodged = cur + delta;
     else if (field === "struck") row.struck = cur + delta;
+    else if (field === "eliminatedContainers") row.eliminatedContainers = cur + delta;
     next[idx] = row;
     return next;
   }
@@ -174,6 +175,7 @@ export function upsertCellCounter(
   else if (field === "kills") row.kills = delta;
   else if (field === "dodged") row.dodged = delta;
   else if (field === "struck") row.struck = delta;
+  else if (field === "eliminatedContainers") row.eliminatedContainers = delta;
   return [...cells, row];
 }
 
@@ -265,7 +267,9 @@ export type LearningEvent =
   | { kind: "hit" | "miss" | "kill" | "dodged" | "struck"; subject: LearningSubject }
   | { kind: "quizSuccess" | "quizFailure"; subject: Exclude<LearningSubject, "none"> }
   | { kind: "survived" | "died" | "leftBehind" }
-  | { kind: "broughtHome" | "abandoned"; subject: Exclude<LearningSubject, "none" | "normal"> };
+  | { kind: "broughtHome" | "abandoned"; subject: Exclude<LearningSubject, "none" | "normal"> }
+  /** 中隊功績: a container carried after an elimination; `count` = enemies that saw it (+1 each, no cap). */
+  | { kind: "eliminatedContainer"; count: number };
 
 export function noteLearningEvent(
   cells: MechLearningCell[],
@@ -312,6 +316,17 @@ export function noteLearningEvent(
       maxCells,
     );
   }
+  if (event.kind === "eliminatedContainer") {
+    const n = Math.max(0, Math.floor(event.count));
+    if (n <= 0) return cells;
+    return upsertCellCounter(
+      cells,
+      { ledger: "company", subject: "container", ...base },
+      "eliminatedContainers",
+      n,
+      maxCells,
+    );
+  }
   if (event.kind === "broughtHome" || event.kind === "abandoned") {
     return upsertCellCounter(
       cells,
@@ -326,6 +341,19 @@ export function noteLearningEvent(
 
 export function isLearningWingman(unit: Unit): boolean {
   return unit.kind === "wingman" && !!unit.instanceId?.trim();
+}
+
+/**
+ * S3 (2026-10-25 神宮, implemented 2026-11-11): a captain with an instanceId and the true
+ * 1×1 「4」 (1×1 完全) equipped is autonomous and learns with the same ledger as a wingman.
+ */
+export function isAutonomousLeader(world: Pick<World, "circuitPlay">, unit: Unit): boolean {
+  return unit.kind === "leader" && !!unit.instanceId?.trim() && world.circuitPlay?.captainTrueOne === true;
+}
+
+/** Units that keep a learning ledger this sortie: wingmen with an instanceId, and the autonomous captain. */
+export function isLearningUnit(world: Pick<World, "circuitPlay">, unit: Unit): boolean {
+  return isLearningWingman(unit) || isAutonomousLeader(world, unit);
 }
 
 export function readLearningAction(unit: Unit): LearningAction {

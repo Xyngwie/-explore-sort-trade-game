@@ -49,6 +49,7 @@
     "src/debug/**/*.selftest.ts",
     "src/mapTargets.selftest.ts",
     "src/learning.selftest.ts",
+    "src/learningFollowups.selftest.ts",
     "src/wreckSupplies.selftest.ts",
     "src/canvas-explore.selftest.ts"
   ]

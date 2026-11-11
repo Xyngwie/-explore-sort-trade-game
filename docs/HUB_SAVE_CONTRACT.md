@@ -551,3 +551,17 @@ ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・�
 - `firstSortie`：実際の出撃開始時のnonce、隊長ID、回路ID。未修復回路、別機体装備、画面閲覧だけでは設定しない。
 
 既存のIndexedDB原子確定・遮断・固定候補の再試行を使用する。新しい記録だけをlocalStorageへ先行確定する経路を作らない。初期支給/購入分はQ1=Aに従い別バッチとする（`docs/spec-questions/new-game-intro-containers.json`）。`opening.url`は再訪時に同じ予約と固定済み仕分状態へ戻るためのURL。`opening.containerCount`は出庫した全体数、`initialCount`は初期分のみの数（通常購入分のバッチでは0）。この導入で始めたゲームの以降の通常購入分も同じ作業ID・未受取レシートで重複を防ぐ。通常分は初期開封数・収穫累計・救済には含めない。`introOpening`/`introResultId`/`introCancelId`で作業を照合し、結果はURLではなく保存済み収穫から受け取る。新しいセッション予約`wreckline.pendingIntroOpening.v1`もタブ別ログ管理の対象で、戻る取消時は一致するHUB予約だけを戻し、結果確定後は返さない。
+
+### 僚機の自律学習 `mechLearning`（#325、後続 2026-11-11）
+
+正本は [`AUTONOMOUS_LEARNING_V0.md`](./AUTONOMOUS_LEARNING_V0.md)。トップレベルの任意キーは `mechLearning` だけで、後続でも新しいトップレベルキーは足していない。
+
+| キー | 型 | 欠落・不正のとき | 書く人 |
+|---|---|---|---|
+| `mechLearning.byMech` | `{ [instanceId]: Cell[] }`（機体ごと最大 4096 セル） | 空の帳簿。壊れたセルだけ捨てる | Explore の帰還の直接保存（`settleMechLearningOnHub`） |
+| `mechLearning.settledSortieIds` | `string[]`（最大 64） | 空 | 同上。同じ `sortieId` は一度だけ精算 |
+| `mechLearning.enemyBaseRewards` | `{ sortieId, total }[]`（新しいものが末尾、最大 10）。**2026-11-11 追加** | 欠落は記録なし＝平均 0 | 同上。精算した出撃ごとに 1 件。`total` は円まで持ち帰った敵の残骸 1 体につき 60。撤退・失敗など 60 が無い出撃も 0 で入る |
+
+- セルの `ledger` に `company`（中隊功績）を足した（2026-11-11）。今ある数は `eliminatedContainers`（排除で運び終えたコンテナ）だけ。学習の想定の和には入れない。
+- 平均は `enemyBaseRewardAverage(mechLearning)` = 直近 10 件の `total` の合計 ÷ 10（件数が 10 未満でも 10 で割る）。保存するだけで、敵の区分にも点数にも使わない（境界は後回し）。
+- 古いセーブ（`enemyBaseRewards` も `company` のセルも無い）はそのまま読める。

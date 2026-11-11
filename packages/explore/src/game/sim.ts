@@ -15,8 +15,9 @@ import { aimAt, noteMoveHeading, updateFacing } from "./facing";
 import { beginMovementPowerTick, consumeMovementPower, expireEmptyBatteries, movementTimeAvailable } from "./power";
 import { backfillEnemyState, nearestEnemyTarget, enemyDestination, enemySpeed, lootEnemy, moveEnemy, enemyRate, enemyDamageMultiplier, handleEnemyDeaths, collectSupplies, scheduleRecall, spawnRecall } from "./enemyBehavior";
 import { tickEnemyTag } from "./enemyIdentity";
-import { wingmanIntent } from "./brain";
-import { isLearningWingman } from "./learning";
+import { leaderLearningIntent, wingmanIntent } from "./brain";
+import { isAutonomousLeader, isLearningUnit } from "./learning";
+import { checkEliminationInterrupts, takeEliminationTags } from "./eliminationContainers";
 import {
   ensureMechLearningWorld,
   finalizeMechLearningSortie,
@@ -152,8 +153,8 @@ function retireBullet(world: World, b: Bullet): void {
   if (!b.alive) return;
   b.alive = false;
   if (b.fromEnemy && b.aimUnitId && !b.aimUnitHit) {
-    const aim = world.wingmen.find((w) => w.id === b.aimUnitId);
-    if (aim && isLearningWingman(aim)) {
+    const aim = friendlyUnits(world).find((w) => w.id === b.aimUnitId);
+    if (aim && isLearningUnit(world, aim)) {
       noteLearningForUnit(world, aim, { kind: "dodged", subject: "normal" });
     }
   }
@@ -220,7 +221,7 @@ export function updateBullets(world: World, dt: number): void {
         const dx=end.x-start.x,dy=end.y-start.y,len=Math.hypot(dx,dy)||1;
         start={x:b.pos.x+dx/len*.001,y:b.pos.y+dy/len*.001};continue;
       }
-      if (b.fromEnemy && isLearningWingman(t)) {
+      if (b.fromEnemy && isLearningUnit(world, t)) {
         noteLearningForUnit(world, t, { kind: "struck", subject: "normal" });
         if (b.aimUnitId === t.id) b.aimUnitHit = true;
       }
@@ -249,7 +250,7 @@ export function updateBullets(world: World, dt: number): void {
         showCombatFeedback(world,t,"friendly_fire");
         pushLog(world,`誤射：${shooter?.name??b.ownerId} → ${t.name}（−${Math.round(hitDmg)}）`);
       }
-      if (!b.fromEnemy && t.kind === "enemy" && shooter && isLearningWingman(shooter)) {
+      if (!b.fromEnemy && t.kind === "enemy" && shooter && isLearningUnit(world, shooter)) {
         noteLearningForUnit(world, shooter, { kind: "hit", subject: "normal" });
       }
       if(t.hp<=0){
@@ -257,7 +258,7 @@ export function updateBullets(world: World, dt: number): void {
         t.alive=false;
         reportBattle(world,friendly ? `${shooter?.name??b.ownerId} の誤射で ${t.name} 大破` : `${b.fromEnemy?"敵":shooter?.name??"分隊"} が ${t.name} を撃破`,t.pos);
         if(t.kind==="enemy"){
-          if (!b.fromEnemy && shooter && isLearningWingman(shooter)) {
+          if (!b.fromEnemy && shooter && isLearningUnit(world, shooter)) {
             noteLearningForUnit(world, shooter, { kind: "kill", subject: "normal" });
           }
           handleEnemyDeaths(world);
@@ -268,7 +269,7 @@ export function updateBullets(world: World, dt: number): void {
     if(b.ttl<=0 && b.alive){
       if(!b.fromEnemy){
         const shooter=friendlyUnits(world).find(u=>u.id===b.ownerId);
-        if(shooter && isLearningWingman(shooter)) noteLearningForUnit(world, shooter, { kind: "miss", subject: "normal" });
+        if(shooter && isLearningUnit(world, shooter)) noteLearningForUnit(world, shooter, { kind: "miss", subject: "normal" });
       }
       retireBullet(world, b);
     }
@@ -306,7 +307,11 @@ export function updateSalvage(world: World, unit: Unit, want: boolean, dt: numbe
   const salvageNeed = salvageSeconds(world) ?? world.balance.salvageSeconds;
   if (unit.salvageT >= salvageNeed) {
     crate.taken = true;
-    if (isLearningWingman(unit)) noteLearningForUnit(world, unit, { kind: "quizSuccess", subject: "container" });
+    const eliminated = takeEliminationTags(crate);
+    if (isLearningUnit(world, unit)) {
+      noteLearningForUnit(world, unit, { kind: "quizSuccess", subject: "container" });
+      if (eliminated > 0) noteLearningForUnit(world, unit, { kind: "eliminatedContainer", count: eliminated });
+    }
     onSalvageCompleted(world, unit);
     trackLearningCargoHeld(world, unit);
   }
@@ -515,12 +520,21 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   const leaderDown = !leader.alive;
   if (leaderDown) noteLeaderDown(world);
   leader.cooldown = Math.max(0, leader.cooldown - dt);
+  // S3 (D1 ★A 暫定): the captain with the true 1×1 「4」 is autonomous while none of the five
+  // basic manual inputs is held; any manual input this frame wins. Orders to wingmen and air
+  // support stay as they are.
+  const manualInput = !!(input.move.x || input.move.y || input.clickMove || input.fire || input.interact);
+  const autoIntent =
+    !manualInput && !leaderDown && !timedOut && isAutonomousLeader(world, leader) && !wreckCarrierId(world, leader.id)
+      ? leaderLearningIntent(world, leader)
+      : null;
   if (leaderDown || timedOut || activeStripping(world,leader.id) || barricadeWorking(world,leader.id) || wreckCarrierId(world, leader.id)) { leader.moveTarget = null; leader.vel = { x: 0, y: 0 }; }
   else {
     // moveTarget is this frame's resolved AI/manual target, never retained input.
     let fallback: Vec2 | null = input.clickMove ? { ...input.clickMove } : null;
     if (input.move.x !== 0 || input.move.y !== 0) { const n = norm(input.move); const reach = Math.max(world.balance.wasdMoveLookahead, world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed * dt); fallback = { x: leader.pos.x + n.x * reach, y: leader.pos.y + n.y * reach }; }
     else if (input.clickMove) fallback = { ...input.clickMove };
+    else if (autoIntent?.moveTarget) fallback = { ...autoIntent.moveTarget };
     const locked = movementLocked(world);
     const speed = world.balance.moveSpeed * unitMoveSpeedMul(leader, world) * abilityOf(world, leader.id).moveSpeed;
     const cruise = manualMove || input.clickMove
@@ -544,7 +558,8 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       let leadTarget: Unit | null = null; let best: number = world.balance.engageRange * rangeMul(world, leader.id);
       for (const e of world.enemies) { if (!e.alive || !enemyVisibleToSquad(world, e)) continue; const d = dist(leader.pos, e.pos); if (d <= best) { best = d; leadTarget = e; } }
       const weaponReach = world.balance.weaponRange * rangeMul(world, leader.id);
-      if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false, input.fire);
+      if (autoIntent) { if (autoIntent.fireAt) tryFire(world, leader, autoIntent.fireAt, false); }
+      else if (leadTarget && (input.fire || best <= weaponReach)) tryFire(world, leader, leadTarget, false, input.fire);
     }
     if (!barricadeWorking(world,leader.id) && !activeStripping(world,leader.id) && !timedOut && !wreckCarrierId(world, leader.id) && !movementLocked(world)) {
       const playEdge = world.circuitPlay;
@@ -552,7 +567,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
         if (input.interact && !playEdge.collectDown) applyCollectPress(world);
         playEdge.collectDown = input.interact;
       }
-      const leaderWantSalvage = input.interact || world.containers.some((c) => c.discovered && !c.taken && dist(leader.pos, c.pos) < world.balance.interactRadius);
+      const leaderWantSalvage = input.interact || !!autoIntent?.trySalvage || world.containers.some((c) => c.discovered && !c.taken && dist(leader.pos, c.pos) < world.balance.interactRadius);
       updateSalvage(world, leader, leaderWantSalvage, dt);
     }
   }
@@ -596,6 +611,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   placeCarried(world);
   spawnRecall(world);
   updateEnemies(world, dt); updateBullets(world, dt); dropNewDeaths(); handleEnemyDeaths(world); collectSupplies(world); revealVision(world);
+  checkEliminationInterrupts(world); // 中隊功績: a tagged container whose salvage stopped loses its tags
   // 項目4-1 C6: a destroyed carrier drops its containers on the spot (wrecks: circuitPlay placeCarried).
   for (const u of friendlyUnits(world)) if (!u.alive && u.salvagedCount > 0) { const n = dropUnitCargoToField(world, u); if (n > 0) pushLog(world, `${u.kind === "leader" ? "隊長機" : u.name}が大破：積載していたコンテナ ${n} をその場に落とした。`); }
   for (const c of world.containers) if (c.glowT > 0) c.glowT = Math.max(0, c.glowT - dt);
