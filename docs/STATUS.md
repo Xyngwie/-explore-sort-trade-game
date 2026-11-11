@@ -3,7 +3,7 @@
 - What: 「小隊長の完全自律と指揮学習」の Status、[AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md)、[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) の後続。E1〜E6 を ★A（神宮決定 2026-11-11）として記録し、#363 が draft で未マージだという文言を、マージとデプロイ成功の記録に直す
 - Why: 神宮の指示。コードは既に E1〜E6 = ★A と一致している。文書だけが回答待ちと draft のまま残っていた
 - Scope: 文書の文言だけ。ゲームのコード、テスト、HTML、素材は変更しない。#361 以前の STATUS の古い draft 表記は直さない。v0 の点数の大きさ、直近 10 出撃の幅、排除コンテナ +1 の「予定のまま」は変えない
-- Status: 文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN
+- Status: PR #364。文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN
 
 ## 小隊長の完全自律と指揮学習（2026-11-11・神宮の TASK_ASSIGNMENT）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
