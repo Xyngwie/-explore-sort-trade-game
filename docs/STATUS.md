@@ -1,3 +1,10 @@
+## 風紀委員 / 本番用地面テクスチャ保管（2026-11-11）
+- Who: Codex / inspector（風紀委員）
+- What: [assets/textures/explore/ground/](../assets/textures/explore/ground/) を新設。地面20パターンと共通48px外周帯、manifest・検証結果を収録。
+- Why: 神宮の「出来たものは本番用のテクスチャ用フォルダを作って入れておいてください」。
+- Scope: 納品済みPNG原本の保管と索引。ゲームへの読み込み・描画・グレーディングは変更しない。
+- Status: 21枚の原本一致、サイズ・sRGB・共通帯・全800通りの境界一致を確認。素材と文書のみでデプロイはNOT_TRIGGERED。ゲーム内操作はNOT_RUN。
+
 ## canvas・格納庫 レア在庫の削除（2026-11-11・神宮の指示）
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: どこからも発生しないレア在庫を項目ごと削除。canvas の VR パレット、既存版 DOCK の売却列と仮価格表、`sellRareItem`・`rare-sell-prices.ts` → [CANVAS_UNIFIED_V0.md §20](CANVAS_UNIFIED_V0.md)。CANVAS-S1 は ★A（個数選択は資源だけ）で神宮決定
