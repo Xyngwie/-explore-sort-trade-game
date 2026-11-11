@@ -1,4 +1,5 @@
 import { setExploreShellPhase, SORTIE_GUARD_RETURN_KEY } from "@estg/shared";
+import { captainIsPlatoonLeader } from "./game/platoonCommand";
 import { clampZoom, gestureDownForTap, gestureMove, gestureUp, MAP_WHEEL_STEP, newMapGestureState, withViewCamera, type MapGestureState } from "./game/mapZoom";
 import { playLogBlocked, playLogNavigate, recordPlayLogSortie, setPlayLogCheckpointProvider } from '@estg/shared';
 import { mapTargetsAt, mapTargetChoicesHtml, type MapTarget } from "./ui/mapTargets";
@@ -707,7 +708,8 @@ function returnOpen(): boolean {
 }
 
 function squadOrderBarHtml(): string {
-  if (world.circuitPlay?.release) return "";
+  // 2026-11-11 C2: a captain-小隊長's controls are the four missions, also in release.
+  if (world.circuitPlay?.release && !captainIsPlatoonLeader(world)) return "";
   const items = SQUAD_ORDER_KEYS.filter(({ stance }) => !cmdLocked(WING_COMMAND_FOR_STANCE[stance]));
   // C20-a: no unlocked squad order → no bar at all.
   if (items.length === 0) return "";

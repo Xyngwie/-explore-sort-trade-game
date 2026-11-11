@@ -18,6 +18,7 @@
  * DEBUG circuit-lock toggle. The Alpha Lab band stays on the existing page
  * (CANVAS-Y5, as on DOCK).
  */
+import { captainIsPlatoonLeader } from "../game/platoonCommand";
 import {
   CANVAS_THEME,
   CTA_CHIP,
@@ -1185,9 +1186,9 @@ export class ExploreScene {
     f.gap(4).buttons(btns);
   }
 
-  /** 小隊方針 bar (existing squad-order-bar; not in release mode). */
+  /** 小隊方針 bar (existing squad-order-bar; not in release mode, except for a captain-小隊長: 2026-11-11 C2). */
   private drawSquadOrders(f: Flow): void {
-    if (this.world.circuitPlay?.release) return;
+    if (this.world.circuitPlay?.release && !captainIsPlatoonLeader(this.world)) return;
     const items = SQUAD_ORDER_KEYS.filter(({ stance }) => !this.cmdLocked(WING_COMMAND_FOR_STANCE[stance]));
     if (items.length === 0) return;
     f.gap(8).text("小隊方針", { size: 12, color: CANVAS_THEME.muted });

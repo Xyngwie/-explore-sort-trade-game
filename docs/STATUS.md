@@ -1,3 +1,10 @@
+## 小隊長の完全自律と指揮学習（2026-11-11・神宮の TASK_ASSIGNMENT）
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 効果キー `platoon_leader`（「小隊長」、一辺 10 の真盤だけ）、小隊長の指定、隊長が小隊長のときの手動停止と 4 方針の操作、出した任務ごとの指揮セル（`ledger: "command"`）と想定による任務の選択 → [AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md) の「小隊長の指揮学習」
+- Why: 神宮「小隊長の完全自律と指揮学習 実装指示」（2026-11-11、決定 P1〜P4・C1〜C4・L1〜L2・S1〜S4・K1〜K2・G1〜G3）
+- Scope: 回路キー・小隊長の指揮・保存の追加だけ。通信距離、複数小隊長の分担、僚機の小隊長の任務、敵の区分、ほかの点数、本番の解放表、新しい入手経路・画面・ログ文・ホットキーは変更なし
+- Status: 細部 E1〜E6 は ★ で暫定実装（神宮の回答待ち）。selftest（新規 `platoonCommand.selftest.ts`、canvas の小隊方針バー）・canvas の verify 済み。draft PR。マージ・デプロイなし。スマートフォン実機・公開版 NOT_RUN
+
 ## 風紀委員 / 本番用地面テクスチャ保管（2026-11-11）
 - Who: Codex / inspector（風紀委員）
 - What: [assets/textures/explore/ground/](../assets/textures/explore/ground/) を新設。地面20パターンと共通48px外周帯、manifest・検証結果を収録。

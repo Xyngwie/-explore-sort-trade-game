@@ -32,6 +32,10 @@ export type Unit = {
   learningHeldSubjects?: Partial<Record<"container" | "circuit" | "wreck", true>>;
   learningFightEnemyId?: string | null;
   learningDropPending?: boolean;
+  /** 小隊長 (platoonCommand.ts): the last mission the captain-小隊長 gave this wingman (runtime). */
+  commandOrder?: import("@estg/shared").MechCommandStance;
+  /** 小隊長: subjects held while on a recover mission (runtime). */
+  commandHeldSubjects?: Partial<Record<"container" | "circuit" | "wreck", true>>;
   /** Enemy PR1: model / durability / hidden false-board circuits (enemies only; optional for old checkpoints). */ enemyIdentity?: EnemyIdentity; enemyState?: import("./enemyBehavior").EnemyState;
   inCover: boolean; coverEscapeT?: number; coverId?: string | null; quirk: WingmanQuirk | null; hitWarnT: number; engageWarnT: number;
   /** Player-issued individual stance; optional for old checkpoints, cleared by the next order or completed recovery. */ individualOrder?: boolean;
@@ -79,5 +83,11 @@ export type World = { barricades?: import("./barricades").BarricadeState; shield
   mechLearningWork?: Record<string, import("@estg/shared").MechLearningCell[]>;
   mechLearningReady?: boolean;
   mechLearningFinalized?: boolean;
+  /** 小隊長の指揮セル keyed by the 小隊長's instanceId (runtime; settled into mechLearning.byMech). */
+  mechCommandWork?: Record<string, import("@estg/shared").MechCommandCell[]>;
+  mechCommandFinalized?: boolean;
+  /** world.elapsed of the last mission issued by the captain-小隊長 (player or itself). */
+  commandDecisionAt?: number;
+  commandDecisionCount?: number;
 };
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };

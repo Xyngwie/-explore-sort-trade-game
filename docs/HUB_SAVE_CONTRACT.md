@@ -565,3 +565,5 @@ ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・�
 - セルの `ledger` に `company`（中隊功績）を足した（2026-11-11）。今ある数は `eliminatedContainers`（排除で運び終えたコンテナ）だけ。学習の想定の和には入れない。
 - 平均は `enemyBaseRewardAverage(mechLearning)` = 直近 10 件の `total` の合計 ÷ 10（件数が 10 未満でも 10 で割る）。保存するだけで、敵の区分にも点数にも使わない（境界は後回し）。
 - 古いセーブ（`enemyBaseRewards` も `company` のセルも無い）はそのまま読める。
+
+- **小隊長の指揮セル（2026-11-11）**: `mechLearning.byMech[instanceId]` の中に、v0 のセルと並べて `{ ledger: "command", stance, subject, tries?, survived?, died?, leftBehind?, broughtHome?, abandoned?, kills? }` を置く。`stance` は `escort` `patrol` `recover` `raid`、`subject` は `none` `normal` `container` `circuit` `wreck`。壊れたセルは捨てる。精算は v0 のセルと指揮セルを別々に置き換える（その出撃で増えなかった側は前のまま）。新しいトップレベルキーは無く、機体ごとの 4096 セル上限は両方を合わせて数える。古いセーブは指揮セルなし。

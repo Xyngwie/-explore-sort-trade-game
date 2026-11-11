@@ -340,11 +340,36 @@ export type MechLearningCell = {
   eliminatedContainers?: number;
 };
 
+/**
+ * 小隊長の指揮セル (2026-11-11 神宮 P1・P2・L1・L2・S1〜S4). A different shape from the v0 cell:
+ * keyed by the mission (`stance`) and `subject` only. Counts are per unit that received the
+ * order; the cell belongs to the platoon leader that issued it. Same 4096-cell cap per mech.
+ */
+export type MechCommandStance = "escort" | "patrol" | "recover" | "raid";
+export type MechCommandSubject = "none" | "normal" | "container" | "circuit" | "wreck";
+export type MechCommandCell = {
+  ledger: "command";
+  stance: MechCommandStance;
+  subject: MechCommandSubject;
+  tries?: number;
+  survived?: number;
+  died?: number;
+  leftBehind?: number;
+  broughtHome?: number;
+  abandoned?: number;
+  kills?: number;
+};
+export type MechLearningEntry = MechLearningCell | MechCommandCell;
+export function isMechCommandCell(cell: MechLearningEntry): cell is MechCommandCell {
+  return cell.ledger === "command";
+}
+
 /** One settled sortie's enemy base reward (60 per enemy wreck brought into the circle). */
 export type EnemyBaseRewardEntry = { sortieId: string; total: number };
 
 export type MechLearningState = {
-  byMech: Record<string, MechLearningCell[]>;
+  /** v0 cells and 小隊長の指揮セル (`ledger: "command"`) side by side, per instanceId. */
+  byMech: Record<string, MechLearningEntry[]>;
   settledSortieIds: string[];
   /**
    * Newest last, at most {@link MECH_LEARNING_LIMITS.baseRewardWindow}. Sorties with no 60 are 0.
@@ -445,6 +470,22 @@ function normalizeMechLearningCell(raw: unknown): MechLearningCell | null {
   return cell;
 }
 
+const MECH_COMMAND_STANCES = new Set<MechCommandStance>(["escort", "patrol", "recover", "raid"]);
+
+function normalizeMechCommandCell(raw: unknown): MechCommandCell | null {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.ledger !== "command") return null;
+  if (typeof o.stance !== "string" || !MECH_COMMAND_STANCES.has(o.stance as MechCommandStance)) return null;
+  if (typeof o.subject !== "string" || !MECH_LEARNING_SUBJECTS.has(o.subject as MechLearningSubject)) return null;
+  const cell: MechCommandCell = { ledger: "command", stance: o.stance as MechCommandStance, subject: o.subject as MechCommandSubject };
+  for (const k of ["tries", "survived", "died", "leftBehind", "broughtHome", "abandoned", "kills"] as const) {
+    const n = mechLearningCounter(o[k]);
+    if (n > 0) cell[k] = n;
+  }
+  return cell;
+}
+
 export function emptyMechLearningState(): MechLearningState {
   return { byMech: {}, settledSortieIds: [] };
 }
@@ -452,14 +493,14 @@ export function emptyMechLearningState(): MechLearningState {
 export function normalizeMechLearning(raw: unknown): MechLearningState {
   if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return emptyMechLearningState();
   const o = raw as Record<string, unknown>;
-  const byMech: Record<string, MechLearningCell[]> = {};
+  const byMech: Record<string, MechLearningEntry[]> = {};
   if (o.byMech != null && typeof o.byMech === "object" && !Array.isArray(o.byMech)) {
     for (const [idRaw, rows] of Object.entries(o.byMech as Record<string, unknown>)) {
       const id = typeof idRaw === "string" ? idRaw.trim().slice(0, MECH_INSTANCE_ID_MAX) : "";
       if (!id || !Array.isArray(rows)) continue;
-      const cells: MechLearningCell[] = [];
+      const cells: MechLearningEntry[] = [];
       for (const row of rows) {
-        const cell = normalizeMechLearningCell(row);
+        const cell = normalizeMechCommandCell(row) ?? normalizeMechLearningCell(row);
         if (cell) cells.push(cell);
         if (cells.length >= MECH_LEARNING_LIMITS.maxCellsPerMech) break;
       }
@@ -503,7 +544,13 @@ export function copyMechLearningForInstance(
   instanceId: string,
 ): MechLearningCell[] {
   const rows = state?.byMech[instanceId] ?? [];
-  return rows.map((c) => ({ ...c }));
+  return rows.filter((c): c is MechLearningCell => !isMechCommandCell(c)).map((c) => ({ ...c }));
+}
+
+/** 小隊長の指揮セル of one mech (empty in an old save). */
+export function copyMechCommandForInstance(state: MechLearningState | undefined, instanceId: string): MechCommandCell[] {
+  const rows = state?.byMech[instanceId] ?? [];
+  return rows.filter(isMechCommandCell).map((c) => ({ ...c }));
 }
 
 export function settleMechLearningOnHub(
@@ -512,16 +559,26 @@ export function settleMechLearningOnHub(
   sortieId: string,
   /** This sortie's enemy base reward (60 × enemy wrecks brought home). Recorded once per sortieId. */
   enemyBaseReward = 0,
+  /** 小隊長の指揮セル worked this sortie; replaces only that mech's command part. */
+  commandByMech: Record<string, MechCommandCell[]> = {},
 ): HubSnapshot {
   const sid = sanitizeSortieId(sortieId);
   if (!sid) return hub;
   const prev = normalizeMechLearning(hub.mechLearning);
   if (prev.settledSortieIds.includes(sid)) return hub;
   const byMech = { ...prev.byMech };
-  for (const [instanceId, cells] of Object.entries(workByMech)) {
+  const ids = new Set([...Object.keys(workByMech), ...Object.keys(commandByMech)]);
+  for (const instanceId of ids) {
     const id = instanceId.trim().slice(0, MECH_INSTANCE_ID_MAX);
-    if (!id || cells.length === 0) continue;
-    byMech[id] = cells.slice(0, MECH_LEARNING_LIMITS.maxCellsPerMech).map((c) => ({ ...c }));
+    if (!id) continue;
+    const before = prev.byMech[id] ?? [];
+    const v0 = workByMech[instanceId] ?? [];
+    const cmd = commandByMech[instanceId] ?? [];
+    const v0Part: MechLearningEntry[] = v0.length > 0 ? v0 : before.filter((c) => !isMechCommandCell(c));
+    const cmdPart: MechLearningEntry[] = cmd.length > 0 ? cmd : before.filter(isMechCommandCell);
+    const merged = [...v0Part, ...cmdPart];
+    if (merged.length === 0) continue;
+    byMech[id] = merged.slice(0, MECH_LEARNING_LIMITS.maxCellsPerMech).map((c) => ({ ...c }));
   }
   const settledSortieIds = [...prev.settledSortieIds, sid];
   while (settledSortieIds.length > MECH_LEARNING_LIMITS.maxSettledSortieIds) settledSortieIds.shift();
