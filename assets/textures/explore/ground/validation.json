@@ -1,0 +1,65 @@
+{
+  "status": "PASS",
+  "count": 20,
+  "dimensions": "1024x1024",
+  "format": "PNG",
+  "color_space": "sRGB",
+  "profile_embedded": true,
+  "shared_band_width": 48,
+  "all_shared_bands_pixel_identical": true,
+  "opposite_edges_pixel_identical": true,
+  "horizontal_ordered_pairs_checked": 400,
+  "vertical_ordered_pairs_checked": 400,
+  "includes_self_repeat": true,
+  "max_boundary_pixel_difference": 0,
+  "single_color_edge_rows": false,
+  "distinct_file_hashes": 20,
+  "closest_inner_pair_mean_absolute_rgb_difference": {
+    "value": 33.17588975694444,
+    "tiles": [
+      1,
+      8
+    ]
+  },
+  "mixed_layout_1_based": [
+    [
+      4,
+      5,
+      8,
+      9,
+      2
+    ],
+    [
+      11,
+      16,
+      19,
+      18,
+      6
+    ],
+    [
+      1,
+      13,
+      17,
+      10,
+      14
+    ],
+    [
+      7,
+      3,
+      15,
+      20,
+      12
+    ]
+  ],
+  "notes": [
+    "Pixel equality guarantees matching boundary values, not a claim of physical height-map continuity.",
+    "Contact-sheet and layout previews are separate from production texture files.",
+    "Image generation native output is normalized to a 1024px sRGB working/export canvas; common band is then copied without modification."
+  ],
+  "visual_review": {
+    "contact_sheet": "PASS",
+    "mixed_5x4": "PASS",
+    "same_tile_3x3": "PASS",
+    "in_game": "NOT_RUN"
+  }
+}
