@@ -44,6 +44,7 @@ export type Unit = {
   commandHeldSubjects?: Partial<Record<"container" | "circuit" | "wreck", true>>;
   /** Enemy PR1: model / durability / hidden false-board circuits (enemies only; optional for old checkpoints). */ enemyIdentity?: EnemyIdentity; enemyState?: import("./enemyBehavior").EnemyState;
   /** Wide map: cell this enemy holds. Set on the first tick from where it stands. Optional on old checkpoints. */ homeCell?: { sx: number; sy: number };
+  /** Wide map: mine cell this enemy was placed on. Never retargeted. Optional on old checkpoints. */ placedCell?: { sx: number; sy: number };
   inCover: boolean; coverEscapeT?: number; coverId?: string | null; quirk: WingmanQuirk | null; hitWarnT: number; engageWarnT: number;
   /** Player-issued individual stance; optional for old checkpoints, cleared by the next order or completed recovery. */ individualOrder?: boolean;
   /** C20-b: holding in place after an order it could not follow ("stop"); cleared by the next order. */ holdOrder?: boolean; /** C20-b: seconds left of the 「？」 above the wingman. */ questionT?: number;
@@ -102,5 +103,11 @@ export type World = { barricades?: import("./barricades").BarricadeState; shield
   commandRings?: import("./platoonCommand").CommandRing[];
   /** Wide sortie: seed and opened/flagged cells used to lay out enemies. Not a hub save key. */
   wideLayout?: import("./wideField").WideLayout;
+  /** Live copy of the front, including cells secured this sortie. Written through to the hub when a save exists. */
+  boardProgress?: import("@estg/shared").InvadeFrontProgress | null;
+  /** Cells secured during this sortie. Their fog stays until the next sortie (decision 30). */
+  securedThisSortie?: { sx: number; sy: number }[];
+  /** Mine cells of this board, "sx,sy". Rebuilt from the layout if a checkpoint dropped the set. */
+  mineKeys?: Set<string>;
 };
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };

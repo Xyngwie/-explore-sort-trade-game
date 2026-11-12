@@ -133,7 +133,9 @@ const battery = { capacity: 300, activity: 200 };
 // (3) row fields: kind / pos normalize; a wreck is always destroyed at 0.
 {
   const w = normalizeLostMechExtras({ kind: "wreck", pos: { x: 512.34, y: "300" }, durability: 55, status: "operational" });
-  assert.deepEqual(w, { kind: "wreck", pos: { x: 512.3, y: 300 }, durability: 0, status: "destroyed" });
+  assert.deepEqual(w, { kind: "wreck", pos: { x: -187.7, y: -200, wide: true }, durability: 0, status: "destroyed" });
+  const again = normalizeLostMechExtras({ kind: "wreck", pos: w.pos, durability: 0, status: "destroyed" });
+  assert.deepEqual(again.pos, w.pos, "a marked position is not shifted a second time");
   assert.deepEqual(normalizeLostMechExtras({ kind: "left_behind" }), { kind: "left_behind" });
   assert.deepEqual(normalizeLostMechExtras({ kind: "ghost", pos: { x: NaN, y: 1 } }), {}, "bad kind / pos dropped");
   assert.equal(normalizeExplorePos({ x: 1e9, y: 0 }), null);
@@ -161,14 +163,14 @@ const battery = { capacity: 300, activity: 200 };
   }, "https://estg.invalid/trade/");
   const payload = parseExploreToHubWearSearch(new URL(url).search)!;
   assert.equal(payload.lostMechs![0]!.kind, "wreck");
-  assert.deepEqual(payload.lostMechs![0]!.pos, { x: 640, y: 420 });
+  assert.deepEqual(payload.lostMechs![0]!.pos, { x: -60, y: -80, wide: true });
   const r = applyExploreReturnToHub(h0, payload);
   assert.equal(r.applied, true);
   const h = normalizeHubSnapshot(r.hub);
   assert.equal(h.fleet.some((m) => m.instanceId === "m2"), false, "W1 A: out of the hangar list");
   const row = h.lostMechs.find((m) => m.instanceId === "m2")!;
   assert.equal(row.kind, "wreck");
-  assert.deepEqual(row.pos, { x: 640, y: 420 });
+  assert.deepEqual(row.pos, { x: -60, y: -80, wide: true });
   assert.equal(row.frontSeed, 4242);
   assert.deepEqual(row.cell, { sx: 2, sy: -1 });
   assert.equal(row.durability, 0);

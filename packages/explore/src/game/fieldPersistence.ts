@@ -66,7 +66,7 @@ export function fieldCellReport(world: World): FieldCellReport | undefined {
     if (!instanceId && !unit?.enemyIdentity && !legacyAir) return;
     const wreckKey=job?.wreckKey ?? `field-wreck:${id}`;
     if (!Object.hasOwn(identities.wrecks,wreckKey)) identities=registerWreckIdentity(identities,wreckKey);
-    wrecks.push({targetId:instanceId ? `s:${instanceId}` : id,wreckKey,pos:{...point},sourceInstanceId:instanceId,
+    wrecks.push({targetId:instanceId ? `s:${instanceId}` : id,wreckKey,pos:{x:point.x,y:point.y,wide:true},sourceInstanceId:instanceId,
       seconds:job?.seconds ?? 0,...(job?.source.shieldMaxHp!==undefined?{shieldMaxHp:job.source.shieldMaxHp}:{}),...(legacyAir ? {legacyAir:true as const} : {}),circuits:structuredClone(job?.source.circuits ?? unit?.enemyIdentity?.circuits.map(c=>({circuitId:c.circuitId,side:c.side,effect:c.effect})) ?? []),
       ...(unit?.enemyIdentity && !instanceId ? {enemy:{name:unit.name,maxHp:unit.maxHp,radius:unit.radius,heading:unit.heading,identity:structuredClone(unit.enemyIdentity)}} : {})});
   };
@@ -77,7 +77,7 @@ export function fieldCellReport(world: World): FieldCellReport | undefined {
   if (!cached) for (const m of world.strandedMechs ?? []) if (m.wreck) add(`s:${m.instanceId}`,m.pos,m.instanceId);
   if (!cached) for (const a of world.circuitPlay?.airWrecks ?? []) if (!a.recovered && !world.enemies.some(e=>e.id===a.id)) add(`a:${a.id}`,a.pos,null,undefined,true);
   // Report only identity records referenced by this cell; counters are global.
-  const ground=structuredClone(world.shieldState?.ground ?? cached?.ground ?? {});
+  const ground=Object.fromEntries(Object.entries(world.shieldState?.ground ?? cached?.ground ?? {}).map(([key, point]) => [key, { x: point.x, y: point.y, wide: true as const }]));
   const barricades=structuredClone(world.barricades?.walls ?? cached?.barricades ?? {});
   const ownedShields=leftBehindShieldState(world);
   identities.wrecks=Object.fromEntries(wrecks.map(w=>[w.wreckKey,identities.wrecks[w.wreckKey]!]));

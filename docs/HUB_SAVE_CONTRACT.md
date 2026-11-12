@@ -163,7 +163,8 @@ type HubSaveV1 = {
 `HubSnapshot.frontProgress: InvadeFrontProgress | null` を**加算**（欠落時は `null`）。  
 読込時エイリアス: `invadeBoard` → `frontProgress`。版番号は **`v: 2` のまま**。
 
-各要素: `{ seed, aoiHalf?, opened[], flagged[], focus, hitMine?, updatedAt? }`。  
+各要素: `{ seed, aoiHalf?, opened[], flagged[], focus, hitMine?, enemyHere?, updatedAt? }`。  
+`enemyHere` は、セキュアなマスに生きている敵がいるときのマス座標だけ（段階 4、決定 31）。世界座標は持たない。空ならキーを付けない。  
 地雷レイアウトは `seed`（uint32）から invade 側 `rngFromSeed` で再生成し、開いたマス・旗・ルート焦点を載せる。  
 ヘルパ: `normalizeFrontProgress` / `setFrontProgressInHub` / `clearFrontProgressInHub`。  
 UI: invade 「盤を再生成」は確認のうえ進捗をクリアする。

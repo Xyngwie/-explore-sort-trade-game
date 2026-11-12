@@ -27,6 +27,7 @@ import {
   trackLearningCargoHeld,
 } from "./outcome";
 import { recoverStrandedAtLiftOff } from "./lostMechs";
+import { syncWideBoard } from "./boardWatch";
 import { recoverStrandedDropsAtLiftOff } from "./circuitDrops";
 import { maybeAutoRescue, noteLeaderDown, resolveForcedRescueTimeout } from "./rescue";
 import { recoverSortieWrecksAtLiftOff, sortieWreckUnits } from "./wrecks";
@@ -537,6 +538,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   leader.playerMoveTarget = input.clickMove ? { ...input.clickMove } : null;
   // 項目5-2: a downed captain does not fail the sortie. A total wipe rescues at once.
   // While a timeout is waiting on a circle, that circle resolves the sortie (5-2b).
+  syncWideBoard(world);
   if (!waitingBoarding && maybeAutoRescue(world)) return;
   const leaderDown = !leader.alive;
   if (leaderDown) noteLeaderDown(world);
@@ -645,6 +647,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   updateFacing(world, dt);
   updateSquadIntel(world);
   updateSquadMemory(world);
+  syncWideBoard(world);
   placeCarried(world);
   if (!world.leader.alive) noteLeaderDown(world);
   // A wipe during this tick rescues before a boarding circle can lift off (6A),

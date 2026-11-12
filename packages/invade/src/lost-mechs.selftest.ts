@@ -250,7 +250,7 @@ const load = (st: Storage) => normalizeHubSnapshot(loadHubSaveFromLocalStorage(s
   const h1 = load(st);
   const w = h1.lostMechs.find((m) => m.instanceId === "wreck-1")!;
   assert.equal(w.kind, "wreck");
-  assert.deepEqual(w.pos, { x: 640, y: 410 });
+  assert.deepEqual(w.pos, { x: -60, y: -90, wide: true });
   assert.deepEqual(w.cell, { sx: 2, sy: 1 });
   assert.equal(h1.circuits.find((c) => c.circuitId === "c_wreck")!.equippedTo, "wreck-1");
   // regenerate: the wreck and its circuit are gone; the left-behind mech moves

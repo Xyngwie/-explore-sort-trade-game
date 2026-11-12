@@ -21,10 +21,12 @@ import {
 } from "./balance";
 import { playableFieldRect, type FieldRect } from "./fieldBounds";
 import { revealOpenedBoardFog } from "./vision";
+import { syncWideBoard } from "./boardWatch";
 import {
   boardFromLayout,
   boardFromProgress,
   entryPointOf,
+  mineKeySet,
   hashUnit,
   wideSpots,
   type WideLayout,
@@ -110,6 +112,7 @@ function placeWideContents(
         capacity: 0,
       });
       enemy.homeCell = { sx: spot.sx, sy: spot.sy };
+      enemy.placedCell = { sx: spot.sx, sy: spot.sy };
       enemy.enemyIdentity = makeEnemyIdentity(enemy, rngFromHash(layout.seed, spot.sx, spot.sy, spot.index), neighborCount);
       enemies.push(enemy);
       enemyOrdinal += 1;
@@ -438,6 +441,19 @@ export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions)
     densityThreat: { ...threat },
     camera: cameraAtSpawn(spawn, rect),
     wideLayout: laid.layout,
+    boardProgress: {
+      seed: laid.layout.seed,
+      aoiHalf: 12,
+      opened: laid.layout.opened.map((c) => ({ sx: c.sx, sy: c.sy })),
+      flagged: laid.layout.flagged.map((c) => ({ sx: c.sx, sy: c.sy })),
+      focus: options?.frontProgress?.focus ?? null,
+      hitMine: options?.frontProgress?.hitMine === true,
+      ...(options?.frontProgress?.enemyHere && options.frontProgress.enemyHere.length > 0
+        ? { enemyHere: options.frontProgress.enemyHere.map((c) => ({ sx: c.sx, sy: c.sy })) }
+        : {}),
+    },
+    securedThisSortie: [],
+    mineKeys: mineKeySet(laid.board),
     combatHitsTaken: 0,
     commandUnlock: defaultCommandUnlockState(
       resolveCommandUnlockMode(),
@@ -556,7 +572,9 @@ export function startSortie(world: World): boolean {
   faceAtSortieStart(world);
   restoreFieldAtSortieStart(world);
   delete world.squadIntel;
+  world.securedThisSortie = [];
   revealOpenedBoardFog(world);
+  syncWideBoard(world);
   return true;
 }
 

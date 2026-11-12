@@ -4,7 +4,7 @@
  * always lay out the same spots.
  *
  * Mine cells (decision 13, 19): 2 enemies and 1 container, whether or not
- * the cell is open or flagged.
+ * the cell is flagged. An already-open mine (済 or ✕) gets neither (decision 33).
  * Known-safe cells: open, not a mine, not a wall. No enemies. A container
  * when wideHash(seed, sx, sy, 0) % 10 === 0 (about 1 cell in 10).
  * Unopened non-mines and false flags: nothing. Walls: nothing.
@@ -101,6 +101,16 @@ function spotInCell(seed: number, sx: number, sy: number, salt: number): { x: nu
   return { x, y };
 }
 
+export function mineKeySet(board: MsBoard): Set<string> {
+  const keys = new Set<string>();
+  for (const row of board.cells) {
+    for (const cell of row) {
+      if (cell.mine && !cell.blocked) keys.add(`${cell.sx},${cell.sy}`);
+    }
+  }
+  return keys;
+}
+
 export function cellsInOrder(board: MsBoard): MsCell[] {
   const out: MsCell[] = [];
   for (const row of board.cells) {
@@ -115,6 +125,7 @@ export function wideSpots(board: MsBoard, seed: number): WideSpot[] {
   const spots: WideSpot[] = [];
   for (const cell of cellsInOrder(board)) {
     if (isMineCell(cell)) {
+      if (cell.open) continue;
       for (let i = 0; i < MINE_ENEMY_COUNT; i++) {
         const pos = spotInCell(seed, cell.sx, cell.sy, 1 + i * 3);
         spots.push({ sx: cell.sx, sy: cell.sy, x: pos.x, y: pos.y, kind: "enemy", index: i });

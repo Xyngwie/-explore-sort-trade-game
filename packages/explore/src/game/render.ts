@@ -8,6 +8,7 @@ import { equippedShield, SHIELD_HALF_ARC } from "./shields";
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
 import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
+import { watchedCell } from "./boardWatch";
 import { fieldRectOf } from "./fieldBounds";
 import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { layoutLabels } from "./labelLayout";
@@ -600,9 +601,9 @@ function drawOverheadLine(ctx: CanvasRenderingContext2D, cssW: number, text: str
   return y;
 }
 
-/** Enemy PR1: an enemy the squad can see (same rule as drawing it). */
+/** Enemy PR1: an enemy the squad can see (same rule as drawing it). A living enemy inside a secure cell is seen even without a cone (decision 26, 31). */
 export function isEnemySeen(world: World, e: Unit): boolean {
   const vision = world.balance.visionRange;
   void vision;
-  return squadSees(world, e.pos); // PR2: cones + line of sight, shared by the squad
+  return squadSees(world, e.pos) || watchedCell(world, e) != null;
 }
