@@ -28,11 +28,17 @@ import {
 } from "@estg/shared";
 import { createWorld, bootstrapFromSearch, startSortie } from "./game/world";
 import { tickWorld, updateBullets, type PlayerInput } from "./game/sim";
-import { attachCircuitPlay } from "./game/circuitPlay";
+import { attachCircuitPlay, placeCarried } from "./game/circuitPlay";
 import { isCommandUnlockedFor } from "./game/commandUnlock";
 import { executeExploreCommand } from "./game/commands";
+import { BALANCE } from "./game/balance";
+import { COLORS } from "./game/mapShapes";
+import { renderWorld } from "./game/render";
+import { snapshotSortieWorld, worldFromCheckpointBody } from "./game/checkpoint";
 import {
   COMMAND_DECISION_SEC,
+  COMMAND_RING_SEC,
+  activeCommandRings,
   captainIsPlatoonLeader,
   chooseCommandStance,
   commandExpectation,
@@ -40,9 +46,10 @@ import {
   isPlatoonLeaderUnit,
   tickPlatoonCommand,
 } from "./game/platoonCommand";
-import { applyMechLearningHubSide } from "./game/outcome";
+import { applyMechLearningHubSide, ensureMechLearningWorld } from "./game/outcome";
 import { getCoverObjects } from "./game/coverObjects";
-import type { Bullet, World } from "./game/types";
+import type { Bullet, Unit, World } from "./game/types";
+import type { MechCommandStance } from "@estg/shared";
 
 // --- the key (K2・G1・G2・G3) ---------------------------------------------------------------
 assert.equal(TRUE_BOARD_EFFECT_KEYS.at(-1), "platoon_leader", "appended at the end of the true-board keys");
@@ -239,7 +246,7 @@ const triesOf = (w: World, stance: string) => cmd(w).find((c) => c.stance === st
   assert.equal(captainIsPlatoonLeader(old), false, "old checkpoint → not a 小隊長");
 }
 {
-  // A wingman with the circuit is designated, but issues nothing (split undecided).
+  // A wingman 小隊長 with nobody outside the captain's 7500 still issues nothing.
   const w = sortie([]);
   w.circuitPlay!.platoonLeader = { "wing-a": true };
   assert.equal(isPlatoonLeaderUnit(w, w.wingmen[0]!), true);
@@ -254,6 +261,510 @@ const triesOf = (w: World, stance: string) => cmd(w).find((c) => c.stance === st
   w.circuitPlay!.captainTrueOne = true;
   for (let i = 0; i < 20; i++) tickWorld(w, 0.05, { ...idle, move: { x: 1, y: 0 } });
   assert.ok((w.leader.learningDecisionCount ?? 0) >= 1, "the autonomous captain decides even while keys are held");
+}
+
+// --- 2026-11-12 range, split, undelivered ------------------------------------
+assert.equal(BALANCE.commandRangeCaptain, 7500);
+assert.equal(BALANCE.commandRangePlatoonLeader, 1500);
+assert.equal(COMMAND_RING_SEC, 2);
+
+function shrink(w: World, captain = 100, platoon = 80): void {
+  w.balance = { ...w.balance, commandRangeCaptain: captain, commandRangePlatoonLeader: platoon };
+}
+function cellTries(w: World, id: string, stance: string): number {
+  return (w.mechCommandWork?.[id] ?? []).find((c) => c.stance === stance && c.subject === "none")?.tries ?? 0;
+}
+function pendingFor(w: World, wingId: string) {
+  return (w.commandPending ?? []).filter((p) => p.wingId === wingId);
+}
+/** Leave every stance but `open` already tried, so the next choice is `open`. */
+function openStance(open: MechCommandStance): MechCommandCell[] {
+  return (["escort", "patrol", "raid"] as const)
+    .filter((s) => s !== open)
+    .map((s) => ({ ledger: "command" as const, stance: s, subject: "none" as const, tries: 1, died: 1 }));
+}
+function addWing(w: World, id: string, instanceId: string, pos: { x: number; y: number }): Unit {
+  const src = w.wingmen[0]!;
+  const u: Unit = {
+    ...src,
+    id,
+    instanceId,
+    name: id,
+    pos: { ...pos },
+    vel: { x: 0, y: 0 },
+    waypoint: null,
+    moveTarget: null,
+    playerMoveTarget: null,
+    commandOrder: undefined,
+    commandIssuerId: undefined,
+    commandIssuedAt: undefined,
+    commandDecisionCount: undefined,
+    commandHeldSubjects: undefined,
+    alive: true,
+    hp: src.maxHp,
+    stance: "escort",
+    individualOrder: false,
+    holdOrder: false,
+  };
+  w.wingmen.push(u);
+  return u;
+}
+function put(w: World, near: boolean): { near: Unit; far: Unit } {
+  const a = w.wingmen[0]!;
+  const b = w.wingmen[1]!;
+  a.pos = { x: w.leader.pos.x + (near ? 40 : 400), y: w.leader.pos.y };
+  b.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+  a.stance = "escort";
+  b.stance = "escort";
+  delete a.commandOrder;
+  delete b.commandOrder;
+  delete a.commandIssuerId;
+  delete b.commandIssuerId;
+  return { near: a, far: b };
+}
+
+{
+  // In range arrives now. Out of range keeps the last order, and tries waits for delivery.
+  // Facing away does not matter: range is distance only.
+  const w = sortie([PL]);
+  shrink(w);
+  w.leader.heading = Math.PI;
+  const { near, far } = put(w, true);
+  far.stance = "patrol";
+  tickPlatoonCommand(w);
+  assert.equal(near.commandOrder, "escort");
+  assert.equal(near.stance, "escort");
+  assert.equal(near.commandIssuerId, "cap");
+  assert.equal(far.commandOrder, undefined, "outside: last mission unchanged");
+  assert.equal(far.stance, "patrol", "outside: keeps moving on the last order");
+  assert.equal(cellTries(w, "cap", "escort"), 1, "tries counts the one who received it");
+  assert.equal(pendingFor(w, far.id)[0]?.stance, "escort");
+  const at = w.commandDecisionAt!;
+  tickPlatoonCommand(w);
+  assert.equal(cellTries(w, "cap", "escort"), 1, "still outside: tries does not grow");
+  assert.equal(w.commandDecisionAt, at);
+  far.pos = { x: w.leader.pos.x + 40, y: w.leader.pos.y };
+  tickPlatoonCommand(w);
+  assert.equal(far.commandOrder, "escort");
+  assert.equal(far.stance, "escort");
+  assert.equal(far.commandIssuerId, "cap");
+  assert.equal(cellTries(w, "cap", "escort"), 2, "tries grows when it arrives");
+  assert.equal(pendingFor(w, far.id).length, 0);
+  // Exactly on the radius is inside. One world-unit past it is outside.
+  const edge = sortie([PL]);
+  shrink(edge, 100, 80);
+  edge.wingmen[0]!.pos = { x: edge.leader.pos.x + 100, y: edge.leader.pos.y };
+  edge.wingmen[1]!.pos = { x: edge.leader.pos.x + 101, y: edge.leader.pos.y };
+  tickPlatoonCommand(edge);
+  assert.equal(edge.wingmen[0]!.commandOrder, "escort", "distance == radius is inside");
+  assert.equal(edge.wingmen[1]!.commandOrder, undefined, "distance == radius + 1 is outside");
+}
+{
+  // The player's order uses the same range and the same undelivered hold, and restarts the 20 s.
+  const w = sortie([PL]);
+  shrink(w);
+  const { near, far } = put(w, true);
+  w.commandDecisionAt = w.elapsed - COMMAND_DECISION_SEC;
+  const before = w.elapsed;
+  executeExploreCommand(w, { id: "wing_raid" });
+  assert.equal(near.commandOrder, "raid");
+  assert.equal(near.stance, "raid");
+  assert.equal(far.stance, "escort", "outside keeps the previous stance");
+  assert.equal(cellTries(w, "cap", "raid"), 1);
+  assert.equal(pendingFor(w, far.id)[0]?.stance, "raid");
+  assert.equal(w.commandDecisionAt, before, "the player's order restarts the 20 s");
+  tickPlatoonCommand(w);
+  assert.equal(cellTries(w, "cap", "raid"), 1, "E1 does not fire again in the restarted window");
+  assert.equal(w.commandDecisionAt, before);
+  far.pos = { x: w.leader.pos.x + 10, y: w.leader.pos.y };
+  tickPlatoonCommand(w);
+  assert.equal(far.commandOrder, "raid");
+  assert.equal(cellTries(w, "cap", "raid"), 2);
+}
+{
+  // ★9 ★A: a newer undelivered order from the same issuer replaces the older one.
+  const w = sortie([PL]);
+  shrink(w);
+  const far = w.wingmen[1]!;
+  far.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+  w.wingmen[0]!.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y + 10 };
+  tickPlatoonCommand(w);
+  assert.equal(pendingFor(w, far.id)[0]?.stance, "escort");
+  assert.equal(cellTries(w, "cap", "escort"), 0);
+  executeExploreCommand(w, { id: "wing_raid" });
+  assert.equal(pendingFor(w, far.id).length, 1);
+  assert.equal(pendingFor(w, far.id)[0]?.stance, "raid");
+  far.pos = { x: w.leader.pos.x + 10, y: w.leader.pos.y };
+  w.wingmen[0]!.pos = { x: w.leader.pos.x + 10, y: w.leader.pos.y };
+  tickPlatoonCommand(w);
+  assert.equal(far.commandOrder, "raid", "the newer undelivered order is the one that arrives");
+  assert.equal(cellTries(w, "cap", "escort"), 0);
+  assert.equal(cellTries(w, "cap", "raid"), 2);
+}
+{
+  // A captain without the circuit still reaches at 7500 (here, the shrunk copy). Cells do not grow.
+  const w = sortie([], false);
+  w.circuitPlay!.release = false;
+  w.commandUnlock = { mode: "all_unlocked", equippedByUnit: {} };
+  shrink(w);
+  const { near, far } = put(w, true);
+  for (const id of ["wing_escort", "wing_patrol", "wing_raid"] as const) {
+    delete near.commandOrder;
+    delete far.commandOrder;
+    far.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+    far.stance = "escort";
+    w.commandPending = [];
+    executeExploreCommand(w, { id });
+    assert.equal(near.stance, id === "wing_escort" ? "escort" : id === "wing_patrol" ? "patrol" : "raid", id);
+    assert.equal(far.stance, "escort", `${id} does not reach outside`);
+    assert.equal(pendingFor(w, far.id).length, 1, id);
+  }
+  w.containers.push({ id: "box", pos: { x: 330, y: 300 }, taken: false, discovered: true, glowT: 0 });
+  far.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+  executeExploreCommand(w, { id: "wing_recover" });
+  assert.equal(near.stance, "recover");
+  assert.equal(far.stance, "escort");
+  assert.equal(Object.values(w.mechCommandWork ?? {}).flat().length, 0, "no 小隊長 circuit: no command cells");
+  far.pos = { x: w.leader.pos.x + 10, y: w.leader.pos.y };
+  tickPlatoonCommand(w);
+  assert.equal(far.stance, "recover", "the held recover arrives with no cell");
+  assert.equal(Object.values(w.mechCommandWork ?? {}).flat().length, 0);
+}
+{
+  // Wingman 小隊長: only living wingmen outside the captain and inside its own circle.
+  // It chooses from its own cells, never orders itself, and repeats on its own 20 s.
+  const w = sortie([PL]);
+  shrink(w, 100, 80);
+  w.leader.pos = { x: 300, y: 300 };
+  const pl = w.wingmen[0]!;
+  const target = w.wingmen[1]!;
+  pl.pos = { x: 300, y: 500 };
+  target.pos = { x: 300, y: 540 };
+  w.circuitPlay!.platoonLeader = { ...(w.circuitPlay!.platoonLeader ?? {}), [pl.id]: true };
+  w.mechCommandWork = { cap: [], wa: openStance("raid") };
+  const inside = addWing(w, "wing-c", "wc", { x: 340, y: 300 });
+  tickPlatoonCommand(w);
+  assert.equal(target.commandOrder, "raid", "outside the captain and inside the 小隊長");
+  assert.equal(target.commandIssuerId, "wa");
+  assert.equal(target.stance, "raid");
+  assert.equal(cellTries(w, "wa", "raid"), 1, "counted on the issuer, once");
+  assert.equal(pl.commandOrder, undefined, "a 小隊長 does not order itself");
+  assert.equal(pl.stance, "escort");
+  assert.equal(inside.commandIssuerId, "cap", "inside the captain's circle stays with the captain");
+  assert.notEqual(inside.commandIssuerId, "wa");
+  assert.equal(cellTries(w, "cap", "escort"), 1, "the captain reached only the one inside");
+  assert.equal(pl.commandIssuedAt, w.elapsed);
+  const issuedAt = pl.commandIssuedAt;
+  tickPlatoonCommand(w);
+  assert.equal(cellTries(w, "wa", "raid"), 1, "not again before 20 s");
+  w.elapsed += COMMAND_DECISION_SEC - 1;
+  tickPlatoonCommand(w);
+  assert.equal(cellTries(w, "wa", "raid"), 1);
+  assert.equal(pl.commandIssuedAt, issuedAt);
+  w.elapsed += 1;
+  tickPlatoonCommand(w);
+  assert.equal(target.commandOrder, "raid", "20 s later it issues again from its own cells");
+  assert.equal(cellTries(w, "wa", "raid"), 2);
+  assert.equal(pl.commandOrder, undefined, "the later issue is still not aimed at itself");
+  assert.equal(pl.commandIssuedAt, w.elapsed, "its own issue restarts its own 20 s");
+}
+{
+  // ★8 ★A: the captain issuing does not restart a wingman 小隊長's 20 s.
+  const w = sortie([PL]);
+  shrink(w, 100, 80);
+  const pl = w.wingmen[0]!;
+  const target = w.wingmen[1]!;
+  pl.pos = { x: 300, y: 500 };
+  target.pos = { x: 300, y: 540 };
+  w.leader.pos = { x: 300, y: 300 };
+  w.circuitPlay!.platoonLeader = { ...(w.circuitPlay!.platoonLeader ?? {}), [pl.id]: true };
+  w.mechCommandWork = { cap: [], wa: openStance("raid") };
+  tickPlatoonCommand(w);
+  assert.equal(pl.commandIssuedAt, w.elapsed);
+  w.elapsed += 10;
+  executeExploreCommand(w, { id: "wing_patrol" });
+  assert.equal(pl.commandIssuedAt, w.elapsed - 10, "the captain's order does not restart the 小隊長");
+  w.elapsed += 10;
+  tickPlatoonCommand(w);
+  assert.equal(pl.commandIssuedAt, w.elapsed, "20 s from its own issue, it issues again");
+}
+{
+  // B3: with no captain order due, the nearer 小隊長 wins. Equal distance → earlier in wingmen.
+  const w = sortie([]);
+  shrink(w, 30, 100);
+  w.leader.pos = { x: 100, y: 100 };
+  const a = w.wingmen[0]!;
+  const b = w.wingmen[1]!;
+  const target = addWing(w, "wing-c", "wc", { x: 500, y: 500 });
+  a.pos = { x: 500, y: 440 };
+  b.pos = { x: 500, y: 580 };
+  w.circuitPlay!.platoonLeader = { [a.id]: true, [b.id]: true };
+  w.mechCommandWork = { wa: openStance("raid"), wb: openStance("patrol") };
+  tickPlatoonCommand(w);
+  assert.equal(target.commandOrder, "raid");
+  assert.equal(target.commandIssuerId, "wa", "the nearer 小隊長 wins");
+  assert.equal(cellTries(w, "wa", "raid"), 1);
+  assert.equal(cellTries(w, "wb", "patrol"), 0, "the loser did not reach, so tries stays");
+  // The later one is nearer.
+  const w2 = sortie([]);
+  shrink(w2, 30, 100);
+  w2.leader.pos = { x: 100, y: 100 };
+  const a2 = w2.wingmen[0]!;
+  const b2 = w2.wingmen[1]!;
+  const t2 = addWing(w2, "wing-c", "wc", { x: 500, y: 500 });
+  a2.pos = { x: 500, y: 420 };
+  b2.pos = { x: 500, y: 560 };
+  w2.circuitPlay!.platoonLeader = { [a2.id]: true, [b2.id]: true };
+  w2.mechCommandWork = { wa: openStance("raid"), wb: openStance("patrol") };
+  tickPlatoonCommand(w2);
+  assert.equal(t2.commandIssuerId, "wb", "nearer wins even when it is later in the array");
+  // Equal distance: the earlier wingman.
+  const w3 = sortie([]);
+  shrink(w3, 30, 150);
+  w3.leader.pos = { x: 100, y: 100 };
+  const a3 = w3.wingmen[0]!;
+  const b3 = w3.wingmen[1]!;
+  const t3 = addWing(w3, "wing-c", "wc", { x: 500, y: 500 });
+  a3.pos = { x: 500, y: 400 };
+  b3.pos = { x: 500, y: 600 };
+  w3.circuitPlay!.platoonLeader = { [a3.id]: true, [b3.id]: true };
+  w3.mechCommandWork = { wa: openStance("raid"), wb: openStance("patrol") };
+  tickPlatoonCommand(w3);
+  assert.equal(t3.commandIssuerId, "wa", "equal distance: earlier in wingmen");
+  assert.equal(t3.commandOrder, "raid");
+}
+{
+  // B3: once the captain's held order arrives, it replaces the 小隊長's order.
+  const w = sortie([PL]);
+  shrink(w, 100, 80);
+  w.leader.pos = { x: 300, y: 300 };
+  const pl = w.wingmen[0]!;
+  const target = w.wingmen[1]!;
+  pl.pos = { x: 300, y: 500 };
+  target.pos = { x: 300, y: 540 };
+  w.circuitPlay!.platoonLeader = { ...(w.circuitPlay!.platoonLeader ?? {}), [pl.id]: true };
+  w.mechCommandWork = { cap: [], wa: openStance("raid") };
+  tickPlatoonCommand(w);
+  assert.equal(target.commandIssuerId, "wa");
+  assert.equal(target.commandOrder, "raid");
+  assert.equal(cellTries(w, "cap", "escort"), 0, "the captain's order has not arrived");
+  target.pos = { x: 300, y: 360 };
+  tickPlatoonCommand(w);
+  assert.equal(target.commandOrder, "escort");
+  assert.equal(target.commandIssuerId, "cap", "the captain wins when the order arrives");
+  assert.equal(cellTries(w, "cap", "escort"), 1);
+}
+{
+  // tries, a kill, and settlement belong to the 小隊長 who issued the mission.
+  const w = sortie([PL]);
+  shrink(w, 100, 80);
+  w.leader.pos = { x: 300, y: 300 };
+  const pl = w.wingmen[0]!;
+  const shooter = w.wingmen[1]!;
+  pl.pos = { x: 300, y: 500 };
+  shooter.pos = { x: 300, y: 540 };
+  w.circuitPlay!.platoonLeader = { ...(w.circuitPlay!.platoonLeader ?? {}), [pl.id]: true };
+  w.mechCommandWork = { cap: [], wa: openStance("raid") };
+  w.commandDecisionAt = w.elapsed;
+  tickPlatoonCommand(w);
+  assert.equal(shooter.commandOrder, "raid");
+  assert.equal(cellTries(w, "wa", "raid"), 1);
+  assert.equal(cellTries(w, "cap", "raid"), 0);
+  const foe = w.enemies[0]!;
+  foe.pos = { x: shooter.pos.x + 40, y: shooter.pos.y };
+  foe.hp = 1;
+  foe.alive = true;
+  w.bullets = [{ alive: true, pos: { x: shooter.pos.x + 20, y: shooter.pos.y }, vel: { x: 400, y: 0 }, ttl: 1, damage: 50, fromEnemy: false, ownerId: shooter.id }];
+  updateBullets(w, 0.1);
+  assert.equal(foe.alive, false);
+  assert.equal((w.mechCommandWork!.wa ?? []).find((c) => c.stance === "raid" && c.subject === "normal")?.kills, 1);
+  assert.equal((w.mechCommandWork!.cap ?? []).find((c) => c.subject === "normal")?.kills ?? 0, 0);
+  w.extracted = true;
+  finalizeCommandSortie(w);
+  assert.equal((w.mechCommandWork!.wa ?? []).find((c) => c.stance === "raid" && c.subject === "none")?.survived, 1);
+  assert.equal((w.mechCommandWork!.cap ?? []).some((c) => (c.survived ?? 0) > 0), false);
+}
+{
+  // ★7 ★A: a wrecked wingman 小隊長 issues nothing and draws no ring.
+  const w = sortie([]);
+  shrink(w, 30, 80);
+  w.leader.pos = { x: 100, y: 100 };
+  const pl = w.wingmen[0]!;
+  const target = w.wingmen[1]!;
+  pl.pos = { x: 500, y: 500 };
+  target.pos = { x: 500, y: 540 };
+  pl.alive = false;
+  pl.hp = 0;
+  w.circuitPlay!.platoonLeader = { [pl.id]: true };
+  w.mechCommandWork = { wa: [] };
+  tickPlatoonCommand(w);
+  assert.equal(target.commandOrder, undefined);
+  assert.equal(cellTries(w, "wa", "escort"), 0);
+  assert.equal(activeCommandRings(w).some((r) => r.issuerUnitId === pl.id), false);
+}
+{
+  // T5 暫定: a carried wrecked captain is ranged from leader.pos after placeCarried.
+  const missed = sortie([PL]);
+  shrink(missed, 100, 40);
+  missed.leader.alive = false;
+  missed.leader.hp = 0;
+  missed.leader.pos = { x: 200, y: 300 };
+  const carrier = missed.wingmen[0]!;
+  const target = missed.wingmen[1]!;
+  carrier.pos = { x: 800, y: 300 };
+  target.pos = { x: 860, y: 300 };
+  missed.circuitPlay!.carry[carrier.id] = [missed.leader.id];
+  tickPlatoonCommand(missed);
+  assert.equal(target.commandOrder, undefined, "before placeCarried the wreck is still at the old point");
+  assert.equal(cellTries(missed, "cap", "escort"), 0);
+  const carried = sortie([PL]);
+  shrink(carried, 100, 40);
+  carried.leader.alive = false;
+  carried.leader.hp = 0;
+  carried.leader.pos = { x: 200, y: 300 };
+  const carrier2 = carried.wingmen[0]!;
+  const target2 = carried.wingmen[1]!;
+  carrier2.pos = { x: 800, y: 300 };
+  target2.pos = { x: 860, y: 300 };
+  carried.circuitPlay!.carry[carrier2.id] = [carried.leader.id];
+  placeCarried(carried);
+  assert.equal(carried.leader.pos.x, 800);
+  tickPlatoonCommand(carried);
+  assert.equal(target2.commandOrder, "escort");
+  assert.equal(target2.commandIssuerId, "cap");
+  assert.ok(cellTries(carried, "cap", "escort") >= 1);
+  const ring = activeCommandRings(carried).find((r) => r.issuerUnitId === carried.leader.id);
+  assert.ok(ring);
+  assert.equal(ring!.x, carried.leader.pos.x);
+  assert.equal(ring!.y, carried.leader.pos.y);
+  assert.equal(ring!.radius, 100);
+}
+{
+  // The ring exists only after a transmission, for 2 s, and a repeat restarts that issuer's clock.
+  const w = sortie([PL]);
+  shrink(w, 100, 40);
+  assert.equal(activeCommandRings(w).length, 0, "nothing issued yet");
+  executeExploreCommand(w, { id: "wing_escort" });
+  const rings = activeCommandRings(w);
+  assert.equal(rings.length, 1);
+  assert.equal(rings[0]!.issuerUnitId, w.leader.id);
+  assert.equal(rings[0]!.x, w.leader.pos.x);
+  assert.equal(rings[0]!.radius, 100);
+  assert.equal(rings[0]!.until, w.elapsed + COMMAND_RING_SEC);
+  const firstUntil = rings[0]!.until;
+  w.elapsed += 0.5;
+  executeExploreCommand(w, { id: "wing_patrol" });
+  assert.equal(activeCommandRings(w).length, 1, "the same issuer replaces its ring");
+  assert.equal(activeCommandRings(w)[0]!.until, w.elapsed + COMMAND_RING_SEC);
+  assert.ok(activeCommandRings(w)[0]!.until > firstUntil);
+  w.elapsed += COMMAND_RING_SEC;
+  assert.equal(activeCommandRings(w).length, 0);
+  // renderWorld strokes that ring at a constant 2px in COLORS.wingman, and not before.
+  const blank = recordingCtx();
+  renderWorld(blank.ctx, w, 720, 420);
+  assert.equal(blank.fullCircles(COLORS.wingman, 2).length, 0);
+  w.elapsed = rings[0]!.until - 1;
+  executeExploreCommand(w, { id: "wing_escort" });
+  const drawn = recordingCtx();
+  renderWorld(drawn.ctx, w, 720, 420);
+  const circles = drawn.fullCircles(COLORS.wingman, 2);
+  assert.equal(circles.length, 1);
+  assert.equal(circles[0]!.r, 100 * (720 / w.camera.w));
+  assert.equal(drawn.ringFilled(), false, "the range ring is a stroke, not a fill");
+}
+{
+  // A sortie checkpoint keeps the undelivered order and the last issuer.
+  const w = sortie([PL]);
+  shrink(w, 100, 40);
+  const near = w.wingmen[0]!;
+  const far = w.wingmen[1]!;
+  near.pos = { x: w.leader.pos.x + 20, y: w.leader.pos.y };
+  far.pos = { x: w.leader.pos.x + 400, y: w.leader.pos.y };
+  tickPlatoonCommand(w);
+  assert.equal(near.commandIssuerId, "cap");
+  assert.equal(pendingFor(w, far.id).length, 1);
+  const restored = worldFromCheckpointBody(JSON.parse(JSON.stringify(snapshotSortieWorld(w))))!;
+  assert.equal(restored.wingmen[0]!.commandIssuerId, "cap");
+  assert.equal(restored.wingmen[1]!.commandOrder, undefined);
+  assert.equal(restored.commandPending?.length, 1);
+  assert.equal(restored.commandPending![0]!.stance, "escort");
+  assert.equal(restored.commandPending![0]!.wingId, far.id);
+  restored.wingmen[1]!.pos = { x: restored.leader.pos.x + 10, y: restored.leader.pos.y };
+  const tries = cellTries(restored, "cap", "escort");
+  tickPlatoonCommand(restored);
+  assert.equal(restored.wingmen[1]!.commandOrder, "escort");
+  assert.equal(restored.wingmen[1]!.commandIssuerId, "cap");
+  assert.equal(cellTries(restored, "cap", "escort"), tries + 1);
+}
+{
+  // A wingman 小隊長's command cells load from that instanceId. No new top-level save key.
+  const w = sortie([]);
+  w.mechLearningReady = false;
+  w.circuitPlay!.platoonLeader = { "wing-a": true };
+  w.mechCommandWork = { wa: [{ ledger: "command", stance: "raid", subject: "none", tries: 4 }] };
+  ensureMechLearningWorld(w);
+  assert.equal(w.mechCommandWork!.wa![0]!.tries, 4, "the wingman 小隊長's cells are kept when the hub has none");
+  assert.equal(w.mechCommandWork!.cap, undefined, "a captain who is not a 小隊長 is not given a command slot here");
+  const hub = applyMechLearningHubSide(w, normalizeHubSnapshot(createNewGameHub()));
+  assert.equal("commandPending" in hub, false);
+  assert.equal("commandRings" in hub, false);
+}
+{
+  // The shallow copy did not rewrite the shared radii.
+  assert.equal(BALANCE.commandRangeCaptain, 7500);
+  assert.equal(BALANCE.commandRangePlatoonLeader, 1500);
+}
+
+function recordingCtx(): { ctx: CanvasRenderingContext2D; fullCircles: (style: string, lw: number) => { r: number }[]; ringFilled: () => boolean } {
+  let strokeStyle = "";
+  let lineWidth = 1;
+  const stack: { strokeStyle: string; lineWidth: number }[] = [];
+  let pending: { r: number; a0: number; a1: number } | null = null;
+  let ringWasFilled = false;
+  const arcs: { r: number; a0: number; a1: number; style: string; lw: number }[] = [];
+  const ctx = new Proxy({} as CanvasRenderingContext2D, {
+    get(_t, prop) {
+      if (prop === "canvas") return { clientWidth: 720, width: 720, height: 420 };
+      if (prop === "strokeStyle") return strokeStyle;
+      if (prop === "lineWidth") return lineWidth;
+      if (prop === "save") return () => { stack.push({ strokeStyle, lineWidth }); };
+      if (prop === "restore") {
+        return () => {
+          const prev = stack.pop();
+          if (prev) { strokeStyle = prev.strokeStyle; lineWidth = prev.lineWidth; }
+        };
+      }
+      if (prop === "beginPath") return () => { pending = null; };
+      if (prop === "arc") {
+        return (_x: number, _y: number, r: number, a0: number, a1: number) => {
+          pending = { r, a0, a1 };
+        };
+      }
+      if (prop === "stroke") {
+        return () => {
+          if (pending) arcs.push({ ...pending, style: strokeStyle, lw: lineWidth });
+          pending = null;
+        };
+      }
+      if (prop === "fill") {
+        return () => {
+          if (pending && pending.a0 === 0 && pending.a1 === Math.PI * 2 && strokeStyle === COLORS.wingman && lineWidth === 2) ringWasFilled = true;
+        };
+      }
+      if (prop === "measureText") return () => ({ width: 10 });
+      return () => {};
+    },
+    set(_t, prop, value) {
+      if (prop === "strokeStyle") strokeStyle = String(value);
+      if (prop === "lineWidth") lineWidth = Number(value);
+      return true;
+    },
+  });
+  return {
+    ctx,
+    ringFilled: () => ringWasFilled,
+    fullCircles: (style, lw) => arcs.filter((a) => a.style === style && a.lw === lw && a.a0 === 0 && a.a1 === Math.PI * 2),
+  };
 }
 
 console.log("explore platoon command selftest: ok");

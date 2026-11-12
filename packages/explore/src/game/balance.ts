@@ -23,6 +23,14 @@ export const BALANCE = {
   wingmanSpeed: 115,
   enemySpeed: 70,
   visionRange: 220,
+  /**
+   * Order radius of the captain (中隊長), in the same world units as visionRange.
+   * A wingman 小隊長 uses commandRangePlatoonLeader. 神宮決定 2026-11-12.
+   * The current 1400×1000 map (diagonal ≈1720.5) sits inside 7500; both radii stay
+   * for a later map that joins explore and invade.
+   */
+  commandRangeCaptain: 7500,
+  commandRangePlatoonLeader: 1500,
   weaponRange: 160,
   engageRange: 180,
   interactRadius: 28,
