@@ -4,7 +4,7 @@
 - What: 出撃の結果を盤へ返す。置いた敵 2 体を両方倒した地雷をその瞬間に「済」にする。味方が入った地雷でないマスを開く。セキュアなマスの敵は出撃中に見え、大マップにはマス単位の印だけ。済と ✕ には敵とコンテナを置かない。古い 0…1400×0…1000 を一度だけ x−700・y−500 で読む。決定 26〜34。正本は [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md)
 - Why: 神宮の指示。段階 4。起点は main `5ca92868`（#372 マージ）
 - Scope: `packages/explore` の盤への書き戻し・霧・見張り、`packages/shared` の座標の印と `frontProgress.enemyHere`、`packages/invade` の「敵がいる」印、上記の文書とこの台帳。段階 5（結果画面の行、INVADE タブ）、命令の半径 7500 と 1500、報酬の二重払い、ミニマップは変えない
-- Status: 実装と selftest（shared・explore・sort・trade・invade・restore）、`npm run build:explore`。PR は作成後に番号を書く。Deploy Modules Preview は CI 待ち。スマートフォン実機 NOT_RUN。マージはしない
+- Status: 実装と selftest（shared・explore・sort・trade・invade・restore）、`npm run build:explore`。PR #373。Deploy Modules Preview は CI 待ち。スマートフォン実機 NOT_RUN。マージはしない
 
 ## 探索と侵略の一体化（段階 3）（2026-11-12）
 
