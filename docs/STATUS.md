@@ -3,7 +3,7 @@
 - What: 「小隊長の通信と分担」の Status、[AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md)、[MECH_WORLD_BUILDING_DESIGN.md](MECH_WORLD_BUILDING_DESIGN.md) §6、[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)、[HUB_SAVE_CONTRACT.md](HUB_SAVE_CONTRACT.md)。T2〜T5、B2〜B5、細部 1〜9 を ★A（神宮決定 2026-11-12）として記録し、#365 が draft で未マージだという文言を、マージとデプロイ成功の記録に直す
 - Why: 神宮の指示。コードは既に T2〜T5・B2〜B5・細部 1〜9 = ★A と一致している。文書だけが暫定と draft のまま残っていた
 - Scope: 文書の文言だけ。ゲームのコード、テスト、HTML、素材は変更しない。#365 より前の STATUS の古い draft 表記は直さない。7500 と 1500、通信妨害の対象外は変えない
-- Status: 文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN
+- Status: PR #366。文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN
 
 ## 小隊長の通信と分担（2026-11-12・神宮の TASK_ASSIGNMENT）
 
