@@ -79,7 +79,7 @@ export function sortieWreckRows(world: World): LostMechReturnState[] {
       battery: { ...battery },
       circuitIds: [...(world.circuitIdsByUnit[u.id] ?? [])],
       kind: "wreck",
-      pos: roundPos(u.pos),
+      pos: { ...roundPos(u.pos), wide: true },
       frontSeed: loc.frontSeed,
       cell: { sx: loc.cell.sx, sy: loc.cell.sy },
     });

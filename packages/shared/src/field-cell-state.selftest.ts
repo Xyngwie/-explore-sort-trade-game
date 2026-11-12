@@ -8,8 +8,8 @@ const location={frontSeed:812,cell:{sx:1,sy:2}};
 let identities=registerWreckIdentity(emptyFieldObjectIdentities(),'source');
 identities=shieldIdentityFromWreck(identities,'source','shield',{hp:23.5,maxHp:50});
 identities=registerWreckIdentity(identities,'enemy-w');
-const report:FieldCellReport={location,ground:{shield:{x:123.4,y:555.6}},wrecks:[{
- targetId:'enemy-field-test',wreckKey:'enemy-w',pos:{x:200,y:300},sourceInstanceId:null,seconds:3.25,shieldMaxHp:62.75,
+const report:FieldCellReport={location,ground:{shield:{x:123.4,y:555.6,wide:true}},wrecks:[{
+ targetId:'enemy-field-test',wreckKey:'enemy-w',pos:{x:200,y:300,wide:true},sourceInstanceId:null,seconds:3.25,shieldMaxHp:62.75,
  circuits:[{circuitId:'exact-c',side:3,effect:7}],enemy:{name:'敵',maxHp:100,radius:14,heading:2,identity:{modelId:'mech_gen1',durability:100,circuits:[{circuitId:'exact-c',side:3,effect:7,effectKey:'smg',trueBoard:false}]}},
 }],identities};
 const hub=normalizeHubSnapshot({...INITIAL_HUB,frontProgress:{seed:812,aoiHalf:12,opened:[],flagged:[],focus:null}});

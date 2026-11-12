@@ -1,6 +1,7 @@
 import { normalizeNewGameIntro, type NewGameIntro } from "./onboarding";
 import { ownedShieldKeys, normalizeLostMechShields, type LostMechShieldMap } from "./lost-mech-shields";
 import { clearFieldCells, normalizeFieldCells, type FieldCellState } from "./field-cell-state";
+import { migrateStoredExplorePos } from "./explore-pos";
 import { normalizeStrippingObservations, type WreckStrippingObservation } from "./wreck-stripping";
 import { normalizeFieldObjectIdentities, type FieldObjectIdentities } from "./field-object-identities";
 import { normalizeInvadeRank, type InvadeRankProgress } from "./invade-rank";
@@ -160,8 +161,8 @@ export type LostMechKind = "left_behind" | "wreck";
 
 export const LOST_MECH_KINDS: readonly LostMechKind[] = ["left_behind", "wreck"] as const;
 
-/** Explore world coordinates (where a wreck lies on its front cell). */
-export type ExplorePos = { x: number; y: number };
+/** Explore world coordinates (where a wreck lies on its front cell). `wide` marks a point already in HQ-centered coordinates (decision 34). */
+export type ExplorePos = { x: number; y: number; wide?: true };
 
 /** Upper bound for a saved Explore coordinate (worlds are ~1400×1000). */
 export const EXPLORE_POS_MAX = 100_000;
@@ -223,6 +224,11 @@ export type InvadeFrontProgress = {
    * Not re-derived from opened mine cells on restore.
    */
   hitMine?: boolean;
+  /**
+   * Secure cells that currently hold a living enemy (stage 4, decision 31).
+   * Cell coordinates only — not a world position. Omitted when empty.
+   */
+  enemyHere?: FrontCellCoord[];
   /** ISO timestamp of last write (optional). */
   updatedAt?: string;
 };
@@ -996,6 +1002,7 @@ export function normalizeFrontProgress(
   }
 
   const hitMine = obj.hitMine === true;
+  const enemyHere = normalizeFrontCoordList(obj.enemyHere);
 
   const out: InvadeFrontProgress = {
     seed,
@@ -1004,6 +1011,7 @@ export function normalizeFrontProgress(
     focus,
     hitMine,
   };
+  if (enemyHere.length > 0) out.enemyHere = enemyHere;
   if (aoiHalf != null) out.aoiHalf = aoiHalf;
   if (typeof obj.updatedAt === "string" && obj.updatedAt.trim()) {
     out.updatedAt = obj.updatedAt.trim().slice(0, 40);
@@ -1102,7 +1110,10 @@ export function normalizeLostMechExtras(
   return out;
 }
 
-/** Finite Explore coordinates within ±EXPLORE_POS_MAX (rounded to 0.1); null when unusable. */
+/**
+ * Finite Explore coordinates within ±EXPLORE_POS_MAX (rounded to 0.1); null when unusable.
+ * An unmarked point inside the old 0…1400×0…1000 map is shifted onto the HQ cell once (decision 34).
+ */
 export function normalizeExplorePos(raw: unknown): ExplorePos | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
@@ -1110,7 +1121,8 @@ export function normalizeExplorePos(raw: unknown): ExplorePos | null {
   const y = typeof o.y === "number" ? o.y : Number(o.y);
   if (o.x == null || o.y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   if (Math.abs(x) > EXPLORE_POS_MAX || Math.abs(y) > EXPLORE_POS_MAX) return null;
-  return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+  const rounded = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, wide: o.wide === true };
+  return migrateStoredExplorePos(rounded);
 }
 
 /**

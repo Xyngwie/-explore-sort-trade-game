@@ -3469,7 +3469,7 @@ import {
   const viaRows = exploreReturnPayload(via)!.lostMechs ?? [];
   assert.deepEqual(
     viaRows.map((r) => [r.instanceId, r.kind, r.pos, r.cell, r.circuitIds]),
-    [["m2", "wreck", { x: 512.3, y: 287.7 }, { sx: 2, sy: -1 }, ["c_down"]]],
+    [["m2", "wreck", { x: 512.3, y: 287.7, wide: true }, { sx: 2, sy: -1 }, ["c_down"]]],
   );
   const viaSave = saveSortieResultToHub(via, viaStore);
   assert.equal(viaSave.status, "saved");
@@ -3478,7 +3478,7 @@ import {
   const wreckRow = viaSaved.lostMechs.find((m) => m.instanceId === "m2")!;
   assert.deepEqual(
     [wreckRow.kind, wreckRow.pos, wreckRow.frontSeed, wreckRow.cell, wreckRow.durability, wreckRow.status],
-    ["wreck", { x: 512.3, y: 287.7 }, 4242, { sx: 2, sy: -1 }, 0, "destroyed"],
+    ["wreck", { x: 512.3, y: 287.7, wide: true }, 4242, { sx: 2, sy: -1 }, 0, "destroyed"],
   );
   assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m1")!.durability, 80);
   assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m3")!.status, "operational");
@@ -3511,7 +3511,7 @@ import {
   const viaPayload = exploreReturnPayload(via)!;
   const urlPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(via)!).search)!;
   assert.equal(urlPayload.sortieId, viaPayload.sortieId);
-  assert.deepEqual(urlPayload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m2", "wreck", { x: 512.3, y: 287.7 }]]);
+  assert.deepEqual(urlPayload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m2", "wreck", { x: 512.3, y: 287.7, wide: true }]]);
   assert.equal(shared.applyExploreReturnToHub(viaSaved, urlPayload).applied, false);
   // trade path first on a fresh hub: applied once, then skipped
   const fresh = makeHub();
@@ -3549,7 +3549,7 @@ import {
       "僚機B は大破（残骸と回路は撃破した場所に残る）",
     ]);
     const payload = exploreReturnPayload(w)!;
-    assert.deepEqual(payload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420 }]]);
+    assert.deepEqual(payload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420, wide: true }]]);
     assert.deepEqual(payload.wreckedMechInstanceIds, ["m2", "m3"]);
     assert.equal(saveSortieResultToHub(w, store).status, "saved");
     const saved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub);
@@ -3587,7 +3587,7 @@ import {
     assert.equal(executeExploreCommand(next, { id: "abort" }).status, "done");
     assert.deepEqual(leftBehindResultHtml(next).includes("残骸 m3 は回収できず（同じ場所に残る）"), true);
     const again = exploreReturnPayload(next)!.lostMechs ?? [];
-    assert.deepEqual(again.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420 }]]);
+    assert.deepEqual(again.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420, wide: true }]]);
     // recovered → destroyed hull with its circuits
     const rec = attachLostMechContext(
       legacyWorld(bootstrapFromSearch(leaderOnlySearch())),
@@ -3617,7 +3617,7 @@ import {
     assert.equal(rescueAbortSortie(w, 0), "rescued");
     assert.deepEqual(wreckResultLines(w), ["隊長機 は大破（残骸と回路は撃破した場所に残る）"]);
     const wreckRows = (exploreReturnPayload(w)!.lostMechs ?? []).filter((r) => r.kind === "wreck");
-    assert.deepEqual(wreckRows.map((r) => [r.instanceId, r.kind, r.pos]), [["m1", "wreck", { x: 333, y: 444 }]]);
+    assert.deepEqual(wreckRows.map((r) => [r.instanceId, r.kind, r.pos]), [["m1", "wreck", { x: 333, y: 444, wide: true }]]);
     const d = begin(false);
     shootDown(d.leader);
     tickWorld(d, 0.05, idleInput());

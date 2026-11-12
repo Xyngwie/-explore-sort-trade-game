@@ -7,8 +7,9 @@ import { getCoverObjects } from "./coverObjects";
 import { visionMul } from "./circuitPlay";
 import { wrapAngle } from "./facing";
 import { fieldRectOf, isWideMap } from "./fieldBounds";
-import { cellBoundsInWorld } from "@estg/shared";
+import { cellBoundsInWorld, worldToCell } from "@estg/shared";
 import { boardFromLayout, cellsInOrder } from "./wideField";
+import { cellSecuredThisSortie, watchedCell } from "./boardWatch";
 
 export const FRONT_HALF_RAD = Math.PI / 6; // 60°
 export const PERIPHERY_HALF_RAD = (135 * Math.PI) / 180; // 270°
@@ -196,7 +197,10 @@ export function updateSquadMemory(world: World): void {
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
         const i = r * cols + c;
-        if (!squadSees(world, fogCellCenter(world, i))) continue;
+        const center = fogCellCenter(world, i);
+        const at = worldToCell(center.x, center.y);
+        if (at && cellSecuredThisSortie(world, at.sx, at.sy)) continue;
+        if (!squadSees(world, center)) continue;
         if (dense) intel.fogT[i] = world.elapsed;
         else intel.fogSeen![String(i)] = world.elapsed;
       }
@@ -226,7 +230,7 @@ export function updateSquadIntel(world: World): void {
   const now: string[] = [];
   for (const e of world.enemies) {
     if (!e.alive) continue;
-    if (squadSees(world, e.pos)) now.push(e.id);
+    if (squadSees(world, e.pos) || watchedCell(world, e)) now.push(e.id);
   }
   const nowSet = new Set(now);
   for (const id of was) {

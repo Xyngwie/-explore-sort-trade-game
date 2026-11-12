@@ -28,6 +28,9 @@ const at = (o: { x: number; y: number }, deg: number, d: number) => ({ x: o.x + 
 // Shared squad knowledge and the 5 s last-seen.
 {
   const w = mk(); const L = w.leader; const wa = w.wingmen[0]!;
+  // This block checks cones. HQ is secure, so the watch would keep a nearby enemy visible.
+  if (w.boardProgress) w.boardProgress.opened = [];
+  if (w.wideLayout) w.wideLayout.opened = [];
   for (const e of w.enemies) e.alive = false;
   const e = w.enemies[0]!; e.alive = true;
   L.heading = 0; L.moveHeading = 0; wa.pos = at(L.pos, 180, 60); wa.heading = Math.PI; wa.moveHeading = Math.PI;
