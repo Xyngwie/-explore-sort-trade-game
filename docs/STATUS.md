@@ -4,7 +4,7 @@
 - What: `createWorld` に地図の大きさ（`worldW` / `worldH`）を渡す。省略時は 1400×1000。出現点は、大きさを渡したときその中心、既定は (700, 500)。大域の `BALANCE` は変えない。決定 13 を [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md) に足す（配置のコードは変えない）
 - Why: 神宮の指示。段階 1。起点は main `5f34a24`。決定 13 は同じ文書への追記（神宮決定 2026-11-12）
 - Scope: `packages/explore` の地図の大きさの通し方と selftest、上記の文書とこの台帳。コンテナの個数と散らしの規則、マスと世界の変換、invade、セーブ、画面、URL のキー、命令の半径 7500 と 1500 は変えない。決定 13 の配置（地雷マスへの敵とコンテナ、空白地帯）は作らない。個数と動きは段階 3 の未決のまま
-- Status: 実装と selftest。PR は作成後に番号を書く。Deploy Modules Preview は CI 待ち。スマートフォン実機 NOT_RUN。マージはしない
+- Status: 実装と selftest。PR #369。Deploy Modules Preview は CI 待ち。スマートフォン実機 NOT_RUN。マージはしない
 
 ## 探索と侵略の一体化の計画（2026-11-12・文書のみ）
 
