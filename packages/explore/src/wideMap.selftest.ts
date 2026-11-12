@@ -240,6 +240,7 @@ const progress = (seed: number): InvadeFrontProgress => ({
   assert.ok(born, "the stray appears on a playable cell");
   assert.deepEqual(stray!.homeCell, born, "the stray's home is the cell it appeared in");
   assert.notDeepEqual(stray!.homeCell, template.homeCell, "it does not keep the copied enemy's home");
+  assert.equal(stray!.placedCell, undefined, "a recall is not one of the two enemies placed on a mine");
 }
 
 {
@@ -377,6 +378,29 @@ const progress = (seed: number): InvadeFrontProgress => ({
   assert.equal(w.phase, "result", "the squad is wiped");
   assert.equal(liveCellGlyph(w, home!.sx, home!.sy), "済", "済 remains after the wipe");
   assert.equal(w.boardProgress!.hitMine, false);
+}
+
+{
+  const w = createWorld(boot());
+  startSortie(w);
+  const home = w.enemies[0]!.placedCell;
+  assert.ok(home);
+  const pair = w.enemies.filter((e) => e.placedCell && e.placedCell.sx === home!.sx && e.placedCell.sy === home!.sy);
+  assert.equal(pair.length, MINE_ENEMY_COUNT);
+  w.boarding = { center: { x: 0, y: 0 }, radius: 60, requestedAt: 0, cargoArrived: false };
+  w.invadeSector = { sectorX: 0, sectorY: 0, density: 0, intelFlags: [], neighborCount: 1 };
+  w.sortieNonce = "recall-clear";
+  scheduleRecall(w, () => 0);
+  w.elapsed = 20;
+  spawnRecall(w);
+  const stray = w.enemies.find((e) => e.id.startsWith("stray-"));
+  assert.ok(stray, "recall spawns beside the placed pair");
+  for (const e of pair) {
+    e.alive = false;
+    e.hp = 0;
+  }
+  syncWideBoard(w);
+  assert.equal(liveCellGlyph(w, home!.sx, home!.sy), "済", "a recall does not keep the mine from becoming 済");
 }
 
 {

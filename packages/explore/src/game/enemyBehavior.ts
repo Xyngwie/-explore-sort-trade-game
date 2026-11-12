@@ -529,6 +529,8 @@ export function spawnRecall(world: World): void {
     const home = playableCellAt(pos.x, pos.y);
     if (home) e.homeCell = home;
     else delete e.homeCell;
+    // A recall is not one of the two enemies placed on a mine (decision 27).
+    delete e.placedCell;
     world.enemies.push(e);
   }
 }
