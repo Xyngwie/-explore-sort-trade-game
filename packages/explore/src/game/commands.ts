@@ -1,5 +1,5 @@
 import { interruptBarricade } from "./barricades";
-import { noteCommandIssued } from "./platoonCommand";
+import { issueCaptainOrders } from "./platoonCommand";
 import { interruptStripping } from "./strippingRuntime";
 /**
  * Execution-side gate for player-issued Explore commands.
@@ -9,11 +9,8 @@ import { interruptStripping } from "./strippingRuntime";
  * basic tier and therefore always unlocked.
  */
 import {
-  applyOrder,
   pickUpFromCamp,
   purgeCargo,
-  pushLog,
-  rallyWingman,
   scatterSearch,
   setCampOrDeposit,
   unloadAtCamp,
@@ -142,28 +139,21 @@ export function executeExploreCommand(
             .filter((wing) => isCommandUnlockedFor(world, id, wing.id))
             .map((wing) => wing.id),
         );
-        // Same as applyOrderToAllWingmen, one wingman at a time so a 小隊長's mission is
-        // counted once per wingman it reached (2026-11-11 L1・S3).
-        let result = 0;
-        for (const wing of world.wingmen) {
-          if (!wing.alive || !allowedWingmanIds.has(wing.id)) continue;
-          if (applyOrder(world, wing, stance) !== "applied") continue;
-          result += 1;
-          noteCommandIssued(world, wing, stance);
-        }
+        // In range now; outside the captain's radius is held (T2・T3). Counted per recipient that received it.
+        const wings = world.wingmen.filter((wing) => wing.alive && allowedWingmanIds.has(wing.id));
+        const { delivered } = issueCaptainOrders(world, wings, stance, false);
         // C20-b: each alive wingman that cannot follow (mixed squad) shows 「？」
         // and rolls stop / ignore. No log.
         for (const wing of world.wingmen) {
           if (wing.alive && !allowedWingmanIds.has(wing.id)) reactToLockedOrder(world, wing);
         }
-        return { status: "done", id, result };
+        return { status: "done", id, result: delivered };
       }
       const wing = world.wingmen.find((w) => w.id === req.wingId);
       if (!wing) return { status: "done", id, result: "denied" };
-      const result =
-        req.rally === true ? rallyWingman(world, wing, { individual: true }) : applyOrder(world, wing, stance, { individual: true });
-      if (result === "applied") noteCommandIssued(world, wing, req.rally === true ? "escort" : stance);
-      return { status: "done", id, result };
+      const sent = req.rally === true ? "escort" : stance;
+      const { delivered, pending } = issueCaptainOrders(world, [wing], sent, true);
+      return { status: "done", id, result: delivered > 0 || pending > 0 ? "applied" : "denied" };
     }
   }
 }

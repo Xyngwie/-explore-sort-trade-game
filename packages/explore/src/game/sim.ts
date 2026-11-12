@@ -578,7 +578,7 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
       updateSalvage(world, leader, leaderWantSalvage, dt);
     }
   }
-  tickPlatoonCommand(world); // 小隊長 (E1 ★A 暫定): a mission of its own when none was issued for a while
+  tickPlatoonCommand(world); // 小隊長: E1, the wingman split, and delivery of orders that were out of range. placeCarried has already run (T5 暫定).
   for (const w of world.wingmen) {
     if (!w.alive) continue;
     w.cooldown = Math.max(0, w.cooldown - dt);

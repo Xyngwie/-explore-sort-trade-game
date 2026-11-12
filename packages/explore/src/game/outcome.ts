@@ -27,7 +27,7 @@ import {
   type MechLearningCell,
 } from "@estg/shared";
 import { buildLearningStage } from "./brain";
-import { captainIsPlatoonLeader, finalizeCommandSortie } from "./platoonCommand";
+import { finalizeCommandSortie, isPlatoonLeaderUnit } from "./platoonCommand";
 import {
   highestCargoSubjectForUnit,
   isLearningUnit,
@@ -271,11 +271,12 @@ export function ensureMechLearningWorld(world: World): void {
   world.mechLearningWork ??= {};
   const loaded = loadHubSaveFromLocalStorage();
   const hub = loaded?.hub ? normalizeHubSnapshot(loaded.hub) : null;
-  // 小隊長 (2026-11-11 P2): the captain-小隊長's command cells come from the same byMech slot.
-  const leaderId = world.leader.instanceId?.trim() ?? "";
-  if (leaderId && captainIsPlatoonLeader(world)) {
+  // 小隊長 (2026-11-11 P2, 2026-11-12 B5): every 小隊長's command cells, captain or wingman, load from that instanceId.
+  for (const unit of [world.leader, ...world.wingmen]) {
+    if (!isPlatoonLeaderUnit(world, unit)) continue;
+    const id = unit.instanceId!.trim();
     world.mechCommandWork ??= {};
-    world.mechCommandWork[leaderId] = hub != null ? copyMechCommandForInstance(hub.mechLearning, leaderId) : (world.mechCommandWork[leaderId] ?? []);
+    world.mechCommandWork[id] = hub != null ? copyMechCommandForInstance(hub.mechLearning, id) : (world.mechCommandWork[id] ?? []);
   }
   // S3: the captain's ledger is loaded too; it only grows while the captain is autonomous.
   for (const w of [world.leader, ...world.wingmen]) {

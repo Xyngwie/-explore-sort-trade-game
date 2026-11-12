@@ -1,3 +1,11 @@
+## 小隊長の通信と分担（2026-11-12・神宮の TASK_ASSIGNMENT）
+
+- Who: Cursor Cloud Agent（Grok）/ 実装。神宮の直接指示。Automations は起動していない
+- What: 中隊長の命令範囲 7500、僚機の小隊長の 1500、隊長の円の外を僚機の小隊長が受け持つ分担、未達、発信者の指揮セル、命令時の青い円 → [AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md) の「小隊長の通信と分担」
+- Why: 神宮「小隊長の続き（通信・分担） 実装指示」（2026-11-12）。起点は main `b0c9e500`（#363 と #364 のあと）
+- Scope: `packages/explore` の balance / platoonCommand / commands / types / outcome / sim / render と、その selftest、上記の文書。任務の種類、想定、個体学習、点数、セーブのトップレベルの形、視界、ログ文、ホットキー、ミニマップ、通信妨害、地図の大きさと半径は変えない
+- Status: draft PR。T1・円の時機・B1 は神宮決定 2026-11-12。T2〜T5、B2〜B5、細部 1〜9 は ★A の暫定。main には未マージ。Deploy Modules Preview は main では走っていない。スマートフォン実機 NOT_RUN
+
 ## 小隊長 E1〜E6 の決定を文書へ書く（2026-11-11・文書のみ）
 - Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
 - What: 「小隊長の完全自律と指揮学習」の Status、[AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md)、[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) の後続。E1〜E6 を ★A（神宮決定 2026-11-11）として記録し、#363 が draft で未マージだという文言を、マージとデプロイ成功の記録に直す

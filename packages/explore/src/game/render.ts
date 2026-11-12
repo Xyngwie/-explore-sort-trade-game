@@ -21,6 +21,7 @@ import { isWingmanMobileFor } from "./commandUnlock";
 import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from "./lockedOrder";
 import { enemyDisplayNameJa } from "./enemyIdentity";
 import { STATUS_BADGE_COLOR, STATUS_BADGE_OUTLINE, STATUS_BADGE_PX, wingmanStatusLine, wreckCircuitLine } from "./statusBadges";
+import { activeCommandRings } from "./platoonCommand";
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -534,6 +535,23 @@ export function renderWorld(
     ctx.fillText(feedbackLabel(event), x, y);
   }
   ctx.restore();
+
+  // 2026-11-12: the issuer's range, stroked for a few seconds on the sortie map (canvas drawMap and #map both call renderWorld).
+  if (world.phase === "sortie") {
+    const rings = activeCommandRings(world);
+    if (rings.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = COLORS.wingman;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      for (const ring of rings) {
+        ctx.beginPath();
+        ctx.arc(tx(ring.x), ty(ring.y), ring.radius * sx, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
 }
 
 function quirkShort(q: "cling" | "decoy" | "sniper"): string {

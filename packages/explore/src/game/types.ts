@@ -32,8 +32,14 @@ export type Unit = {
   learningHeldSubjects?: Partial<Record<"container" | "circuit" | "wreck", true>>;
   learningFightEnemyId?: string | null;
   learningDropPending?: boolean;
-  /** 小隊長 (platoonCommand.ts): the last mission the captain-小隊長 gave this wingman (runtime). */
+  /** 小隊長 (platoonCommand.ts): the last mission this wingman received (runtime; checkpointed). */
   commandOrder?: import("@estg/shared").MechCommandStance;
+  /** instanceId of the unit that issued commandOrder (runtime; checkpointed with the sortie). */
+  commandIssuerId?: string;
+  /** B2 ★A 暫定: world.elapsed when this wingman 小隊長 last issued. Absent → has not issued yet. */
+  commandIssuedAt?: number;
+  /** How many times this wingman 小隊長 has chosen a mission (S4 rotation). The captain uses World.commandDecisionCount. */
+  commandDecisionCount?: number;
   /** 小隊長: subjects held while on a recover mission (runtime). */
   commandHeldSubjects?: Partial<Record<"container" | "circuit" | "wreck", true>>;
   /** Enemy PR1: model / durability / hidden false-board circuits (enemies only; optional for old checkpoints). */ enemyIdentity?: EnemyIdentity; enemyState?: import("./enemyBehavior").EnemyState;
@@ -86,8 +92,12 @@ export type World = { barricades?: import("./barricades").BarricadeState; shield
   /** 小隊長の指揮セル keyed by the 小隊長's instanceId (runtime; settled into mechLearning.byMech). */
   mechCommandWork?: Record<string, import("@estg/shared").MechCommandCell[]>;
   mechCommandFinalized?: boolean;
-  /** world.elapsed of the last mission issued by the captain-小隊長 (player or itself). */
+  /** world.elapsed of the last mission the captain-小隊長 issued (player or itself). Wingman 小隊長 timers sit on the unit. */
   commandDecisionAt?: number;
   commandDecisionCount?: number;
+  /** T3 暫定: missions issued outside the issuer's radius. Not a HubSave key; copied by the sortie snapshot. */
+  commandPending?: import("./platoonCommand").CommandPending[];
+  /** ★A 暫定: blue range rings drawn for a few seconds after an issuer transmits. Sortie runtime, not a HubSave key. */
+  commandRings?: import("./platoonCommand").CommandRing[];
 };
 export type WingmanIntent = { moveTarget: Vec2 | null; fireAt: Unit | null; trySalvage: boolean; };
