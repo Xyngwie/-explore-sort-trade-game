@@ -17,6 +17,7 @@
   "exclude": [
     "src/selftest.ts",
     "src/mapZoom.selftest.ts",
+    "src/mapSize.selftest.ts",
     "src/facing.selftest.ts",
     "src/mapShapes.selftest.ts",
     "src/vision.selftest.ts",

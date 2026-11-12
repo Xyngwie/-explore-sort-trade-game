@@ -13,7 +13,10 @@
  * Prefer editing this file (or the re-export index `./constants.ts`) over
  * sprinkling literals in brain/sim/orders.
  */
-/** Player spawn (2026-10-17: moved to the map centre). Single source for every spawn-relative rule. */
+/**
+ * Player spawn on the default 1400×1000 map (2026-10-17: map centre).
+ * A world with another size uses `spawnPointForMap` (the centre of that size).
+ */
 export const SPAWN_POINT = { x: 700, y: 500 } as const;
 
 export const BALANCE = {
@@ -120,7 +123,24 @@ export const BALANCE = {
   cameraLeadYFrac: 0.5,
 } as const;
 
-export type Balance = Omit<typeof BALANCE, "enemyDamage"> & { readonly enemyDamage: number };
+export type Balance = Omit<typeof BALANCE, "enemyDamage" | "worldW" | "worldH"> & {
+  readonly enemyDamage: number;
+  /** This world's width. The global table stays 1400; a sortie may copy another width. */
+  readonly worldW: number;
+  /** This world's height. The global table stays 1000; a sortie may copy another height. */
+  readonly worldH: number;
+};
+
+/**
+ * Spawn for one map. The default 1400×1000 stays `SPAWN_POINT` (700, 500).
+ * Any other size uses the centre of that size.
+ */
+export function spawnPointForMap(worldW: number, worldH: number): { x: number; y: number } {
+  if (worldW === BALANCE.worldW && worldH === BALANCE.worldH) {
+    return { x: SPAWN_POINT.x, y: SPAWN_POINT.y };
+  }
+  return { x: worldW / 2, y: worldH / 2 };
+}
 
 /** Clamp density to 0..1. */
 export function clampDensity(density: number): number {
