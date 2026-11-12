@@ -43,6 +43,7 @@ export * from "./field-cell-state";
 export * as frontBoard from "./front-board";
 
 export * from "./front-board";
+export * from "./cell-world";
 export * from "./front-sweep";
 
 export * from "./lost-mech-shields";
