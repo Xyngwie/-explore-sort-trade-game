@@ -567,4 +567,4 @@ ALPHA_LABの証拠JSONは必要な状態を選んで出力し、署名・GPS・�
 - 古いセーブ（`enemyBaseRewards` も `company` のセルも無い）はそのまま読める。
 
 - **小隊長の指揮セル（2026-11-11）**: `mechLearning.byMech[instanceId]` の中に、v0 のセルと並べて `{ ledger: "command", stance, subject, tries?, survived?, died?, leftBehind?, broughtHome?, abandoned?, kills? }` を置く。`stance` は `escort` `patrol` `recover` `raid`、`subject` は `none` `normal` `container` `circuit` `wreck`。壊れたセルは捨てる。精算は v0 のセルと指揮セルを別々に置き換える（その出撃で増えなかった側は前のまま）。新しいトップレベルキーは無く、機体ごとの 4096 セル上限は両方を合わせて数える。古いセーブは指揮セルなし。
-- **指揮セルの付け先（2026-11-12）**: `tries`・撃破・精算は、その任務を出した発信者の `instanceId` の枠に付く（B5。暫定）。隊長も、僚機の小隊長も同じ。小隊長回路が無く `instanceId` が無い機体の発信は、セルを増やさない（P3）。新しい HubSave のトップレベルキーは無い。届いていない命令（未達）と、僚機が最後に受けた発信者の `instanceId` は、出撃中の実行時データとしてワールドと機体に乗り、出撃チェックポイント（`snapshotSortieWorld`）の写しに入る。HubSave のキーではない。精算までに届かなかった未達は数えない（T3。暫定）。
+- **指揮セルの付け先（2026-11-12）**: `tries`・撃破・精算は、その任務を出した発信者の `instanceId` の枠に付く（B5。神宮決定 2026-11-12）。隊長も、僚機の小隊長も同じ。小隊長回路が無く `instanceId` が無い機体の発信は、セルを増やさない（P3）。新しい HubSave のトップレベルキーは無い。届いていない命令（未達）と、僚機が最後に受けた発信者の `instanceId` は、出撃中の実行時データとしてワールドと機体に乗り、出撃チェックポイント（`snapshotSortieWorld`）の写しに入る。HubSave のキーではない。精算までに届かなかった未達は数えない（T3。神宮決定 2026-11-12）。

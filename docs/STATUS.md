@@ -1,10 +1,17 @@
+## 小隊長の通信と分担の決定を文書へ書く（2026-11-12・文書のみ）
+- Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
+- What: 「小隊長の通信と分担」の Status、[AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md)、[MECH_WORLD_BUILDING_DESIGN.md](MECH_WORLD_BUILDING_DESIGN.md) §6、[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)、[HUB_SAVE_CONTRACT.md](HUB_SAVE_CONTRACT.md)。T2〜T5、B2〜B5、細部 1〜9 を ★A（神宮決定 2026-11-12）として記録し、#365 が draft で未マージだという文言を、マージとデプロイ成功の記録に直す
+- Why: 神宮の指示。コードは既に T2〜T5・B2〜B5・細部 1〜9 = ★A と一致している。文書だけが暫定と draft のまま残っていた
+- Scope: 文書の文言だけ。ゲームのコード、テスト、HTML、素材は変更しない。#365 より前の STATUS の古い draft 表記は直さない。7500 と 1500、通信妨害の対象外は変えない
+- Status: 文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN
+
 ## 小隊長の通信と分担（2026-11-12・神宮の TASK_ASSIGNMENT）
 
 - Who: Cursor Cloud Agent（Grok）/ 実装。神宮の直接指示。Automations は起動していない
 - What: 中隊長の命令範囲 7500、僚機の小隊長の 1500、隊長の円の外を僚機の小隊長が受け持つ分担、未達、発信者の指揮セル、命令時の青い円 → [AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md) の「小隊長の通信と分担」
 - Why: 神宮「小隊長の続き（通信・分担） 実装指示」（2026-11-12）。起点は main `b0c9e500`（#363 と #364 のあと）
 - Scope: `packages/explore` の balance / platoonCommand / commands / types / outcome / sim / render と、その selftest、上記の文書。任務の種類、想定、個体学習、点数、セーブのトップレベルの形、視界、ログ文、ホットキー、ミニマップ、通信妨害、地図の大きさと半径は変えない
-- Status: draft PR #365。T1・円の時機・B1 は神宮決定 2026-11-12。T2〜T5、B2〜B5、細部 1〜9 は ★A の暫定。main には未マージ。Deploy Modules Preview は main では走っていない。スマートフォン実機 NOT_RUN
+- Status: T1・円の時機・B1・T2〜T5・B2〜B5・細部 1〜9 はすべて ★A（神宮決定 2026-11-12）。PR #365 をマージ（merge `61e8cc80c8ebf5f54a988e9efd1b335410bedbe4`、監査 head `90c869196400fdf16a45e2fcbfca74afe40be96d`）。Deploy Modules Preview run 43143386270 は success（11:44 JST）。公開 canvas https://xyngwie.github.io/-explore-sort-trade-game/canvas/ を更新済み。スマートフォン実機 NOT_RUN
 
 ## 小隊長 E1〜E6 の決定を文書へ書く（2026-11-11・文書のみ）
 - Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
