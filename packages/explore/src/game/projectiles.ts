@@ -7,6 +7,7 @@ import { segmentCircle } from "./geometry";
 import { getCoverObjects } from "./coverObjects";
 import type { Unit, World } from "./types";
 import type { Vec2 } from "./math";
+import { clampToField } from "./fieldBounds";
 export const SPREAD_DEG={normal:2,smg:5,mmr:.5,lmg:4,shotgun:2} as const;
 export function spreadRadians(weapon: string|null, rng:()=>number=Math.random):number {
   const degrees=SPREAD_DEG[weapon as keyof typeof SPREAD_DEG]??SPREAD_DEG.normal;
@@ -52,6 +53,6 @@ export function clearFiringLine(world:World,unit:Unit):void {
   if(wreckCarrierId(world,unit.id) || movementLocked(world) || (unit.kind==="wingman" && !isWingmanMobileFor(world,unit.id)))return;
   if(lineClearTarget(world,unit))return;
   const side=world.wingmen.findIndex(w=>w.id===unit.id)%2===0 ? 1:-1;
-  const target={x:Math.max(20,Math.min(world.balance.worldW-20,unit.pos.x-Math.sin(unit.heading)*36*side)),y:Math.max(20,Math.min(world.balance.worldH-20,unit.pos.y+Math.cos(unit.heading)*36*side))};
+  const target=clampToField(world.balance, unit.pos.x-Math.sin(unit.heading)*36*side, unit.pos.y+Math.cos(unit.heading)*36*side, 20);
   const map=avoidance.get(world)??new Map();map.set(unit.id,{pos:target,until:world.elapsed+.6});avoidance.set(world,map);
 }

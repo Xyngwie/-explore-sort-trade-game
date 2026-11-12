@@ -20,13 +20,15 @@ export type EnemyIdentity = {
   circuits: EnemyCircuitData[];
 };
 
+let enemyIdentitySerial = 0;
+
 export function makeEnemyIdentity(
   unit: Pick<Unit, "id" | "maxHp">,
   rng: () => number = Math.random,
   n = 0,
 ): EnemyIdentity {
   const tier = Math.floor(Math.min(8, Math.max(0, n)) / 3);
-  const nonce = `${Date.now().toString(36)}-${rng().toString(36).slice(2)}-${unit.id}`;
+  const nonce = `${Date.now().toString(36)}-${(enemyIdentitySerial++).toString(36)}-${rng().toString(36).slice(2)}-${unit.id}`;
   const usedCategories = new Set<string>();
   const circuits: EnemyCircuitData[] = Array.from({ length: 1 + tier }, (_, i) => {
     const candidates = FALSE_BOARD_EFFECT_KEYS.filter(key => {

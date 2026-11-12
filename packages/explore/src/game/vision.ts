@@ -6,6 +6,7 @@ import type { Unit, World } from "./types";
 import { getCoverObjects } from "./coverObjects";
 import { visionMul } from "./circuitPlay";
 import { wrapAngle } from "./facing";
+import { fieldRectOf } from "./fieldBounds";
 
 export const FRONT_HALF_RAD = Math.PI / 6; // 60°
 export const PERIPHERY_HALF_RAD = (135 * Math.PI) / 180; // 270°
@@ -51,8 +52,10 @@ export type SquadIntel = {
   visible: string[];
   /** Last seen position of lost enemies; dropped after LAST_SEEN_SEC. */
   lastSeen: Record<string, { pos: Vec2; t: number }>;
-  /** Per fog cell: elapsed time it was last watched (-1 = never seen). */
+  /** Per fog cell: elapsed time it was last watched (-1 = never seen). Dense on a small map. */
   fogT: number[];
+  /** Wide map: seen fog-cell index → elapsed. Absent means use fogT. Not a hub key. */
+  fogSeen?: Record<string, number>;
   /** Faint images of static objects (containers, wrecks, enemy supplies), keyed by kind:id. */
   ghosts: Record<string, Ghost>;
 };
@@ -73,8 +76,17 @@ export function squadIntel(world: World): SquadIntel {
   s.visible ??= [];
   s.lastSeen ??= {};
   s.ghosts ??= {};
+  if (!s.fogSeen || typeof s.fogSeen !== "object" || Array.isArray(s.fogSeen)) s.fogSeen = {};
   const n = fogCols(world) * fogRows(world);
-  if (!Array.isArray(s.fogT) || s.fogT.length !== n) s.fogT = Array.from({ length: n }, (_, i) => (Array.isArray(s.fogT) && typeof s.fogT[i] === "number" ? s.fogT[i]! : -1));
+  // A dense grid of the whole board is hundreds of thousands of cells. Keep it
+  // only for a small (legacy) map. The wide map stores the cells it has seen.
+  if (n <= 4000) {
+    if (!Array.isArray(s.fogT) || s.fogT.length !== n) {
+      s.fogT = Array.from({ length: n }, (_, i) => (Array.isArray(s.fogT) && typeof s.fogT[i] === "number" ? s.fogT[i]! : -1));
+    }
+  } else if (!Array.isArray(s.fogT)) {
+    s.fogT = [];
+  }
   return s;
 }
 
@@ -82,16 +94,37 @@ export function squadSees(world: World, pos: Vec2): boolean {
   return [world.leader, ...world.wingmen].some((u) => u?.alive && canSee(world, u, pos));
 }
 
-export function fogCols(world: World): number { return Math.ceil(world.balance.worldW / world.balance.fogCell); }
-export function fogRows(world: World): number { return Math.ceil(world.balance.worldH / world.balance.fogCell); }
+export function fogCols(world: World): number {
+  const b = fieldRectOf(world.balance);
+  return Math.max(1, Math.ceil((b.maxX - b.minX) / world.balance.fogCell));
+}
+export function fogRows(world: World): number {
+  const b = fieldRectOf(world.balance);
+  return Math.max(1, Math.ceil((b.maxY - b.minY) / world.balance.fogCell));
+}
 export function fogCellCenter(world: World, i: number): Vec2 {
   const cols = fogCols(world), c = world.balance.fogCell;
-  return { x: (i % cols) * c + c / 2, y: Math.floor(i / cols) * c + c / 2 };
+  const b = fieldRectOf(world.balance);
+  return { x: b.minX + (i % cols) * c + c / 2, y: b.minY + Math.floor(i / cols) * c + c / 2 };
+}
+/** Index of the fog cell containing (x, y), or null outside the field. */
+export function fogIndexAt(world: World, x: number, y: number): number | null {
+  const b = fieldRectOf(world.balance);
+  const c = world.balance.fogCell;
+  if (x < b.minX || y < b.minY || x >= b.maxX || y >= b.maxY) return null;
+  const col = Math.floor((x - b.minX) / c);
+  const row = Math.floor((y - b.minY) / c);
+  const cols = fogCols(world);
+  const rows = fogRows(world);
+  if (col < 0 || row < 0 || col >= cols || row >= rows) return null;
+  return row * cols + col;
 }
 /** 0 = watched now (black ground) … 1 = full grey fog. */
 export function fogGrey(world: World, i: number): number {
-  const t = squadIntel(world).fogT[i] ?? -1;
-  if (t < 0) return 1;
+  const intel = squadIntel(world);
+  const seen = intel.fogSeen?.[String(i)];
+  const t = typeof seen === "number" ? seen : intel.fogT?.[i] ?? -1;
+  if (typeof t !== "number" || t < 0) return 1;
   return Math.max(0, Math.min(1, (world.elapsed - t) / FOG_RETURN_SEC));
 }
 
@@ -113,7 +146,27 @@ const gkey = (g: { kind: GhostKind; id: string }) => `${g.kind}:${g.id}`;
 /** Fog and faint images: watched cells go black; seen statics refresh their image; a watched spot whose object is gone drops it. */
 export function updateSquadMemory(world: World): void {
   const intel = squadIntel(world);
-  for (let i = 0; i < intel.fogT.length; i++) if (squadSees(world, fogCellCenter(world, i))) intel.fogT[i] = world.elapsed;
+  const cell = world.balance.fogCell;
+  const cols = fogCols(world);
+  const rows = fogRows(world);
+  const b = fieldRectOf(world.balance);
+  const dense = intel.fogT.length === cols * rows;
+  const reach = world.balance.visionRange * FRONT_RANGE_MUL + cell;
+  for (const u of [world.leader, ...world.wingmen]) {
+    if (!u?.alive) continue;
+    const c0 = Math.max(0, Math.floor((u.pos.x - reach - b.minX) / cell));
+    const c1 = Math.min(cols - 1, Math.floor((u.pos.x + reach - b.minX) / cell));
+    const r0 = Math.max(0, Math.floor((u.pos.y - reach - b.minY) / cell));
+    const r1 = Math.min(rows - 1, Math.floor((u.pos.y + reach - b.minY) / cell));
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const i = r * cols + c;
+        if (!squadSees(world, fogCellCenter(world, i))) continue;
+        if (dense) intel.fogT[i] = world.elapsed;
+        else intel.fogSeen![String(i)] = world.elapsed;
+      }
+    }
+  }
   const present = new Map(presentStatics(world).map((g) => [gkey(g), g]));
   for (const [k, g] of present) if (squadSees(world, g.pos)) intel.ghosts[k] = { kind: g.kind, id: g.id, pos: { ...g.pos }, t: world.elapsed };
   for (const [k, g] of Object.entries(intel.ghosts)) {

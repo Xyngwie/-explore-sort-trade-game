@@ -39,6 +39,8 @@ import {
   unitMoveSpeedMul,
 } from "./orders";
 import { angleOf, clamp, dist, dist2, norm, type Vec2 } from "./math";
+import { FIELD_EDGE, clampToField, clampToRect, fieldRectOf, isWideMap } from "./fieldBounds";
+import { enemyMoveRect, enemyNearCaptain, rebindHomeIfDisplaced } from "./enemyBehavior";
 import { obstacleMove, updateCoverMovement } from "./coverMovement";
 import { isWingmanMobileFor } from "./commandUnlock";
 import {
@@ -99,8 +101,9 @@ function moveToward(unit: Unit, target: Vec2 | null, speed: number, dt: number, 
   const dir = norm({ x: target.x - unit.pos.x, y: target.y - unit.pos.y });
   const travelTime = Math.min(d / speed, movementTimeAvailable(world, unit, dt));
   const before = { ...unit.pos };
-  unit.pos.x = clamp(before.x + dir.x * speed * travelTime, 20, world.balance.worldW - 20);
-  unit.pos.y = clamp(before.y + dir.y * speed * travelTime, 20, world.balance.worldH - 20);
+  const stepped = clampToField(world.balance, before.x + dir.x * speed * travelTime, before.y + dir.y * speed * travelTime, FIELD_EDGE);
+  unit.pos.x = stepped.x;
+  unit.pos.y = stepped.y;
   unit.pos = obstacleMove(world, { ...unit, pos: before }, unit.pos);
   updateCoverMovement(world, unit, {x:0,y:0}, dt);
   const moved = dist(before, unit.pos);
@@ -321,20 +324,28 @@ export function updateSalvage(world: World, unit: Unit, want: boolean, dt: numbe
 
 export function updateEnemies(world: World, dt: number): void {
   backfillEnemyState(world);
+  const wide = isWideMap(world.balance);
   for (const e of world.enemies) {
     if (!e.alive) continue;
+    if (wide) rebindHomeIfDisplaced(e);
+    if (wide && !enemyNearCaptain(world, e)) {
+      e.vel = { x: 0, y: 0 };
+      continue;
+    }
     e.cooldown = Math.max(0, e.cooldown - dt);
     const before = {...e.pos};
     const st = e.enemyState!;
     const nearest = nearestEnemyTarget(world, e);
     const emp = enemyEmpMul(world,e);
+    const leash = wide ? enemyMoveRect(world, e, nearest) : null;
     if (st.activity > st.capacity*.1 && applyLure(world,e,dt)) {
       e.pos = obstacleMove(world, {...e,pos:before}, e.pos);
+      if (leash) e.pos = clampToRect(e.pos.x, e.pos.y, leash, FIELD_EDGE);
       updateCoverMovement(world,e,{x:0,y:0},dt);
       if (Math.hypot(e.vel.x,e.vel.y)>0) st.activity = Math.max(st.capacity*.1, st.activity - .5*dt);
     } else if (!enemyHeld(world,e)) {
       const speed = enemySpeed(world,e)*emp.speed;
-      if (!lootEnemy(world,e,dt,speed)) moveEnemy(world,e,enemyDestination(world,e,nearest),speed,dt);
+      if (!lootEnemy(world,e,dt,speed)) moveEnemy(world,e,enemyDestination(world,e,nearest),speed,dt,leash);
     } else e.vel = {x:0,y:0};
     // Stationary / full / low-power enemies can still return fire.
     if (nearest) {
@@ -347,8 +358,11 @@ export function updateEnemies(world: World, dt: number): void {
 
 function updateCamera(world: World): void {
   const lead = world.leader.pos;
-  world.camera.x = clamp(lead.x - world.camera.w * world.balance.cameraLeadXFrac, 0, world.balance.worldW - world.camera.w);
-  world.camera.y = clamp(lead.y - world.camera.h * world.balance.cameraLeadYFrac, 0, world.balance.worldH - world.camera.h);
+  const rect = fieldRectOf(world.balance);
+  const maxX = Math.max(rect.minX, rect.maxX - world.camera.w);
+  const maxY = Math.max(rect.minY, rect.maxY - world.camera.h);
+  world.camera.x = clamp(lead.x - world.camera.w * world.balance.cameraLeadXFrac, rect.minX, maxX);
+  world.camera.y = clamp(lead.y - world.camera.h * world.balance.cameraLeadYFrac, rect.minY, maxY);
 }
 
 export type PlayerInput = { move: Vec2; clickMove: Vec2 | null; fire: boolean; interact: boolean };

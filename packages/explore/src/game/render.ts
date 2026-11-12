@@ -8,6 +8,7 @@ import { equippedShield, SHIELD_HALF_ARC } from "./shields";
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
 import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
+import { fieldRectOf } from "./fieldBounds";
 import { strayShown, strayStoppedLabel, strayWreckLabel } from "./strayScatter";
 import { layoutLabels } from "./labelLayout";
 import { extractionProgressPct } from "../extractProgress";
@@ -220,13 +221,14 @@ export function renderWorld(
   // PR2 fog: never seen = grey; watched now = black ground; unwatched fades back to grey over 60 s.
   {
     const cell = world.balance.fogCell, cols = fogCols(world), rows = fogRows(world);
-    const c0 = Math.max(0, Math.floor(cam.x / cell)), c1 = Math.min(cols - 1, Math.floor((cam.x + cam.w) / cell));
-    const r0 = Math.max(0, Math.floor(cam.y / cell)), r1 = Math.min(rows - 1, Math.floor((cam.y + cam.h) / cell));
+    const origin = fieldRectOf(world.balance);
+    const c0 = Math.max(0, Math.floor((cam.x - origin.minX) / cell)), c1 = Math.min(cols - 1, Math.floor((cam.x + cam.w - origin.minX) / cell));
+    const r0 = Math.max(0, Math.floor((cam.y - origin.minY) / cell)), r1 = Math.min(rows - 1, Math.floor((cam.y + cam.h - origin.minY) / cell));
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const g = fogGrey(world, r * cols + c);
       if (g <= 0.01) continue;
       ctx.fillStyle = `rgba(74,80,88,${(0.88 * g).toFixed(3)})`;
-      ctx.fillRect(Math.floor(tx(c * cell)), Math.floor(ty(r * cell)), Math.ceil(cell * sx) + 1, Math.ceil(cell * sy) + 1);
+      ctx.fillRect(Math.floor(tx(origin.minX + c * cell)), Math.floor(ty(origin.minY + r * cell)), Math.ceil(cell * sx) + 1, Math.ceil(cell * sy) + 1);
     }
   }
   // Seen now → the real thing; otherwise its faint image (original colour, 35%) from squad knowledge.

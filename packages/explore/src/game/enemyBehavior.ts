@@ -7,9 +7,24 @@ import { canSee } from "./vision";
 import { noteMoveHeading } from "./facing";
 import { effectRate, cargoSlotBonus, rankEnemyMultiplier, type HubSnapshot } from "@estg/shared";
 import { makeEnemyIdentity, type EnemyCircuitData } from "./enemyIdentity";
-import { dist, clamp, type Vec2 } from "./math";
+import { dist, type Vec2 } from "./math";
 import type { Unit, World } from "./types";
 import { BALANCE } from "./balance";
+import {
+  FIELD_EDGE,
+  cellChebyshev,
+  cellReachRect,
+  clampToField,
+  clampToRect,
+  fieldRectOf,
+  intersectRect,
+  isPlayablePoint,
+  isWideMap,
+  settleLegacyPos,
+  type FieldRect,
+} from "./fieldBounds";
+import { CAPTAIN_ENEMY_CELLS, ENEMY_CHASE_CELLS, playableCellAt } from "./wideField";
+import { cellCenterToWorld } from "@estg/shared";
 import { sortieAmmoCap, effectiveBatteryCapacity } from "./circuitPlay";
 import { getCoverObjects } from "./coverObjects";
 import { loadSpeedRatio } from "./carry";
@@ -145,33 +160,81 @@ export function initializeEnemy(
   };
 }
 export function backfillEnemyState(world: World): void {
-  for (const e of world.enemies) initializeEnemy(e);
+  for (const e of world.enemies) {
+    initializeEnemy(e);
+    if (!isWideMap(world.balance)) continue;
+    if (!isPlayablePoint(world.balance, e.pos.x, e.pos.y)) e.pos = settleLegacyPos(world.balance, e.pos);
+    if (!e.homeCell) {
+      const cell = playableCellAt(e.pos.x, e.pos.y);
+      if (cell) e.homeCell = cell;
+    }
+  }
   world.enemySupplies ??= [];
   // Old in-flight recall checkpoints must not invent a second wave.
   if (world.boarding && !world.recallSpawns) world.recallSpawns = [];
 }
+/** Farther than a neighbor: this enemy was placed here, so this cell is home. */
+export function rebindHomeIfDisplaced(e: Unit): void {
+  if (!e.homeCell) return;
+  const here = playableCellAt(e.pos.x, e.pos.y);
+  if (!here) return;
+  if (cellChebyshev(e.homeCell, here) > ENEMY_CHASE_CELLS) e.homeCell = here;
+}
+
+/** Chebyshev cell distance from the captain. Distant enemies stay put (decision 23). */
+export function enemyNearCaptain(world: World, e: Unit): boolean {
+  const cap = playableCellAt(world.leader.pos.x, world.leader.pos.y);
+  const here = playableCellAt(e.pos.x, e.pos.y);
+  if (!cap || !here) return false;
+  return cellChebyshev(cap, here) <= CAPTAIN_ENEMY_CELLS;
+}
+
+/** Home cell while idle. Home plus neighbors while chasing a seen unit, or walking back. */
+export function enemyMoveRect(world: World, e: Unit, target: Unit | null): FieldRect {
+  const field = fieldRectOf(world.balance);
+  if (!e.homeCell) return field;
+  const home = e.homeCell;
+  const targetCell = target ? playableCellAt(target.pos.x, target.pos.y) : null;
+  const chasing = !!targetCell && cellChebyshev(home, targetCell) <= ENEMY_CHASE_CELLS;
+  const here = playableCellAt(e.pos.x, e.pos.y);
+  const outside = !here || cellChebyshev(home, here) > 0;
+  const reach = chasing || outside ? ENEMY_CHASE_CELLS : 0;
+  return intersectRect(field, cellReachRect(home.sx, home.sy, reach));
+}
+
+function leashGoal(e: Unit, target: Vec2 | null): Vec2 | null {
+  if (!target || !e.homeCell) return target;
+  const cell = playableCellAt(target.x, target.y);
+  if (cell && cellChebyshev(e.homeCell, cell) <= ENEMY_CHASE_CELLS) return target;
+  return cellCenterToWorld(e.homeCell.sx, e.homeCell.sy);
+}
+
 export function moveEnemy(
   world: World,
   e: Unit,
   target: Vec2 | null,
   speed: number,
   dt: number,
+  leash?: FieldRect | null,
 ): void {
   const s = e.enemyState!;
   e.vel = { x: 0, y: 0 };
-  if (!target || s.activity <= s.capacity * 0.1 || s.dormant) return;
-  const d = dist(e.pos, target);
+  const goal = isWideMap(world.balance) ? leashGoal(e, target) : target;
+  if (!goal || s.activity <= s.capacity * 0.1 || s.dormant) return;
+  const d = dist(e.pos, goal);
   if (d < 4) return;
   const step = Math.min(
     d,
     speed * dt,
     ((s.activity - s.capacity * 0.1) * speed) / 0.5,
   );
-  const dx = (target.x - e.pos.x) / d,
-    dy = (target.y - e.pos.y) / d;
+  const dx = (goal.x - e.pos.x) / d,
+    dy = (goal.y - e.pos.y) / d;
   const before = { ...e.pos };
-  e.pos.x = clamp(e.pos.x + dx * step, 20, world.balance.worldW - 20);
-  e.pos.y = clamp(e.pos.y + dy * step, 20, world.balance.worldH - 20);
+  const rect = leash ?? fieldRectOf(world.balance);
+  const next = clampToRect(e.pos.x + dx * step, e.pos.y + dy * step, rect, FIELD_EDGE);
+  e.pos.x = next.x;
+  e.pos.y = next.y;
   e.pos = obstacleMove(world, { ...e, pos: before }, e.pos);
   updateCoverMovement(world, e, {x:0,y:0}, dt);
   const travelled = dist(before, e.pos);
@@ -310,10 +373,21 @@ export function enemyDestination(
   if (!s.wander || dist(e.pos, s.wander) < 5) {
     const a = Math.random() * Math.PI * 2,
       r = mode === "scavenge" ? 100 : 60;
-    s.wander = {
-      x: clamp(e.pos.x + Math.cos(a) * r, 20, world.balance.worldW - 20),
-      y: clamp(e.pos.y + Math.sin(a) * r, 20, world.balance.worldH - 20),
-    };
+    const wandered = clampToField(
+      world.balance,
+      e.pos.x + Math.cos(a) * r,
+      e.pos.y + Math.sin(a) * r,
+      FIELD_EDGE,
+    );
+    s.wander =
+      isWideMap(world.balance) && e.homeCell
+        ? clampToRect(
+            wandered.x,
+            wandered.y,
+            intersectRect(fieldRectOf(world.balance), cellReachRect(e.homeCell.sx, e.homeCell.sy, 0)),
+            FIELD_EDGE,
+          )
+        : wandered;
   }
   return s.wander;
 }
@@ -419,18 +493,12 @@ export function spawnRecall(world: World): void {
     let pos = { x: 0, y: 0 };
     for (let attempt = 0; attempt < 64; attempt++) {
       const a = ev.angle + (attempt * Math.PI) / 32;
-      pos = {
-        x: clamp(
-          world.boarding.center.x + Math.cos(a) * r,
-          20,
-          world.balance.worldW - 20,
-        ),
-        y: clamp(
-          world.boarding.center.y + Math.sin(a) * r,
-          20,
-          world.balance.worldH - 20,
-        ),
-      };
+      pos = clampToField(
+        world.balance,
+        world.boarding.center.x + Math.cos(a) * r,
+        world.boarding.center.y + Math.sin(a) * r,
+        FIELD_EDGE,
+      );
       if (dist(pos, world.boarding.center) > world.boarding.radius + 220) break;
     }
     const e: Unit = {

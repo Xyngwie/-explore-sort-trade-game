@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHubSave, serializeHubSave, INITIAL_HUB } from "@estg/shared";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
+import { fieldRectOf } from "./game/fieldBounds";
 import { tickWorld } from "./game/sim";
 import { getCoverObjects } from "./game/coverObjects";
 import { snapshotSortieWorld, worldFromCheckpointBody } from "./game/checkpoint";
@@ -12,7 +13,8 @@ const w = createWorld(bootstrapFromSearch("")); startSortie(w);
 const taken: { x: number; y: number }[] = [];
 for (let i = 0; i < 40; i++) {
   const p = scatterStrayPos(w, taken);
-  assert.ok(p.x >= STRAY_EDGE_MARGIN && p.x <= w.balance.worldW - STRAY_EDGE_MARGIN && p.y >= STRAY_EDGE_MARGIN && p.y <= w.balance.worldH - STRAY_EDGE_MARGIN, "edge margin");
+  const rect = fieldRectOf(w.balance);
+  assert.ok(p.x >= rect.minX + STRAY_EDGE_MARGIN && p.x <= rect.maxX - STRAY_EDGE_MARGIN && p.y >= rect.minY + STRAY_EDGE_MARGIN && p.y <= rect.maxY - STRAY_EDGE_MARGIN, "edge margin");
   for (const c of getCoverObjects(w)) assert.ok(Math.hypot(p.x - c.pos.x, p.y - c.pos.y) >= c.radius, "not on an obstacle");
   for (const c of w.containers) assert.ok(Math.hypot(p.x - c.pos.x, p.y - c.pos.y) >= 40 - 1e-9, "clear of containers");
 }

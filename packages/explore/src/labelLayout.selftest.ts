@@ -35,7 +35,8 @@ for (const scale of [0.6, 1, 1.5, 2.5]) {
     for (let i = 0; i < placed.length; i++) {
       assert.ok(!boxesOverlap(placed[i]!, leader), `scale ${scale} n=${n}: no overlap with the leader label`);
       for (let j = i + 1; j < placed.length; j++) assert.ok(!boxesOverlap(placed[i]!, placed[j]!), `scale ${scale} n=${n}: ${i},${j} overlap`);
-      assert.ok(Number.isInteger((boxes[i]!.y - ys[i]!) / 13), "shifts are whole lines (13px)");
+      const lines = (boxes[i]!.y - ys[i]!) / 13;
+      assert.ok(Math.abs(lines - Math.round(lines)) < 1e-9, "shifts are whole lines (13px)");
     }
   }
 }

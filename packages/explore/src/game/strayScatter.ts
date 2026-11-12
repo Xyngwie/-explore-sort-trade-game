@@ -3,6 +3,7 @@ import type { Vec2 } from "./math";
 import type { World } from "./types";
 import { getCoverObjects } from "./coverObjects";
 import { pushLog } from "./orders";
+import { fieldRectOf } from "./fieldBounds";
 
 /** Keep this far from the map edges. */
 export const STRAY_EDGE_MARGIN = 90;
@@ -12,11 +13,14 @@ const STRAY_GAP = 30;
 
 /** A random field position away from edges, obstacles, containers and other strays (enemies are ignored). */
 export function scatterStrayPos(world: World, taken: Vec2[], rng: () => number = Math.random): Vec2 {
-  const W = world.balance.worldW, H = world.balance.worldH, m = STRAY_EDGE_MARGIN;
+  const rect = fieldRectOf(world.balance), m = STRAY_EDGE_MARGIN;
   const covers = getCoverObjects(world);
-  let p: Vec2 = { x: W / 2, y: H / 2 };
+  let p: Vec2 = { x: (rect.minX + rect.maxX) / 2, y: (rect.minY + rect.maxY) / 2 };
   for (let i = 0; i < 80; i++) {
-    p = { x: m + rng() * (W - 2 * m), y: m + rng() * (H - 2 * m) };
+    p = {
+      x: rect.minX + m + rng() * Math.max(1, rect.maxX - rect.minX - 2 * m),
+      y: rect.minY + m + rng() * Math.max(1, rect.maxY - rect.minY - 2 * m),
+    };
     if (covers.some((c) => Math.hypot(p.x - c.pos.x, p.y - c.pos.y) < c.radius + COVER_GAP)) continue;
     if (world.containers.some((c) => Math.hypot(p.x - c.pos.x, p.y - c.pos.y) < CONTAINER_GAP)) continue;
     if (taken.some((t) => Math.hypot(p.x - t.x, p.y - t.y) < STRAY_GAP)) continue;
