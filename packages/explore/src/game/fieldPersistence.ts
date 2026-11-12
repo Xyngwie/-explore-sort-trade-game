@@ -6,6 +6,7 @@ import {
 import { initializeEnemy } from './enemyBehavior';
 import { wreckWasStripped } from './strippingRuntime';
 import type { Unit, World } from './types';
+import { settleLegacyPos } from './fieldBounds';
 
 /** Stage a snapshot; startSortie's reset must run before dead enemies reappear. */
 export function attachFieldPersistence(world: World, hub: HubSnapshot | null): void {
@@ -21,9 +22,9 @@ export function attachFieldPersistence(world: World, hub: HubSnapshot | null): v
   }
   if (cell && hub?.fieldObjectIdentities) world.fieldCellAtStart={...structuredClone(cell),identities:structuredClone(hub.fieldObjectIdentities)};
 }
-function deadEnemy(w: FieldWreck): Unit {
+function deadEnemy(world: World, w: FieldWreck): Unit {
   const e=w.enemy!;
-  const unit:Unit = {id:w.targetId,kind:'enemy',name:e.name,pos:{...w.pos},vel:{x:0,y:0},heading:e.heading,
+  const unit:Unit = {id:w.targetId,kind:'enemy',name:e.name,pos:settleLegacyPos(world.balance, w.pos),vel:{x:0,y:0},heading:e.heading,
     hp:0,maxHp:e.maxHp,radius:e.radius,alive:false,stance:'raid',waypoint:null,moveTarget:null,
     cooldown:0,patrolAngle:0,salvageId:null,salvageT:0,salvagedCount:0,capacity:0,instanceId:null,
     inCover:false,quirk:null,hitWarnT:0,engageWarnT:0,enemyIdentity:structuredClone(e.identity)};
@@ -41,8 +42,8 @@ export function restoreFieldAtSortieStart(world: World): void {
   for (const w of saved.wrecks) {
     const id=w.sourceInstanceId ? `s:${w.sourceInstanceId}` : w.targetId;
     if (w.sourceInstanceId && !world.strandedMechs?.some(m=>m.instanceId===w.sourceInstanceId && m.wreck)) continue;
-    if (w.enemy && !world.enemies.some(e=>e.id===id)) world.enemies.push(deadEnemy(w));
-    if (w.legacyAir && world.circuitPlay) world.circuitPlay.airWrecks.push({id:id.slice(2),pos:{...w.pos},recovered:false});
+    if (w.enemy && !world.enemies.some(e=>e.id===id)) world.enemies.push(deadEnemy(world, w));
+    if (w.legacyAir && world.circuitPlay) world.circuitPlay.airWrecks.push({id:id.slice(2),pos:settleLegacyPos(world.balance, w.pos),recovered:false});
     world.stripping.jobs[id]={source:{targetId:id,instanceId:w.sourceInstanceId,circuits:structuredClone(w.circuits),learningValue:null,...(w.shieldMaxHp!==undefined?{shieldMaxHp:w.shieldMaxHp}:{})},
       wreckKey:w.wreckKey,seconds:w.seconds,reservation:null,completed:false};
   }

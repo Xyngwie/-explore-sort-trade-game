@@ -17,6 +17,7 @@ import { wreckWasStripped } from "./strippingRuntime";
  */
 import type { ExplorePos, LostMechReturnState } from "@estg/shared";
 import { getCoverObjects } from "./coverObjects";
+import { settleLegacyPos } from "./fieldBounds";
 import { dist, type Vec2 } from "./math";
 import type { BoardingState, Unit, World } from "./types";
 
@@ -101,14 +102,7 @@ const WRECK_COVER_GAP = 14;
  * anew every sortie). The saved `pos` itself is kept for the next sortie.
  */
 export function placeWreckInWorld(world: World, pos: Vec2): Vec2 {
-  const minX = 20;
-  const minY = 20;
-  const maxX = world.balance.worldW - 20;
-  const maxY = world.balance.worldH - 20;
-  const clampP = (p: Vec2): Vec2 => ({
-    x: Math.min(maxX, Math.max(minX, p.x)),
-    y: Math.min(maxY, Math.max(minY, p.y)),
-  });
+  const clampP = (p: Vec2): Vec2 => settleLegacyPos(world.balance, p);
   let p = clampP(pos);
   const covers = getCoverObjects(world);
   for (let pass = 0; pass < 3; pass += 1) {

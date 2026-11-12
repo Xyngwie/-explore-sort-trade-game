@@ -125,10 +125,18 @@ export const BALANCE = {
 
 export type Balance = Omit<typeof BALANCE, "enemyDamage" | "worldW" | "worldH"> & {
   readonly enemyDamage: number;
-  /** This world's width. The global table stays 1400; a sortie may copy another width. */
+  /**
+   * Span of this sortie (maxX − minX). Not a 0-based right edge.
+   * The global table stays 1400; a sortie copies its own span.
+   */
   readonly worldW: number;
-  /** This world's height. The global table stays 1000; a sortie may copy another height. */
+  /** Span of this sortie (maxY − minY). The global table stays 1000. */
   readonly worldH: number;
+  /** Wide sortie only. Left edge of the playable field (HQ-centered, may be negative). */
+  readonly minX?: number;
+  readonly maxX?: number;
+  readonly minY?: number;
+  readonly maxY?: number;
 };
 
 /**

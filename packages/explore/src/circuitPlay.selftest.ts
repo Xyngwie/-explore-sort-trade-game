@@ -443,11 +443,16 @@ for (const release of [true, false]) {
   const world = sortieWith([old2x2("old", "cap")], true);
   stepCircuitPlay(world, 0.05);
   world.circuitPlay!.cooldownSec = 123;
-  const fogLen = world.circuitPlay!.fogOpen!.length;
+  const fogBefore = world.circuitPlay!.fogSparse ?? world.circuitPlay!.fogOpen;
+  assert.ok(fogBefore, "(d) fog was recorded");
   const restored = worldFromCheckpointBody(JSON.parse(JSON.stringify({ v: 1, kind: "sortie", body: snapshotSortieWorld(world) })).body)!;
   assert.ok(restored, "(d) checkpoint body restores");
-  assert.ok(restored.circuitPlay!.fogOpen instanceof Uint8Array, "(d) fog is a Uint8Array again");
-  assert.equal(restored.circuitPlay!.fogOpen!.length, fogLen);
+  if (world.circuitPlay!.fogOpen instanceof Uint8Array) {
+    assert.ok(restored.circuitPlay!.fogOpen instanceof Uint8Array, "(d) fog is a Uint8Array again");
+    assert.equal(restored.circuitPlay!.fogOpen!.length, world.circuitPlay!.fogOpen.length);
+  } else {
+    assert.deepEqual(restored.circuitPlay!.fogSparse, world.circuitPlay!.fogSparse, "(d) sparse fog survives");
+  }
   assert.equal(restored.circuitPlay!.cooldownSec, 123, "(d) air support cooldown survives");
   assert.equal(restored.circuitPlay!.release, true);
   for (let i = 0; i < 5; i++) tickWorld(restored, 0.05, idle);

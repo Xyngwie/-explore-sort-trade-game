@@ -1,6 +1,6 @@
-import { spawnPointForMap } from "./balance";
 import type { Vec2 } from "./math";
 import type { World } from "./types";
+import { fieldRectOf } from "./fieldBounds";
 
 export type CoverObject = { id: string; pos: Vec2; radius: number };
 
@@ -17,13 +17,16 @@ export function getCoverObjects(world: World): CoverObject[] {
   if (Array.isArray(world.coverObjects)) { layouts.set(world, world.coverObjects); return world.coverObjects; }
   const covers: CoverObject[] = [];
   const margin = COVER_RADIUS + 20;
-  const spawn = spawnPointForMap(world.balance.worldW, world.balance.worldH);
+  const rect = fieldRectOf(world.balance);
+  const spawn = world.extract?.pos ?? world.leader.pos;
+  const spanX = Math.max(1, rect.maxX - rect.minX - margin * 2);
+  const spanY = Math.max(1, rect.maxY - rect.minY - margin * 2);
   let attempts = 0;
   while (covers.length < COVER_COUNT && attempts < 1000) {
     attempts += 1;
     const pos = {
-      x: margin + Math.random() * (world.balance.worldW - margin * 2),
-      y: margin + Math.random() * (world.balance.worldH - margin * 2),
+      x: rect.minX + margin + Math.random() * spanX,
+      y: rect.minY + margin + Math.random() * spanY,
     };
     if (Math.hypot(pos.x - spawn.x, pos.y - spawn.y) < SPAWN_AVOID_RADIUS) continue;
     if (covers.some((cover) => Math.hypot(cover.pos.x - pos.x, cover.pos.y - pos.y) < MIN_SEPARATION)) continue;

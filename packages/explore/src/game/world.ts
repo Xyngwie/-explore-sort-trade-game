@@ -15,11 +15,20 @@ import {
   BALANCE,
   balanceForThreat,
   ENGAGE_BRIEFING_LABEL,
-  spawnPointForMap,
   threatFromInvadeSector,
   type Balance,
   type DensityThreat,
 } from "./balance";
+import { playableFieldRect, type FieldRect } from "./fieldBounds";
+import { revealOpenedBoardFog } from "./vision";
+import {
+  boardFromLayout,
+  boardFromProgress,
+  entryPointOf,
+  hashUnit,
+  wideSpots,
+  type WideLayout,
+} from "./wideField";
 import type { Container, InvadeSectorContext, Unit, World } from "./types";
 import { quirkForWingmanIndex } from "./types";
 import { vec, type Vec2 } from "./math";
@@ -59,139 +68,63 @@ function makeUnit(
   };
 }
 
-function clampToWorld(
-  x: number,
-  y: number,
-  margin: number,
-  worldW: number,
-  worldH: number,
-): { x: number; y: number } {
-  return {
-    x: Math.min(worldW - margin, Math.max(margin, x)),
-    y: Math.min(worldH - margin, Math.max(margin, y)),
+/** Positions stay on the seed. Ids change per placement so a saved wreck does not collide with the next sortie. */
+let placementSerial = 0;
+
+function rngFromHash(seed: number, sx: number, sy: number, index: number): () => number {
+  let n = 0;
+  return () => {
+    n += 1;
+    return hashUnit(seed, sx, sy, 100 + index * 20 + n);
   };
 }
 
-/**
- * Scatter many salvage crates across the wreck field.
- * Deterministic positions (no RNG) so selftests stay stable.
- * Count from BALANCE.fieldContainerCount — no longer capped near 6.
- * The landmark list and the 5×4 grid are unchanged. The grid uses this world's size,
- * so the default 1400×1000 keeps today's positions. Wide-map count is 段階3.
- */
-function placeContainers(worldW: number, worldH: number, spawn: Vec2): Container[] {
-  const count = BALANCE.fieldContainerCount;
-  const margin = 90;
-  const spawnAvoid = spawn;
-  const avoidR = 140;
-  const spots: { x: number; y: number }[] = [];
-
-  // Landmark seeds (readable early-game targets)
-  const landmarks = [
-    vec(420, 280),
-    vec(780, 360),
-    vec(980, 620),
-    vec(560, 720),
-    vec(1100, 240),
-    vec(300, 520),
-    vec(640, 180),
-    vec(200, 780),
-    vec(1250, 480),
-    vec(880, 820),
-  ];
-  for (const p of landmarks) {
-    if (spots.length >= count) break;
-    spots.push(p);
-  }
-
-  // Fill remaining with a jittered grid covering the map
-  const cols = 5;
-  const rows = 4;
-  const usableW = worldW - margin * 2;
-  const usableH = worldH - margin * 2;
-  let gi = 0;
-  for (let row = 0; row < rows && spots.length < count; row++) {
-    for (let col = 0; col < cols && spots.length < count; col++) {
-      const jx = ((gi * 37) % 17) - 8;
-      const jy = ((gi * 53) % 17) - 8;
-      gi += 1;
-      const x = margin + ((col + 0.5) / cols) * usableW + jx * 6;
-      const y = margin + ((row + 0.5) / rows) * usableH + jy * 6;
-      const pos = clampToWorld(x, y, margin, worldW, worldH);
-      if (Math.hypot(pos.x - spawnAvoid.x, pos.y - spawnAvoid.y) < avoidR) continue;
-      // Skip near-duplicates of already placed landmarks
-      if (spots.some((s) => Math.hypot(s.x - pos.x, s.y - pos.y) < 55)) continue;
-      spots.push(pos);
-    }
-  }
-
-  // Safety fill if grid skipped too many near spawn
-  let fill = 0;
-  while (spots.length < count && fill < 40) {
-    const i = spots.length + fill;
-    const angle = i * 2.399; // golden-angle-ish
-    const radius = 220 + (i % 7) * 70;
-    const pos = clampToWorld(
-      spawnAvoid.x + Math.cos(angle) * radius,
-      spawnAvoid.y + Math.sin(angle) * radius,
-      margin,
-      worldW,
-      worldH,
-    );
-    fill += 1;
-    if (spots.some((s) => Math.hypot(s.x - pos.x, s.y - pos.y) < 50)) continue;
-    spots.push(pos);
-  }
-
-  return spots.slice(0, count).map((pos, i) => ({
-    id: `crate-${i}`,
-    pos: { ...pos },
-    taken: false,
-    discovered: false,
-    glowT: 0,
-  }));
-}
-
-/**
- * Place enemies on a ring around player spawn.
- * Higher density → more enemies, closer ring (see threatFromDensity / BALANCE).
- */
-function placeEnemies(
-  spawn: { x: number; y: number },
+function placeWideContents(
+  layout: WideLayout,
   threat: DensityThreat,
-  n: number,
+  neighborCount: number,
   rank: number,
-  worldW: number,
-  worldH: number,
-): Unit[] {
-  const count = Math.max(1, threat.enemyCount);
+): { enemies: Unit[]; containers: Container[] } {
+  const board = boardFromLayout(layout);
+  const spots = wideSpots(board, layout.seed);
+  // Hull HP stays the rank multiplier only, as placeEnemies did. Density and
+  // engage still set world.balance.enemySpeed. Count is the board, not threat.enemyCount.
+  void threat;
   const enemies: Unit[] = [];
-  const margin = 40;
-  for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count + Math.random()*Math.PI*2;
-    const raw = {
-      x: spawn.x + Math.cos(angle) * threat.spawnDist,
-      y: spawn.y + Math.sin(angle) * threat.spawnDist,
-    };
-    const pos = clampToWorld(raw.x, raw.y, margin, worldW, worldH);
-    const hp = BALANCE.enemyHp * rankEnemyMultiplier(rank);
-    enemies.push(
-      makeUnit({
-        id: `enemy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${i}`,
+  const containers: Container[] = [];
+  let enemyOrdinal = 0;
+  for (const spot of spots) {
+    if (spot.kind === "enemy") {
+      const hp = BALANCE.enemyHp * rankEnemyMultiplier(rank);
+      const id = `enemy-${spot.sx}-${spot.sy}-${spot.index}-${placementSerial++}`;
+      const enemy = makeUnit({
+        id,
         kind: "enemy",
-        name: `敵${i + 1}`,
-        pos,
+        name: `敵${enemyOrdinal + 1}`,
+        pos: { x: spot.x, y: spot.y },
         hp,
         maxHp: hp,
         radius: BALANCE.enemyRadius,
         alive: true,
         stance: "raid",
         capacity: 0,
-      }),
-    );
-    enemies[enemies.length - 1]!.enemyIdentity = makeEnemyIdentity(enemies[enemies.length - 1]!, Math.random, n);
+      });
+      enemy.homeCell = { sx: spot.sx, sy: spot.sy };
+      enemy.enemyIdentity = makeEnemyIdentity(enemy, rngFromHash(layout.seed, spot.sx, spot.sy, spot.index), neighborCount);
+      enemies.push(enemy);
+      enemyOrdinal += 1;
+      continue;
+    }
+    const prefix = spot.kind === "mine-container" ? "crate-m" : "crate-s";
+    containers.push({
+      id: `${prefix}-${spot.sx}-${spot.sy}`,
+      pos: { x: spot.x, y: spot.y },
+      taken: false,
+      discovered: false,
+      glowT: 0,
+    });
   }
-  return enemies;
+  return { enemies, containers };
 }
 
 export type SortieBootstrap = {
@@ -339,33 +272,36 @@ export function wingmanRingPos(spawn: Vec2, i: number, n: number): Vec2 {
   return { x: spawn.x + Math.cos(a) * r, y: spawn.y + Math.sin(a) * r };
 }
 
-/** Map size for one world. Omitted axes keep BALANCE (1400×1000). Does not mutate BALANCE. */
+/**
+ * Stage 3 ignores worldW/worldH. Every sortie is the playable board
+ * (decision 18). frontProgress selects the mine layout and which cells
+ * are already known safe. Omitted progress uses the campaign seed.
+ */
 export type CreateWorldOptions = {
   worldW?: number;
   worldH?: number;
+  frontProgress?: import("@estg/shared").InvadeFrontProgress | null;
 };
 
-function axisSize(passed: number | undefined, fallback: number): number {
-  return passed != null && Number.isFinite(passed) && passed > 0 ? passed : fallback;
-}
-
-/** Initial 720×420 view centred on the spawn, kept inside the map. */
-function cameraAtSpawn(spawn: Vec2, worldW: number, worldH: number): { x: number; y: number; w: number; h: number } {
+/** Initial 720×420 view centred on the entry, kept inside the playable field. */
+function cameraAtSpawn(spawn: Vec2, rect: FieldRect): { x: number; y: number; w: number; h: number } {
   const w = 720;
   const h = 420;
   return {
-    x: Math.min(Math.max(0, spawn.x - 360), Math.max(0, worldW - w)),
-    y: Math.min(Math.max(0, spawn.y - 210), Math.max(0, worldH - h)),
+    x: Math.min(Math.max(rect.minX, spawn.x - w / 2), Math.max(rect.minX, rect.maxX - w)),
+    y: Math.min(Math.max(rect.minY, spawn.y - h / 2), Math.max(rect.minY, rect.maxY - h)),
     w,
     h,
   };
 }
 
 export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions): World {
-  const worldW = axisSize(options?.worldW, BALANCE.worldW);
-  const worldH = axisSize(options?.worldH, BALANCE.worldH);
-  const at = spawnPointForMap(worldW, worldH);
+  const rect = playableFieldRect();
+  const worldW = rect.maxX - rect.minX;
+  const worldH = rect.maxY - rect.minY;
+  const at = entryPointOf(boot.invadeSector);
   const spawn = vec(at.x, at.y);
+  const laid = boardFromProgress(options?.frontProgress);
   const density = boot.invadeSector?.density ?? null;
   const threat = threatFromInvadeSector({
     density,
@@ -379,7 +315,17 @@ export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions)
     enemyDamage: baseBalance.enemyDamage * rankEnemyMultiplier(boot.invadeSector?.invadeRank ?? 0),
     worldW,
     worldH,
+    minX: rect.minX,
+    maxX: rect.maxX,
+    minY: rect.minY,
+    maxY: rect.maxY,
   };
+  const placed = placeWideContents(
+    laid.layout,
+    threat,
+    boot.invadeSector?.neighborCount ?? 0,
+    boot.invadeSector?.invadeRank ?? 0,
+  );
 
   const leaderId = boot.deployedInstanceIds[0] ?? null;
   const leader = makeUnit({
@@ -420,7 +366,7 @@ export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions)
   void craft;
   const carrierCapacity = BALANCE.carrierCapacityUnlimited;
 
-  return {
+  const world: World = {
     balance,
     phase: "briefing",
     timeLeft: boot.maxOperationTimeSec,
@@ -429,8 +375,8 @@ export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions)
     maxOperationTimeSec: boot.maxOperationTimeSec,
     leader,
     wingmen,
-    enemies: placeEnemies(spawn, threat, boot.invadeSector?.neighborCount ?? 0, boot.invadeSector?.invadeRank ?? 0, worldW, worldH),
-    containers: placeContainers(worldW, worldH, spawn),
+    enemies: placed.enemies,
+    containers: placed.containers,
     extract: { pos: vec(spawn.x, spawn.y), radius: 48 },
     boarding: null,
     camp: null,
@@ -490,13 +436,16 @@ export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions)
         }
       : null,
     densityThreat: { ...threat },
-    camera: cameraAtSpawn(spawn, worldW, worldH),
+    camera: cameraAtSpawn(spawn, rect),
+    wideLayout: laid.layout,
     combatHitsTaken: 0,
     commandUnlock: defaultCommandUnlockState(
       resolveCommandUnlockMode(),
       boot.equippedByUnit,
     ),
   };
+  revealOpenedBoardFog(world);
+  return world;
 }
 
 export function startSortie(world: World): boolean {
@@ -541,14 +490,14 @@ export function startSortie(world: World): boolean {
   delete world.shieldReturnSettled;
   delete world.barricades;
   delete world.fieldReturnReport;
-  world.enemies = placeEnemies(
-    world.leader.pos,
+  const layout = world.wideLayout ?? boardFromProgress(null).layout;
+  world.wideLayout = layout;
+  world.enemies = placeWideContents(
+    layout,
     world.densityThreat,
     world.invadeSector?.neighborCount ?? 0,
     world.invadeSector?.invadeRank ?? 0,
-    world.balance.worldW,
-    world.balance.worldH,
-  );
+  ).enemies;
   world.enemySupplies = [];
   world.recallSpawns = undefined;
   world.recoveredEnemyUnits = [];
@@ -606,6 +555,8 @@ export function startSortie(world: World): boolean {
   }
   faceAtSortieStart(world);
   restoreFieldAtSortieStart(world);
+  delete world.squadIntel;
+  revealOpenedBoardFog(world);
   return true;
 }
 
@@ -613,7 +564,7 @@ export function startSortie(world: World): boolean {
 export function faceAtSortieStart(world: World): void {
   const allies = [world.leader, ...world.wingmen];
   const up = -Math.PI / 2;
-  const spawn = spawnPointForMap(world.balance.worldW, world.balance.worldH);
+  const spawn = world.extract.pos;
   for (const u of allies) {
     const dx = u.pos.x - spawn.x, dy = u.pos.y - spawn.y;
     const out = u.kind === "leader" || Math.hypot(dx, dy) < 1 ? up : Math.atan2(dy, dx);
