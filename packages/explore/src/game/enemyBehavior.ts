@@ -277,6 +277,8 @@ export function lootEnemy(
       .filter((c) => c.effectKey === "cargo_slots")
       .reduce((n, c) => n + cargoSlotBonus(c.effect), 0);
   const needs = s.ammo < s.ammoCap || s.activity < s.capacity;
+  const inLeash = (pos: Vec2) =>
+    !leash || (pos.x >= leash.minX && pos.x < leash.maxX && pos.y >= leash.minY && pos.y < leash.maxY);
   if (
     s.cargo >= cap &&
     !needs &&
@@ -284,6 +286,7 @@ export function lootEnemy(
       (c) =>
         c.id === s.targetCrate &&
         !c.taken &&
+        inLeash(c.pos) &&
         dist(e.pos, c.pos) <= world.balance.interactRadius,
     )
   ) {
@@ -291,10 +294,10 @@ export function lootEnemy(
     e.vel = { x: 0, y: 0 };
     return true;
   }
-  let crate = world.containers.find((c) => c.id === s.targetCrate && !c.taken);
+  let crate = world.containers.find((c) => c.id === s.targetCrate && !c.taken && inLeash(c.pos));
   if (!crate) {
     crate = world.containers
-      .filter((c) => !c.taken)
+      .filter((c) => !c.taken && inLeash(c.pos))
       .sort((a, b) => dist(e.pos, a.pos) - dist(e.pos, b.pos))[0];
     s.targetCrate = crate?.id ?? null;
     s.collectT = 0;

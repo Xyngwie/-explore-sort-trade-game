@@ -10,7 +10,7 @@ import {
   worldToCell,
   type InvadeFrontProgress,
 } from "@estg/shared";
-import { initializeEnemy, scheduleRecall, spawnRecall } from "./game/enemyBehavior";
+import { enemyMoveRect, initializeEnemy, lootEnemy, scheduleRecall, spawnRecall } from "./game/enemyBehavior";
 import { tickWorld } from "./game/sim";
 import { fogGrey, fogIndexAt } from "./game/vision";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
@@ -254,14 +254,43 @@ const progress = (seed: number): InvadeFrontProgress => ({
     durability: 1,
     circuits: [{ circuitId: "rec", side: 2, effectKey: "recover", effect: 1, trueBoard: false }],
   };
-  w.containers = [{ id: "far-crate", pos: { x: 900, y: 0 }, taken: false, discovered: false, glowT: 0 }];
+  w.containers = [
+    { id: "outside", pos: { x: 900, y: 0 }, taken: false, discovered: false, glowT: 0 },
+    { id: "inside", pos: { x: 200, y: 0 }, taken: false, discovered: false, glowT: 0 },
+  ];
   w.leader.pos = { x: 400, y: 0 };
   w.leader.heading = 0;
-  tickWorld(w, 3, idle);
+  tickWorld(w, 1, idle);
+  assert.equal(e.enemyState!.targetCrate, "inside", "a nearer crate outside the leash is ignored");
+  assert.ok(e.pos.x < 650, "the enemy walks toward the crate in its own cell");
   const at = worldToCell(e.pos.x, e.pos.y);
-  assert.deepEqual(at, { sx: 0, sy: 0 }, "looting does not leave the home cell");
-  assert.ok(e.pos.x > 650, "the enemy still walks toward the crate");
-  assert.ok(e.pos.x < 700, "the step stops at the home cell edge");
+  assert.deepEqual(at, { sx: 0, sy: 0 });
+}
+
+{
+  const w = createWorld(boot());
+  startSortie(w);
+  w.coverObjects = [];
+  for (const u of [...w.wingmen, ...w.enemies]) u.alive = false;
+  const e = w.enemies[0]!;
+  e.alive = true;
+  e.homeCell = { sx: 0, sy: 0 };
+  e.pos = { x: 0, y: 0 };
+  initializeEnemy(e);
+  e.enemyState!.activity = e.enemyState!.capacity;
+  e.enemyState!.ammo = 0;
+  e.enemyState!.dormant = false;
+  e.enemyState!.targetCrate = "outside";
+  e.enemyIdentity = {
+    modelId: "mech_gen1",
+    durability: 1,
+    circuits: [{ circuitId: "rec", side: 2, effectKey: "recover", effect: 1, trueBoard: false }],
+  };
+  w.containers = [{ id: "outside", pos: { x: 900, y: 0 }, taken: false, discovered: false, glowT: 0 }];
+  const before = { ...e.pos };
+  assert.equal(lootEnemy(w, e, 1, 70, enemyMoveRect(w, e, null)), false, "no crate inside the leash means no loot");
+  assert.equal(e.enemyState!.targetCrate, null);
+  assert.deepEqual(e.pos, before, "the enemy does not walk to an unreachable crate");
 }
 
 {
