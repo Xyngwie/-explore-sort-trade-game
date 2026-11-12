@@ -1,3 +1,11 @@
+## 探索と侵略の一体化の計画（2026-11-12・文書のみ）
+
+- Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
+- What: [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md)。探索と侵略を一枚の広い地図にする骨組み（決定 1〜12、すべて神宮決定 2026-11-12）と、段階 0〜5。食い違う文は打ち消し線でこの文書を指す
+- Why: 神宮の指示。段階 0。コードの前に、決まったことと未決を分ける
+- Scope: 文書だけ。ゲームのコード、テスト、HTML、素材は変えない。12 個の決定の外は決めない。未決は「未決（段階 N で聞く）」のまま残す
+- Status: 文書のみの PR。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN。マージはまだ
+
 ## 小隊長の通信と分担の決定を文書へ書く（2026-11-12・文書のみ）
 - Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
 - What: 「小隊長の通信と分担」の Status、[AUTONOMOUS_LEARNING_V0.md](AUTONOMOUS_LEARNING_V0.md)、[MECH_WORLD_BUILDING_DESIGN.md](MECH_WORLD_BUILDING_DESIGN.md) §6、[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)、[HUB_SAVE_CONTRACT.md](HUB_SAVE_CONTRACT.md)。T2〜T5、B2〜B5、細部 1〜9 を ★A（神宮決定 2026-11-12）として記録し、#365 が draft で未マージだという文言を、マージとデプロイ成功の記録に直す
@@ -200,7 +208,7 @@
 - Who: Claude Code（神宮の直接指示。Automations は起動していない）
 - What: `packages/shared/src/canvas-ui/`（描画・入力・スクロール・モーダルの共通基盤）と、canvas 版の入口 `packages/trade/canvas/index.html`（開始前の名前入力 → DOCK の HUD・未開封数・物資市場の購入）。既存版の DOCK は変更なし → [CANVAS_SHELL_V0.md](CANVAS_SHELL_V0.md)
 - Why: 神宮の指示書「単一canvas刷新・第1段階：共通基盤とDOCKの縦断実装」。決定済み CANVAS-Q1（名前は開始前、刻印に自動使用）・CANVAS-Q2（数量は canvas 内で完結）
-- Scope: 基盤＋DOCK の購入だけ。全画面の移植・INVADE/Explore の統合・経済調整・新規アート・マージ・デプロイはしない
+- Scope: 基盤＋DOCK の購入だけ。全画面の移植・~~INVADE/Explore の統合~~・経済調整・新規アート・マージ・デプロイはしない。~~INVADE/Explore の統合~~を対象外にしたのは #348 当時の範囲の記録であり、この項のほかの履歴は書き換えない。2026-11-12 の決定で、統合の骨組みは [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md) に移った
 - Status: 細部 CANVAS-D1〜D11 はすべて★のとおり神宮決定（2026-11-04、§7）。PR #348 は draft、監査・マージ・デプロイはオーケストレーター側。スマートフォン実機・公開版 NOT_RUN
   - D1 名前が空 = 開始できない／D2 確認 = 箱だけ毎回／D3 数量 = −10・−1・×N・+1・+10／D4 購入後 = 1 に戻す／D5 プレイ記録パネル = canvas 版では隠す／D6 外側タップ = やめる／D7 保存中の画面 = 既存 HTML のまま／D8 名前 = 32 文字／D9 開始画面 = 毎回／D10 PC 幅 = 中央 960px／D11 文言 = 今のまま（すべて神宮決定 2026-11-04）
 
