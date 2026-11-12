@@ -4,7 +4,7 @@
 - What: [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md)。探索と侵略を一枚の広い地図にする骨組み（決定 1〜12、すべて神宮決定 2026-11-12）と、段階 0〜5。食い違う文は打ち消し線でこの文書を指す
 - Why: 神宮の指示。段階 0。コードの前に、決まったことと未決を分ける
 - Scope: 文書だけ。ゲームのコード、テスト、HTML、素材は変えない。12 個の決定の外は決めない。未決は「未決（段階 N で聞く）」のまま残す
-- Status: PR #367。文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN。マージはまだ
+- Status: PR #367 をマージ（merge `5f34a24d26f3b953fe5dd29bfb91af3ad6c36a9c`）。文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED（対象は packages と依存の変更だけ）。PR Build Check も同じ理由で走らない。スマートフォン実機 NOT_RUN
 
 ## 小隊長の通信と分担の決定を文書へ書く（2026-11-12・文書のみ）
 - Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
