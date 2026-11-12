@@ -10,7 +10,9 @@
 - Ctrl＋左は右と同じマーク操作。通常左/右/左右同時押し、数字タップ、ピンチ、広域ダブルタップ、中ドラッグ、ホイールは維持する。
 - 内部flaggedと保存形式は変更しない。マーク数一致だけで周囲開放し、誤推定では敵に接触し得る。最初の敵接触で追加開放を止める。
 
-変更しないもの：敵配置・数字・偵察範囲・勝利条件・報酬、Invade/Explore統合、部隊/学習/経済。操作反転・視点の永続化を追加しない。Automationsを起動しない。マージ・デプロイを行わず、Draftで監査を待つ。
+変更しないもの：敵配置・数字・偵察範囲・勝利条件・報酬、~~Invade/Explore統合~~、部隊/学習/経済。操作反転・視点の永続化を追加しない。Automationsを起動しない。マージ・デプロイを行わず、Draftで監査を待つ。
+
+~~Invade/Explore統合~~ をこの PR の対象外にした記録は、当時のまま残す。2026-11-12 の決定で、統合の骨組みは [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md) に移った。この行のほかの「変更しないもの」は、当時の PR の記録のままである。
 
 再現手順：`npm run test -w @estg/invade`、`VITE_BASE=/-explore-sort-trade-game/invade/ npm run build:invade` の後、`PLAYWRIGHT_MODULE=<playwright-coreの場所> node scripts/verify-invade-input.cjs`。Chromiumは`CHROMIUM_PATH`で指定可能。スクリプトはローカル本番ビルドと使い捨てブラウザープロファイル・保存済み盤面fixtureを使用する。通常ユーザーのセーブや公開サイトを書き換えない。
 
