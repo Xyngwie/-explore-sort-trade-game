@@ -1,7 +1,7 @@
 ## 探索と侵略の一体化（段階 3）（2026-11-12）
 
 - Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
-- What: 25×25 の盤全体を出撃 1 回の広い地図にする。世界座標は HQ マス中心が (0, 0)。決定 17〜24 はすべて A。地雷マスに敵 2 とコンテナ 1、安全と分かっている空白地帯は敵なしでコンテナがおよそ 10 マスに 1 個。壁には入らない。隊長から 2 マスより遠い敵は動かさない
+- What: 25×25 の盤全体を出撃 1 回の広い地図にする。世界座標は HQ マス中心が (0, 0)。決定 17〜24 はすべて A。決定 25 は B（開いているマスは出撃の始めから霧を晴らす）。地雷マスに敵 2 とコンテナ 1、安全と分かっている空白地帯は敵なしでコンテナがおよそ 10 マスに 1 個。壁には入らない。隊長から 2 マスより遠い敵は動かさない
 - Why: 神宮の指示。段階 3。起点は main `b9488c0`。正本は [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md)
 - Scope: `packages/explore` の地図・配置・霧・カメラ・移動の端、`packages/shared` の座標コメント、上記の文書とこの台帳。段階 4（結果を盤へ返すこと、今のセーブ座標の移し）、段階 5、命令の半径 7500 と 1500、セーブの最上位キーは変えない。古い座標は移さず、範囲外だけその場で壁の内側へ寄せる
 - Status: 実装と selftest（shared・explore・sort・trade・invade・restore）、`npm run build:explore`。PR #372。Deploy Modules Preview は CI 待ち。スマートフォン実機 NOT_RUN。マージはしない

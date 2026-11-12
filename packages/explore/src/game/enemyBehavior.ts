@@ -267,6 +267,7 @@ export function lootEnemy(
   e: Unit,
   dt: number,
   speed: number,
+  leash?: FieldRect | null,
 ): boolean {
   const s = e.enemyState!;
   if (!canLoot(e)) return false;
@@ -300,7 +301,7 @@ export function lootEnemy(
   }
   if (!crate) return false;
   if (dist(e.pos, crate.pos) > world.balance.interactRadius) {
-    moveEnemy(world, e, crate.pos, speed, dt);
+    moveEnemy(world, e, crate.pos, speed, dt, leash);
     s.collectT = 0;
     return true;
   }
@@ -522,6 +523,9 @@ export function spawnRecall(world: World): void {
     e.enemyIdentity = makeEnemyIdentity(e);
     e.enemyIdentity.circuits = [];
     initializeEnemy(e, Math.random, true);
+    const home = playableCellAt(pos.x, pos.y);
+    if (home) e.homeCell = home;
+    else delete e.homeCell;
     world.enemies.push(e);
   }
 }

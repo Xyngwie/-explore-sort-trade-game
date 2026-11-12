@@ -6,7 +6,9 @@ import type { Unit, World } from "./types";
 import { getCoverObjects } from "./coverObjects";
 import { visionMul } from "./circuitPlay";
 import { wrapAngle } from "./facing";
-import { fieldRectOf } from "./fieldBounds";
+import { fieldRectOf, isWideMap } from "./fieldBounds";
+import { cellBoundsInWorld } from "@estg/shared";
+import { boardFromLayout, cellsInOrder } from "./wideField";
 
 export const FRONT_HALF_RAD = Math.PI / 6; // 60°
 export const PERIPHERY_HALF_RAD = (135 * Math.PI) / 180; // 270°
@@ -142,6 +144,39 @@ function presentStatics(world: World): Ghost[] {
   return out;
 }
 const gkey = (g: { kind: GhostKind; id: string }) => `${g.kind}:${g.id}`;
+
+/**
+ * Decision 25: cells the board has already opened (numbers, HQ, 済, ✕) start
+ * clear. One pass at sortie start. Later frames still update only the
+ * vision window. Unopened cells are left unseen.
+ */
+export function revealOpenedBoardFog(world: World): void {
+  if (!isWideMap(world.balance) || !world.wideLayout) return;
+  const board = boardFromLayout(world.wideLayout);
+  const intel = squadIntel(world);
+  const cell = world.balance.fogCell;
+  const cols = fogCols(world);
+  const rows = fogRows(world);
+  const origin = fieldRectOf(world.balance);
+  const dense = intel.fogT.length === cols * rows;
+  for (const opened of cellsInOrder(board)) {
+    if (!opened.open) continue;
+    const bounds = cellBoundsInWorld(opened.sx, opened.sy);
+    const c0 = Math.max(0, Math.floor((bounds.x0 - origin.minX) / cell));
+    const c1 = Math.min(cols - 1, Math.floor((bounds.x1 - 1 - origin.minX) / cell));
+    const r0 = Math.max(0, Math.floor((bounds.y0 - origin.minY) / cell));
+    const r1 = Math.min(rows - 1, Math.floor((bounds.y1 - 1 - origin.minY) / cell));
+    for (let row = r0; row <= r1; row++) {
+      for (let col = c0; col <= c1; col++) {
+        const i = row * cols + col;
+        const center = fogCellCenter(world, i);
+        if (center.x < bounds.x0 || center.x >= bounds.x1 || center.y < bounds.y0 || center.y >= bounds.y1) continue;
+        if (dense) intel.fogT[i] = world.elapsed;
+        else intel.fogSeen![String(i)] = world.elapsed;
+      }
+    }
+  }
+}
 
 /** Fog and faint images: watched cells go black; seen statics refresh their image; a watched spot whose object is gone drops it. */
 export function updateSquadMemory(world: World): void {

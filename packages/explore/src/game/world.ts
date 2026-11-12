@@ -20,6 +20,7 @@ import {
   type DensityThreat,
 } from "./balance";
 import { playableFieldRect, type FieldRect } from "./fieldBounds";
+import { revealOpenedBoardFog } from "./vision";
 import {
   boardFromLayout,
   boardFromProgress,
@@ -365,7 +366,7 @@ export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions)
   void craft;
   const carrierCapacity = BALANCE.carrierCapacityUnlimited;
 
-  return {
+  const world: World = {
     balance,
     phase: "briefing",
     timeLeft: boot.maxOperationTimeSec,
@@ -443,6 +444,8 @@ export function createWorld(boot: SortieBootstrap, options?: CreateWorldOptions)
       boot.equippedByUnit,
     ),
   };
+  revealOpenedBoardFog(world);
+  return world;
 }
 
 export function startSortie(world: World): boolean {
@@ -552,6 +555,8 @@ export function startSortie(world: World): boolean {
   }
   faceAtSortieStart(world);
   restoreFieldAtSortieStart(world);
+  delete world.squadIntel;
+  revealOpenedBoardFog(world);
   return true;
 }
 

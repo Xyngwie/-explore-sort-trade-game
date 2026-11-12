@@ -345,7 +345,7 @@ export function updateEnemies(world: World, dt: number): void {
       if (Math.hypot(e.vel.x,e.vel.y)>0) st.activity = Math.max(st.capacity*.1, st.activity - .5*dt);
     } else if (!enemyHeld(world,e)) {
       const speed = enemySpeed(world,e)*emp.speed;
-      if (!lootEnemy(world,e,dt,speed)) moveEnemy(world,e,enemyDestination(world,e,nearest),speed,dt,leash);
+      if (!lootEnemy(world,e,dt,speed,leash)) moveEnemy(world,e,enemyDestination(world,e,nearest),speed,dt,leash);
     } else e.vel = {x:0,y:0};
     // Stationary / full / low-power enemies can still return fire.
     if (nearest) {

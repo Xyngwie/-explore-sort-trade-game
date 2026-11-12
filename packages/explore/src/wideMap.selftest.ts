@@ -10,8 +10,9 @@ import {
   worldToCell,
   type InvadeFrontProgress,
 } from "@estg/shared";
-import { initializeEnemy } from "./game/enemyBehavior";
+import { initializeEnemy, scheduleRecall, spawnRecall } from "./game/enemyBehavior";
 import { tickWorld } from "./game/sim";
+import { fogGrey, fogIndexAt } from "./game/vision";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import { fieldRectOf } from "./game/fieldBounds";
 import {
@@ -22,6 +23,7 @@ import {
   boardFromProgress,
   isKnownSafeCell,
   isMineCell,
+  playableCellAt,
   safeCellGetsContainer,
   wideSpots,
 } from "./game/wideField";
@@ -213,4 +215,88 @@ const progress = (seed: number): InvadeFrontProgress => ({
   assert.ok(Number.isFinite(w.leader.pos.x) && Number.isFinite(w.leader.pos.y));
 }
 
-console.log("wide map (negative move, walls, mines, safe crates, leash, entry) PASS");
+{
+  const w = createWorld(boot());
+  startSortie(w);
+  const template = w.enemies[0]!;
+  template.homeCell = { sx: 0, sy: 0 };
+  w.boarding = { center: { x: 1400, y: 0 }, radius: 60, requestedAt: 0, cargoArrived: false };
+  w.invadeSector = { sectorX: 0, sectorY: 0, density: 0, intelFlags: [], neighborCount: 1 };
+  w.sortieNonce = "recall-home";
+  scheduleRecall(w, () => 0);
+  w.elapsed = 20;
+  spawnRecall(w);
+  const stray = w.enemies.find((e) => e.id.startsWith("stray-"));
+  assert.ok(stray, "recall spawns a stray");
+  const born = playableCellAt(stray!.pos.x, stray!.pos.y);
+  assert.ok(born, "the stray appears on a playable cell");
+  assert.deepEqual(stray!.homeCell, born, "the stray's home is the cell it appeared in");
+  assert.notDeepEqual(stray!.homeCell, template.homeCell, "it does not keep the copied enemy's home");
+}
+
+{
+  const w = createWorld(boot());
+  startSortie(w);
+  w.coverObjects = [];
+  for (const u of w.wingmen) u.alive = false;
+  for (const e of w.enemies) e.alive = false;
+  const e = w.enemies[0]!;
+  e.alive = true;
+  e.homeCell = { sx: 0, sy: 0 };
+  e.pos = { x: 650, y: 0 };
+  e.heading = 0;
+  initializeEnemy(e);
+  e.enemyState!.activity = e.enemyState!.capacity;
+  e.enemyState!.ammo = 0;
+  e.enemyState!.dormant = false;
+  e.enemyIdentity = {
+    modelId: "mech_gen1",
+    durability: 1,
+    circuits: [{ circuitId: "rec", side: 2, effectKey: "recover", effect: 1, trueBoard: false }],
+  };
+  w.containers = [{ id: "far-crate", pos: { x: 900, y: 0 }, taken: false, discovered: false, glowT: 0 }];
+  w.leader.pos = { x: 400, y: 0 };
+  w.leader.heading = 0;
+  tickWorld(w, 3, idle);
+  const at = worldToCell(e.pos.x, e.pos.y);
+  assert.deepEqual(at, { sx: 0, sy: 0 }, "looting does not leave the home cell");
+  assert.ok(e.pos.x > 650, "the enemy still walks toward the crate");
+  assert.ok(e.pos.x < 700, "the step stops at the home cell edge");
+}
+
+{
+  const seed = 99;
+  const laid = boardFromProgress(progress(seed));
+  let openedSafe: { sx: number; sy: number } | null = null;
+  let openedMine: { sx: number; sy: number } | null = null;
+  let closed: { sx: number; sy: number } | null = null;
+  for (const row of laid.board.cells) {
+    for (const cell of row) {
+      if (cell.blocked) continue;
+      if (cell.open && cell.mine && !openedMine) openedMine = { sx: cell.sx, sy: cell.sy };
+      if (cell.open && !cell.mine && !openedSafe) openedSafe = { sx: cell.sx, sy: cell.sy };
+      if (!cell.open && !cell.mine && !closed) closed = { sx: cell.sx, sy: cell.sy };
+    }
+  }
+  assert.ok(openedSafe, "the fresh board has an opened safe cell");
+  assert.ok(closed, "the fresh board has an unopened cell");
+  const mine = laid.board.cells.flat().find((cell) => cell.mine && !cell.blocked);
+  assert.ok(mine);
+  const withMine = progress(seed);
+  withMine.opened = [{ sx: mine!.sx, sy: mine!.sy }];
+  const w = createWorld(boot(), { frontProgress: withMine });
+  startSortie(w);
+  const greyAt = (sx: number, sy: number) => {
+    const p = cellCenterToWorld(sx, sy);
+    const i = fogIndexAt(w, p.x, p.y);
+    assert.ok(i != null);
+    return fogGrey(w, i!);
+  };
+  assert.equal(greyAt(openedSafe!.sx, openedSafe!.sy), 0, "an opened cell starts clear");
+  assert.equal(greyAt(0, 0), 0, "HQ starts clear");
+  assert.equal(greyAt(mine!.sx, mine!.sy), 0, "an opened mine (済 or ✕) starts clear");
+  assert.equal(greyAt(closed!.sx, closed!.sy), 1, "an unopened cell stays in fog");
+  void openedMine;
+}
+
+console.log("wide map (negative move, walls, mines, safe crates, leash, entry, recall home, loot leash, opened fog) PASS");
