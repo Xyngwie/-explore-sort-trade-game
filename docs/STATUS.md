@@ -5,7 +5,7 @@
 - Scope: PR #374、head `fe96213afd6b363d356d9022892863281b6bb41b`。12ファイルを仕様と照合し、マージを妨げる指摘なし。scopeLockViolation=false、unresolved=[]
 - Status: PR #374 は main にマージ済み。merge `f00445d365d48c018b1e877c6535f43b9a0203c3`。PR Build Check run [43392826518](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43392826518) は PASS（型チェック・全selftest・全5ビルドのstep success）。Deploy Modules Preview run [43394975621](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43394975621) は同merge SHAでbuild/deployともsuccess、deploy=PASS
 - 確認: 監査側でも型チェック、全5ビルド、wideMap・canvas-explore・fullscreen-shellのselftestはPASS。ログの空配列を許容するverify変更は広い地図の初期状態に適合し、ログ追加・実描画・追従は既存canvas-explore.selftestで検証される
-- 実行環境の制限: 通常npm testはtsx CLIのIPC用UNIX socketがEPERMで停止。node --import tsxで同じselftest群を再実行。ローカルPlaywrightもChromiumのsingleton socketがEPERMとなりアプリ到達前に停止したため、監査側のPlaywrightはFAIL（環境起因）。実装者報告のPASSと区別する
+- 実行環境の制限: 通常npm testはtsx CLIのIPC用UNIX socketがEPERMで停止。node --import tsxで同じ全6ワークスペースのselftest群を再実行し全件PASS（exit 0）。ローカルPlaywrightもChromiumのsingleton socketがEPERMとなりアプリ到達前に停止したため、監査側のPlaywrightはFAIL（環境起因）。実装者報告のPASSと区別する
 - 公開確認: 公開版canvas DOCKと既存版invadeの「偵察」表記、invadeの戦線マップ起動をブラウザで確認。previewPlay=PASS（この起動・表示確認の範囲）。初期セーブではタブがロックされるためクリック遷移と公開版の出撃結果画面はNOT_RUN。結果行はselftestで確認。スマートフォン実機NOT_RUN
 - プレビュー: https://xyngwie.github.io/-explore-sort-trade-game/canvas/ 。下部の「偵察」、盤を変えた出撃後の結果行（0件の種類は非表示）をスマートフォンで確認できる
 - この記録は文書のみ。記録用PR自体のDeploy Modules PreviewはNOT_TRIGGERED。下のClaude Codeのdraft記録は実装時点の履歴であり、最新状態はこの節を正とする
