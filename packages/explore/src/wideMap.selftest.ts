@@ -19,7 +19,7 @@ import { enemyMoveRect, initializeEnemy, lootEnemy, scheduleRecall, spawnRecall 
 import { tickWorld } from "./game/sim";
 import { fogGrey, fogIndexAt } from "./game/vision";
 import { isEnemySeen } from "./game/render";
-import { enemyPresenceMarks, liveCellGlyph, syncWideBoard } from "./game/boardWatch";
+import { boardResultHtml, boardResultLines, enemyPresenceMarks, liveCellGlyph, syncWideBoard } from "./game/boardWatch";
 import { settleLegacyPos } from "./game/fieldBounds";
 import { bootstrapFromSearch, createWorld, startSortie } from "./game/world";
 import { fieldRectOf } from "./game/fieldBounds";
@@ -34,6 +34,7 @@ import {
   playableCellAt,
   safeCellGetsContainer,
   wideSpots,
+  boardFromLayout,
 } from "./game/wideField";
 
 const boot = () => bootstrapFromSearch("");
@@ -530,4 +531,29 @@ const progress = (seed: number): InvadeFrontProgress => ({
   assert.deepEqual(fieldAgain.fieldCells![0]!.wrecks[0]!.pos, cell.wrecks[0]!.pos);
 }
 
-console.log("wide map (stage 3 move/walls/mines plus stage 4 clear, fog, watch, migrate) PASS");
+// --- stage 5 (decisions 7・38): result-screen lines, one per kind, none when nothing changed ---
+{
+  const w = createWorld(boot());
+  startSortie(w);
+  assert.deepEqual(boardResultLines(w), [], "nothing changed → no line");
+  assert.equal(boardResultHtml(w), "");
+  const home = w.enemies.find((e) => e.placedCell)?.placedCell;
+  assert.ok(home);
+  for (const e of w.enemies) if (e.placedCell && e.placedCell.sx === home!.sx && e.placedCell.sy === home!.sy) { e.alive = false; e.hp = 0; }
+  syncWideBoard(w);
+  assert.deepEqual(boardResultLines(w), ["盤：地雷マス 1 個を「済」にした"]);
+  const laid = boardFromLayout(w.wideLayout!);
+  const closed = laid.cells.flat().filter((cell) => !cell.blocked && !cell.mine && !cell.open && chebyshevDistance(cell.sx, cell.sy, 0, 0) <= 3).slice(0, 2);
+  assert.equal(closed.length, 2, "two unopened non-mine cells near HQ");
+  for (const c of closed) { w.leader.pos = cellCenterToWorld(c.sx, c.sy); syncWideBoard(w); }
+  w.boardProgress!.enemyHere = [{ sx: 0, sy: 0 }];
+  assert.deepEqual(boardResultLines(w), ["盤：地雷マス 1 個を「済」にした", "盤：マス 2 個を開いた", "盤：「敵がいる」マス 1 個"]);
+  assert.match(boardResultHtml(w), /id="result-board"/);
+  delete w.boardProgress!.enemyHere;
+  w.securedThisSortie = closed.map((c) => ({ sx: c.sx, sy: c.sy }));
+  assert.deepEqual(boardResultLines(w), ["盤：マス 2 個を開いた"], "a kind with no change has no line");
+  w.boardProgress = undefined;
+  assert.deepEqual(boardResultLines(w), [], "no board → no line");
+}
+
+console.log("wide map (stage 3 move/walls/mines plus stage 4 clear, fog, watch, migrate, stage 5 result lines) PASS");

@@ -5,7 +5,7 @@
  */
 import { CANVAS_THEME, fontSpec, roundRectPath, wrapText, type ButtonVariant, type CanvasUI, type Rect } from "./core";
 import { MECH_GAUGE_COLORS, type MechGaugeModel } from "../mech-gauge";
-import { formatHudNumber, hudItems, type ShellTabState } from "../fullscreen-shell";
+import { SHELL_TAB_LABEL, formatHudNumber, hudItems, type ShellTabState } from "../fullscreen-shell";
 import type { HubSnapshot } from "../hub-save";
 
 export type FlowButton = {
@@ -298,10 +298,10 @@ export function drawShellTabs(ui: CanvasUI, r: Rect, tabs: readonly ShellTabStat
     const b: Rect = { x: r.x + w * i + 2, y: r.y + 4, w: w - 4, h: r.h - 8 };
     if (tab.active) {
       ui.panel(b, { fill: "#1f6feb33", edge: CANVAS_THEME.primary, radius: 8 });
-      ui.text(tab.id, b.x + b.w / 2, b.y + b.h / 2, { size: 13, weight: 700, align: "center", color: "#ffffff", maxW: b.w - 4 });
+      ui.text(SHELL_TAB_LABEL[tab.id], b.x + b.w / 2, b.y + b.h / 2, { size: 13, weight: 700, align: "center", color: "#ffffff", maxW: b.w - 4 });
       ui.region(`tab:${tab.id}`, b, { disabled: true });
     } else {
-      ui.button(`tab:${tab.id}`, b, tab.id, { disabled: !tab.enabled, fontSize: 13, onActivate: () => onTap(tab) });
+      ui.button(`tab:${tab.id}`, b, SHELL_TAB_LABEL[tab.id], { disabled: !tab.enabled, fontSize: 13, onActivate: () => onTap(tab) });
     }
   });
 }

@@ -95,6 +95,7 @@ import {
 } from "./game/commandUnlock";
 import { createPhaseWatcher } from "./game/phaseWatch";
 import { leftBehindResultHtml } from "./game/leftBehind";
+import { boardResultHtml } from "./game/boardWatch";
 import {
   forcedRescueAliveHtml,
   forcedRescueWarningHtml,
@@ -951,6 +952,7 @@ function renderDom(): void {
         ${forcedRescueAliveHtml(world)}
         ${leftBehindResultHtml(world)}
         ${wreckResultHtml(world)}
+        ${boardResultHtml(world)}
         ${recoveredCircuitResultHtml(world)}
         <table>
           <tr><td>returnKind</td><td>${returnKindFromWorld(world)}</td></tr>

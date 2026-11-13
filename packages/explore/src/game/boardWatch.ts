@@ -150,3 +150,32 @@ export function liveCellGlyph(world: World, sx: number, sy: number): string {
   if (!cell) return "";
   return cellGlyph(cell, { hitMine: progress.hitMine === true });
 }
+
+/**
+ * Stage 5, decisions 7 and 38 (神宮 2026-11-13): the board changes of this sortie on the result
+ * screen, one line per kind, no line for a kind that did not change.
+ */
+export function boardResultLines(world: World): string[] {
+  if (!isWideMap(world.balance) || !world.boardProgress) return [];
+  const mines = minesOf(world);
+  const secured = world.securedThisSortie ?? [];
+  const cleared = secured.filter((c) => mines.has(cellKey(c.sx, c.sy))).length;
+  const opened = secured.length - cleared;
+  const enemies = world.boardProgress.enemyHere?.length ?? 0;
+  const lines: string[] = [];
+  if (cleared > 0) lines.push(`盤：地雷マス ${cleared} 個を「済」にした`);
+  if (opened > 0) lines.push(`盤：マス ${opened} 個を開いた`);
+  if (enemies > 0) lines.push(`盤：「敵がいる」マス ${enemies} 個`);
+  return lines;
+}
+
+function escapeText(s: string): string {
+  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+/** Result-screen fragment of {@link boardResultLines} for the existing page; empty string when none. */
+export function boardResultHtml(world: World): string {
+  const lines = boardResultLines(world);
+  if (lines.length === 0) return "";
+  return `<ul class="board-changes" id="result-board">${lines.map((l) => `<li>${escapeText(l)}</li>`).join("")}</ul>`;
+}

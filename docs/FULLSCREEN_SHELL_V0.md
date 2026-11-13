@@ -7,7 +7,7 @@
 |---|---|
 | Q1 | 入りきらないときは画面内のパネルだけスクロール可（ページ全体の縦スクロールは無し） |
 | Q2 | PC もスマホと同じ全画面。中央固定・最大幅つき |
-| Q3 | 下部タブは英字 `DOCK`・`INVADE`・`SORT`・`RESTORE`・`SORTIE` |
+| Q3 | 下部タブは英字 `DOCK`・`INVADE`・`SORT`・`RESTORE`・`SORTIE`（→ 2026-11-13 神宮 決定 39：`INVADE` の表示名だけ「偵察」。id・並び・行き先は同じ。[`EXPLORE_INVADE_INTEGRATION.md`](./EXPLORE_INVADE_INTEGRATION.md)） |
 | Q4 | 出撃中はタブを隠す |
 | Q5 | HUD の未開封コンテナをタップすると SORT へ移動 |
 | Q6 | 弾薬は赤のまま。危険は点滅白枠＋頭上赤字で表す |

@@ -1,3 +1,11 @@
+## 探索と侵略の一体化（段階 5）（2026-11-13）
+
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 結果画面に盤の変化の行（種類ごとに 1 行。決定 38）。下部タブ `INVADE` の表示名を「偵察」に（決定 39。id・並び・行き先・URL は同じ）→ [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md) の段階 5
+- Why: 神宮の指示（Grok の段階 4 の引き継ぎ）。段階 5 の未決二つを 2026-11-13 に神宮が決定。起点は main `1c3fd2d`（#373 マージ）
+- Scope: `packages/explore` の結果画面（canvas と既存版）、`packages/shared` のタブの表示名、上記の文書とこの台帳。盤の書き戻し、命令の半径 7500 と 1500、報酬、セーブ、ミニマップ、侵略モジュールの中身は変えない
+- Status: 実装と selftest（`wideMap.selftest.ts`・`canvas-explore.selftest.ts`・`fullscreen-shell.selftest.ts`）、`npm test`、canvas の verify（explore 5 構成・dock・dock-full・invade）。`verify-canvas-explore.cjs` の「log has rows」は段階 3（#372）の広い地図から main でも失敗していた（出撃直後に近くに何もなくログが空のまま）。情報が開いていることと、ログが読めることの確認に直した。draft PR。マージ・デプロイなし。スマートフォン実機 NOT_RUN
+
 ## 探索と侵略の一体化（段階 4）（2026-11-13）
 
 - Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない

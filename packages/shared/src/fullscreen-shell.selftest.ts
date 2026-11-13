@@ -16,6 +16,7 @@ import {
   hudUnopenedEnabled,
   SHELL_CSS,
   type HubSnapshot,
+  SHELL_TAB_LABEL,
 } from "./index";
 
 class Mem {
@@ -32,6 +33,9 @@ const ids = (hub: HubSnapshot | null, current: any, handoff = false) =>
 const enabled = (m: ReturnType<typeof ids>) => m.tabs.filter((t) => t.enabled).map((t) => t.id);
 
 assert.deepEqual([...SHELL_TABS], ["DOCK", "INVADE", "SORT", "RESTORE", "SORTIE"]);
+// 2026-11-13 decision 39: only the label of INVADE changes (id, order, module and URL stay).
+assert.deepEqual(SHELL_TABS.map((id) => SHELL_TAB_LABEL[id]), ["DOCK", "偵察", "SORT", "RESTORE", "SORTIE"]);
+assert.equal(SHELL_TAB_MODULE.INVADE, "invade");
 assert.equal(new Set(Object.values(SHELL_TAB_MODULE)).size, 5);
 
 // Existing (pre-#332) save: no newGameIntro → all non-current tabs open.
