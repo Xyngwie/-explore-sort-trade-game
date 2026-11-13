@@ -54,6 +54,8 @@ class ReadyImage extends FakeImage {
 Object.defineProperty(globalThis, "Image", { value: ReadyImage, configurable: true });
 drawArtMech(ctx, 50, 50, 12, "#4f8fe8", "hexagon", 0);
 assert.equal(images.length, 1);
+assert.equal(images[0]![7], 12 * 2.8, "hull scale compensates for transparent padding");
+assert.equal(images[0]![6], -(12 * 2.8) * 0.55, "rotation anchored on the spherical hull");
 assert.equal(angles.at(-1), Math.PI / 2, "up-facing source rotates to world heading right");
 assert.ok(strokes.includes("#4f8fe8"), "faction outline remains over art");
 const camera = { x: -700, y: -300, w: 1000, h: 600 };

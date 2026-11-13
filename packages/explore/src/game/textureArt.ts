@@ -54,11 +54,14 @@ export function drawTexture(ctx: CanvasRenderingContext2D, key: TextureKey, x: n
   const fit = Math.min(width / sw!, height / sh!);
   const dw = sw! * fit, dh = sh! * fit;
   // Canvas owns clipping: cull only objects whose entire rotated bounds are off screen.
-  const bound = Math.hypot(dw, dh) / 2;
+  const hull = key === "rover" || key === "wreck";
+  // These source images include the muzzle/arm above the spherical hull; anchor its body, not its padding.
+  const pivotY = hull ? 0.55 : 0.5;
+  const bound = Math.hypot(dw, dh) * (hull ? 0.6 : 0.5);
   if (x + bound < 0 || y + bound < 0 || x - bound > ctx.canvas.width || y - bound > ctx.canvas.height) return true;
   ctx.save();
   ctx.translate(x, y); ctx.rotate(angle);
-  ctx.drawImage(image, left!, top!, sw!, sh!, -dw / 2, -dh / 2, dw, dh);
+  ctx.drawImage(image, left!, top!, sw!, sh!, -dw / 2, -dh * pivotY, dw, dh);
   ctx.restore();
   return true;
 }
@@ -87,27 +90,28 @@ export function drawGround(ctx: CanvasRenderingContext2D, camera: { x: number; y
 /** The original non-rotating faction/role outline and facing line remain over the rotating art. */
 export function drawArtMech(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   color: string, shape: MechShape, heading: number | null): void {
-  if (!drawTexture(ctx, "rover", x, y, r * 2, r * 2, heading == null ? 0 : heading + Math.PI / 2)) {
+  if (!drawTexture(ctx, "rover", x, y, r * 2.8, r * 2.8, heading == null ? 0 : heading + Math.PI / 2)) {
     drawMechShape(ctx, x, y, r, color, shape, heading); return;
   }
   ctx.save();
-  ctx.strokeStyle = "#17212b"; ctx.lineWidth = 4;
+  const edge = Math.max(0.75, Math.min(2, r / 8));
+  ctx.strokeStyle = "#17212b"; ctx.lineWidth = edge + 1.5;
   ctx.beginPath();
   shapePoints(shape, r).forEach((p, i) => i ? ctx.lineTo(x + p.x, y + p.y) : ctx.moveTo(x + p.x, y + p.y));
   ctx.closePath(); ctx.stroke();
-  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = color; ctx.lineWidth = edge; ctx.stroke();
   if (heading != null) {
     ctx.beginPath(); ctx.moveTo(x, y);
     ctx.lineTo(x + Math.cos(heading) * r * FACING_LINE_RATIO, y + Math.sin(heading) * r * FACING_LINE_RATIO);
-    ctx.strokeStyle = "#17212b"; ctx.lineWidth = 4; ctx.stroke();
-    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = "#17212b"; ctx.lineWidth = edge + 1.5; ctx.stroke();
+    ctx.strokeStyle = color; ctx.lineWidth = edge; ctx.stroke();
   }
   ctx.restore();
 }
 
 export function drawArtWreck(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   color: string, outline?: { color: string; width: number }): void {
-  if (!drawTexture(ctx, "wreck", x, y, r * 2)) { drawDisc(ctx, x, y, r, color, outline); return; }
+  if (!drawTexture(ctx, "wreck", x, y, r * 2.8)) { drawDisc(ctx, x, y, r, color, outline); return; }
   if (outline) {
     ctx.save(); ctx.strokeStyle = outline.color; ctx.lineWidth = outline.width;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
