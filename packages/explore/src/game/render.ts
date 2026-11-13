@@ -6,7 +6,7 @@ import type { Vec2 } from "./math";
 import { wreckWasStripped } from "./strippingRuntime";
 import { equippedShield, SHIELD_HALF_ARC } from "./shields";
 import { combatFeedback, feedbackLabel } from "./combatFeedback";
-import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, leaderLabelLift, drawDisc, drawMechShape } from "./mapShapes";
+import { COLORS, MECH_R, OWN_WRECK_OUTLINE, SHAPE_SIZE, dropGlowRgba, leaderLabelLift, drawDisc } from "./mapShapes";
 import { fogCols, fogGrey, fogRows, ghostOf, GHOST_ALPHA, lastSeenFade, squadIntel, squadSees, viewRange, type GhostKind, FRONT_HALF_RAD, FRONT_RANGE_MUL, PERIPHERY_HALF_RAD } from "./vision";
 import { watchedCell } from "./boardWatch";
 import { fieldRectOf } from "./fieldBounds";
@@ -24,6 +24,7 @@ import { QUESTION_COLOR, QUESTION_FONT, questionAlpha, wingStanceTagJa } from ".
 import { enemyDisplayNameJa } from "./enemyIdentity";
 import { STATUS_BADGE_COLOR, STATUS_BADGE_OUTLINE, STATUS_BADGE_PX, wingmanStatusLine, wreckCircuitLine } from "./statusBadges";
 import { activeCommandRings } from "./platoonCommand";
+import { artVariant, drawArtMech, drawArtWreck, drawGround, drawTexture, worldText } from "./textureArt";
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -42,6 +43,11 @@ export function renderWorld(
     if (!entry) return;
     ctx.save();
     ctx.globalAlpha = Math.min(1, entry.shield.hp / entry.shield.maxHp);
+    const heading = unit.heading;
+    const rr = (unit.radius + 4) * sx;
+    drawTexture(ctx, "barricade", tx(unit.pos.x) + Math.cos(heading) * rr,
+      ty(unit.pos.y) + Math.sin(heading) * rr, unit.radius * sx * 2,
+      unit.radius * sx, heading + Math.PI / 2);
     ctx.strokeStyle = color; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(tx(unit.pos.x), ty(unit.pos.y), (unit.radius + 4) * sx,
@@ -52,9 +58,10 @@ export function renderWorld(
   ctx.clearRect(0, 0, cssW, cssH);
   ctx.fillStyle = "#0b0f14";
   ctx.fillRect(0, 0, cssW, cssH);
+  const texturedGround = drawGround(ctx, cam, cssW, cssH);
 
   // Grid
-  ctx.strokeStyle = "#1a222c";
+  ctx.strokeStyle = texturedGround ? "#33414d18" : "#1a222c";
   ctx.lineWidth = 1;
   const grid = 80;
   const x0 = Math.floor(cam.x / grid) * grid;
@@ -85,6 +92,8 @@ export function renderWorld(
     ctx.arc(px, py, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    if (drawTexture(ctx, "rubble", px, py, r * 2, r * 2, 0, artVariant(cover.id, 6))) continue;
 
     // Low circular debris mound, leaving the snapped-to center readable.
     ctx.fillStyle = "#3f4b52";
@@ -181,7 +190,7 @@ export function renderWorld(
     ctx.fillStyle = b.cargoArrived ? "#3dd68ccc" : "#7eb6ffcc";
     ctx.font = "12px sans-serif";
     const label = b.cargoArrived ? "BOARDING · CARGO" : "BOARDING";
-    ctx.fillText(label, cx - 48, cy - rr - 6);
+    worldText(ctx, label, cx - 48, cy - rr - 6);
   }
 
   // Temporary staging camp (+ aura when stash > 0)
@@ -216,7 +225,7 @@ export function renderWorld(
     ctx.font = "11px sans-serif";
     const drPct = Math.round((1 - world.balance.campDamageTakenMul) * 100);
     const campLabel = c.stashedCount > 0 ? `CAMP · ${c.stashedCount} · 防衛−${drPct}%` : `CAMP · ${c.stashedCount}`;
-    ctx.fillText(campLabel, cx - 44, cy - 28);
+    worldText(ctx, campLabel, cx - 44, cy - 28);
   }
 
   // PR2 fog: never seen = grey; watched now = black ground; unwatched fades back to grey over 60 s.
@@ -261,14 +270,16 @@ export function renderWorld(
       ctx.fill();
     }
     ctx.fillStyle = c.glowT > 0 ? COLORS.dropGlow : COLORS.container;
-    ctx.fillRect(px - 8, py - 8, 16, 16);
+    if (!drawTexture(ctx, "containers", px, py, 16, 16, 0, artVariant(c.id, 4))) {
+      ctx.fillRect(px - 8, py - 8, 16, 16);
+    }
     ctx.strokeStyle = c.glowT > 0 ? COLORS.dropGlow : COLORS.containerEdge;
     ctx.lineWidth = c.glowT > 0 ? 2 : 1;
     ctx.strokeRect(px - 8, py - 8, 16, 16);
     if (c.glowT > 0) {
       ctx.fillStyle = "#ffc98a";
       ctx.font = "10px sans-serif";
-      ctx.fillText("DROP", px - 14, py - 12);
+      worldText(ctx, "DROP", px - 14, py - 12);
     }
     ctx.restore();
   }
@@ -279,13 +290,13 @@ export function renderWorld(
   for (const e of world.enemies) {
     if (!e.alive) continue;
     if (!isEnemySeen(world, e)) continue;
-    drawMechShape(ctx, tx(e.pos.x), ty(e.pos.y), MECH_R * SHAPE_SIZE.enemy * sx, COLORS.enemy, "triangle", e.heading);
+    drawArtMech(ctx, tx(e.pos.x), ty(e.pos.y), MECH_R * SHAPE_SIZE.enemy * sx, COLORS.enemy, "triangle", e.heading);
     drawShield(e, COLORS.enemy);
     // Enemy PR1 (F1 = B): 「所属不明」 only after a tap, for a few seconds.
     if (world.enemyTag?.enemyId === e.id) {
       ctx.fillStyle = "#ffb3b3";
       ctx.font = "11px sans-serif";
-      ctx.fillText(enemyDisplayNameJa(e), tx(e.pos.x) - 22, ty(e.pos.y) - e.radius * sy - 6);
+      worldText(ctx, enemyDisplayNameJa(e), tx(e.pos.x) - 22, ty(e.pos.y) - e.radius * sy - 6);
     }
   }
 
@@ -293,8 +304,8 @@ export function renderWorld(
     if (wreckWasStripped(world,e.id) || e.alive || e.enemyState?.recovered || wreckCarrierId(world,e.id)) continue;
     const v = seenOrGhost("enemyWreck", e.id, e.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck);
-    ctx.fillStyle='#c3c8cf'; ctx.font='11px sans-serif'; ctx.fillText('残骸',tx(v.pos.x),ty(v.pos.y)-12);
+    drawArtWreck(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck);
+    ctx.fillStyle='#c3c8cf'; ctx.font='11px sans-serif'; worldText(ctx, '残骸',tx(v.pos.x),ty(v.pos.y)-12);
     ctx.restore();
   }
   // Faint images of wrecks recovered or carried off while unseen stay until the spot is seen again.
@@ -307,27 +318,29 @@ export function renderWorld(
       : u && !u.alive && !(world.recoveredWreckUnitIds ?? []).includes(u.id) && wreckCarrierId(world, u.id) == null;
     if (drawnAbove) continue;
     ctx.save(); ctx.globalAlpha = GHOST_ALPHA;
-    drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, g.kind === "allyWreck" ? OWN_WRECK_OUTLINE : undefined);
+    drawArtWreck(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, g.kind === "allyWreck" ? OWN_WRECK_OUTLINE : undefined);
     ctx.restore();
   }
   // Faint images of enemy supplies taken while unseen stay until the spot is seen again.
   const liveSupplyIds = new Set((world.enemySupplies ?? []).map((d) => d.id));
   for (const g of Object.values(squadIntel(world).ghosts)) {
     if (g.kind !== "supply" || liveSupplyIds.has(g.id) || squadSees(world, g.pos)) continue;
-    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx, g.id.endsWith('-armor') ? COLORS.armorDrop : g.id.endsWith('-power') ? COLORS.powerDrop : COLORS.ammoDrop); ctx.restore();
+    ctx.save(); ctx.globalAlpha = GHOST_ALPHA; drawDisc(ctx, tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx, g.id.endsWith('-armor') ? COLORS.armorDrop : g.id.endsWith('-power') ? COLORS.powerDrop : COLORS.ammoDrop); drawTexture(ctx, "supplies", tx(g.pos.x), ty(g.pos.y), MECH_R * SHAPE_SIZE.supply * sx * 2, undefined, 0, g.id.endsWith("-armor") ? 2 : g.id.endsWith("-power") ? 1 : 0); ctx.restore();
   }
   for (const d of world.enemySupplies ?? []) {
     const v = seenOrGhost("supply", d.id, d.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
     drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx, d.kind === 'armor' ? COLORS.armorDrop : d.kind === 'power' ? COLORS.powerDrop : COLORS.ammoDrop);
-    if(d.kind === "armor") { ctx.fillStyle=COLORS.armorDrop;ctx.font="11px sans-serif";ctx.fillText(`装甲パーツ ${d.armor??0}`,tx(v.pos.x),ty(v.pos.y)-10); }
+    drawTexture(ctx, "supplies", tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.supply * sx * 2, undefined, 0, d.kind === "armor" ? 2 : d.kind === "power" ? 1 : 0);
+    if(d.kind === "armor") { ctx.fillStyle=COLORS.armorDrop;ctx.font="11px sans-serif";worldText(ctx, `装甲パーツ ${d.armor??0}`,tx(v.pos.x),ty(v.pos.y)-10); }
     ctx.restore();
   }
   // Same visible groups drive map labels and the pickup candidate panel.
   for (const {pos,keys,reserved} of groundShieldGroups(world)) {
     ctx.save(); ctx.fillStyle=COLORS.wreck; ctx.font="11px sans-serif";
     if(reserved===keys.length)ctx.globalAlpha=.5;
-    ctx.fillText(`盾 ×${keys.length}${reserved?`（回収中${reserved}）`:""}`,tx(pos.x),ty(pos.y));ctx.restore();
+    drawTexture(ctx, "shield", tx(pos.x), ty(pos.y), 18 * sx, 14 * sy);
+    worldText(ctx, `盾 ×${keys.length}${reserved?`（回収中${reserved}）`:""}`,tx(pos.x),ty(pos.y));ctx.restore();
   }
   for(const [key,b] of wallEntries(world)){
     if(!squadSees(world,b.pos))continue;
@@ -336,12 +349,15 @@ export function renderWorld(
     for(const [i,v] of [{x:-4,y:-30},{x:4,y:-30},{x:4,y:30},{x:-4,y:30}].entries()){
       const d=worldVector(b,v);if(i===0)ctx.moveTo(tx(b.pos.x+d.x),ty(b.pos.y+d.y));else ctx.lineTo(tx(b.pos.x+d.x),ty(b.pos.y+d.y));
     }
-    ctx.closePath();ctx.fill();ctx.font="11px sans-serif";ctx.fillText(`設置盾 ${Number(item.hp.toFixed(1))}/${Number(item.maxHp.toFixed(1))}`,tx(b.pos.x),ty(b.pos.y)-12);ctx.restore();
+    ctx.closePath();ctx.fill();
+    drawTexture(ctx, "barricade", tx(b.pos.x), ty(b.pos.y), 60 * sx, 16 * sy, b.heading + Math.PI / 2);
+    ctx.font="11px sans-serif";worldText(ctx, `設置盾 ${Number(item.hp.toFixed(1))}/${Number(item.maxHp.toFixed(1))}`,tx(b.pos.x),ty(b.pos.y)-12);ctx.restore();
   }
   // Bullets
   ctx.fillStyle = "#e8eaed";
   for (const b of world.bullets) {
     if (!b.alive) continue;
+    if (texturedGround) { ctx.save(); ctx.fillStyle = "#26313d"; ctx.fillRect(tx(b.pos.x) - 3, ty(b.pos.y) - 3, 6, 6); ctx.restore(); }
     ctx.fillRect(tx(b.pos.x) - 2, ty(b.pos.y) - 2, 4, 4);
   }
 
@@ -359,15 +375,15 @@ export function renderWorld(
     m = { ...m, pos: sv.pos };
     if (m.wreck) {
       // Left-behind ex-wingman wreck: grey circle with the blue outline on its edge (width 2), same as own wrecks.
-      drawDisc(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, OWN_WRECK_OUTLINE);
+      drawArtWreck(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, OWN_WRECK_OUTLINE);
       ctx.fillStyle = COLORS.wingman;
     } else {
       // Left-behind mech that can still move: grey inverted triangle (no facing), blue label.
-      drawMechShape(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wreck, "invertedTriangle", null);
+      drawArtMech(ctx, tx(m.pos.x), ty(m.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wreck, "invertedTriangle", null);
       ctx.fillStyle = COLORS.wingman;
     }
     ctx.font = "11px sans-serif";
-    ctx.fillText(m.wreck ? strayWreckLabel(m.instanceId) : strayStoppedLabel(m.instanceId), tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
+    worldText(ctx, m.wreck ? strayWreckLabel(m.instanceId) : strayStoppedLabel(m.instanceId), tx(m.pos.x) - 34, ty(m.pos.y) - 9 * sy - 8);
     ctx.restore();
   }
 
@@ -378,10 +394,10 @@ export function renderWorld(
     if (wreckCarrierId(world, u.id) != null) continue; // drawn on its carrier (項目4-1)
     const v = seenOrGhost("allyWreck", u.id, u.pos); if (!v) continue;
     ctx.save(); ctx.globalAlpha = v.alpha;
-    drawDisc(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, OWN_WRECK_OUTLINE);
+    drawArtWreck(ctx, tx(v.pos.x), ty(v.pos.y), MECH_R * SHAPE_SIZE.wreck * sx, COLORS.wreck, OWN_WRECK_OUTLINE);
     ctx.fillStyle = "#c3c8cf";
     ctx.font = "11px sans-serif";
-    ctx.fillText(wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(v.pos.x) - 30, ty(v.pos.y) - u.radius * sy - 8);
+    worldText(ctx, wreckLabel(u.kind === "leader" ? "隊長機" : u.name), tx(v.pos.x) - 30, ty(v.pos.y) - u.radius * sy - 8);
     // 21:29 神宮 1 = B: a wrecked wingman shows its circuits (type + value) over the label.
     if (u.kind !== "leader") drawOverheadLine(ctx, cssW, wreckCircuitLine(world, u), tx(v.pos.x) - 30, ty(v.pos.y) - u.radius * sy - 8);
     ctx.restore();
@@ -399,10 +415,12 @@ export function renderWorld(
     d = { ...d, pos: dv.pos };
     // 10/17 神宮 6: whitish square (same 8px size as before; no outline).
     ctx.fillStyle = COLORS.circuitDrop;
-    ctx.fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
+    if (!drawTexture(ctx, "supplies", tx(d.pos.x), ty(d.pos.y), 8, 8, 0, 3)) {
+      ctx.fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8);
+    }
     ctx.fillStyle = COLORS.circuitDrop;
     ctx.font = "11px sans-serif";
-    ctx.fillText(`落とし物 回路 ${d.circuitId}`, tx(d.pos.x) - 30, ty(d.pos.y) - 10);
+    worldText(ctx, `落とし物 回路 ${d.circuitId}`, tx(d.pos.x) - 30, ty(d.pos.y) - 10);
     ctx.restore();
   }
 
@@ -426,14 +444,14 @@ export function renderWorld(
   for (const w of world.wingmen) {
     if (!w.alive) continue;
     if (w.inCover) drawCoverRing(ctx, tx(w.pos.x), ty(w.pos.y), w.radius * sx);
-    drawMechShape(ctx, tx(w.pos.x), ty(w.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wingman, "invertedTriangle", w.heading);
+    drawArtMech(ctx, tx(w.pos.x), ty(w.pos.y), MECH_R * SHAPE_SIZE.wingman * sx, COLORS.wingman, "invertedTriangle", w.heading);
     drawShield(w, COLORS.wingman);
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
     // C20-b: 「待機」 while holding (mobile wingmen; immobile keep 「自衛のみ」) — see wingLabelText.
     const labelX = tx(w.pos.x) - 28;
     const labelY = wingLabelY.get(w.id) ?? ty(w.pos.y) - w.radius * sy - 8;
-    ctx.fillText(wingLabelText(w), labelX, labelY);
+    worldText(ctx, wingLabelText(w), labelX, labelY);
     // feat/explore-status-badges: red outlined state line over the name label.
     // The canvas backing is fixed and CSS-scaled, so the font is sized in
     // backing px to land at STATUS_BADGE_PX on screen at any width / map zoom.
@@ -446,7 +464,7 @@ export function renderWorld(
       ctx.globalAlpha = qa;
       ctx.fillStyle = QUESTION_COLOR;
       ctx.font = QUESTION_FONT;
-      ctx.fillText("？", tx(w.pos.x) - 5, topY - 13);
+      worldText(ctx, "？", tx(w.pos.x) - 5, topY - 13);
       ctx.restore();
     }
     if (w.stance === "patrol" && w.waypoint) {
@@ -482,12 +500,12 @@ export function renderWorld(
   // Leader
   if (world.leader.alive) {
     if (world.leader.inCover) drawCoverRing(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), world.leader.radius * sx);
-    drawMechShape(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), MECH_R * SHAPE_SIZE.leader * sx, COLORS.leader, "hexagon", world.leader.heading);
+    drawArtMech(ctx, tx(world.leader.pos.x), ty(world.leader.pos.y), MECH_R * SHAPE_SIZE.leader * sx, COLORS.leader, "hexagon", world.leader.heading);
     drawShield(world.leader, COLORS.leader);
     ctx.fillStyle = "#9ecbff";
     ctx.font = "11px sans-serif";
     const leadLabel = world.leader.inCover ? "隊長·カバー" : "隊長";
-    ctx.fillText(leadLabel, tx(world.leader.pos.x) - 18, ty(world.leader.pos.y) - leaderLabelLift(sx));
+    worldText(ctx, leadLabel, tx(world.leader.pos.x) - 18, ty(world.leader.pos.y) - leaderLabelLift(sx));
   }
 
   // 項目4-1 C7: a carried wreck is drawn small on top of its carrier, with 「積載中 残骸」.
@@ -497,10 +515,10 @@ export function renderWorld(
     if (n <= 0) continue;
     const cx = tx(u.pos.x);
     const cy = ty(u.pos.y) - u.radius * sy * 0.9;
-    drawDisc(ctx, cx, cy, MECH_R * SHAPE_SIZE.wreck * 0.55 * sx, COLORS.wreck);
+    drawArtWreck(ctx, cx, cy, MECH_R * SHAPE_SIZE.wreck * 0.55 * sx, COLORS.wreck);
     ctx.fillStyle = "#e6d3a3";
     ctx.font = "11px sans-serif";
-    ctx.fillText(n > 1 ? `積載中 残骸×${n}` : "積載中 残骸", cx + u.radius * sx * 0.8, cy + 4);
+    worldText(ctx, n > 1 ? `積載中 残骸×${n}` : "積載中 残骸", cx + u.radius * sx * 0.8, cy + 4);
   }
 
   // PR2 vision cones (A): every living ally, very faint. Front 60° to 2×, periphery 270° to 1×.

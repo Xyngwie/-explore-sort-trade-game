@@ -39,7 +39,7 @@ const CONFIGS = [
     let f = path.resolve(dir, s || "index.html");
     if (fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, "index.html");
     if (!f.startsWith(dir + "/") || !fs.existsSync(f) || !fs.statSync(f).isFile()) return res.writeHead(404).end();
-    res.setHeader("Content-Type", f.endsWith(".js") ? "text/javascript" : f.endsWith(".css") ? "text/css" : "text/html");
+    res.setHeader("Content-Type", f.endsWith(".js") ? "text/javascript" : f.endsWith(".css") ? "text/css" : f.endsWith(".webp") ? "image/webp" : "text/html");
     fs.createReadStream(f).pipe(res);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -50,10 +50,19 @@ const CONFIGS = [
     // VERIFY_CONFIGS=name1,name2 runs only those configurations.
     for (const cfg of CONFIGS.filter((c) => !process.env.VERIFY_CONFIGS || process.env.VERIFY_CONFIGS.split(",").includes(c.name))) {
       const ctx = await b.newContext({ viewport: cfg.viewport, deviceScaleFactor: cfg.dpr, isMobile: cfg.touch, hasTouch: cfg.touch });
+      if (process.env.VERIFY_BLOCK_TEXTURES) await ctx.route("**/*.webp", (route) => route.abort());
       await ctx.addInitScript(() => {
         const n = localStorage, ss = sessionStorage;
         window.__native = () => n;
         window.__pending = () => Object.keys(ss).some((k) => k.startsWith("wreckline.playLog.pending"));
+        // Observe real decoded textures reaching the renderer, not just successful HTTP requests.
+        window.__textureDraws = {};
+        const draw = CanvasRenderingContext2D.prototype.drawImage;
+        CanvasRenderingContext2D.prototype.drawImage = function (im, ...args) {
+          const key = im.src && im.src.match(/\/(ground|rover|wreck|shield|barricade|supplies|containers|rubble)-[^/]+\.webp/);
+          if (key) window.__textureDraws[key[1]] = (window.__textureDraws[key[1]] || 0) + 1;
+          return draw.call(this, im, ...args);
+        };
       });
       const p = await ctx.newPage();
       const errors = [];
@@ -207,6 +216,24 @@ const CONFIGS = [
       await settle();
       e = await ex();
       assert.equal(e.phase, "sortie", `${cfg.name}: 出撃`);
+      if (!process.env.VERIFY_BLOCK_TEXTURES) {
+        await p.waitForFunction(() => window.__textureDraws.ground > 0 && window.__textureDraws.rover > 0);
+        // Every atlas decodes under the actual Pages subpath in both builds, even rare pickups.
+        for (const module of ["trade", "explore"]) {
+          const files = fs.readdirSync(path.join(root, "packages", module, "dist", "assets")).filter((s) => s.endsWith(".webp"));
+          assert.equal(files.length, 8, `${module}: eight texture files shipped`);
+          const decoded = await p.evaluate(async (urls) => Promise.all(urls.map(async (src) => {
+            const im = new Image(); im.src = src; await im.decode(); return im.naturalWidth > 0;
+          })), files.map((s) => local + (module === "trade" ? "" : module + "/") + "assets/" + s));
+          assert.ok(decoded.every(Boolean), `${module}: all texture files decode`);
+        }
+      } else {
+        assert.deepEqual(await p.evaluate(() => window.__textureDraws), {}, "blocked images keep the game on procedural fallback");
+      }
+      if (process.env.VERIFY_SCREENSHOTS) {
+        fs.mkdirSync(process.env.VERIFY_SCREENSHOTS, { recursive: true });
+        await p.screenshot({ path: path.join(process.env.VERIFY_SCREENSHOTS, cfg.name + (process.env.VERIFY_BLOCK_TEXTURES ? "-fallback" : "") + ".png") });
+      }
       assert.equal(await region("tab:DOCK"), null, "no tabs during the sortie (PR6)");
       assert.ok(Math.abs(e.map.w / e.map.h - 720 / 420) < 0.01, `${cfg.name}: map 720:420`);
       assert.ok(e.map.y + e.map.h <= cfg.viewport.height + 0.5, `${cfg.name}: map fits the screen height`);
