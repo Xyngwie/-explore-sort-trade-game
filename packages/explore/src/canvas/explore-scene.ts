@@ -18,6 +18,7 @@
  * DEBUG circuit-lock toggle. The Alpha Lab band stays on the existing page
  * (CANVAS-Y5, as on DOCK).
  */
+import { boardResultLines } from "../game/boardWatch";
 import { captainIsPlatoonLeader } from "../game/platoonCommand";
 import {
   CANVAS_THEME,
@@ -740,6 +741,9 @@ export class ExploreScene {
     f.heading("作戦結果", { size: 17 });
     f.text(resultHeading(w) ?? (result.isExtracted ? "生還" : `失敗（${w.failReason ?? "abort"}）`), { size: 16, weight: 700, color: result.isExtracted ? CANVAS_THEME.gain : "#d29922" });
     f.text(`回収 ${result.salvagedContainers}`, { size: 14, weight: 600 }).gap(8);
+    // Stage 5 (decisions 7・38): the board changes of this sortie, one line per kind.
+    const board = boardResultLines(w);
+    if (board.length > 0) { for (const l of board) f.text(l, { size: 13 }); f.gap(8); }
     f.buttons([
       { id: "explore:to-sort", label: CTA_COPY.toSort, variant: "primary", w: f.w, onActivate: () => { if (!playLogBlocked()) this.host.go(sortUrl); } },
       { id: "explore:to-hangar", label: CTA_COPY.toHangar, sub: wearUrl ? CTA_CHIP.wearReport : undefined, w: f.w, onActivate: () => { if (!playLogBlocked()) this.host.go(wearUrl ?? resolveModuleBaseUrl("trade")); } },

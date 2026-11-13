@@ -226,7 +226,10 @@ const CONFIGS = [
       await tapAt(bk.cx, bk.cy);
       const inf = await revealC("explore:ctl:info");
       await tapAt(inf.cx, inf.cy);
-      assert.ok((await ex()).log > 0, `${cfg.name}: log has rows`);
+      // Since the wide map (stage 3, #372) nothing is near at the start, so the log can still be
+      // empty here (it shows 「戦術／戦報はここに出ます。」). Check that 情報 shows the log panel.
+      assert.ok(await region("explore:ctl:back"), `${cfg.name}: 情報 is open`);
+      assert.equal(typeof (await ex()).log, "number", `${cfg.name}: log feed readable`);
       if (cfg.touch) assert.equal(await region("explore:keys"), null, `${cfg.name}: no key table on touch`);
       else assert.ok(await revealC("explore:keys"), `${cfg.name}: key table toggle on PC`);
       e = await ex();
