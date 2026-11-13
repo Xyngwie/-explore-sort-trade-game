@@ -1,3 +1,11 @@
+## 探索に既存テクスチャを組み込む（2026-11-13）
+
+- Who: Codex（神宮の直接依頼。Cursor Automationsは起動しない）
+- What: 白い外殻、球形ローバー、コンテナ、残骸、盾、拾得物、遮蔽物の画像をcanvas版・既存版の共通描画へ組み込む。実行用WebPは8枚・約247KiB
+- Why: 神宮「今ある素材をテクスチャとして使うのを実装しましょう」。Issue #376。詳細は[EXPLORE_TEXTURES_V0.md](EXPLORE_TEXTURES_V0.md)
+- Scope: 描画・画像の読込と配布・視認性・確認スクリプト・文書。役割の固定輪郭と色・向きの線を維持。戦闘・命令・霧の判定・保存・報酬・ヒット領域は変更しない
+- Status: 型チェック、拠点と探索ビルド、textureArt.selftestはPASS。全selftestとCIのPC/スマホ相当自動操作を確認中。マージ・デプロイはまだ。物理スマートフォン実機NOT_RUN
+
 ## PR #374 監査・マージ・デプロイ確認（2026-11-13）
 
 - Who: Codex / inspector（神宮の直接依頼。Automations は起動していない）
