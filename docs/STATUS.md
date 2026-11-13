@@ -4,7 +4,11 @@
 - What: 白い外殻、球形ローバー、コンテナ、残骸、盾、拾得物、遮蔽物の画像をcanvas版・既存版の共通描画へ組み込む。実行用WebPは8枚・約247KiB
 - Why: 神宮「今ある素材をテクスチャとして使うのを実装しましょう」。Issue #376。詳細は[EXPLORE_TEXTURES_V0.md](EXPLORE_TEXTURES_V0.md)
 - Scope: 描画・画像の読込と配布・視認性・確認スクリプト・文書。役割の固定輪郭と色・向きの線を維持。戦闘・命令・霧の判定・保存・報酬・ヒット領域は変更しない
-- Status: 型チェック、拠点と探索ビルド、textureArt.selftestはPASS。全selftestとCIのPC/スマホ相当自動操作を確認中。マージ・デプロイはまだ。物理スマートフォン実機NOT_RUN
+- Status: PR #377 をmainへマージ済み。merge `2de2bc9632e7e6a156384b0a61188ed5ae6b4bd9`。CI [43408385726](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43408385726) は全step success（型チェック、全selftest、全5ビルド、PC/スマホ相当5構成、画像拒否時のフォールバック操作）。Deploy Modules Preview [43409490353](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43409490353) は同merge SHAでbuild/deploy success、deploy=PASS。物理スマートフォン実機NOT_RUN
+- 画像確認: artifact `texture-verification`（14028806664）の6枚を取得して目視確認。透明余白による機体の縮小を補正し、球形本体に表示倍率・回転中心を合わせた。PC DPR1/2・390×844・844×390・320×568で画像描画と出撃→移動/拡大→途中保存/再開→帰還→仕分を確認。画像を拒否しても同操作PASS
+- 公開確認: `/canvas/`・`/canvas/explore/`・`/explore/` はHTTP200。拠点/探索に配信されたWebP全16ファイル（各8枚）は検証済みローカル出力とSHA-256一致。公開版での操作はNOT_RUN（操作検証はCIの配布同等ビルドで実施）。[ゲームを開く](https://xyngwie.github.io/-explore-sort-trade-game/canvas/)
+- CI実行環境: 初回のブラウザ導入はubuntu-latest（26.04）とPlaywrightの不一致で停止。ubuntu-24.04に固定し、最終CIは全件PASS。ローカル全selftestもnode --import tsxでPASS
+- この完了記録は文書のみ。記録用PR自体のDeploy Modules PreviewはNOT_TRIGGERED
 
 ## PR #374 監査・マージ・デプロイ確認（2026-11-13）
 
