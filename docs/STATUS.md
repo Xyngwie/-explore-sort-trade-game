@@ -46,7 +46,7 @@
 - Scope: `packages/explore` の地図・配置・霧・カメラ・移動の端、`packages/shared` の座標コメント、上記の文書とこの台帳。段階 4（結果を盤へ返すこと、今のセーブ座標の移し）、段階 5、命令の半径 7500 と 1500、セーブの最上位キーは変えない。古い座標は移さず、範囲外だけその場で壁の内側へ寄せる
 - Status: 実装と selftest（shared・explore・sort・trade・invade・restore）、`npm run build:explore`。PR #372。Deploy Modules Preview は CI 待ち。スマートフォン実機 NOT_RUN。マージはしない
 
-段階 2（2026-11-12）: マスと世界座標の純関数（決定 14 = B、決定 15 = A）。決定 16 は文書だけ（探索の内部も同じ世界座標。コードは変えない）。ゲームの動きは変えない。PR #370。
+段階 2（2026-11-12）: マスと世界座標の純関数（決定 14 = B、決定 15 = A）。決定 16 は文書だけ（探索の内部も同じ世界座標。コードは変えない）。PR #370 をマージ（merge `b9488c00d770e8ecce7d43874834b6b63fd3bb3e`）。PR Build Check run 43223794827 は success。Deploy Modules Preview run 43224398548 は success（22:09 JST）。スマートフォン実機 NOT_RUN。
 
 ## 探索の地図の大きさを渡せるようにする（段階 1）（2026-11-12）
 
