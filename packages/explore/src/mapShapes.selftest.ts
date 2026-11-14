@@ -57,7 +57,7 @@ assert.notEqual(COLORS.container, COLORS.circuitDrop);
   assert.ok(!/#ff8a3d|#ffd0a0|rgba\(255, 120, 80|rgba\(255, 160, 60/.test(src), "old orange / reddish DROP colours gone");
   assert.ok(src.includes("dropGlowRgba(0.35 + pulse * 0.45)") && src.includes("dropGlowRgba(0.12 + pulse * 0.18)"), "ring and glow purple, same pulse");
   assert.ok(src.includes("Math.sin(world.elapsed * 8)") && src.includes("const r = 14 + pulse * 6;"), "blink timing and size kept");
-  assert.ok(src.includes('fillText("DROP", px - 14, py - 12)') && src.includes('"#ffc98a"'), "DROP text kept");
+  assert.ok(src.includes('worldText(ctx, "DROP", px - 14, py - 12)') && src.includes('"#ffc98a"'), "DROP text kept");
   assert.ok(src.includes("fillRect(tx(d.pos.x) - 4, ty(d.pos.y) - 4, 8, 8)"), "circuit square 8px");
   assert.ok(src.includes('"#9ecbff"'), "leader name colour kept");
   assert.equal((src.match(/leaderLabelLift\(sx\)/g) ?? []).length, 2, "leader label and its layout box use the same lift");

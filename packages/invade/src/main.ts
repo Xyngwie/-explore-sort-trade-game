@@ -455,6 +455,7 @@ function cellTitleWithLost(cell: ReturnType<typeof getCell>): string {
   if (wreckExtra) extras.push(wreckExtra);
   const dropExtra = fieldDropTitleJa(dropCircuitIdsAt(cell.sx, cell.sy));
   if (dropExtra) extras.push(dropExtra);
+  if (enemyHere.has(`${cell.sx},${cell.sy}`)) extras.push("敵がいる");
   return extras.length > 0 ? `${base} · ${extras.join(" · ")}` : base;
 }
 
@@ -493,6 +494,7 @@ function dangerLegendHtml(): string {
     <span class="danger-swatch lost-mech"><span class="chip" aria-hidden="true"></span>置き去り機</span>
     <span class="danger-swatch wreck"><span class="chip" aria-hidden="true"></span>残骸</span>
     <span class="danger-swatch field-drop"><span class="chip" aria-hidden="true"></span>落とし物</span>
+    <span class="danger-swatch enemy-here"><span class="chip" aria-hidden="true"></span>敵がいる</span>
     ${swatches}
   </div>
   <p class="muted" style="margin-top:0.35rem;font-size:0.72rem">未開マスの色は HQ からの距離帯（敵密度の手触り）。近傍薄 → 前線濃。</p>`;
@@ -514,7 +516,13 @@ function progressFeelHtml(): string {
   </div>`;
 }
 
+let enemyHere = new Set<string>();
+function refreshEnemyHere(): void {
+  enemyHere = new Set((readStoredHub().frontProgress?.enemyHere ?? []).map((c) => `${c.sx},${c.sy}`));
+}
+
 function render(): void {
+  refreshEnemyHere();
   const cols = board.span;
   const cellsHtml: string[] = [];
   // Paint top→bottom (sy = +half … −half) so north is up
@@ -541,6 +549,7 @@ function render(): void {
         lostCount > 0 ? "lost-mech" : "",
         dropCount > 0 ? "field-drop" : "",
         wreckCount > 0 ? "wreck" : "",
+        enemyHere.has(`${sx},${sy}`) ? "enemy-here" : "",
         !c.blocked && !c.open ? "pickable" : "",
         c.open && !c.blocked ? "focusable" : "",
         ...feel,
@@ -553,8 +562,9 @@ function render(): void {
       const wreckAttr = wreckCount > 0 ? ` data-wreck-count="${wreckCount}"` : "";
       // 項目5-1b③: the wreck dot is a child (the cell's ::before / ::after are the drop / left-behind dots).
       const wreckDot = wreckCount > 0 ? `<span class="wreck-dot" aria-hidden="true"></span>` : "";
+      const enemyDot = enemyHere.has(`${sx},${sy}`) ? `<span class="enemy-here-dot" aria-hidden="true"></span>` : "";
       cellsHtml.push(
-        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostAttr}${dropAttr}${wreckAttr} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}><span class="cell-face" aria-hidden="true">${c.flagged&&!c.open?'':c.open&&c.mine?`<span class="enemy-icon"></span>${board.hitMine?'':'<span class="resolved-label">済</span>'}`:escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</span><span class="scope-reticle" aria-hidden="true"></span>${wreckDot}</button>`,
+        `<button type="button" class="${cls}" data-sx="${sx}" data-sy="${sy}"${lostAttr}${dropAttr}${wreckAttr} title="${escapeHtml(cellTitleWithLost(c))}" ${disabled}><span class="cell-face" aria-hidden="true">${c.flagged&&!c.open?'':c.open&&c.mine?`<span class="enemy-icon"></span>${board.hitMine?'':'<span class="resolved-label">済</span>'}`:escapeHtml(cellGlyph(c, { hitMine: board.hitMine }))}</span><span class="scope-reticle" aria-hidden="true"></span>${wreckDot}${enemyDot}</button>`,
       );
     }
   }

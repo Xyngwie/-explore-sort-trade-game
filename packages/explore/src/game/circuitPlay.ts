@@ -14,7 +14,8 @@ import { segmentCircle } from "./geometry";
  *   false-1×1 wingman ×2 (Q3a/Q3c), and the #269 rework of the basic
  *   collect / second return press. In `all_unlocked` these stay off.
  */
-import { canSee } from "./vision";
+import { canSee, fogCellCenter, fogCols, fogRows, FRONT_RANGE_MUL } from "./vision";
+import { FIELD_EDGE, clampToField, fieldRectOf } from "./fieldBounds";
 import {
   AIR_SUPPORT_COOLDOWN_SEC,
   exploreUnitId,
@@ -92,6 +93,8 @@ export type CircuitPlayState = {
   pending: { kind: string; pick: "enemy" | "ally" | "map" | "none"; unitIds?: string[] } | null;
   cooldownSec: number;
   fogOpen: Uint8Array | null;
+  /** Wide map: opened fog-cell index → 1. Small maps keep fogOpen. Not a hub key. */
+  fogSparse?: Record<string, 1> | null;
   lastSeen: Record<string, Vec2>;
   dodgeReady: Record<string, number>;
   emp: Record<string, { until: number; slow: number }>;
@@ -155,6 +158,7 @@ function blank(release: boolean): CircuitPlayState {
     pending: null,
     cooldownSec: 0,
     fogOpen: null,
+    fogSparse: null,
     lastSeen: {},
     dodgeReady: {},
     emp: {},
@@ -669,36 +673,53 @@ export function applyCircuitHubSide(world: World, hub: HubSnapshot): HubSnapshot
 }
 
 function fogSize(world: World): { cols: number; rows: number } {
-  const cell = world.balance.fogCell;
-  return {
-    cols: Math.ceil(world.balance.worldW / cell),
-    rows: Math.ceil(world.balance.worldH / cell),
-  };
+  return { cols: fogCols(world), rows: fogRows(world) };
 }
 
-function ensureFog(world: World): Uint8Array {
-  const p = playOf(world)!;
+function fogCellCount(world: World): number {
   const { cols, rows } = fogSize(world);
-  if (!p.fogOpen || p.fogOpen.length !== cols * rows) p.fogOpen = new Uint8Array(cols * rows);
-  return p.fogOpen;
+  return cols * rows;
 }
 
-function cellCenter(world: World, i: number): Vec2 {
-  const { cols } = fogSize(world);
-  const cell = world.balance.fogCell;
-  const x = i % cols;
-  const y = Math.floor(i / cols);
-  return { x: x * cell + cell / 2, y: y * cell + cell / 2 };
+function fogUsesDense(world: World): boolean {
+  return fogCellCount(world) <= 4000;
+}
+
+function markFog(world: World, i: number): void {
+  const p = playOf(world)!;
+  if (fogUsesDense(world)) {
+    const n = fogCellCount(world);
+    if (!p.fogOpen || p.fogOpen.length !== n) p.fogOpen = new Uint8Array(n);
+    p.fogOpen[i] = 1;
+    return;
+  }
+  p.fogSparse ??= {};
+  p.fogSparse[String(i)] = 1;
+}
+
+function fogMarked(world: World, i: number): boolean {
+  const p = playOf(world);
+  if (!p) return false;
+  if (fogUsesDense(world) && p.fogOpen && i < p.fogOpen.length) return p.fogOpen[i] === 1;
+  return p.fogSparse?.[String(i)] === 1;
 }
 
 function updateFog(world: World): void {
-  const open = ensureFog(world);
   const { cols, rows } = fogSize(world);
+  const cell = world.balance.fogCell;
+  const origin = fieldRectOf(world.balance);
   for (const u of living(world)) {
-    for (let i = 0; i < cols * rows; i++) {
-      if (open[i]) continue;
-      const c = cellCenter(world, i);
-      if (canSee(world, u, c)) open[i] = 1; // PR2: fog opens along the cones
+    const reach = (world.balance.visionRange * FRONT_RANGE_MUL) + cell;
+    const c0 = Math.max(0, Math.floor((u.pos.x - reach - origin.minX) / cell));
+    const c1 = Math.min(cols - 1, Math.floor((u.pos.x + reach - origin.minX) / cell));
+    const r0 = Math.max(0, Math.floor((u.pos.y - reach - origin.minY) / cell));
+    const r1 = Math.min(rows - 1, Math.floor((u.pos.y + reach - origin.minY) / cell));
+    for (let row = r0; row <= r1; row++) {
+      for (let col = c0; col <= c1; col++) {
+        const i = row * cols + col;
+        if (fogMarked(world, i)) continue;
+        if (canSee(world, u, fogCellCenter(world, i))) markFog(world, i);
+      }
     }
   }
 }
@@ -723,16 +744,28 @@ function seenEnemy(world: World, unit: Unit): boolean {
 
 function nearestFog(world: World, from: Vec2, pred: (c: Vec2) => boolean): Vec2 | null {
   const p = playOf(world);
-  if (!p?.fogOpen) return null;
+  if (!p) return null;
+  const { cols, rows } = fogSize(world);
+  const cell = world.balance.fogCell;
+  const origin = fieldRectOf(world.balance);
+  const dense = fogUsesDense(world);
+  if (dense && !p.fogOpen) return null;
+  const reach = world.balance.visionRange * FRONT_RANGE_MUL * 3 + cell * 2;
+  const c0 = dense ? 0 : Math.max(0, Math.floor((from.x - reach - origin.minX) / cell));
+  const c1 = dense ? cols - 1 : Math.min(cols - 1, Math.floor((from.x + reach - origin.minX) / cell));
+  const r0 = dense ? 0 : Math.max(0, Math.floor((from.y - reach - origin.minY) / cell));
+  const r1 = dense ? rows - 1 : Math.min(rows - 1, Math.floor((from.y + reach - origin.minY) / cell));
   let best: Vec2 | null = null;
   let d = Infinity;
-  for (let i = 0; i < p.fogOpen.length; i++) {
-    if (p.fogOpen[i]) continue;
-    const c = cellCenter(world, i);
-    if (c.x < 0 || c.y < 0 || c.x > world.balance.worldW || c.y > world.balance.worldH) continue;
-    if (!pred(c)) continue;
-    const dd = dist(from, c);
-    if (dd < d) { d = dd; best = c; }
+  for (let row = r0; row <= r1; row++) {
+    for (let col = c0; col <= c1; col++) {
+      const i = row * cols + col;
+      if (fogMarked(world, i)) continue;
+      const c = fogCellCenter(world, i);
+      if (!pred(c)) continue;
+      const dd = dist(from, c);
+      if (dd < d) { d = dd; best = c; }
+    }
   }
   return best;
 }
@@ -1302,10 +1335,7 @@ export function tryDodge(world: World, unit: Unit, b: Bullet, frameEnd?: Vec2): 
   const future = frameEnd
     ? {x:frameEnd.x+b.vel.x*Math.max(0,b.ttl),y:frameEnd.y+b.vel.y*Math.max(0,b.ttl)}
     : {x:b.pos.x+b.vel.x*Math.max(0,b.ttl),y:b.pos.y+b.vel.y*Math.max(0,b.ttl)};
-  const candidates=[ln,rn].map(side=>obstacleMove(world,unit,{
-    x:Math.max(20,Math.min(world.balance.worldW-20,unit.pos.x+side.x*step)),
-    y:Math.max(20,Math.min(world.balance.worldH-20,unit.pos.y+side.y*step)),
-  })).filter(pos=>dist(pos,unit.pos)>1e-6 && segmentCircle(b.pos,future,pos,hit+1e-6)==null);
+  const candidates=[ln,rn].map(side=>obstacleMove(world,unit,clampToField(world.balance, unit.pos.x+side.x*step, unit.pos.y+side.y*step, FIELD_EDGE))).filter(pos=>dist(pos,unit.pos)>1e-6 && segmentCircle(b.pos,future,pos,hit+1e-6)==null);
   const destination=candidates.sort((a,c)=>dist(c,b.pos)-dist(a,b.pos))[0];
   if(!destination)return false;
   unit.pos=destination;
@@ -1441,7 +1471,7 @@ export function unloadMech(world: World, id: string): boolean {
   const carrier = friendlies(world).find(u => u.id === by);
   if (carrier && !passenger) pickupById(world, id)?.move(carrier.pos);
   if (passenger && carrier) {
-    passenger.pos = passenger.alive ? { x: Math.min(world.balance.worldW - 20, Math.max(20, carrier.pos.x + carrier.radius + passenger.radius + 8)), y: carrier.pos.y } : { ...carrier.pos };
+    passenger.pos = passenger.alive ? clampToField(world.balance, carrier.pos.x + carrier.radius + passenger.radius + 8, carrier.pos.y, FIELD_EDGE) : { ...carrier.pos };
     passenger.vel = { x: 0, y: 0 };
     passenger.moveTarget = null;
     if (passenger.kind === "wingman") {

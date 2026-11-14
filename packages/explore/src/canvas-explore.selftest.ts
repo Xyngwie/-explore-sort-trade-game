@@ -348,6 +348,15 @@ assert.ok(wSaved > wBefore, "result saved once");
 for (let i = 0; i < 10; i++) draw();
 assert.equal(store.writes, wSaved, "redraw never saves (result)");
 assert.ok(ctx.texts.includes("作戦結果"));
+// Stage 5 (decisions 7・38): the board change lines are on the result page.
+{
+  const keep = scene.world.securedThisSortie;
+  scene.world.securedThisSortie = [{ sx: 99, sy: 99 }];
+  draw();
+  assert.ok(ctx.texts.includes("盤：マス 1 個を開いた"), "board line on the result page");
+  scene.world.securedThisSortie = keep;
+  draw();
+}
 assert.equal(scene.onPopstate(), false, "result: back is not trapped");
 press("explore:to-sort");
 assert.ok(/salvagedContainers=/.test(went[went.length - 1] ?? ""), "仕分へ = Sort handoff URL");

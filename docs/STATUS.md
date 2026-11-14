@@ -1,3 +1,51 @@
+## 探索に既存テクスチャを組み込む（2026-11-13）
+
+- Who: Codex（神宮の直接依頼。Cursor Automationsは起動しない）
+- What: 白い外殻、球形ローバー、コンテナ、残骸、盾、拾得物、遮蔽物の画像をcanvas版・既存版の共通描画へ組み込む。実行用WebPは8枚・約247KiB
+- Why: 神宮「今ある素材をテクスチャとして使うのを実装しましょう」。Issue #376。詳細は[EXPLORE_TEXTURES_V0.md](EXPLORE_TEXTURES_V0.md)
+- Scope: 描画・画像の読込と配布・視認性・確認スクリプト・文書。役割の固定輪郭と色・向きの線を維持。戦闘・命令・霧の判定・保存・報酬・ヒット領域は変更しない
+- Status: PR #377 をmainへマージ済み。merge `2de2bc9632e7e6a156384b0a61188ed5ae6b4bd9`。CI [43408385726](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43408385726) は全step success（型チェック、全selftest、全5ビルド、PC/スマホ相当5構成、画像拒否時のフォールバック操作）。Deploy Modules Preview [43409490353](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43409490353) は同merge SHAでbuild/deploy success、deploy=PASS。物理スマートフォン実機NOT_RUN
+- 画像確認: artifact `texture-verification`（14028806664）の6枚を取得して目視確認。透明余白による機体の縮小を補正し、球形本体に表示倍率・回転中心を合わせた。PC DPR1/2・390×844・844×390・320×568で画像描画と出撃→移動/拡大→途中保存/再開→帰還→仕分を確認。画像を拒否しても同操作PASS
+- 公開確認: `/canvas/`・`/canvas/explore/`・`/explore/` はHTTP200。拠点/探索に配信されたWebP全16ファイル（各8枚）は検証済みローカル出力とSHA-256一致。公開版での操作はNOT_RUN（操作検証はCIの配布同等ビルドで実施）。[ゲームを開く](https://xyngwie.github.io/-explore-sort-trade-game/canvas/)
+- CI実行環境: 初回のブラウザ導入はubuntu-latest（26.04）とPlaywrightの不一致で停止。ubuntu-24.04に固定し、最終CIは全件PASS。ローカル全selftestもnode --import tsxでPASS
+- この完了記録は文書のみ。記録用PR自体のDeploy Modules PreviewはNOT_TRIGGERED
+
+## PR #374 監査・マージ・デプロイ確認（2026-11-13）
+
+- Who: Codex / inspector（神宮の直接依頼。Automations は起動していない）
+- What / Why: 段階5・決定38/39の監査と公開反映の確認。機能コードは変更していない
+- Scope: PR #374、head `fe96213afd6b363d356d9022892863281b6bb41b`。12ファイルを仕様と照合し、マージを妨げる指摘なし。scopeLockViolation=false、unresolved=[]
+- Status: PR #374 は main にマージ済み。merge `f00445d365d48c018b1e877c6535f43b9a0203c3`。PR Build Check run [43392826518](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43392826518) は PASS（型チェック・全selftest・全5ビルドのstep success）。Deploy Modules Preview run [43394975621](https://github.com/Xyngwie/-explore-sort-trade-game/actions/runs/43394975621) は同merge SHAでbuild/deployともsuccess、deploy=PASS
+- 確認: 監査側でも型チェック、全5ビルド、wideMap・canvas-explore・fullscreen-shellのselftestはPASS。ログの空配列を許容するverify変更は広い地図の初期状態に適合し、ログ追加・実描画・追従は既存canvas-explore.selftestで検証される
+- 実行環境の制限: 通常npm testはtsx CLIのIPC用UNIX socketがEPERMで停止。node --import tsxで同じ全6ワークスペースのselftest群を再実行し全件PASS（exit 0）。ローカルPlaywrightもChromiumのsingleton socketがEPERMとなりアプリ到達前に停止したため、監査側のPlaywrightはFAIL（環境起因）。実装者報告のPASSと区別する
+- 公開確認: 公開版canvas DOCKと既存版invadeの「偵察」表記、invadeの戦線マップ起動をブラウザで確認。previewPlay=PASS（この起動・表示確認の範囲）。初期セーブではタブがロックされるためクリック遷移と公開版の出撃結果画面はNOT_RUN。結果行はselftestで確認。スマートフォン実機NOT_RUN
+- プレビュー: https://xyngwie.github.io/-explore-sort-trade-game/canvas/ 。下部の「偵察」、盤を変えた出撃後の結果行（0件の種類は非表示）をスマートフォンで確認できる
+- この記録は文書のみ。記録用PR自体のDeploy Modules PreviewはNOT_TRIGGERED。下のClaude Codeのdraft記録は実装時点の履歴であり、最新状態はこの節を正とする
+
+## 探索と侵略の一体化（段階 5）（2026-11-13）
+
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: 結果画面に盤の変化の行（種類ごとに 1 行。決定 38）。下部タブ `INVADE` の表示名を「偵察」に（決定 39。id・並び・行き先・URL は同じ）→ [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md) の段階 5
+- Why: 神宮の指示（Grok の段階 4 の引き継ぎ）。段階 5 の未決二つを 2026-11-13 に神宮が決定。起点は main `1c3fd2d`（#373 マージ）
+- Scope: `packages/explore` の結果画面（canvas と既存版）、`packages/shared` のタブの表示名、上記の文書とこの台帳。盤の書き戻し、命令の半径 7500 と 1500、報酬、セーブ、ミニマップ、侵略モジュールの中身は変えない
+- Status: 実装と selftest（`wideMap.selftest.ts`・`canvas-explore.selftest.ts`・`fullscreen-shell.selftest.ts`）、`npm test`、canvas の verify（explore 5 構成・dock・dock-full・invade）。`verify-canvas-explore.cjs` の「log has rows」は段階 3（#372）の広い地図から main でも失敗していた（出撃直後に近くに何もなくログが空のまま）。情報が開いていることと、ログが読めることの確認に直した。draft PR。マージ・デプロイなし。スマートフォン実機 NOT_RUN
+
+## 探索と侵略の一体化（段階 4）（2026-11-13）
+
+- Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
+- What: 出撃の結果を盤へ返す。置いた敵 2 体を両方倒した地雷をその瞬間に「済」にする。味方が入った地雷でないマスを開く。セキュアなマスの敵は出撃中に見え、大マップにはマス単位の印だけ。済と ✕ には敵とコンテナを置かない。古い 0…1400×0…1000 を一度だけ x−700・y−500 で読む。決定 26〜34。決定 35〜37 はすべて A（神宮決定 2026-11-13）。入ったマスだけ開く（0 でも連鎖しない）。「敵がいる」印は出撃後も残し、次の出撃の開始時に置き直す。済にするとき盤全体の `hitMine` を false にし、未解決の ✕ も済にする。コードは変えていない。正本は [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md)
+- Why: 神宮の指示。段階 4。起点は main `5ca92868`（#372 マージ）
+- Scope: `packages/explore` の盤への書き戻し・霧・見張り、`packages/shared` の座標の印と `frontProgress.enemyHere`、`packages/invade` の「敵がいる」印、上記の文書とこの台帳。段階 5（結果画面の行、INVADE タブ）、命令の半径 7500 と 1500、報酬の二重払い、ミニマップは変えない
+- Status: 実装と selftest（shared・explore・sort・trade・invade・restore）、`npm run build:explore`。PR #373。PR Build Check run 43256056381 は success（head `6070c45`）。Deploy Modules Preview は main への push だけで走るので NOT_TRIGGERED。スマートフォン実機 NOT_RUN。マージはしない
+
+## 探索と侵略の一体化（段階 3）（2026-11-12）
+
+- Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない
+- What: 25×25 の盤全体を出撃 1 回の広い地図にする。世界座標は HQ マス中心が (0, 0)。決定 17〜24 はすべて A。決定 25 は B（開いているマスは出撃の始めから霧を晴らす）。地雷マスに敵 2 とコンテナ 1、安全と分かっている空白地帯は敵なしでコンテナがおよそ 10 マスに 1 個。壁には入らない。隊長から 2 マスより遠い敵は動かさない
+- Why: 神宮の指示。段階 3。起点は main `b9488c0`。正本は [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md)
+- Scope: `packages/explore` の地図・配置・霧・カメラ・移動の端、`packages/shared` の座標コメント、上記の文書とこの台帳。段階 4（結果を盤へ返すこと、今のセーブ座標の移し）、段階 5、命令の半径 7500 と 1500、セーブの最上位キーは変えない。古い座標は移さず、範囲外だけその場で壁の内側へ寄せる
+- Status: 実装と selftest（shared・explore・sort・trade・invade・restore）、`npm run build:explore`。PR #372。Deploy Modules Preview は CI 待ち。スマートフォン実機 NOT_RUN。マージはしない
+
 段階 2（2026-11-12）: マスと世界座標の純関数（決定 14 = B、決定 15 = A）。決定 16 は文書だけ（探索の内部も同じ世界座標。コードは変えない）。PR #370 をマージ（merge `b9488c00d770e8ecce7d43874834b6b63fd3bb3e`）。PR Build Check run 43223794827 は success。Deploy Modules Preview run 43224398548 は success（22:09 JST）。スマートフォン実機 NOT_RUN。
 
 ## 探索の地図の大きさを渡せるようにする（段階 1）（2026-11-12）
@@ -14,7 +62,7 @@
 - What: [EXPLORE_INVADE_INTEGRATION.md](EXPLORE_INVADE_INTEGRATION.md)。探索と侵略を一枚の広い地図にする骨組み（決定 1〜12、すべて神宮決定 2026-11-12）と、段階 0〜5。食い違う文は打ち消し線でこの文書を指す
 - Why: 神宮の指示。段階 0。コードの前に、決まったことと未決を分ける
 - Scope: 文書だけ。ゲームのコード、テスト、HTML、素材は変えない。12 個の決定の外は決めない。未決は「未決（段階 N で聞く）」のまま残す
-- Status: PR #367。文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED。スマートフォン実機 NOT_RUN。マージはまだ
+- Status: PR #367 をマージ（merge `5f34a24d26f3b953fe5dd29bfb91af3ad6c36a9c`）。文書のみ。packages は変えていないので Deploy Modules Preview は NOT_TRIGGERED（対象は packages と依存の変更だけ）。PR Build Check も同じ理由で走らない。スマートフォン実機 NOT_RUN
 
 ## 小隊長の通信と分担の決定を文書へ書く（2026-11-12・文書のみ）
 - Who: Cursor Cloud Agent（Grok）/ 神宮の直接指示。Automations は起動していない

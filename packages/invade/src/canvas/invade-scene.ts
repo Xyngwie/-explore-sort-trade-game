@@ -52,6 +52,9 @@ import { armForcedLockHistory, forcedLockBackAction, isForcedCombatLock, markFor
 
 type SectorSel = { sx: number; sy: number };
 export const RANK_PAGE_SIZE = 100;
+function enemyHereFromHub(): Set<string> {
+  return new Set((readStoredHub().frontProgress?.enemyHere ?? []).map((c) => cellKey(c.sx, c.sy)));
+}
 const NUM_COLOR = ["", "#58a6ff", "#3fb950", "#f85149", "#a371f7", "#d29922", "#39c5cf", "#e6edf3", "#8b949e"];
 
 export type InvadeHost = {
@@ -84,6 +87,7 @@ export class InvadeScene {
   lostByCell: Map<string, string[]>;
   dropsByCell: Map<string, string[]>;
   wrecksByCell: Map<string, string[]>;
+  enemyHere: Set<string>;
   reversedTouch = false;
   private forcedLockHistoryArmed = false;
   private lastSavedStatus: MsBoard["status"];
@@ -108,6 +112,7 @@ export class InvadeScene {
       ? `前線進捗を HubSave から復元 — 敵 ${this.board.mineCount} · seed ${this.board.seed ?? "—"}`
       : `前線盤生成 — ${BOARD_SPAN}×${BOARD_SPAN} · 敵 ${this.board.mineCount} · HQ 開放 · seed ${this.board.seed ?? "—"}`;
     this.lostByCell = s.lostByCell; this.dropsByCell = s.dropsByCell; this.wrecksByCell = s.wrecksByCell;
+    this.enemyHere = enemyHereFromHub();
     this.lastSavedStatus = this.board.status;
     this.firstClearOnThisBoard = firstClearDiscoveredOnBoard(readStoredHub(), this.board.seed);
     this.rankListPage = Math.floor(invadeRankOf(readStoredHub()).current / RANK_PAGE_SIZE);
@@ -190,6 +195,7 @@ export class InvadeScene {
     this.board = session.board; this.selected = session.focus; this.lastSavedStatus = this.board.status;
     this.firstClearOnThisBoard = firstClearDiscoveredOnBoard(readStoredHub(), this.board.seed);
     this.lostByCell = session.lostByCell; this.dropsByCell = session.dropsByCell; this.wrecksByCell = session.wrecksByCell;
+    this.enemyHere = enemyHereFromHub();
     this.reversedTouch = false; this.forcedLockHistoryArmed = false;
     this.resetView();
   }
@@ -281,6 +287,7 @@ export class InvadeScene {
     if (lostN > 0) extras.push(lostMechSortieLineJa(lostN));
     if (wreckN > 0) extras.push(wreckSortieLineJa(wreckN));
     if (dropN > 0) extras.push(fieldDropSortieLineJa(dropN));
+    if (this.enemyHere.has(cellKey(sel.sx, sel.sy))) extras.push("敵がいる");
     const withExtras = (bar: SortieBar): SortieBar => ({ ...bar, lines: [bar.lines[0], ...extras, ...bar.lines.slice(1)] });
     if (locked) {
       if (toForced == null) return withExtras({ tone: "locked", lines: ["強制戦闘ロック — 他操作不可。", `地雷マスを選ぶと「${CTA_COPY.toExplore}」（${CTA_CHIP.forcedCombat}）が表示されます。`], buttons: [] });
@@ -547,6 +554,7 @@ export class InvadeScene {
   }
 
   private drawBoard(ui: CanvasUI, vp: Rect, locked: boolean): void {
+    this.enemyHere = enemyHereFromHub();
     const ctx = ui.context;
     const board = this.board;
     const { cell: cw, pitch } = this.pitch(vp.w);
@@ -591,6 +599,7 @@ export class InvadeScene {
       if ((this.lostByCell.get(cellKey(c.sx, c.sy))?.length ?? 0) > 0) { ctx.fillStyle = "#8a9099"; ctx.fillRect(x + size - dot, y, dot, dot); }
       if ((this.dropsByCell.get(cellKey(c.sx, c.sy))?.length ?? 0) > 0) { ctx.fillStyle = "#f59e0b"; ctx.fillRect(x, y, dot, dot); }
       if ((this.wrecksByCell.get(cellKey(c.sx, c.sy))?.length ?? 0) > 0) { ctx.fillStyle = "#a8604a"; ctx.fillRect(x + size - dot, y + size - dot, dot, dot); }
+      if (this.enemyHere.has(cellKey(c.sx, c.sy))) { ctx.fillStyle = "#f85149"; ctx.fillRect(x, y + size - dot, dot, dot); }
       if (this.selected && this.selected.sx === c.sx && this.selected.sy === c.sy) {
         ctx.strokeStyle = "#f0c14b"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, size - 2, size - 2); ctx.lineWidth = 1;
       }

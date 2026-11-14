@@ -4,6 +4,7 @@
  * swapped in only while drawing and mapping taps. Zoom is never saved (resets on reload / new sortie).
  */
 import type { Camera, World } from "./types";
+import { fieldRectOf, type FieldRect } from "./fieldBounds";
 /** §11 values (神宮決定 2026-11-01) */
 export const MAP_ZOOM_MIN = 1;
 export const MAP_ZOOM_MAX = 2.5;
@@ -14,20 +15,27 @@ export const MAP_WHEEL_STEP = 1.15;
 export function clampZoom(z: number): number {
   return Math.min(MAP_ZOOM_MAX, Math.max(MAP_ZOOM_MIN, Number.isFinite(z) ? z : 1));
 }
-/** Zoomed view of the base camera: same centre (it follows the leader), clamped inside the world. */
-export function viewCamera(base: Camera, zoom: number, worldW: number, worldH: number): Camera {
+function cameraRect(bounds: number | FieldRect, worldH?: number): FieldRect {
+  if (typeof bounds === "number") return { minX: 0, maxX: bounds, minY: 0, maxY: worldH ?? bounds };
+  return bounds;
+}
+/** Zoomed view of the base camera: same centre (it follows the leader), clamped inside the field. */
+export function viewCamera(base: Camera, zoom: number, worldWOrRect: number | FieldRect, worldH?: number): Camera {
   const z = clampZoom(zoom);
   if (z === 1) return base;
+  const rect = cameraRect(worldWOrRect, worldH);
   const w = base.w / z, h = base.h / z;
   const cx = base.x + base.w / 2, cy = base.y + base.h / 2;
-  const x = Math.min(Math.max(0, cx - w / 2), Math.max(0, worldW - w));
-  const y = Math.min(Math.max(0, cy - h / 2), Math.max(0, worldH - h));
+  const maxX = Math.max(rect.minX, rect.maxX - w);
+  const maxY = Math.max(rect.minY, rect.maxY - h);
+  const x = Math.min(Math.max(rect.minX, cx - w / 2), maxX);
+  const y = Math.min(Math.max(rect.minY, cy - h / 2), maxY);
   return { x, y, w, h };
 }
 /** Run fn with world.camera temporarily replaced by the zoomed view; always restores the base camera. */
 export function withViewCamera<T>(world: World, zoom: number, fn: () => T): T {
   const base = world.camera;
-  world.camera = viewCamera(base, zoom, world.balance.worldW, world.balance.worldH);
+  world.camera = viewCamera(base, zoom, fieldRectOf(world.balance));
   try { return fn(); } finally { world.camera = base; }
 }
 export function pinchZoom(startZoom: number, startDist: number, dist: number): number {

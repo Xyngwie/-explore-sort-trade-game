@@ -11,6 +11,17 @@ import { PALETTE_CSS, closeResourcePalette, openResourcePalette } from "./resour
 
 export type ShellTabId = "DOCK" | "INVADE" | "SORT" | "RESTORE" | "SORTIE";
 export const SHELL_TABS: readonly ShellTabId[] = ["DOCK", "INVADE", "SORT", "RESTORE", "SORTIE"];
+/**
+ * What each tab shows. The id (and its URL, order and module) never changes.
+ * 2026-11-13 神宮 decision 39 (docs/EXPLORE_INVADE_INTEGRATION.md): INVADE reads 「偵察」.
+ */
+export const SHELL_TAB_LABEL: Record<ShellTabId, string> = {
+  DOCK: "DOCK",
+  INVADE: "偵察",
+  SORT: "SORT",
+  RESTORE: "RESTORE",
+  SORTIE: "SORTIE",
+};
 /** Q3 tab → existing module (決定済み（2026-11-01）, FULLSCREEN_SHELL_V0 §4). */
 export const SHELL_TAB_MODULE: Record<ShellTabId, ModuleKey> = {
   DOCK: "trade",
@@ -152,7 +163,7 @@ export function mountFullscreenShell(current: ModuleKey, doc: Document = documen
   for (const t of model.tabs) {
     const b = doc.createElement("button");
     b.type = "button";
-    b.textContent = t.id;
+    b.textContent = SHELL_TAB_LABEL[t.id];
     b.dataset.shellTab = t.id;
     if (t.active) b.setAttribute("aria-current", "page");
     b.disabled = !t.enabled;

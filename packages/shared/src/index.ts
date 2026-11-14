@@ -44,6 +44,7 @@ export * as frontBoard from "./front-board";
 
 export * from "./front-board";
 export * from "./cell-world";
+export * from "./explore-pos";
 export * from "./front-sweep";
 
 export * from "./lost-mech-shields";

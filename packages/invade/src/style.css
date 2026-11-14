@@ -390,6 +390,24 @@ a.btn { display: inline-block; text-decoration: none; line-height: 1.2; }
 .danger-swatch.wreck .chip { background: #21262d; border-color: #2a313c; }
 .danger-swatch.wreck .chip::after { bottom: -2px; right: -2px; width: 7px; height: 7px; }
 
+/* Stage 4: a living enemy inside a secure cell. Cell-level only, bottom-left, not a world position. */
+.cell.enemy-here,
+.danger-swatch.enemy-here .chip { position: relative; }
+.cell.enemy-here .enemy-here-dot,
+.danger-swatch.enemy-here .chip::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background: #f85149;
+  box-shadow: 0 0 0 1px #0d1014;
+  pointer-events: none;
+}
+.danger-swatch.enemy-here .chip { background: #21262d; border-color: #2a313c; }
+.danger-swatch.enemy-here .chip::before { bottom: -2px; left: -2px; width: 7px; height: 7px; }
+
 
 #board-viewport { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; margin-top: .75rem; touch-action: none; overscroll-behavior: contain; user-select: none; background: #10141b; }
 #board-viewport .front-ms { width: 100%; margin: 0; transform-origin: 0 0; }

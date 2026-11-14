@@ -1,6 +1,6 @@
 /**
  * Cell ↔ world coordinates for the wide map (explore/invade stage 2).
- * Pure functions. Explore does not call these yet.
+ * Pure functions. Explore uses them for the wide sortie (stage 3).
  *
  * Decision 14 (神宮 2026-11-12, stage 2-1 = B): world (0, 0) is the center of
  * the HQ cell (sx=0, sy=0). Coordinates may be negative.

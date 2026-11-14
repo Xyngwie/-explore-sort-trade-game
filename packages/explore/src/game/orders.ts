@@ -2,7 +2,8 @@ import { interruptBarricade } from "./barricades";
 import { emitLogLine } from "./logFeed";
 import { nearCover } from "./coverMovement";
 import { loadSpeedRatio, roomFor, unitLoad } from "./carry";
-import { clamp, dist } from "./math";
+import { dist } from "./math";
+import { clampToField } from "./fieldBounds";
 import type { Balance } from "./balance";
 import type { Container, Stance, Unit, World } from "./types";
 import { STANCE_LABEL } from "./types";
@@ -51,8 +52,7 @@ export function recoverApproachWaypoint(world: World, focus: { x: number; y: num
   const n = Math.max(1, slotCount);
   const angle = (Math.PI * 2 * slotIndex) / n + Math.PI / n;
   const radius = Math.max(48, world.balance.interactRadius * 2.5);
-  const pad = 20;
-  return { x: clamp(focus.x + Math.cos(angle) * radius, pad, world.balance.worldW - pad), y: clamp(focus.y + Math.sin(angle) * radius, pad, world.balance.worldH - pad) };
+  return clampToField(world.balance, focus.x + Math.cos(angle) * radius, focus.y + Math.sin(angle) * radius, 20);
 }
 
 export function applyOrder(world: World, wing: Unit, stance: Stance, opts?: { waypoint?: { x: number; y: number } | null; individual?: boolean }): "applied" | "denied" {
@@ -93,10 +93,10 @@ export function scatterSearch(world: World): "applied" | "denied" {
   if (isOperationTimedOut(world)) { pushLog(world, "時間切れのため散開不可（移動ロック）。"); return "denied"; }
   const living: Unit[] = [world.leader, ...world.wingmen.filter((w) => w.alive)];
   if (living.length === 0) return "denied";
-  const base = world.leader.moveHeading ?? world.leader.heading; const origin = world.leader.pos; const distOut = world.balance.scatterSearchDist; const n = living.length; const pad = 20;
+  const base = world.leader.moveHeading ?? world.leader.heading; const origin = world.leader.pos; const distOut = world.balance.scatterSearchDist; const n = living.length;
   for (let i = 0; i < n; i++) {
     const unit = living[i]!; const angle = base + (Math.PI * 2 * i) / n;
-    const target = { x: clamp(origin.x + Math.cos(angle) * distOut, pad, world.balance.worldW - pad), y: clamp(origin.y + Math.sin(angle) * distOut, pad, world.balance.worldH - pad) };
+    const target = clampToField(world.balance, origin.x + Math.cos(angle) * distOut, origin.y + Math.sin(angle) * distOut, 20);
     abortSalvage(unit); unit.stance = "raid"; unit.moveTarget = { ...target };
     if (unit.kind === "wingman") { unit.holdOrder = false; unit.individualOrder = false; } // C20-b: 散開捜索 clears a hold
     if (unit.kind === "leader") unit.waypoint = null; else unit.waypoint = { ...target };
@@ -216,10 +216,10 @@ export function nextContainerId(world: World, prefix = "crate"): string {
 
 export function spawnContainersAt(world: World, at: { x: number; y: number }, count: number, opts?: { discovered?: boolean; idPrefix?: string }): Container[] {
   const n = Math.max(0, Math.floor(count)); if (n <= 0) return [];
-  const discovered = opts?.discovered ?? true; const prefix = opts?.idPrefix ?? "crate"; const spawned: Container[] = []; const pad = 20;
+  const discovered = opts?.discovered ?? true; const prefix = opts?.idPrefix ?? "crate"; const spawned: Container[] = [];
   for (let i = 0; i < n; i++) {
     const angle = (Math.PI * 2 * i) / Math.max(1, n) + i * 0.35; const radius = n === 1 ? 0 : 14 + i * 6;
-    const pos = { x: clamp(at.x + Math.cos(angle) * radius, pad, world.balance.worldW - pad), y: clamp(at.y + Math.sin(angle) * radius, pad, world.balance.worldH - pad) };
+    const pos = clampToField(world.balance, at.x + Math.cos(angle) * radius, at.y + Math.sin(angle) * radius, 20);
     const c: Container = { id: nextContainerId(world, prefix), pos, taken: false, discovered, glowT: 0 }; world.containers.push(c); spawned.push(c);
   }
   return spawned;

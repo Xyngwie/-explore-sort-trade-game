@@ -244,7 +244,7 @@ function lostMechsFromWorld(world: World): LostMechReturnState[] {
       circuitIds: [...m.row.circuitIds],
       // a reappeared wreck stays a wreck at its saved coordinates (W3 C)
       ...(m.row.kind ? { kind: m.row.kind } : {}),
-      ...(m.row.pos ? { pos: { x: m.row.pos.x, y: m.row.pos.y } } : {}),
+      ...(m.row.pos ? { pos: { x: m.row.pos.x, y: m.row.pos.y, ...(m.row.pos.wide ? { wide: true as const } : {}) } } : {}),
       ...place,
     });
   }

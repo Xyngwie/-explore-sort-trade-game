@@ -883,7 +883,8 @@ function advancePinned(
   assert.equal(bootLow.invadeSector!.sectorX, 1);
   assert.equal(bootLow.invadeSector!.density, 0);
   const worldLow = legacyWorld(bootLow);
-  assert.equal(worldLow.enemies.length, BALANCE.densityEnemyCountMin);
+  assert.ok(worldLow.enemies.length >= 2 && worldLow.enemies.length % 2 === 0, "enemies are pairs on mine cells, not the density count");
+  assert.notEqual(worldLow.enemies.length, BALANCE.densityEnemyCountMin);
   assert.equal(worldLow.invadeSector?.sectorY, 0);
   assert.equal(worldLow.balance.enemySpeed, BALANCE.enemySpeed * low.enemySpeedMul);
 
@@ -896,7 +897,7 @@ function advancePinned(
   assert.equal(bootHigh.wingmanCount, 1);
   assert.ok(bootHigh.note.includes("戦線"));
   const worldHigh = legacyWorld(bootHigh);
-  assert.equal(worldHigh.enemies.length, BALANCE.densityEnemyCountMax);
+  assert.equal(worldHigh.enemies.length, worldLow.enemies.length, "density changes strength, not how many enemies the board places");
   assert.ok(
     Math.abs(worldHigh.balance.enemySpeed - BALANCE.enemySpeed * high.enemySpeedMul) < 1e-9,
   );
@@ -904,7 +905,8 @@ function advancePinned(
   const bootNone = bootstrapFromSearch("?deployableMechs=3&startingAmmo=10");
   assert.equal(bootNone.invadeSector, null);
   const worldNone = legacyWorld(bootNone);
-  assert.equal(worldNone.enemies.length, BALANCE.baselineEnemyCount);
+  assert.equal(worldNone.enemies.length, worldLow.enemies.length, "no sector still uses the same default board");
+  assert.deepEqual(worldNone.leader.pos, { x: 0, y: 0 });
   assert.equal(worldNone.balance.enemySpeed, BALANCE.enemySpeed);
 }
 
@@ -978,7 +980,8 @@ function advancePinned(
   assert.equal(bootForced.invadeSector?.enemyCells?.length, 5);
   assert.ok(bootForced.note.includes("強制交戦") || bootForced.note.includes(ENGAGE_BRIEFING_LABEL.forced));
   const worldForced = legacyWorld(bootForced);
-  assert.equal(worldForced.enemies.length, 5);
+  assert.ok(worldForced.enemies.length >= 2 && worldForced.enemies.length % 2 === 0, "forced engage does not set the headcount");
+  assert.notEqual(worldForced.enemies.length, 5);
   assert.equal(worldForced.enemies[0]!.maxHp, BALANCE.enemyHp); // enemy strength now comes from circuits, not hull tiers
   assert.equal(worldForced.invadeSector?.engage, "forced");
 
@@ -989,8 +992,7 @@ function advancePinned(
   assert.deepEqual(bootRaid.invadeSector?.enemyCells, [{ sx: 5, sy: 1 }]);
   assert.ok(bootRaid.note.includes("任意侵入") || bootRaid.note.includes(ENGAGE_BRIEFING_LABEL.raid));
   const worldRaid = legacyWorld(bootRaid);
-  assert.equal(worldRaid.enemies.length, 1);
-  assert.ok(worldRaid.enemies.length < worldForced.enemies.length);
+  assert.equal(worldRaid.enemies.length, worldForced.enemies.length, "raid and forced share the board's enemy count");
 }
 
 
@@ -1141,14 +1143,13 @@ function advancePinned(
 }
 
 
-// --- field containers: many more than the old ~6 cap ---
+// --- field containers: the wide board, not the old fixed 20 ---
 {
   const world = legacyWorld(bootstrapFromSearch(""));
   assert.ok(
-    world.containers.length >= BALANCE.fieldContainerCount,
-    `expected >= ${BALANCE.fieldContainerCount} field crates, got ${world.containers.length}`,
+    world.containers.length > BALANCE.fieldContainerCount,
+    `expected more than the old ${BALANCE.fieldContainerCount} crates, got ${world.containers.length}`,
   );
-  assert.equal(world.containers.length, BALANCE.fieldContainerCount);
   assert.ok(BALANCE.fieldContainerCount > 6);
   const ids = new Set(world.containers.map((c) => c.id));
   assert.equal(ids.size, world.containers.length);
@@ -3084,7 +3085,9 @@ import {
   assert.deepEqual(w2.strandedMechs?.map((m) => m.instanceId), ["m2"], "reappears on the same cell");
   const sm = w2.strandedMechs![0]!;
   // 10/17: scattered on the field (90 from the edges), hidden until found.
-  assert.ok(sm.pos.x >= 90 && sm.pos.x <= w2.balance.worldW - 90 && sm.pos.y >= 90 && sm.pos.y <= w2.balance.worldH - 90, "scattered inside the 90 edge margin");
+  const strayMinX = w2.balance.minX ?? 0, strayMaxX = w2.balance.maxX ?? w2.balance.worldW;
+  const strayMinY = w2.balance.minY ?? 0, strayMaxY = w2.balance.maxY ?? w2.balance.worldH;
+  assert.ok(sm.pos.x >= strayMinX + 90 && sm.pos.x <= strayMaxX - 90 && sm.pos.y >= strayMinY + 90 && sm.pos.y <= strayMaxY - 90, "scattered inside the 90 edge margin");
   assert.equal(sm.found, false, "hidden until found");
   void STRANDED_RING_RADIUS;
   const second = run(search2, false, { x: 900, y: 300 });
@@ -3466,7 +3469,7 @@ import {
   const viaRows = exploreReturnPayload(via)!.lostMechs ?? [];
   assert.deepEqual(
     viaRows.map((r) => [r.instanceId, r.kind, r.pos, r.cell, r.circuitIds]),
-    [["m2", "wreck", { x: 512.3, y: 287.7 }, { sx: 2, sy: -1 }, ["c_down"]]],
+    [["m2", "wreck", { x: 512.3, y: 287.7, wide: true }, { sx: 2, sy: -1 }, ["c_down"]]],
   );
   const viaSave = saveSortieResultToHub(via, viaStore);
   assert.equal(viaSave.status, "saved");
@@ -3475,7 +3478,7 @@ import {
   const wreckRow = viaSaved.lostMechs.find((m) => m.instanceId === "m2")!;
   assert.deepEqual(
     [wreckRow.kind, wreckRow.pos, wreckRow.frontSeed, wreckRow.cell, wreckRow.durability, wreckRow.status],
-    ["wreck", { x: 512.3, y: 287.7 }, 4242, { sx: 2, sy: -1 }, 0, "destroyed"],
+    ["wreck", { x: 512.3, y: 287.7, wide: true }, 4242, { sx: 2, sy: -1 }, 0, "destroyed"],
   );
   assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m1")!.durability, 80);
   assert.equal(viaSaved.fleet.find((m) => m.instanceId === "m3")!.status, "operational");
@@ -3508,7 +3511,7 @@ import {
   const viaPayload = exploreReturnPayload(via)!;
   const urlPayload = parseExploreToHubWearSearch(new URL(hubWearHandoffUrl(via)!).search)!;
   assert.equal(urlPayload.sortieId, viaPayload.sortieId);
-  assert.deepEqual(urlPayload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m2", "wreck", { x: 512.3, y: 287.7 }]]);
+  assert.deepEqual(urlPayload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m2", "wreck", { x: 512.3, y: 287.7, wide: true }]]);
   assert.equal(shared.applyExploreReturnToHub(viaSaved, urlPayload).applied, false);
   // trade path first on a fresh hub: applied once, then skipped
   const fresh = makeHub();
@@ -3546,7 +3549,7 @@ import {
       "僚機B は大破（残骸と回路は撃破した場所に残る）",
     ]);
     const payload = exploreReturnPayload(w)!;
-    assert.deepEqual(payload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420 }]]);
+    assert.deepEqual(payload.lostMechs?.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420, wide: true }]]);
     assert.deepEqual(payload.wreckedMechInstanceIds, ["m2", "m3"]);
     assert.equal(saveSortieResultToHub(w, store).status, "saved");
     const saved = shared.normalizeHubSnapshot(shared.loadHubSaveFromLocalStorage(store)!.hub);
@@ -3584,7 +3587,7 @@ import {
     assert.equal(executeExploreCommand(next, { id: "abort" }).status, "done");
     assert.deepEqual(leftBehindResultHtml(next).includes("残骸 m3 は回収できず（同じ場所に残る）"), true);
     const again = exploreReturnPayload(next)!.lostMechs ?? [];
-    assert.deepEqual(again.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420 }]]);
+    assert.deepEqual(again.map((r) => [r.instanceId, r.kind, r.pos]), [["m3", "wreck", { x: 1300, y: 420, wide: true }]]);
     // recovered → destroyed hull with its circuits
     const rec = attachLostMechContext(
       legacyWorld(bootstrapFromSearch(leaderOnlySearch())),
@@ -3614,7 +3617,7 @@ import {
     assert.equal(rescueAbortSortie(w, 0), "rescued");
     assert.deepEqual(wreckResultLines(w), ["隊長機 は大破（残骸と回路は撃破した場所に残る）"]);
     const wreckRows = (exploreReturnPayload(w)!.lostMechs ?? []).filter((r) => r.kind === "wreck");
-    assert.deepEqual(wreckRows.map((r) => [r.instanceId, r.kind, r.pos]), [["m1", "wreck", { x: 333, y: 444 }]]);
+    assert.deepEqual(wreckRows.map((r) => [r.instanceId, r.kind, r.pos]), [["m1", "wreck", { x: 333, y: 444, wide: true }]]);
     const d = begin(false);
     shootDown(d.leader);
     tickWorld(d, 0.05, idleInput());
@@ -3629,7 +3632,9 @@ import {
     const p = placeWreckInWorld(w, { ...c.pos });
     assert.ok(Math.hypot(p.x - c.pos.x, p.y - c.pos.y) >= c.radius + 14 - 0.001);
     const out = placeWreckInWorld(w, { x: -50, y: 99999 });
-    assert.ok(out.x >= 20 && out.y <= w.balance.worldH - 20, "clamped to the field");
+    const edgeMinX = w.balance.minX ?? 0, edgeMaxX = w.balance.maxX ?? w.balance.worldW;
+    const edgeMinY = w.balance.minY ?? 0, edgeMaxY = w.balance.maxY ?? w.balance.worldH;
+    assert.ok(out.x >= edgeMinX + 20 && out.x <= edgeMaxX - 20 && out.y >= edgeMinY + 20 && out.y <= edgeMaxY - 20, "clamped to the field");
   }
   console.log("explore 項目5-1 sortie wrecks ok");
 }

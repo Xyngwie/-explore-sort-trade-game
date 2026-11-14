@@ -134,7 +134,8 @@ export function persistFrontSessionWithClear(
   const snap = captureFrontProgress(board, focus);
   if (!snap) return { saved: false, discovered: false };
   const hub = readHub(storage);
-  let next = setFrontProgressInHub(hub, snap);
+  const kept = hub.frontProgress?.seed === snap.seed ? hub.frontProgress?.enemyHere : undefined;
+  let next = setFrontProgressInHub(hub, kept && kept.length > 0 ? { ...snap, enemyHere: kept.map((c) => ({ sx: c.sx, sy: c.sy })) } : snap);
   let discovered = false;
   if (opts?.justWon === true && board.status === "won") {
     const r = recordFirstInvadeClear(next, board.seed ?? null);

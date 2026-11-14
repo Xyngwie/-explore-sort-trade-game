@@ -6,7 +6,7 @@ import { decideWingman } from "./game/brain";
 import { nearestEnemyTarget } from "./game/enemyBehavior";
 import { getCoverObjects } from "./game/coverObjects";
 import { snapshotSortieWorld, worldFromCheckpointBody } from "./game/checkpoint";
-import { canSee, enemyVisibleToSquad, squadIntel, updateSquadIntel, updateSquadMemory, fogGrey, fogCellCenter, ghostOf, ghostTrust, LAST_SEEN_SEC, FOG_RETURN_SEC, GHOST_TRUST_SEC } from "./game/vision";
+import { canSee, enemyVisibleToSquad, squadIntel, updateSquadIntel, updateSquadMemory, fogGrey, fogIndexAt, ghostOf, ghostTrust, LAST_SEEN_SEC, FOG_RETURN_SEC, GHOST_TRUST_SEC } from "./game/vision";
 
 const idle = { move: { x: 0, y: 0 }, clickMove: null, fire: false, interact: false };
 const mk = () => { const w = createWorld(bootstrapFromSearch("")); startSortie(w); getCoverObjects(w).splice(0); return w; };
@@ -28,6 +28,9 @@ const at = (o: { x: number; y: number }, deg: number, d: number) => ({ x: o.x + 
 // Shared squad knowledge and the 5 s last-seen.
 {
   const w = mk(); const L = w.leader; const wa = w.wingmen[0]!;
+  // This block checks cones. HQ is secure, so the watch would keep a nearby enemy visible.
+  if (w.boardProgress) w.boardProgress.opened = [];
+  if (w.wideLayout) w.wideLayout.opened = [];
   for (const e of w.enemies) e.alive = false;
   const e = w.enemies[0]!; e.alive = true;
   L.heading = 0; L.moveHeading = 0; wa.pos = at(L.pos, 180, 60); wa.heading = Math.PI; wa.moveHeading = Math.PI;
@@ -70,9 +73,9 @@ const at = (o: { x: number; y: number }, deg: number, d: number) => ({ x: o.x + 
 {
   const w = mk(); const L = w.leader; for (const u of w.wingmen) u.alive = false; for (const e of w.enemies) e.alive = false;
   L.heading = 0; w.elapsed = 0;
-  const n = squadIntel(w).fogT.length; assert.ok(n > 0);
-  let watched = -1, never = -1;
-  for (let i = 0; i < n; i++) { const c = fogCellCenter(w, i); if (watched < 0 && canSee(w, L, c)) watched = i; if (never < 0 && Math.hypot(c.x - L.pos.x, c.y - L.pos.y) > 600) never = i; }
+  const watched = fogIndexAt(w, L.pos.x + 80, L.pos.y);
+  const never = fogIndexAt(w, L.pos.x, L.pos.y + 2000);
+  assert.ok(watched != null && never != null && watched !== never);
   updateSquadMemory(w);
   assert.equal(fogGrey(w, never), 1, "never seen = grey");
   assert.equal(fogGrey(w, watched), 0, "watched = black");
@@ -122,7 +125,8 @@ const at = (o: { x: number; y: number }, deg: number, d: number) => ({ x: o.x + 
   const w = mk(); tickWorld(w, 0.05, idle);
   const k = Object.keys(squadIntel(w).ghosts);
   const r = worldFromCheckpointBody(JSON.parse(JSON.stringify(snapshotSortieWorld(w))))!;
-  assert.deepEqual(squadIntel(r).fogT, squadIntel(w).fogT, "fog survives");
+  assert.deepEqual(squadIntel(r).fogSeen, squadIntel(w).fogSeen, "fog survives");
+  assert.deepEqual(squadIntel(r).fogT, squadIntel(w).fogT, "dense fog array survives");
   assert.deepEqual(Object.keys(squadIntel(r).ghosts), k, "images survive");
   const old = JSON.parse(JSON.stringify(snapshotSortieWorld(w))) as { squadIntel: Record<string, unknown> };
   delete old.squadIntel.fogT; delete old.squadIntel.ghosts;

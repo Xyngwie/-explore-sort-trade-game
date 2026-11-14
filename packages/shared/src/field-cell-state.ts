@@ -3,13 +3,14 @@ import { normalizeLostMechShields, ownedShieldKeys, type LostMechShieldMap } fro
  * Identity records remain canonical in HubSnapshot.fieldObjectIdentities. */
 import { isMechId, type MechId } from './catalog';
 import { normalizeFieldObjectIdentities, emptyFieldObjectIdentities, type FieldObjectIdentities } from './field-object-identities';
+import { migrateStoredExplorePos, type StoredExplorePos } from './explore-pos';
 import type { HubSnapshot } from './hub-save';
 export type FieldLocation = { frontSeed: number; cell: { sx: number; sy: number } };
 export type FieldEnemyIdentity = { modelId: MechId; durability: number; circuits: {
   circuitId: string; side: number; effectKey: string; effect: number; trueBoard: false;
 }[] };
 export type FieldWreck = {
-  targetId: string; wreckKey: string; pos: { x: number; y: number };
+  targetId: string; wreckKey: string; pos: StoredExplorePos;
   sourceInstanceId: string | null; seconds: number; shieldMaxHp?: number;
   circuits: { circuitId: string; side: number; effect: number }[];
   legacyAir?: true;
@@ -17,7 +18,7 @@ export type FieldWreck = {
 };
 export type FieldCellState = {
   location: FieldLocation;
-  ground: Record<string, { x: number; y: number }>;
+  ground: Record<string, StoredExplorePos>;
   wrecks: FieldWreck[];
   barricades?: Record<string, {pos:{x:number;y:number};heading:number}>;
 };
@@ -72,7 +73,10 @@ export function normalizeFieldCells(raw: unknown, identities: FieldObjectIdentit
         throw new Error('Invalid field wreck');
       targets.add(w.targetId); wreckKeys.add(w.wreckKey);
     }
-    result.push(structuredClone({location:row.location,ground:row.ground,wrecks:row.wrecks,...(row.barricades!==undefined?{barricades:row.barricades}:{})}) as FieldCellState);
+    const cell = structuredClone({location:row.location,ground:row.ground,wrecks:row.wrecks,...(row.barricades!==undefined?{barricades:row.barricades}:{})}) as FieldCellState;
+    for (const key of Object.keys(cell.ground)) cell.ground[key] = migrateStoredExplorePos(cell.ground[key]!);
+    for (const wreck of cell.wrecks) wreck.pos = migrateStoredExplorePos(wreck.pos);
+    result.push(cell);
   }
   return result;
 }

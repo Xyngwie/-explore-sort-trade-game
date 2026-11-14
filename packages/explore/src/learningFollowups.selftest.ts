@@ -79,6 +79,7 @@ function finishSalvage(w: World, u: Unit): void {
   const c = crate("c-many", 530, 500);
   w.containers.push(c);
   while (w.enemies.length < 12) w.enemies.push({ ...structuredClone(w.enemies[0]!), id: `extra-${w.enemies.length}` });
+  w.enemies.splice(12);
   backfillEnemyState(w);
   for (const e of w.enemies) { e.enemyState!.deathHandled = false; kill(w, e, 500, 500); }
   assert.equal(c.eliminationTags, 12, "no cap");

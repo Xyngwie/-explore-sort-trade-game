@@ -6,6 +6,7 @@ import {
 import { initializeEnemy } from './enemyBehavior';
 import { wreckWasStripped } from './strippingRuntime';
 import type { Unit, World } from './types';
+import { settleLegacyPos } from './fieldBounds';
 
 /** Stage a snapshot; startSortie's reset must run before dead enemies reappear. */
 export function attachFieldPersistence(world: World, hub: HubSnapshot | null): void {
@@ -21,9 +22,9 @@ export function attachFieldPersistence(world: World, hub: HubSnapshot | null): v
   }
   if (cell && hub?.fieldObjectIdentities) world.fieldCellAtStart={...structuredClone(cell),identities:structuredClone(hub.fieldObjectIdentities)};
 }
-function deadEnemy(w: FieldWreck): Unit {
+function deadEnemy(world: World, w: FieldWreck): Unit {
   const e=w.enemy!;
-  const unit:Unit = {id:w.targetId,kind:'enemy',name:e.name,pos:{...w.pos},vel:{x:0,y:0},heading:e.heading,
+  const unit:Unit = {id:w.targetId,kind:'enemy',name:e.name,pos:settleLegacyPos(world.balance, w.pos),vel:{x:0,y:0},heading:e.heading,
     hp:0,maxHp:e.maxHp,radius:e.radius,alive:false,stance:'raid',waypoint:null,moveTarget:null,
     cooldown:0,patrolAngle:0,salvageId:null,salvageT:0,salvagedCount:0,capacity:0,instanceId:null,
     inCover:false,quirk:null,hitWarnT:0,engageWarnT:0,enemyIdentity:structuredClone(e.identity)};
@@ -41,8 +42,8 @@ export function restoreFieldAtSortieStart(world: World): void {
   for (const w of saved.wrecks) {
     const id=w.sourceInstanceId ? `s:${w.sourceInstanceId}` : w.targetId;
     if (w.sourceInstanceId && !world.strandedMechs?.some(m=>m.instanceId===w.sourceInstanceId && m.wreck)) continue;
-    if (w.enemy && !world.enemies.some(e=>e.id===id)) world.enemies.push(deadEnemy(w));
-    if (w.legacyAir && world.circuitPlay) world.circuitPlay.airWrecks.push({id:id.slice(2),pos:{...w.pos},recovered:false});
+    if (w.enemy && !world.enemies.some(e=>e.id===id)) world.enemies.push(deadEnemy(world, w));
+    if (w.legacyAir && world.circuitPlay) world.circuitPlay.airWrecks.push({id:id.slice(2),pos:settleLegacyPos(world.balance, w.pos),recovered:false});
     world.stripping.jobs[id]={source:{targetId:id,instanceId:w.sourceInstanceId,circuits:structuredClone(w.circuits),learningValue:null,...(w.shieldMaxHp!==undefined?{shieldMaxHp:w.shieldMaxHp}:{})},
       wreckKey:w.wreckKey,seconds:w.seconds,reservation:null,completed:false};
   }
@@ -65,7 +66,7 @@ export function fieldCellReport(world: World): FieldCellReport | undefined {
     if (!instanceId && !unit?.enemyIdentity && !legacyAir) return;
     const wreckKey=job?.wreckKey ?? `field-wreck:${id}`;
     if (!Object.hasOwn(identities.wrecks,wreckKey)) identities=registerWreckIdentity(identities,wreckKey);
-    wrecks.push({targetId:instanceId ? `s:${instanceId}` : id,wreckKey,pos:{...point},sourceInstanceId:instanceId,
+    wrecks.push({targetId:instanceId ? `s:${instanceId}` : id,wreckKey,pos:{x:point.x,y:point.y,wide:true},sourceInstanceId:instanceId,
       seconds:job?.seconds ?? 0,...(job?.source.shieldMaxHp!==undefined?{shieldMaxHp:job.source.shieldMaxHp}:{}),...(legacyAir ? {legacyAir:true as const} : {}),circuits:structuredClone(job?.source.circuits ?? unit?.enemyIdentity?.circuits.map(c=>({circuitId:c.circuitId,side:c.side,effect:c.effect})) ?? []),
       ...(unit?.enemyIdentity && !instanceId ? {enemy:{name:unit.name,maxHp:unit.maxHp,radius:unit.radius,heading:unit.heading,identity:structuredClone(unit.enemyIdentity)}} : {})});
   };
@@ -76,7 +77,7 @@ export function fieldCellReport(world: World): FieldCellReport | undefined {
   if (!cached) for (const m of world.strandedMechs ?? []) if (m.wreck) add(`s:${m.instanceId}`,m.pos,m.instanceId);
   if (!cached) for (const a of world.circuitPlay?.airWrecks ?? []) if (!a.recovered && !world.enemies.some(e=>e.id===a.id)) add(`a:${a.id}`,a.pos,null,undefined,true);
   // Report only identity records referenced by this cell; counters are global.
-  const ground=structuredClone(world.shieldState?.ground ?? cached?.ground ?? {});
+  const ground=Object.fromEntries(Object.entries(world.shieldState?.ground ?? cached?.ground ?? {}).map(([key, point]) => [key, { x: point.x, y: point.y, wide: true as const }]));
   const barricades=structuredClone(world.barricades?.walls ?? cached?.barricades ?? {});
   const ownedShields=leftBehindShieldState(world);
   identities.wrecks=Object.fromEntries(wrecks.map(w=>[w.wreckKey,identities.wrecks[w.wreckKey]!]));

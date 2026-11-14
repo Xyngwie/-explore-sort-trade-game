@@ -88,7 +88,7 @@ export function makeExploreWorld(b: ExploreBoot, readHub: ReadHub): World {
       hub = normalizeHubSnapshot(next);
     }
   }
-  const world = attachLostMechContext(createWorld(b), hub);
+  const world = attachLostMechContext(createWorld(b, { frontProgress: hub?.frontProgress ?? null }), hub);
   // Circuit effects are live in both modes; release-only extras follow `mode` (Q1/Q3c).
   attachCircuitPlay(world, hub, mode === "release");
   attachFieldPersistence(world, hub);

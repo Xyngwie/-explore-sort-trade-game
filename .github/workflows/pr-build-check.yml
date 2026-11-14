@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,3 +67,34 @@ jobs:
         env:
           VITE_BASE: "/-explore-sort-trade-game/restore/"
         run: npm run build:restore
+
+      - name: Install browser verifier
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Verify canvas exploration and texture rendering (five viewports)
+        env:
+          PLAYWRIGHT_MODULE: playwright
+          VERIFY_SCREENSHOTS: artifacts/textures
+        run: |
+          export CHROMIUM_PATH="$(node -p 'require("playwright").chromium.executablePath()')"
+          node scripts/verify-canvas-explore.cjs
+
+      - name: Verify image failure fallback (phone)
+        env:
+          PLAYWRIGHT_MODULE: playwright
+          VERIFY_CONFIGS: phone-390x844@3
+          VERIFY_BLOCK_TEXTURES: "1"
+          VERIFY_SCREENSHOTS: artifacts/textures
+        run: |
+          export CHROMIUM_PATH="$(node -p 'require("playwright").chromium.executablePath()')"
+          node scripts/verify-canvas-explore.cjs
+
+      - name: Upload texture verification screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: texture-verification
+          path: artifacts/textures/
+          if-no-files-found: ignore
