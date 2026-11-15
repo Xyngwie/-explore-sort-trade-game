@@ -9,3 +9,6 @@ build/
 .turbo/
 coverage/
 packages/*/dist/
+
+# Python (tools/audio)
+__pycache__/
