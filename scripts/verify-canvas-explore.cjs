@@ -65,6 +65,8 @@ const CONFIGS = [
         };
       });
       const p = await ctx.newPage();
+      // Optional: slow the page's CPU like a small CI runner (VERIFY_CPU_THROTTLE=4).
+      if (process.env.VERIFY_CPU_THROTTLE) await (await ctx.newCDPSession(p)).send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.VERIFY_CPU_THROTTLE) });
       const errors = [];
       p.on("pageerror", (e) => errors.push(String(e)));
       p.on("dialog", (d) => { errors.push("native dialog: " + d.message()); d.dismiss(); });

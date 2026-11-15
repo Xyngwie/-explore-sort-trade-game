@@ -635,6 +635,7 @@ function tryAirSupport(world: World, enemy: Unit): void {
   setPlayLogOperation('explore.air_support',{targetId:enemy.id,cost:AIR_SUPPORT_COST});
   if (!saveHubSaveToLocalStorage(next)) return;
   p.cooldownSec = AIR_SUPPORT_COOLDOWN_SEC;
+  raiseSfx(world, "air-support"); // #379 A8: only once the strike is paid for and happens
   enemy.hp = 0;
   enemy.alive = false;
   p.airWrecks.push({ id: enemy.id, pos: { ...enemy.pos }, recovered: false });

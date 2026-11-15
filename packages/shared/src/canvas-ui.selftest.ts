@@ -325,4 +325,43 @@ assert.equal(canvasNewGameDestination("http://127.0.0.1:5175/canvas/", "?debug=1
   assert.equal(open, false, "closed: Escape dismisses the modal");
 }
 
+// --- #379 F2: onDenied for a disabled button, onActivate for an enabled one (UI sounds) -----------
+{
+  const denied: string[] = [], activated: string[] = [];
+  let blockedD = false, modalD = false;
+  const u = new CanvasUI({ blocked: () => blockedD, onDenied: (id) => denied.push(id), onActivate: (id) => activated.push(id) });
+  const on: Rect = { x: 10, y: 10, w: 100, h: 44 };
+  const off: Rect = { x: 10, y: 60, w: 100, h: 44 };
+  const scrollBox: Rect = { x: 200, y: 0, w: 150, h: 120 };
+  const offInScroll = (o: number): Rect => ({ x: 210, y: 20 - o, w: 100, h: 44 });
+  const draw = () => {
+    u.beginFrame(ctx, 400, 300);
+    u.button("on", on, "On", { onActivate: () => {} });
+    u.button("off", off, "Off", { disabled: true, onActivate: () => {} });
+    u.scrollArea("sc", scrollBox, 600, (o) => { u.button("scOff", offInScroll(o), "x", { disabled: true }); });
+    if (modalD) u.modal("m", () => {});
+    u.endFrame();
+  };
+  const tapAt = (id: number, pt: { x: number; y: number }, to = pt) => { draw(); u.pointerDown(id, pt); draw(); u.pointerUp(id, to); };
+  tapAt(1, center(off));
+  assert.deepEqual([denied, activated], [["off"], []], "a tap on a disabled button → onDenied only");
+  tapAt(2, center(on));
+  assert.deepEqual([denied, activated], [["off"], ["on"]], "an enabled button → onActivate with its id");
+  tapAt(3, center(off), center(on));
+  assert.deepEqual([denied.length, activated.length], [1, 1], "released elsewhere → nothing (and the other button does not fire)");
+  draw(); u.pointerDown(4, center(off)); u.pointerDown(5, center(on)); u.pointerUp(5, center(on)); u.pointerUp(4, center(off));
+  assert.deepEqual([denied.length, activated.length], [1, 1], "a second finger cancels it");
+  blockedD = true;
+  tapAt(6, center(off));
+  blockedD = false;
+  assert.equal(denied.length, 1, "blocked → no onDenied");
+  draw(); u.pointerDown(7, center(offInScroll(0)));
+  u.pointerMove(7, { x: center(offInScroll(0)).x, y: center(offInScroll(0)).y + CANVAS_SCROLL_SLOP_PX + 20 });
+  draw(); u.pointerUp(7, center(offInScroll(u.getScroll("sc"))));
+  assert.equal(denied.length, 1, "a scroll that started on a disabled button → no onDenied");
+  draw(); u.pointerDown(8, center(off)); modalD = true; draw(); u.pointerUp(8, center(off)); modalD = false; draw();
+  assert.equal(denied.length, 1, "a modal opened in between → no onDenied");
+  assert.equal(u.activationCount, 1, "onDenied never counts as an activation");
+}
+
 console.log("canvas-ui selftest: OK");

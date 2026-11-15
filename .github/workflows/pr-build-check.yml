@@ -81,6 +81,13 @@ jobs:
           export CHROMIUM_PATH="$(node -p 'require("playwright").chromium.executablePath()')"
           node scripts/verify-canvas-explore.cjs
 
+      - name: Verify canvas audio (BGM, 「♪」, play-log isolation; four viewports)
+        env:
+          PLAYWRIGHT_MODULE: playwright
+        run: |
+          export CHROMIUM_PATH="$(node -p 'require("playwright").chromium.executablePath()')"
+          node scripts/verify-canvas-audio.cjs
+
       - name: Verify image failure fallback (phone)
         env:
           PLAYWRIGHT_MODULE: playwright

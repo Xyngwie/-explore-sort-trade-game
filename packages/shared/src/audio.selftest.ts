@@ -13,6 +13,7 @@ import {
   type SourceLike,
 } from "./index";
 import { BGM_URLS, SFX_URLS } from "./audio-urls";
+import { isPlayLogTrackedKey } from "./play-log-browser";
 import manifest from "./audio/manifest.json";
 
 type Ramp = { v: number; t: number };
@@ -56,6 +57,10 @@ function make(storage = new Store()) {
   });
   return { ctx, audio, fetched, storage, tick: (s: number) => { clock += s; } };
 }
+
+// --- #379 F1: the 「♪」 is a device preference, never part of the game record (play log)
+assert.equal(isPlayLogTrackedKey(AUDIO_MUTED_STORAGE_KEY), false, "mute is not recorded in the play log");
+assert.equal(isPlayLogTrackedKey("wreckline.hubSave.v3"), true, "the save still is");
 
 // --- the manifest and the URL table agree; every loop region is one period after the 0.5 s margin
 assert.deepEqual(Object.keys(BGM_URLS).sort(), Object.keys(manifest.bgm).sort());

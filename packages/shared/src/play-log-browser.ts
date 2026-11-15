@@ -47,9 +47,17 @@ const parse = (v: string): LogJSON => {
 };
 const encode = (v: LogJSON): string =>
   typeof v === "string" ? v : JSON.stringify(v);
+/**
+ * Keys that belong to the game record. Device preferences stay out of it: they never change
+ * the record, survive a new game and are never rebuilt from history (docs/AUDIO_V0.md: the 「♪」).
+ */
+export function isPlayLogTrackedKey(key: string): boolean {
+  return tracked(key);
+}
 const tracked = (key: string) =>
   !key.startsWith("wreckline.playLog.") &&
   !key.startsWith("wreckline.DEBUG_FIXTURE.") &&
+  !key.startsWith("wreckline.audio.") &&
   !["wreckline.craftSignature.v0", "wreckline.lastSortYieldTotal.v0"].includes(
     key,
   ) &&

@@ -265,7 +265,8 @@ export class GameAudio {
 /* ------------------------------------------------------------------ action names → effects */
 
 /**
- * Hangar actions by their play-log operation name (`setPlayLogOperation`). Unlisted actions
+ * Hangar actions by their play-log operation name. Played only after the action succeeded
+ * (#379 A8: DockSections.act / commitHub and the market purchase call it). Unlisted actions
  * (debug buttons, selection) only get the plain button sound.
  */
 export const ACTION_SFX: Record<string, SfxId> = {
@@ -284,7 +285,6 @@ export const ACTION_SFX: Record<string, SfxId> = {
   "circuit.create": "mech-new",
   "trade.equip-equip": "equip",
   "trade.equip-unequip": "equip",
-  "explore.air_support": "air-support",
 };
 
 /** UI sound for a tapped canvas region id. */
@@ -322,8 +322,16 @@ export function playSfx(id: SfxId): void {
   gameAudio()?.sfx(id);
 }
 
-/** Effect for a play-log operation name, if it has one. */
+let actionSfxListener: ((id: SfxId) => void) | null = null;
+/** Tests: hear which action sounds would play (no audio outside a browser). */
+export function setActionSfxListener(fn: ((id: SfxId) => void) | null): void {
+  actionSfxListener = fn;
+}
+
+/** Effect for a play-log operation name, if it has one. Call it after the action succeeded (#379 A8). */
 export function playActionSfx(kind: string): void {
   const id = ACTION_SFX[kind];
-  if (id) playSfx(id);
+  if (!id) return;
+  actionSfxListener?.(id);
+  playSfx(id);
 }

@@ -4,6 +4,7 @@
  * cards); drawing only reads `HangarState`.
  */
 import {
+  playActionSfx,
   CANVAS_THEME,
   CTA_COPY,
   P_SHIELD_CIRCUIT_DESCRIPTION_JA,
@@ -254,7 +255,9 @@ export class DockSections {
   act(kind: string, data: Record<string, string>, fn: (s: HangarState) => HangarState): void {
     if (playLogBlocked()) return;
     setPlayLogOperation(`trade.${kind}`, { id: kind, data });
+    const before = this.state.hub;
     this.state = fn(this.state);
+    if (this.state.hub !== before) playActionSfx(`trade.${kind}`); // #379 A8: only a change that happened sounds
     this.ensureCaptainCircuit();
     this.onHubChanged();
   }
@@ -263,6 +266,7 @@ export class DockSections {
     if (playLogBlocked()) return false;
     setPlayLogOperation(kind, ctx);
     if (!saveHubSaveToLocalStorage(hub, this.env.storage ?? undefined)) { this.state = { ...this.state, notice: "保存できませんでした。変更していません。" }; return false; }
+    playActionSfx(kind); // #379 A8: after the save succeeded
     this.reloadHub();
     this.ensureCaptainCircuit();
     this.onHubChanged();

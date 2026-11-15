@@ -4,6 +4,7 @@
  * reads state; changes happen in the button callbacks.
  */
 import {
+  playActionSfx,
   CANVAS_MIN_TARGET_PX,
   CANVAS_THEME,
   SHELL_HUD_HEIGHT_PX,
@@ -173,6 +174,7 @@ export class DockScene {
   cancelConfirm(): void { this.confirm = null; }
   private run(item: MarketItem, q: number): void {
     const r = purchase(item, q, this.deps);
+    if (r.ok) playActionSfx(item === "unopened" ? "unopened.buy" : "resource.buy"); // #379 A8: after the save
     if (r.ok) {
       this.hub = r.hub;
       this.delta = { item, deltas: r.deltas };

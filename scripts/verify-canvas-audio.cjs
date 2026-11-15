@@ -52,6 +52,19 @@ const TYPES = { ".js": "text/javascript", ".css": "text/css", ".mp3": "audio/mpe
         const k = c.width / window.__wlCanvas.size().width;
         return { ...r, cx: c.left + (r.x + r.w / 2) * k, cy: c.top + (r.y + r.h / 2) * k };
       }, id);
+      /** The play log's game records: sequence number and which files they hold. */
+      const games = () => p.evaluate(() => new Promise((res, rej) => {
+        const r = indexedDB.open("wreckline.playLog.v1");
+        r.onsuccess = () => {
+          const db = r.result;
+          if (!db.objectStoreNames.contains("games")) { db.close(); res([]); return; }
+          const q = db.transaction(["games"], "readonly").objectStore("games").getAll();
+          q.onsuccess = () => { db.close(); res(q.result.map((g) => ({ id: g.gameId, seq: g.seq, files: Object.keys((g.state && g.state.files) || {}).sort() }))); };
+          q.onerror = () => rej(q.error);
+        };
+        r.onerror = () => rej(r.error);
+      }));
+      p.on("dialog", (d) => d.accept());
       const tapAt = async (x, y) => { if (cfg.touch) await p.touchscreen.tap(x, y); else await p.mouse.click(x, y); await p.waitForTimeout(60); };
       const tap = async (id) => { const r = await region(id); assert.ok(r && r.visible, `${cfg.name}: ${id} visible`); await tapAt(r.cx, r.cy); };
       const waitFor = async (label, fn) => {
@@ -85,10 +98,19 @@ const TYPES = { ".js": "text/javascript", ".css": "text/css", ".mp3": "audio/mpe
       await waitFor("hangar", () => window.__wlCanvas.audio().playing === "hangar");
       await toggleClear("DOCK HUB");
       // 「♪」 mutes, and the choice survives a reload
+      await settle();
+      await p.waitForTimeout(300);
+      const before = await games();
       await tap("audio:toggle");
       a = await audio();
       assert.equal(a.muted, true, `${cfg.name}: 「♪」 mutes`);
       assert.equal(await p.evaluate(() => localStorage.getItem("wreckline.audio.muted")), "1");
+      // #379 F1: a device preference never enters the game record (play log)
+      await settle();
+      await p.waitForTimeout(300);
+      const after = await games();
+      assert.deepEqual(after, before, `${cfg.name}: 「♪」 changes no play-log record`);
+      assert.ok(after.every((g) => !g.files.some((f) => f.includes("wreckline.audio"))), `${cfg.name}: no audio key in a record`);
       await p.reload();
       await ready();
       a = await audio();
@@ -109,6 +131,25 @@ const TYPES = { ".js": "text/javascript", ".css": "text/css", ".mp3": "audio/mpe
         await waitFor("invade", () => window.__wlCanvas.scene() === "invade");
         await waitFor("recon", () => window.__wlCanvas.audio().playing === "recon");
         await toggleClear("INVADE");
+      }
+      if (!cfg.touch) {
+        // #379 F1: the mute survives a 新規ゲーム (play log) — the device keeps its own setting
+        await tap("audio:toggle");
+        assert.equal((await audio()).muted, true);
+        const dbg = await region("dock:debug:open");
+        assert.ok(dbg, `${cfg.name}: the debug opener (localhost = debug mode) for 新規ゲーム`);
+        {
+          await tapAt(dbg.cx, dbg.cy);
+          await p.locator("#play-log-panel > summary").click();
+          const ids = (await games()).map((g) => g.id);
+          await p.locator("#play-log-new").click();
+          await p.waitForFunction((ids) => window.__wlCanvas && document.readyState === "complete", ids, { timeout: 20000 });
+          await p.waitForTimeout(500);
+          await ready();
+          assert.ok((await games()).some((g) => !ids.includes(g.id)), `${cfg.name}: a new game record exists`);
+          assert.equal(await p.evaluate(() => localStorage.getItem("wreckline.audio.muted")), "1", `${cfg.name}: mute kept through 新規ゲーム`);
+          assert.equal((await audio()).muted, true, `${cfg.name}: the player starts muted after 新規ゲーム`);
+        }
       }
       assert.deepEqual(errors, [], `${cfg.name}: page errors`);
       await p.screenshot({ path: path.join(process.env.VERIFY_SHOTS || "/tmp", `audio-${cfg.name}.png`) });

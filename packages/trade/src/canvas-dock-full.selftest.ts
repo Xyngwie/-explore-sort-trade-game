@@ -7,6 +7,7 @@ import {
   createNewGameHub,
   loadHubSaveFromLocalStorage,
   serializeHubSave,
+  setActionSfxListener,
 } from "@estg/shared";
 import { createStubCtx } from "../../shared/src/canvas-ui/test-ctx";
 import { DockScene } from "./canvas/dock-scene";
@@ -225,6 +226,23 @@ assert.equal(hub().credits, crBefore + 5);
   tap("dock:confirm:sell:ok");
   assert.equal(hub().inventory.armor ?? 0, 10);
   assert.equal(hub().credits, c0 + (a0 - 10) * 5);
+}
+
+// --- #379 A8: a hangar sound only after the action succeeded --------------------------------
+{
+  const heard: string[] = [];
+  setActionSfxListener((id) => heard.push(id));
+  sec().act("repair", { id: "x" }, (st) => ({ ...st, notice: "装甲パーツが足りない" }));
+  assert.deepEqual(heard, [], "a refused action makes no sound");
+  sec().act("repair", { id: "x" }, (st) => ({ ...st, hub: { ...st.hub } }));
+  assert.deepEqual(heard, ["repair"], "a done action sounds once");
+  heard.length = 0;
+  goto("T", "V", "VS");
+  tap("dock:sell:armor");
+  assert.deepEqual(heard, [], "asking to sell is silent");
+  tap("dock:confirm:sell:ok");
+  assert.deepEqual(heard, ["coin-gain"], "the sale sounds after its save");
+  setActionSfxListener(null);
 }
 
 // --- equip (整備 → 機体整備 → 装備回路) through the canvas pickers ----------------------------------------
