@@ -267,11 +267,16 @@ const CONFIGS = [
       await p.waitForTimeout(200);
       const bk = await revealC("explore:ctl:back");
       await tapAt(bk.cx, bk.cy);
-      const inf = await revealC("explore:ctl:info");
-      await tapAt(inf.cx, inf.cy);
       // Since the wide map (stage 3, #372) nothing is near at the start, so the log can still be
-      // empty here (it shows 「戦術／戦報はここに出ます。」). Check that 情報 shows the log panel.
-      assert.ok(await region("explore:ctl:back"), `${cfg.name}: 情報 is open`);
+      // empty here (it shows 「戦術／戦報はここに出ます。」). Check that 情報 opens.
+      // A slow machine (CI) can still be scrolling the controls when the tap lands: retry the reveal + tap.
+      let infoOpen = false;
+      for (let attempt = 0; attempt < 3 && !infoOpen; attempt++) {
+        const inf = await revealC("explore:ctl:info");
+        await tapAt(inf.cx, inf.cy);
+        infoOpen = await p.waitForFunction(() => window.__wlCanvas.regions().some((r) => r.id === "explore:ctl:back"), null, { timeout: 3000 }).then(() => true, () => false);
+      }
+      assert.ok(infoOpen, `${cfg.name}: 情報 is open`);
       assert.equal(typeof (await ex()).log, "number", `${cfg.name}: log feed readable`);
       if (cfg.touch) assert.equal(await region("explore:keys"), null, `${cfg.name}: no key table on touch`);
       else assert.ok(await revealC("explore:keys"), `${cfg.name}: key table toggle on PC`);
