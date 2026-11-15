@@ -11,10 +11,10 @@ import {
 } from "@estg/shared";
 import { createStubCtx } from "../../shared/src/canvas-ui/test-ctx";
 import { DockScene } from "./canvas/dock-scene";
-import { type DockEnv } from "./canvas/dock-sections";
+import { hubTransactionKey, type DockEnv } from "./canvas/dock-sections";
 import { PALETTE_TITLE, type PaletteId } from "./canvas/palette-tree";
 import { dockTabs } from "./canvas/tabs";
-import { loadPlaytestSeed, createInitialHangar } from "./hangar";
+import { loadPlaytestSeed, createInitialHangar, sellHangarWreck, sellCircuit, repairMech, reviveWreck, chargeMech, scrapMech, buyNewMech, createNewMech, type HangarState } from "./hangar";
 
 class MemStore {
   map = new Map<string, string>();
@@ -228,14 +228,40 @@ assert.equal(hub().credits, crBefore + 5);
   assert.equal(hub().credits, c0 + (a0 - 10) * 5);
 }
 
-// --- #379 A8: a hangar sound only after the action succeeded --------------------------------
+// --- #379 A8: a hangar sound only after the action really traded (real reducers) ----------------
 {
   const heard: string[] = [];
   setActionSfxListener((id) => heard.push(id));
-  sec().act("repair", { id: "x" }, (st) => ({ ...st, notice: "装甲パーツが足りない" }));
-  assert.deepEqual(heard, [], "a refused action makes no sound");
-  sec().act("repair", { id: "x" }, (st) => ({ ...st, hub: { ...st.hub } }));
-  assert.deepEqual(heard, ["repair"], "a done action sounds once");
+  // Every sounding hangar action, refused by its real reducer. sellHangarWreck hands back a freshly
+  // reloaded hub on a refusal (#379 re-audit A8): it must stay silent too.
+  const refusals: Array<[string, (st: HangarState) => HangarState]> = [
+    ["sell-wreck", (st) => sellHangarWreck(st, "no-such-mech", store)],
+    ["sell-circuit", (st) => sellCircuit(st, "no-such-circuit")],
+    ["repair", (st) => repairMech(st, "no-such-mech")],
+    ["revive", (st) => reviveWreck(st, "no-such-mech")],
+    ["charge", (st) => chargeMech(st, "no-such-mech", store)],
+    ["scrap", (st) => scrapMech(st, "no-such-mech")],
+  ];
+  for (const [kind, fn] of refusals) {
+    const before = hubTransactionKey(hub());
+    sec().act(kind, { id: "no-such" }, fn);
+    assert.deepEqual(heard, [], `${kind}: a refusal makes no sound`);
+    assert.equal(hubTransactionKey(hub()), before, `${kind}: and traded nothing`);
+  }
+  const broke = { ...sec().state, hub: { ...sec().state.hub, credits: 0 } };
+  for (const [kind, fn] of [["btn-buy-mech", buyNewMech], ["btn-create-mech", createNewMech]] as const) {
+    sec().state = broke;
+    sec().act(kind, {}, fn);
+    assert.deepEqual(heard, [], `${kind}: no credits → no sound`);
+  }
+  sec().reloadHub();
+  // The fingerprint ignores key order and object identity.
+  const h0 = hub();
+  assert.equal(hubTransactionKey(JSON.parse(JSON.stringify(h0))), hubTransactionKey(h0));
+  // A real success sounds once.
+  sec().state = { ...sec().state, hub: { ...sec().state.hub, credits: 1_000_000 } };
+  sec().act("btn-buy-mech", {}, buyNewMech);
+  assert.deepEqual(heard, ["mech-new"], "a mech bought → its sound once");
   heard.length = 0;
   goto("T", "V", "VS");
   tap("dock:sell:armor");

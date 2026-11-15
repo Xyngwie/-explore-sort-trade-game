@@ -72,8 +72,46 @@ const CONFIGS = [
       p.on("dialog", (d) => { errors.push("native dialog: " + d.message()); d.dismiss(); });
       const cdp = cfg.touch ? await ctx.newCDPSession(p) : null;
 
+      /** What the play log is doing (printed when a settle times out, #379 re-audit). */
+      const playLogState = () => p.evaluate(async () => {
+        const blocker = document.getElementById("play-log-blocker");
+        const ss = sessionStorage, ls = window.__native ? window.__native() : localStorage;
+        const pendingKeys = Object.keys(ss).filter((k) => k.startsWith("wreckline.playLog.pending"));
+        const pending = pendingKeys.map((k) => { const v = ss.getItem(k) || ""; let op = null; try { const j = JSON.parse(v); op = j && (j.operationId || (j.draft && j.draft.operationId) || null); } catch { /* raw */ } return { key: k, operationId: op, bytes: v.length }; });
+        const idb = await new Promise((res) => {
+          const r = indexedDB.open("wreckline.playLog.v1");
+          r.onerror = () => res({ error: String(r.error) });
+          r.onsuccess = () => {
+            const db = r.result, out = {};
+            const stores = ["games", "pending"].filter((n) => db.objectStoreNames.contains(n));
+            if (!stores.length) { db.close(); res(out); return; }
+            const t = db.transaction(stores, "readonly");
+            for (const n of stores) {
+              const q = t.objectStore(n).getAll();
+              q.onsuccess = () => { out[n] = q.result.map((x) => ({ gameId: x.gameId, seq: x.seq, operationId: x.operationId || (x.draft && x.draft.operationId) || null, checkpoint: !!(x.state && x.state.checkpoint) })); };
+            }
+            t.oncomplete = () => { db.close(); res(out); };
+            t.onerror = () => { db.close(); res({ error: String(t.error) }); };
+          };
+        });
+        return {
+          blocker: blocker ? (blocker.textContent || "").trim().slice(0, 200) : null,
+          pending,
+          checkpointBytes: (ls.getItem("estg.sortieCheckpoint") || "").length,
+          idb,
+          scene: window.__wlCanvas ? window.__wlCanvas.scene() : null,
+          visibility: document.visibilityState,
+        };
+      });
       const settle = async () => {
-        await p.waitForFunction(() => !document.getElementById("play-log-blocker") && !window.__pending(), null, { timeout: 15000 });
+        try {
+          await p.waitForFunction(() => !document.getElementById("play-log-blocker") && !window.__pending(), null, { timeout: 15000 });
+        } catch (e) {
+          let state = null;
+          try { state = await playLogState(); } catch (err) { state = { error: String(err) }; }
+          console.error(`SETTLE_TIMEOUT ${cfg.name} ${JSON.stringify(state)}`);
+          throw e;
+        }
       };
       const ready = async () => { await p.waitForFunction(() => !!window.__wlCanvas, null, { timeout: 15000 }); await settle(); await p.waitForTimeout(50); };
       const scene = () => p.evaluate(() => window.__wlCanvas.scene());
@@ -270,13 +308,20 @@ const CONFIGS = [
       // Since the wide map (stage 3, #372) nothing is near at the start, so the log can still be
       // empty here (it shows 「戦術／戦報はここに出ます。」). Check that 情報 opens.
       // A slow machine (CI) can still be scrolling the controls when the tap lands: retry the reveal + tap.
-      let infoOpen = false;
+      // What this proves (#379 re-audit): 情報 opens within three reveal + tap attempts — weaker than the
+      // earlier single tap. Whether the FIRST tap opened it is observed separately (INFO_FIRST_TAP in the
+      // log) and not required: on CI the first tap can land while this script's own wheel scroll is
+      // still moving the controls. VERIFY_REQUIRE_INFO_FIRST_TAP=1 makes the first tap a requirement.
+      let infoOpen = false, infoTaps = 0;
       for (let attempt = 0; attempt < 3 && !infoOpen; attempt++) {
         const inf = await revealC("explore:ctl:info");
         await tapAt(inf.cx, inf.cy);
+        infoTaps++;
         infoOpen = await p.waitForFunction(() => window.__wlCanvas.regions().some((r) => r.id === "explore:ctl:back"), null, { timeout: 3000 }).then(() => true, () => false);
       }
+      console.log(`INFO_FIRST_TAP ${cfg.name} ${infoOpen && infoTaps === 1 ? "opened" : `missed (opened after ${infoTaps} taps: ${infoOpen})`}`);
       assert.ok(infoOpen, `${cfg.name}: 情報 is open`);
+      if (process.env.VERIFY_REQUIRE_INFO_FIRST_TAP) assert.equal(infoTaps, 1, `${cfg.name}: 情報 opens on the first tap`);
       assert.equal(typeof (await ex()).log, "number", `${cfg.name}: log feed readable`);
       if (cfg.touch) assert.equal(await region("explore:keys"), null, `${cfg.name}: no key table on touch`);
       else assert.ok(await revealC("explore:keys"), `${cfg.name}: key table toggle on PC`);

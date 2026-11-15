@@ -4,7 +4,7 @@
 - What: プログラムで作曲した BGM 11 曲と効果音 39 種を canvas 版に入れた。シーンごとの曲、交戦の切り替え（B1）、「♪」のオン・オフ（B2）、1 秒のクロスフェード（B3）→ [AUDIO_V0.md](AUDIO_V0.md)、作曲のプログラムは [tools/audio/](../tools/audio/README.md)
 - Why: 神宮「各シーンに BGM を付けたい」「効果音も順次つくって」「全★で実装お願いします」（2026-11-15）
 - Scope: `packages/shared`（再生エンジン・素材・`CanvasUI` の押下通知・資源の行の右端）、`packages/explore`（曲の選び方・効果音の積み上げ）、`packages/restore` `sort` `invade` の canvas の場面、`packages/trade` の canvas アプリ、検証。ゲームの規則・セーブ・既存版のページは変えない
-- Status: B1〜B3 は ★A（神宮決定 2026-11-15）。selftest（`audio.selftest.ts`・`sceneAudio.selftest.ts`）、`npm test`、canvas の verify（新規 `verify-canvas-audio.cjs` ほか）。PR #379。監査（CHANGES_REQUIRED）の F1・F2・A8・A12 を修正（[AUDIO_V0.md](AUDIO_V0.md) の末尾）。CI の verify-canvas-explore の settle タイムアウトは手元で再現せず、修正後の CI で再確認する。マージ・デプロイなし。スマートフォン実機（音が出るか・音量）NOT_RUN
+- Status: B1〜B3 は ★A（神宮決定 2026-11-15）。selftest（`audio.selftest.ts`・`sceneAudio.selftest.ts`）、`npm test`、canvas の verify（新規 `verify-canvas-audio.cjs` ほか）。PR #379。監査（CHANGES_REQUIRED）の F1・F2・A8・A12 を修正（[AUDIO_V0.md](AUDIO_V0.md) の末尾）。再監査（CHANGES_REQUIRED）の A8（失敗した残骸売却で音が鳴る）を、取引の中身の比較で修正。CI の settle 時間切れは、時間切れの瞬間のプレイ記録の状態を出すようにして原因を調べている。マージ・デプロイなし。スマートフォン実機（音が出るか・音量）NOT_RUN
 
 ## 探索に既存テクスチャを組み込む（2026-11-13）
 
