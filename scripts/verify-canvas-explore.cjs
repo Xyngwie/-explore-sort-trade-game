@@ -208,6 +208,7 @@ const CONFIGS = [
       assert.equal(await scene(), "explore", `${cfg.name}: 探索 scene`);
       let e = await ex();
       assert.equal(e.phase, "briefing");
+      assert.equal((await p.evaluate(() => window.__wlCanvas.audio())).wanted, "briefing", `${cfg.name}: briefing BGM (docs/AUDIO_V0.md)`);
       assert.equal(e.note, "", `${cfg.name}: the seeded squad can sortie`);
       assert.deepEqual(await visibleHtmlControls(), ["canvas#wl-canvas"], `${cfg.name}: only the canvas`);
       assert.ok(await region("tab:DOCK"), "briefing shows the tabs");
@@ -216,6 +217,19 @@ const CONFIGS = [
       await settle();
       e = await ex();
       assert.equal(e.phase, "sortie", `${cfg.name}: 出撃`);
+      // docs/AUDIO_V0.md: sortie BGM, and the 「♪」 in the HUD covers no control
+      {
+        const au = await p.evaluate(() => window.__wlCanvas.audio());
+        assert.ok(["scavenging", "contact"].includes(au.wanted), `${cfg.name}: sortie BGM ${au.wanted}`);
+        const all = (await p.evaluate(() => window.__wlCanvas.regions())).filter((r) => r.visible);
+        const t = all.find((r) => r.id === "audio:toggle");
+        assert.ok(t, `${cfg.name}: 「♪」 in the sortie HUD`);
+        const hit = all.filter((r) => r.id !== "audio:toggle" && r.id !== "explore:map" && r.layer === t.layer && r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h);
+        assert.deepEqual(hit.map((r) => r.id), [], `${cfg.name}: 「♪」 overlaps in the sortie`);
+        const m = await ex();
+        assert.ok(t.y + t.h <= m.map.y + 0.5, `${cfg.name}: 「♪」 above the map`);
+        if (process.env.VERIFY_SHOTS) await p.screenshot({ path: require("node:path").join(process.env.VERIFY_SHOTS, `sortie-${cfg.name}.png`) });
+      }
       if (!process.env.VERIFY_BLOCK_TEXTURES) {
         await p.waitForFunction(() => window.__textureDraws.ground > 0 && window.__textureDraws.rover > 0);
         // Every atlas decodes under the actual Pages subpath in both builds, even rare pickups.

@@ -12,6 +12,7 @@
  * when zoomed out, mouse left / right / Ctrl+left / chord / middle drag, wheel).
  */
 import {
+  playSfx,
   CANVAS_THEME,
   CTA_CHIP,
   CTA_COPY,
@@ -172,19 +173,23 @@ export class InvadeScene {
     }
     const flag = action === "right" || (action === "tap" && !this.reversedTouch) || (action === "hold" && this.reversedTouch);
     let chordHit: Coord | null = null;
+    const wasHit = board.hitMine === true, wasWon = board.status === "won";
     if (cell.open) {
       if (!cell.mine && (action === "chord" || action === "tap")) {
         const r = chordCells(board, sx, sy); chordHit = r.hit;
         this.lastBoardLog = `周囲開放 (${sx},${sy}) ×${r.opened}`;
       } else this.lastBoardLog = `ルート焦点 (${sx},${sy})`;
     } else if (action === "chord") return;
-    else if (flag) { const r = toggleFlag(board, sx, sy); if (!r.ok) return; this.lastBoardLog = r.flagged ? `敵位置をマーク (${sx},${sy})` : `マーク解除 (${sx},${sy})`; }
+    else if (flag) { const r = toggleFlag(board, sx, sy); if (!r.ok) return; playSfx("invade-flag"); this.lastBoardLog = r.flagged ? `敵位置をマーク (${sx},${sy})` : `マーク解除 (${sx},${sy})`; }
     else {
       const r = openCell(board, sx, sy);
       if (!r.ok) { if (r.reason === "flagged") { this.selected = { sx, sy }; this.skipped = false; this.lastBoardLog = `マーク付きマス (${sx},${sy}) は開けません`; this.saveFrontProgress(); this.host.redraw(); } return; }
       this.lastBoardLog = `開放 (${sx},${sy}) ×${r.opened} · 残敵 ${minesRemaining(board)}`;
+      playSfx("invade-open");
     }
     this.selected = chordHit ?? { sx, sy }; this.skipped = false;
+    if (board.hitMine && !wasHit) playSfx("invade-mine");
+    else if (board.status === "won" && !wasWon) playSfx("board-cleared");
     if (board.hitMine) this.lastBoardLog = `敵接触 (${this.selected.sx},${this.selected.sy}) → scoutHazard · 強制出撃 敵 ${forcedEngageTargets(board, this.selected.sx, this.selected.sy).length} マス`;
     else if (board.status === "won") this.lastBoardLog = "掃討完了 → sectorCleared";
     this.saveFrontProgress();

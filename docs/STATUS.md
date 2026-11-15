@@ -1,3 +1,11 @@
+## BGM と効果音（2026-11-15・神宮の依頼）
+
+- Who: Claude Code（神宮の直接指示。Automations は起動していない）
+- What: プログラムで作曲した BGM 11 曲と効果音 39 種を canvas 版に入れた。シーンごとの曲、交戦の切り替え（B1）、「♪」のオン・オフ（B2）、1 秒のクロスフェード（B3）→ [AUDIO_V0.md](AUDIO_V0.md)、作曲のプログラムは [tools/audio/](../tools/audio/README.md)
+- Why: 神宮「各シーンに BGM を付けたい」「効果音も順次つくって」「全★で実装お願いします」（2026-11-15）
+- Scope: `packages/shared`（再生エンジン・素材・`CanvasUI` の押下通知・資源の行の右端）、`packages/explore`（曲の選び方・効果音の積み上げ）、`packages/restore` `sort` `invade` の canvas の場面、`packages/trade` の canvas アプリ、検証。ゲームの規則・セーブ・既存版のページは変えない
+- Status: B1〜B3 は ★A（神宮決定 2026-11-15）。selftest（`audio.selftest.ts`・`sceneAudio.selftest.ts`）、`npm test`、canvas の verify（新規 `verify-canvas-audio.cjs` ほか）。draft PR。マージ・デプロイなし。スマートフォン実機（音が出るか・音量）NOT_RUN
+
 ## 探索に既存テクスチャを組み込む（2026-11-13）
 
 - Who: Codex（神宮の直接依頼。Cursor Automationsは起動しない）

@@ -94,6 +94,8 @@ export type World = { barricades?: import("./barricades").BarricadeState; shield
   /** 小隊長の指揮セル keyed by the 小隊長's instanceId (runtime; settled into mechLearning.byMech). */
   mechCommandWork?: Record<string, import("@estg/shared").MechCommandCell[]>;
   mechCommandFinalized?: boolean;
+  /** docs/AUDIO_V0.md: effect ids raised by the game logic since the last frame (runtime; drained by the page). */
+  sfx?: string[];
   /** world.elapsed of the last mission the captain-小隊長 issued (player or itself). Wingman 小隊長 timers sit on the unit. */
   commandDecisionAt?: number;
   commandDecisionCount?: number;

@@ -126,6 +126,10 @@ export type CanvasUIOptions = {
   blocked?: () => boolean;
   /** Called whenever input changed something visible. */
   invalidate?: () => void;
+  /** A tap activated a region (after `blocked` passed), before its handler runs. Used for UI sounds. */
+  onActivate?: (id: string) => void;
+  /** A tap released on a disabled region. Used for UI sounds. */
+  onDenied?: (id: string) => void;
 };
 
 /** Text helpers ----------------------------------------------------------- */
@@ -480,9 +484,11 @@ export class CanvasUI {
       return true;
     }
     const r = this.hitTest(p);
+    if (r && r.id === s.regionId && r.disabled) this.opts.onDenied?.(r.id);
     if (!r || r.id !== s.regionId || r.disabled) return false;
     if (this.opts.blocked?.()) return false;
     this.activations++;
+    if (r.onActivate) this.opts.onActivate?.(r.id);
     r.onActivate?.();
     this.opts.invalidate?.();
     return true;

@@ -1,0 +1,286 @@
+{
+  "bgm": {
+    "title": {
+      "file": "bgm/title.mp3",
+      "title": "WRECKLINE - Above the Shell",
+      "loop": null
+    },
+    "hangar": {
+      "file": "bgm/hangar.mp3",
+      "title": "Hangar - Rust and Warmth",
+      "loop": [
+        0.5,
+        96.5
+      ]
+    },
+    "recon": {
+      "file": "bgm/recon.mp3",
+      "title": "Recon Grid",
+      "loop": [
+        0.5,
+        61.131565
+      ]
+    },
+    "sorting": {
+      "file": "bgm/sorting.mp3",
+      "title": "Sorting the Salvage",
+      "loop": [
+        0.5,
+        55.357143
+      ]
+    },
+    "restoring": {
+      "file": "bgm/restoring.mp3",
+      "title": "Restoring the Circuit",
+      "loop": [
+        0.5,
+        93.833333
+      ]
+    },
+    "briefing": {
+      "file": "bgm/briefing.mp3",
+      "title": "Briefing - Mass Driver",
+      "loop": [
+        0.5,
+        58.099977
+      ]
+    },
+    "scavenging": {
+      "file": "bgm/scavenging.mp3",
+      "title": "Scavenging the Shell",
+      "loop": [
+        0.5,
+        85.833333
+      ]
+    },
+    "contact": {
+      "file": "bgm/contact.mp3",
+      "title": "Contact",
+      "loop": [
+        0.5,
+        59.576916
+      ]
+    },
+    "extraction": {
+      "file": "bgm/extraction.mp3",
+      "title": "Extraction Window",
+      "loop": [
+        0.5,
+        48.5
+      ]
+    },
+    "home": {
+      "file": "bgm/home.mp3",
+      "title": "Home with Cargo",
+      "loop": [
+        0.5,
+        24.5
+      ]
+    },
+    "lost": {
+      "file": "bgm/lost.mp3",
+      "title": "Lost to the Cold",
+      "loop": [
+        0.5,
+        32.5
+      ]
+    }
+  },
+  "sfx": {
+    "ui-tap": {
+      "file": "sfx/ui-tap.mp3",
+      "label": "画面：ボタンを押す",
+      "tier": "ui"
+    },
+    "ui-back": {
+      "file": "sfx/ui-back.mp3",
+      "label": "画面：‹ 戻る",
+      "tier": "ui"
+    },
+    "ui-open": {
+      "file": "sfx/ui-open.mp3",
+      "label": "画面：パレットを開く",
+      "tier": "ui"
+    },
+    "ui-confirm": {
+      "file": "sfx/ui-confirm.mp3",
+      "label": "画面：確認ダイアログで決定",
+      "tier": "ui"
+    },
+    "ui-cancel": {
+      "file": "sfx/ui-cancel.mp3",
+      "label": "画面：やめる",
+      "tier": "ui"
+    },
+    "ui-denied": {
+      "file": "sfx/ui-denied.mp3",
+      "label": "画面：できない操作",
+      "tier": "ui"
+    },
+    "coin-gain": {
+      "file": "sfx/coin-gain.mp3",
+      "label": "格納庫：売却して入金",
+      "tier": "work"
+    },
+    "coin-spend": {
+      "file": "sfx/coin-spend.mp3",
+      "label": "格納庫：購入して支払い",
+      "tier": "work"
+    },
+    "repair": {
+      "file": "sfx/repair.mp3",
+      "label": "格納庫：修理・残骸復活",
+      "tier": "work"
+    },
+    "charge": {
+      "file": "sfx/charge.mp3",
+      "label": "格納庫：充電",
+      "tier": "work"
+    },
+    "equip": {
+      "file": "sfx/equip.mp3",
+      "label": "格納庫：回路を装備・外す",
+      "tier": "work"
+    },
+    "scrap": {
+      "file": "sfx/scrap.mp3",
+      "label": "格納庫：解体",
+      "tier": "work"
+    },
+    "mech-new": {
+      "file": "sfx/mech-new.mp3",
+      "label": "格納庫：新品購入・新規作成",
+      "tier": "work"
+    },
+    "fire-player": {
+      "file": "sfx/fire-player.mp3",
+      "label": "探索：隊長の射撃",
+      "tier": "combat"
+    },
+    "fire-wing": {
+      "file": "sfx/fire-wing.mp3",
+      "label": "探索：僚機の射撃（小さめ）",
+      "tier": "ui"
+    },
+    "fire-enemy": {
+      "file": "sfx/fire-enemy.mp3",
+      "label": "探索：敵の射撃（暗め）",
+      "tier": "combat"
+    },
+    "hit-enemy": {
+      "file": "sfx/hit-enemy.mp3",
+      "label": "探索：敵に命中",
+      "tier": "combat"
+    },
+    "hit-self": {
+      "file": "sfx/hit-self.mp3",
+      "label": "探索：味方が被弾",
+      "tier": "combat"
+    },
+    "shield-break": {
+      "file": "sfx/shield-break.mp3",
+      "label": "探索：盾が壊れる",
+      "tier": "combat"
+    },
+    "enemy-down": {
+      "file": "sfx/enemy-down.mp3",
+      "label": "探索：敵を撃破",
+      "tier": "event"
+    },
+    "ally-wrecked": {
+      "file": "sfx/ally-wrecked.mp3",
+      "label": "探索：味方が大破",
+      "tier": "event"
+    },
+    "air-support": {
+      "file": "sfx/air-support.mp3",
+      "label": "探索：航空支援",
+      "tier": "event"
+    },
+    "salvage-start": {
+      "file": "sfx/salvage-start.mp3",
+      "label": "探索：回収を始める",
+      "tier": "work"
+    },
+    "salvage-done": {
+      "file": "sfx/salvage-done.mp3",
+      "label": "探索：回収完了",
+      "tier": "work"
+    },
+    "container-found": {
+      "file": "sfx/container-found.mp3",
+      "label": "探索：コンテナ発見",
+      "tier": "work"
+    },
+    "order": {
+      "file": "sfx/order.mp3",
+      "label": "探索：僚機へ指示",
+      "tier": "ui"
+    },
+    "extract-request": {
+      "file": "sfx/extract-request.mp3",
+      "label": "探索：帰還要請",
+      "tier": "event"
+    },
+    "time-warning": {
+      "file": "sfx/time-warning.mp3",
+      "label": "探索：残り30秒",
+      "tier": "event"
+    },
+    "liftoff": {
+      "file": "sfx/liftoff.mp3",
+      "label": "探索：離昇",
+      "tier": "event"
+    },
+    "board-cleared": {
+      "file": "sfx/board-cleared.mp3",
+      "label": "探索：地雷マスを「済」に",
+      "tier": "event"
+    },
+    "restore-edge": {
+      "file": "sfx/restore-edge.mp3",
+      "label": "修復：線を引く",
+      "tier": "ui"
+    },
+    "restore-cross": {
+      "file": "sfx/restore-cross.mp3",
+      "label": "修復：×を付ける",
+      "tier": "ui"
+    },
+    "restore-solved": {
+      "file": "sfx/restore-solved.mp3",
+      "label": "修復：完成",
+      "tier": "event"
+    },
+    "restore-perfect": {
+      "file": "sfx/restore-perfect.mp3",
+      "label": "修復：パーフェクト",
+      "tier": "event"
+    },
+    "sort-open": {
+      "file": "sfx/sort-open.mp3",
+      "label": "仕分：コンテナを開ける",
+      "tier": "work"
+    },
+    "sort-place": {
+      "file": "sfx/sort-place.mp3",
+      "label": "仕分：物を置く",
+      "tier": "ui"
+    },
+    "invade-open": {
+      "file": "sfx/invade-open.mp3",
+      "label": "偵察：マスを開く",
+      "tier": "ui"
+    },
+    "invade-flag": {
+      "file": "sfx/invade-flag.mp3",
+      "label": "偵察：旗を立てる",
+      "tier": "ui"
+    },
+    "invade-mine": {
+      "file": "sfx/invade-mine.mp3",
+      "label": "偵察：地雷を踏む",
+      "tier": "event"
+    }
+  }
+}

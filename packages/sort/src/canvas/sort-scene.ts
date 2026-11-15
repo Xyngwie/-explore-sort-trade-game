@@ -10,6 +10,7 @@
  * host (canvas app) receives URLs through `go` and switches scenes in place.
  */
 import {
+  playSfx,
   CANVAS_THEME,
   CTA_CHIP,
   CTA_COPY,
@@ -243,7 +244,7 @@ export class SortScene {
   private resetFlashes(): void { this.bagIntroUntil = 0; this.junkTensionUntil = 0; this.lastGaugeLevel = null; }
 
   /* --------------------------------- actions -------------------------------- */
-  start(): void { this.flash("bag", 2800); this.setState(startRefine(this.state)); }
+  start(): void { this.flash("bag", 2800); playSfx("sort-open"); this.setState(startRefine(this.state)); }
   /**
    * Test-only actions, shown in the page's debug area (神宮決定 2026-11-06), never
    * on the canvas: the existing 「コンテナ100でテストプレイ」 (briefing / blocked,
@@ -278,6 +279,7 @@ export class SortScene {
     if (this.state.phase !== "play") return;
     const target = resolveSwipeNeighbor(this.state.cols, this.state.rows, index, dx, dy);
     if (target == null && Math.max(Math.abs(dx), Math.abs(dy)) >= SORT_V0_RULES.swipeMinPx) return;
+    if (target != null) playSfx("sort-place");
     this.setState(target == null ? tapCell(this.state, index) : swapPanels(this.state, index, target));
   }
   key(key: string, shift: boolean): boolean {
@@ -290,6 +292,7 @@ export class SortScene {
     if (key === "ArrowUp" && r > 0) target = sel - s.cols;
     if (key === "ArrowDown" && r + 1 < s.rows) target = sel + s.cols;
     if (target == null) return false;
+    if (!shift) playSfx("sort-place");
     this.setState(shift ? { ...s, selected: target } : swapPanels(s, sel, target));
     return true;
   }

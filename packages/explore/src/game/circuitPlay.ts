@@ -1,3 +1,4 @@
+import { fireSfxOf, raiseSfx } from "./sfxQueue";
 import {setPlayLogOperation} from '@estg/shared';
 import { dropFriendlyWreckSupplies } from "./wreckSupplies";
 import { canBuildBarricade, startBarricade, barricadeWorking, interruptBarricade } from "./barricades";
@@ -1295,6 +1296,7 @@ function spawnShot(
     ...(pierce != null && pierce > 0 ? { pierce } : {}),
   };
   world.bullets.push(b);
+  raiseSfx(world, fireSfxOf(from));
 }
 
 export function bendHoming(world: World, b: Bullet, dt: number): void {

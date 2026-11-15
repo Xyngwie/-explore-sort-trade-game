@@ -12,7 +12,9 @@ import type { World } from "./types";
 import { backfillCircuitPlayState, type CircuitPlayState } from "./circuitPlay";
 
 export function snapshotSortieWorld(world: World): unknown {
-  return JSON.parse(JSON.stringify(world)) as unknown;
+  const copy = JSON.parse(JSON.stringify(world)) as World;
+  delete copy.sfx; // pending effects are this frame's, not part of the sortie
+  return copy as unknown;
 }
 
 export function snapshotResultWorld(world: World): unknown {

@@ -1,5 +1,6 @@
 /** Optional browser adapter. Reducer selftests/legacy/debug saves retain their existing API. */
 import type { LogJSON } from "./play-log";
+import { playActionSfx } from "./audio";
 type Hooks = {
   operation(kind: string, context: LogJSON): void;
   blocked(): boolean;
@@ -41,6 +42,7 @@ export function setPlayLogOperation(
   context: LogJSON = null,
 ): void {
   hooks?.operation(kind, context);
+  playActionSfx(kind); // docs/AUDIO_V0.md: one place hears every hangar action
 }
 export function playLogRecording(): boolean {
   return hooks !== null;

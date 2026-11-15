@@ -37,14 +37,19 @@ import {
   playLogBlocked,
   playLogNavigate,
   resolveModuleBaseUrl,
+  setHudTrailing,
+  gameAudio,
+  uiSfxForRegion,
+  type BgmId,
   type CanvasUI,
   type FrameInfo,
   type Rect,
+  type SfxId,
 } from "@estg/shared";
 import { SortScene, armSortBackTrap, sortPopstateAction } from "@estg/sort/canvas";
 import { RestoreScene, slowPerfectBoardSide, stripInboundSearchFromLocation } from "@estg/restore/canvas";
 import { InvadeScene } from "@estg/invade/canvas";
-import { ExploreScene, inspectShieldFixture } from "@estg/explore/canvas";
+import { ExploreScene, drainSortieSfx, exploreBgm, inspectShieldFixture, type ContactMemo } from "@estg/explore/canvas";
 import { mountDebugPanel, type DebugAction } from "./debug-panel";
 import { routeGameKey } from "./game-keys";
 import { DockScene, layoutDock, CANVAS_MOBILE_MAX_W } from "./dock-scene";
@@ -56,6 +61,23 @@ import { clearHandoffFromUrl, createInitialHangar, ingestLocationSearch, loadCra
 import { captureSortYieldFromHandoff, clearPendingSort, gateSortHandoff, hasSortHandoff, restorePendingSortOnBack } from "../sort-return-core";
 
 export type SceneId = "start" | "dock" | "sort" | "restore" | "invade" | "explore";
+
+/** docs/AUDIO_V0.md: the BGM of each scene (explore picks its own: briefing / sortie / contact / extraction / result). */
+export const SCENE_BGM: Record<Exclude<SceneId, "explore">, BgmId> = {
+  start: "title",
+  dock: "hangar",
+  sort: "sorting",
+  restore: "restoring",
+  invade: "recon",
+};
+/** B2 (★A): the 「♪」 toggle, top right of the column. */
+export const AUDIO_TOGGLE_ID = "audio:toggle";
+export function audioToggleRect(frame: Pick<FrameInfo, "width" | "insets">): Rect {
+  const w = 40, h = 28;
+  const colW = Math.min(frame.width, SHELL_MAX_WIDTH_PX);
+  const right = (frame.width + colW) / 2 - frame.insets.right;
+  return { x: right - w - 6, y: frame.insets.top + 4, w, h };
+}
 /** The RESTORE page of this app (same app, own path like the existing /restore/ page). */
 export const CANVAS_RESTORE_PATH = "restore/";
 /** The INVADE page of this app (same app, own path like the existing /invade/ page). */
@@ -105,6 +127,22 @@ export function mountCanvasApp(doc: Document = document): void {
   const canvas = doc.getElementById("wl-canvas") as HTMLCanvasElement;
   const input = doc.getElementById("wl-canvas-name") as HTMLInputElement;
   let current: SceneId = "start";
+  const audio = gameAudio();
+  const contact: ContactMemo = { lastSeenAt: null };
+  const sceneBgm = (): BgmId | null => {
+    if (current === "explore") return explore ? exploreBgm(explore.world, contact) : null;
+    contact.lastSeenAt = null;
+    return SCENE_BGM[current];
+  };
+  /** B2: the 「♪」 toggle. It sits at the right end of the resource row (or the sortie HUD / the start screen corner). */
+  const audioToggle = (ui: CanvasUI, r: Rect) => {
+    const muted = audio?.muted ?? false;
+    ui.button(AUDIO_TOGGLE_ID, r, muted ? "♪×" : "♪", {
+      fontSize: 15,
+      onActivate: () => { audio?.unlock(); audio?.toggleMuted(); surface.invalidate(); },
+    });
+  };
+  setHudTrailing((ui, r) => audioToggle(ui, { x: r.x + 4, y: r.y + 3, w: r.w - 6, h: r.h - 6 }));
   let dock: DockScene | null = null;
   let sort: SortScene | null = null;
   let restore: RestoreScene | null = null;
@@ -397,7 +435,7 @@ export function mountCanvasApp(doc: Document = document): void {
     const top = frame.insets.top;
     const bottom = frame.height - frame.insets.bottom;
     if (scene.phase === "sortie") {
-      scene.drawSortie(ui, { x: L.column.x, y: top, w: L.column.w, h: bottom - top }, frame.dpr);
+      scene.drawSortie(ui, { x: L.column.x, y: top, w: L.column.w, h: bottom - top }, frame.dpr, (r) => audioToggle(ui, r));
       if (scene.picker) pickerModal(ui, L.column, frame.height, scene.picker, frame.insets.top, frame.insets.bottom);
       scene.drawPauseCover(ui, frame.width, frame.height); // last: the pause tap reaches nothing else
       return;
@@ -426,16 +464,26 @@ export function mountCanvasApp(doc: Document = document): void {
     blocked: () => playLogBlocked(),
     // Debug area open: the page scrolls between the canvas and the area (#353 B3).
     inert: () => !!debugPanel?.isOpen,
+    // UI sounds: one plain tap per activation (a specific action sound wins), a low buzz on a disabled control.
+    onActivate: (id) => { if (id !== AUDIO_TOGGLE_ID) audio?.tap(uiSfxForRegion(id)); },
+    onDenied: () => audio?.sfx("ui-denied"),
     draw: (ui, frame) => {
       if (current === "explore" && explore) drawExplore(ui, frame, explore);
       else if (current === "invade" && invade) drawInvade(ui, frame, invade);
       else if (current === "restore") drawRestore(ui, frame);
       else if (current === "sort" && sort) drawSort(ui, frame, sort);
       else if (current === "dock" && dock) dock.draw(ui, frame);
-      else start.draw(ui, frame);
+      else { start.draw(ui, frame); audioToggle(ui, audioToggleRect(frame)); }
       placeInput(frame);
+      audio?.setBgm(sceneBgm());
+      if (current === "explore" && explore) for (const id of drainSortieSfx(explore.world)) audio?.sfx(id as SfxId);
     },
   });
+  // Browsers allow sound only after a gesture: the first tap or key starts the audio.
+  const unlockAudio = () => audio?.unlock();
+  canvas.addEventListener("pointerdown", unlockAudio, { capture: true });
+  win.addEventListener("keydown", unlockAudio, { capture: true });
+  doc.addEventListener("visibilitychange", () => audio?.setHidden(doc.visibilityState === "hidden"));
 
   // The HTML debug area under the canvas (debug mode only).
   let alphaLab: HTMLElement | null = null;
@@ -508,6 +556,8 @@ export function mountCanvasApp(doc: Document = document): void {
 
   // Read-only hook for scripts/verify-canvas-*.cjs.
   (win as unknown as Record<string, unknown>).__wlCanvas = {
+    /** docs/AUDIO_V0.md: what the player wants / plays (verify scripts). */
+    audio: () => (audio ? { unlocked: audio.unlocked, muted: audio.muted, wanted: audio.wantedBgm, playing: audio.playingBgm } : null),
     scene: () => current,
     palette: () => (current === "dock" ? dock?.sections?.nav.current ?? null : null),
     selectedCircuit: () => dock?.sections?.state.lastCircuit?.circuitId ?? null,
