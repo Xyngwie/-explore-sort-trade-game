@@ -72,32 +72,61 @@ const CONFIGS = [
       p.on("dialog", (d) => { errors.push("native dialog: " + d.message()); d.dismiss(); });
       const cdp = cfg.touch ? await ctx.newCDPSession(p) : null;
 
-      /** What the play log is doing (printed when a settle times out, #379 re-audit). */
+      /**
+       * What the play log is doing (printed when a settle times out, #379 re-audit D1).
+       * The checkpoint lives in `resume` of PlayGame / PlayDraft ({ v, kind, body } or null).
+       * Every read has a deadline and handles blocked / abort / error, so the diagnostics can never
+       * stall or replace the original failure.
+       */
       const playLogState = () => p.evaluate(async () => {
+        const DEADLINE_MS = 2000;
+        const withDeadline = (label, promise) => Promise.race([
+          promise,
+          new Promise((res) => setTimeout(() => res({ error: `${label}: no answer in ${DEADLINE_MS} ms` }), DEADLINE_MS)),
+        ]);
+        const resumeOf = (x) => (x && x.resume != null ? { present: true, kind: (x.resume && x.resume.kind) || null } : { present: false, kind: null });
         const blocker = document.getElementById("play-log-blocker");
         const ss = sessionStorage, ls = window.__native ? window.__native() : localStorage;
-        const pendingKeys = Object.keys(ss).filter((k) => k.startsWith("wreckline.playLog.pending"));
-        const pending = pendingKeys.map((k) => { const v = ss.getItem(k) || ""; let op = null; try { const j = JSON.parse(v); op = j && (j.operationId || (j.draft && j.draft.operationId) || null); } catch { /* raw */ } return { key: k, operationId: op, bytes: v.length }; });
-        const idb = await new Promise((res) => {
-          const r = indexedDB.open("wreckline.playLog.v1");
-          r.onerror = () => res({ error: String(r.error) });
+        const pending = Object.keys(ss).filter((k) => k.startsWith("wreckline.playLog.pending")).map((k) => {
+          const v = ss.getItem(k) || "";
+          let operationId = null;
+          try { const j = JSON.parse(v); operationId = (j && (j.operationId || (j.draft && j.draft.operationId))) || null; } catch { /* not JSON */ }
+          return { key: k, operationId, bytes: v.length };
+        });
+        const idb = await withDeadline("indexedDB", new Promise((res) => {
+          let r;
+          try { r = indexedDB.open("wreckline.playLog.v1"); } catch (e) { res({ error: String(e) }); return; }
+          r.onerror = () => res({ error: `open: ${String(r.error)}` });
+          r.onblocked = () => res({ error: "open: blocked" });
           r.onsuccess = () => {
             const db = r.result, out = {};
             const stores = ["games", "pending"].filter((n) => db.objectStoreNames.contains(n));
             if (!stores.length) { db.close(); res(out); return; }
-            const t = db.transaction(stores, "readonly");
+            let t;
+            try { t = db.transaction(stores, "readonly"); } catch (e) { db.close(); res({ error: `transaction: ${String(e)}` }); return; }
             for (const n of stores) {
               const q = t.objectStore(n).getAll();
-              q.onsuccess = () => { out[n] = q.result.map((x) => ({ gameId: x.gameId, seq: x.seq, operationId: x.operationId || (x.draft && x.draft.operationId) || null, checkpoint: !!(x.state && x.state.checkpoint) })); };
+              q.onsuccess = () => {
+                out[n] = q.result.map((x) => ({
+                  gameId: x.gameId,
+                  seq: x.seq ?? null,
+                  expectedSeq: x.expectedSeq ?? null,
+                  operationId: x.operationId || null,
+                  resume: resumeOf(x),
+                }));
+              };
             }
             t.oncomplete = () => { db.close(); res(out); };
-            t.onerror = () => { db.close(); res({ error: String(t.error) }); };
+            t.onabort = () => { db.close(); res({ error: `transaction aborted: ${String(t.error)}` }); };
+            t.onerror = () => { db.close(); res({ error: `transaction: ${String(t.error)}` }); };
           };
-        });
+        }));
+        let localCheckpoint = null;
+        try { const raw = ls.getItem("estg.sortieCheckpoint"); localCheckpoint = raw ? { bytes: raw.length, kind: (JSON.parse(raw) || {}).kind || null } : null; } catch (e) { localCheckpoint = { error: String(e) }; }
         return {
           blocker: blocker ? (blocker.textContent || "").trim().slice(0, 200) : null,
           pending,
-          checkpointBytes: (ls.getItem("estg.sortieCheckpoint") || "").length,
+          localCheckpoint,
           idb,
           scene: window.__wlCanvas ? window.__wlCanvas.scene() : null,
           visibility: document.visibilityState,
@@ -108,9 +137,11 @@ const CONFIGS = [
           await p.waitForFunction(() => !document.getElementById("play-log-blocker") && !window.__pending(), null, { timeout: 15000 });
         } catch (e) {
           let state = null;
-          try { state = await playLogState(); } catch (err) { state = { error: String(err) }; }
+          try {
+            state = await Promise.race([playLogState(), new Promise((res) => setTimeout(() => res({ error: "diagnostics: no answer in 5000 ms" }), 5000))]);
+          } catch (err) { state = { error: String(err) }; }
           console.error(`SETTLE_TIMEOUT ${cfg.name} ${JSON.stringify(state)}`);
-          throw e;
+          throw e; // the original timeout, never replaced by the diagnostics
         }
       };
       const ready = async () => { await p.waitForFunction(() => !!window.__wlCanvas, null, { timeout: 15000 }); await settle(); await p.waitForTimeout(50); };
@@ -255,6 +286,7 @@ const CONFIGS = [
       const start = await revealE("explore:start");
       await tapAt(start.cx, start.cy);
       await settle();
+      if (process.env.VERIFY_DUMP_PLAYLOG) console.log(`PLAYLOG_STATE ${cfg.name} ${JSON.stringify(await playLogState())}`);
       e = await ex();
       assert.equal(e.phase, "sortie", `${cfg.name}: 出撃`);
       // docs/AUDIO_V0.md: sortie BGM, and the 「♪」 in the HUD covers no control

@@ -73,5 +73,5 @@
 ## #379 の再監査対応（2026-11-15）
 
 - A8（再）：参照の比較では足りなかった（`sellHangarWreck` は断るときも読み直した新しい hub を返す）。`DockSections.act` は、取引の中身（所持金・資源・未開封・各機体の状態と耐久とバッテリー・回路と装備先・置き去り）を並びに左右されない形で比べ、変わったときだけ鳴らす（`hubTransactionKey`）。`canvas-dock-full.selftest.ts` は本物の処理で、鳴る操作すべての断りが無音であること（残骸・回路の売却、修理、残骸復活、充電、解体、所持金なしの購入と作成）と、本当の購入と売却は 1 回鳴ることを確かめる。古い参照の比較では `sell-wreck` で落ちる。
-- CI：`verify-canvas-explore.cjs` の `settle` が時間切れになったとき、ブロッカーの文言、保留中の操作キー、IndexedDB の games と pending（gameId・seq・operationId）、チェックポイントの大きさ、場面を `SETTLE_TIMEOUT` として出す。手元では CPU を 2 倍に遅くして 6 回走らせても再現しなかった。
-- 「情報」の確認：3 回までの再試行のあいだに開くことを確かめる形で、以前の 1 回のタップより弱い。最初のタップで開いたかは `INFO_FIRST_TAP` として別に出す（手元では 5 構成とも最初のタップで開いた）。`VERIFY_REQUIRE_INFO_FIRST_TAP=1` で最初のタップを必須にできる。
+- CI：`verify-canvas-explore.cjs` の `settle` が時間切れになったとき、ブロッカーの文言、保留中の操作キーと operationId、IndexedDB の games と pending（gameId・seq・expectedSeq・operationId・`resume` の有無と種類）、localStorage のチェックポイントの大きさと種類、場面、visibility を `SETTLE_TIMEOUT` として出す。再監査 D1：チェックポイントは `PlayGame` / `PlayDraft` の `resume` にある（以前の `state.checkpoint` は誤り）。読み取りは 2 秒で打ち切り、`onblocked`・`onabort`・`onerror` でも答えを返し、全体も 5 秒で打ち切るので、診断が元の失敗を止めたり置き換えたりしない（応答しない indexedDB で 2.1 秒で返ることを確認）。`VERIFY_DUMP_PLAYLOG=1` で出撃直後に一度出せる。手元では CPU を 2 倍に遅くして 6 回走らせても再現せず、原因は未特定（性能だけの問題とは断定しない）。
+- 「情報」の確認：3 回までの再試行のあいだに開くことを確かめる形で、以前の 1 回のタップより弱い。最初のタップで開いたかは `INFO_FIRST_TAP` として別に出す（手元と CI run 43714521008 では全構成で最初のタップで開いた）。`VERIFY_REQUIRE_INFO_FIRST_TAP=1` で最初のタップを必須にできる。**証明していないこと**：あらゆるスクロールのタイミングで、プレイヤーの最初のタップが必ず効くこと。入力の回帰を見る専用の確認を作るなら、スクロールの位置が止まるのを待ってから 1 回のタップを必須にする形がよい（再監査の助言）。
