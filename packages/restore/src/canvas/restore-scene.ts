@@ -14,6 +14,7 @@
  * scene has no name field.
  */
 import {
+  playSfx,
   CANVAS_THEME,
   CTA_COPY,
   encodeEdgeState,
@@ -123,6 +124,7 @@ export class RestoreScene {
     const noise = hazardNoiseEdgeIndices(p.clues, p.cols, p.rows, this.session.hazard);
     const next = cycleEdgeMark(this.marks[index] ?? 0);
     this.marks[index] = next;
+    playSfx(next === 1 ? "restore-edge" : "restore-cross"); // docs/AUDIO_V0.md
     this.outcomeOverride = null;
     this.abandoned = false;
     if (this.noiseTimer) { clearTimeout(this.noiseTimer); this.noiseTimer = null; }
@@ -138,6 +140,7 @@ export class RestoreScene {
   private afterChange(): void {
     const closed = this.play().loopClosed;
     if (shouldArmLoopCelebrate(this.prevLoopClosed, closed)) {
+      playSfx("restore-solved");
       this.celebrateUntil = this.now() + LOOP_CELEBRATE_MS;
       setTimeout(() => this.host.redraw(), LOOP_CELEBRATE_MS + 20);
     }
@@ -147,6 +150,7 @@ export class RestoreScene {
   commitAwaken(): void {
     if (this.locked || this.play().outcome !== "fully_awakened" || !this.op("commit-awaken")) return;
     this.outcomeOverride = "fully_awakened"; this.abandoned = false; this.persistIfNeeded(); this.afterChange();
+    playSfx("restore-perfect");
   }
   commitBypass(): void {
     if (this.locked || !this.op("commit-bypass")) return;

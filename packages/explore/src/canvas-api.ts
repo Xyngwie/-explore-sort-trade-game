@@ -4,3 +4,4 @@
  */
 export { ExploreScene, EXPLORE_MAP_ASPECT, layoutExploreSortie, type ExploreHost, type ExploreSortieLayout } from "./canvas/explore-scene";
 export { inspectShieldFixture } from "./debug/shieldFixture";
+export { exploreBgm, drainSortieSfx, CONTACT_HOLD_SEC, type ContactMemo } from "./game/sceneAudio";

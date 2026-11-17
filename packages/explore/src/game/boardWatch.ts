@@ -6,6 +6,7 @@
  * A living enemy inside a secure cell is visible on the sortie map, and the
  * big map keeps only that cell (decisions 26, 31, 32).
  */
+import { raiseSfx } from "./sfxQueue";
 import {
   cellGlyph,
   getCell,
@@ -86,7 +87,7 @@ function openSecuredCell(world: World, sx: number, sy: number, mine: boolean): v
   if (!progress || !layout) return;
   if (!openedHas(progress, sx, sy)) progress.opened.push({ sx, sy });
   progress.flagged = progress.flagged.filter((c) => !sameCell(c, sx, sy));
-  if (mine) progress.hitMine = false;
+  if (mine) { progress.hitMine = false; raiseSfx(world, "board-cleared"); }
   if (!layout.opened.some((c) => sameCell(c, sx, sy))) layout.opened.push({ sx, sy });
   layout.flagged = layout.flagged.filter((c) => !sameCell(c, sx, sy));
   const secured = (world.securedThisSortie ??= []);

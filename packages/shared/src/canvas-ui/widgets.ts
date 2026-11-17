@@ -270,6 +270,16 @@ export function drawMechGauge(ui: CanvasUI, m: MechGaugeModel, x: number, y: num
 }
 
 /** Shell HUD (FULLSCREEN_SHELL_V0 §6): Cr・弾・装・電・箱, 0 in grey, short numbers on phones. Display only. */
+/**
+ * Something the page draws at the right end of every resource row (docs/AUDIO_V0.md: the 「♪」).
+ * The row keeps {@link HUD_TRAILING_W} px free for it. Null = the full row for the items.
+ */
+let hudTrailing: ((ui: CanvasUI, r: Rect) => void) | null = null;
+export const HUD_TRAILING_W = 44;
+export function setHudTrailing(fn: ((ui: CanvasUI, r: Rect) => void) | null): void {
+  hudTrailing = fn;
+}
+
 export function drawResourceHud(ui: CanvasUI, r: Rect, hub: HubSnapshot | null, mobile: boolean): void {
   const ctx = ui.context;
   ctx.fillStyle = CANVAS_THEME.panel;
@@ -277,13 +287,15 @@ export function drawResourceHud(ui: CanvasUI, r: Rect, hub: HubSnapshot | null, 
   ctx.fillStyle = CANVAS_THEME.panelEdge;
   ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
   const items = hudItems(hub);
-  const cellW = r.w / items.length;
+  const reserve = hudTrailing ? HUD_TRAILING_W : 0;
+  const cellW = (r.w - reserve) / items.length;
   items.forEach((it, i) => {
     const cx = r.x + cellW * i + 10;
     const cy = r.y + r.h / 2;
     ui.text(it.label, cx, cy, { size: 12, weight: 700, color: it.value === 0 ? CANVAS_THEME.faint : it.color });
     ui.text(formatHudNumber(it.value, mobile), cx + (it.label.length > 1 ? 22 : 16), cy, { size: 13, weight: 600, color: it.value === 0 ? CANVAS_THEME.faint : CANVAS_THEME.text, maxW: cellW - 30 });
   });
+  if (hudTrailing) hudTrailing(ui, { x: r.x + r.w - HUD_TRAILING_W, y: r.y, w: HUD_TRAILING_W, h: r.h });
 }
 
 /** Bottom tabs (FULLSCREEN_SHELL_V0 §4). The active tab is drawn highlighted and is not a button. */

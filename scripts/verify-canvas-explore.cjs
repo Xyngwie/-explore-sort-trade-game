@@ -65,13 +65,84 @@ const CONFIGS = [
         };
       });
       const p = await ctx.newPage();
+      // Optional: slow the page's CPU like a small CI runner (VERIFY_CPU_THROTTLE=4).
+      if (process.env.VERIFY_CPU_THROTTLE) await (await ctx.newCDPSession(p)).send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.VERIFY_CPU_THROTTLE) });
       const errors = [];
       p.on("pageerror", (e) => errors.push(String(e)));
       p.on("dialog", (d) => { errors.push("native dialog: " + d.message()); d.dismiss(); });
       const cdp = cfg.touch ? await ctx.newCDPSession(p) : null;
 
+      /**
+       * What the play log is doing (printed when a settle times out, #379 re-audit D1).
+       * The checkpoint lives in `resume` of PlayGame / PlayDraft ({ v, kind, body } or null).
+       * Every read has a deadline and handles blocked / abort / error, so the diagnostics can never
+       * stall or replace the original failure.
+       */
+      const playLogState = () => p.evaluate(async () => {
+        const DEADLINE_MS = 2000;
+        const withDeadline = (label, promise) => Promise.race([
+          promise,
+          new Promise((res) => setTimeout(() => res({ error: `${label}: no answer in ${DEADLINE_MS} ms` }), DEADLINE_MS)),
+        ]);
+        const resumeOf = (x) => (x && x.resume != null ? { present: true, kind: (x.resume && x.resume.kind) || null } : { present: false, kind: null });
+        const blocker = document.getElementById("play-log-blocker");
+        const ss = sessionStorage, ls = window.__native ? window.__native() : localStorage;
+        const pending = Object.keys(ss).filter((k) => k.startsWith("wreckline.playLog.pending")).map((k) => {
+          const v = ss.getItem(k) || "";
+          let operationId = null;
+          try { const j = JSON.parse(v); operationId = (j && (j.operationId || (j.draft && j.draft.operationId))) || null; } catch { /* not JSON */ }
+          return { key: k, operationId, bytes: v.length };
+        });
+        const idb = await withDeadline("indexedDB", new Promise((res) => {
+          let r;
+          try { r = indexedDB.open("wreckline.playLog.v1"); } catch (e) { res({ error: String(e) }); return; }
+          r.onerror = () => res({ error: `open: ${String(r.error)}` });
+          r.onblocked = () => res({ error: "open: blocked" });
+          r.onsuccess = () => {
+            const db = r.result, out = {};
+            const stores = ["games", "pending"].filter((n) => db.objectStoreNames.contains(n));
+            if (!stores.length) { db.close(); res(out); return; }
+            let t;
+            try { t = db.transaction(stores, "readonly"); } catch (e) { db.close(); res({ error: `transaction: ${String(e)}` }); return; }
+            for (const n of stores) {
+              const q = t.objectStore(n).getAll();
+              q.onsuccess = () => {
+                out[n] = q.result.map((x) => ({
+                  gameId: x.gameId,
+                  seq: x.seq ?? null,
+                  expectedSeq: x.expectedSeq ?? null,
+                  operationId: x.operationId || null,
+                  resume: resumeOf(x),
+                }));
+              };
+            }
+            t.oncomplete = () => { db.close(); res(out); };
+            t.onabort = () => { db.close(); res({ error: `transaction aborted: ${String(t.error)}` }); };
+            t.onerror = () => { db.close(); res({ error: `transaction: ${String(t.error)}` }); };
+          };
+        }));
+        let localCheckpoint = null;
+        try { const raw = ls.getItem("estg.sortieCheckpoint"); localCheckpoint = raw ? { bytes: raw.length, kind: (JSON.parse(raw) || {}).kind || null } : null; } catch (e) { localCheckpoint = { error: String(e) }; }
+        return {
+          blocker: blocker ? (blocker.textContent || "").trim().slice(0, 200) : null,
+          pending,
+          localCheckpoint,
+          idb,
+          scene: window.__wlCanvas ? window.__wlCanvas.scene() : null,
+          visibility: document.visibilityState,
+        };
+      });
       const settle = async () => {
-        await p.waitForFunction(() => !document.getElementById("play-log-blocker") && !window.__pending(), null, { timeout: 15000 });
+        try {
+          await p.waitForFunction(() => !document.getElementById("play-log-blocker") && !window.__pending(), null, { timeout: 15000 });
+        } catch (e) {
+          let state = null;
+          try {
+            state = await Promise.race([playLogState(), new Promise((res) => setTimeout(() => res({ error: "diagnostics: no answer in 5000 ms" }), 5000))]);
+          } catch (err) { state = { error: String(err) }; }
+          console.error(`SETTLE_TIMEOUT ${cfg.name} ${JSON.stringify(state)}`);
+          throw e; // the original timeout, never replaced by the diagnostics
+        }
       };
       const ready = async () => { await p.waitForFunction(() => !!window.__wlCanvas, null, { timeout: 15000 }); await settle(); await p.waitForTimeout(50); };
       const scene = () => p.evaluate(() => window.__wlCanvas.scene());
@@ -208,14 +279,29 @@ const CONFIGS = [
       assert.equal(await scene(), "explore", `${cfg.name}: 探索 scene`);
       let e = await ex();
       assert.equal(e.phase, "briefing");
+      assert.equal((await p.evaluate(() => window.__wlCanvas.audio())).wanted, "briefing", `${cfg.name}: briefing BGM (docs/AUDIO_V0.md)`);
       assert.equal(e.note, "", `${cfg.name}: the seeded squad can sortie`);
       assert.deepEqual(await visibleHtmlControls(), ["canvas#wl-canvas"], `${cfg.name}: only the canvas`);
       assert.ok(await region("tab:DOCK"), "briefing shows the tabs");
       const start = await revealE("explore:start");
       await tapAt(start.cx, start.cy);
       await settle();
+      if (process.env.VERIFY_DUMP_PLAYLOG) console.log(`PLAYLOG_STATE ${cfg.name} ${JSON.stringify(await playLogState())}`);
       e = await ex();
       assert.equal(e.phase, "sortie", `${cfg.name}: 出撃`);
+      // docs/AUDIO_V0.md: sortie BGM, and the 「♪」 in the HUD covers no control
+      {
+        const au = await p.evaluate(() => window.__wlCanvas.audio());
+        assert.ok(["scavenging", "contact"].includes(au.wanted), `${cfg.name}: sortie BGM ${au.wanted}`);
+        const all = (await p.evaluate(() => window.__wlCanvas.regions())).filter((r) => r.visible);
+        const t = all.find((r) => r.id === "audio:toggle");
+        assert.ok(t, `${cfg.name}: 「♪」 in the sortie HUD`);
+        const hit = all.filter((r) => r.id !== "audio:toggle" && r.id !== "explore:map" && r.layer === t.layer && r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h);
+        assert.deepEqual(hit.map((r) => r.id), [], `${cfg.name}: 「♪」 overlaps in the sortie`);
+        const m = await ex();
+        assert.ok(t.y + t.h <= m.map.y + 0.5, `${cfg.name}: 「♪」 above the map`);
+        if (process.env.VERIFY_SHOTS) await p.screenshot({ path: require("node:path").join(process.env.VERIFY_SHOTS, `sortie-${cfg.name}.png`) });
+      }
       if (!process.env.VERIFY_BLOCK_TEXTURES) {
         await p.waitForFunction(() => window.__textureDraws.ground > 0 && window.__textureDraws.rover > 0);
         // Every atlas decodes under the actual Pages subpath in both builds, even rare pickups.
@@ -251,11 +337,23 @@ const CONFIGS = [
       await p.waitForTimeout(200);
       const bk = await revealC("explore:ctl:back");
       await tapAt(bk.cx, bk.cy);
-      const inf = await revealC("explore:ctl:info");
-      await tapAt(inf.cx, inf.cy);
       // Since the wide map (stage 3, #372) nothing is near at the start, so the log can still be
-      // empty here (it shows 「戦術／戦報はここに出ます。」). Check that 情報 shows the log panel.
-      assert.ok(await region("explore:ctl:back"), `${cfg.name}: 情報 is open`);
+      // empty here (it shows 「戦術／戦報はここに出ます。」). Check that 情報 opens.
+      // A slow machine (CI) can still be scrolling the controls when the tap lands: retry the reveal + tap.
+      // What this proves (#379 re-audit): 情報 opens within three reveal + tap attempts — weaker than the
+      // earlier single tap. Whether the FIRST tap opened it is observed separately (INFO_FIRST_TAP in the
+      // log) and not required: on CI the first tap can land while this script's own wheel scroll is
+      // still moving the controls. VERIFY_REQUIRE_INFO_FIRST_TAP=1 makes the first tap a requirement.
+      let infoOpen = false, infoTaps = 0;
+      for (let attempt = 0; attempt < 3 && !infoOpen; attempt++) {
+        const inf = await revealC("explore:ctl:info");
+        await tapAt(inf.cx, inf.cy);
+        infoTaps++;
+        infoOpen = await p.waitForFunction(() => window.__wlCanvas.regions().some((r) => r.id === "explore:ctl:back"), null, { timeout: 3000 }).then(() => true, () => false);
+      }
+      console.log(`INFO_FIRST_TAP ${cfg.name} ${infoOpen && infoTaps === 1 ? "opened" : `missed (opened after ${infoTaps} taps: ${infoOpen})`}`);
+      assert.ok(infoOpen, `${cfg.name}: 情報 is open`);
+      if (process.env.VERIFY_REQUIRE_INFO_FIRST_TAP) assert.equal(infoTaps, 1, `${cfg.name}: 情報 opens on the first tap`);
       assert.equal(typeof (await ex()).log, "number", `${cfg.name}: log feed readable`);
       if (cfg.touch) assert.equal(await region("explore:keys"), null, `${cfg.name}: no key table on touch`);
       else assert.ok(await revealC("explore:keys"), `${cfg.name}: key table toggle on PC`);

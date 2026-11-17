@@ -1,4 +1,5 @@
 import { interruptBarricade } from "./barricades";
+import { raiseSfx } from "./sfxQueue";
 import { issueCaptainOrders } from "./platoonCommand";
 import { interruptStripping } from "./strippingRuntime";
 /**
@@ -142,6 +143,7 @@ export function executeExploreCommand(
         // In range now; outside the captain's radius is held (T2・T3). Counted per recipient that received it.
         const wings = world.wingmen.filter((wing) => wing.alive && allowedWingmanIds.has(wing.id));
         const { delivered } = issueCaptainOrders(world, wings, stance, false);
+        if (delivered > 0) raiseSfx(world, "order");
         // C20-b: each alive wingman that cannot follow (mixed squad) shows 「？」
         // and rolls stop / ignore. No log.
         for (const wing of world.wingmen) {
@@ -153,6 +155,7 @@ export function executeExploreCommand(
       if (!wing) return { status: "done", id, result: "denied" };
       const sent = req.rally === true ? "escort" : stance;
       const { delivered, pending } = issueCaptainOrders(world, [wing], sent, true);
+      if (delivered > 0 || pending > 0) raiseSfx(world, "order");
       return { status: "done", id, result: delivered > 0 || pending > 0 ? "applied" : "denied" };
     }
   }

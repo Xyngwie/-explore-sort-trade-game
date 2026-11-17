@@ -7,13 +7,14 @@ import {
   createNewGameHub,
   loadHubSaveFromLocalStorage,
   serializeHubSave,
+  setActionSfxListener,
 } from "@estg/shared";
 import { createStubCtx } from "../../shared/src/canvas-ui/test-ctx";
 import { DockScene } from "./canvas/dock-scene";
-import { type DockEnv } from "./canvas/dock-sections";
+import { hubTransactionKey, type DockEnv } from "./canvas/dock-sections";
 import { PALETTE_TITLE, type PaletteId } from "./canvas/palette-tree";
 import { dockTabs } from "./canvas/tabs";
-import { loadPlaytestSeed, createInitialHangar } from "./hangar";
+import { loadPlaytestSeed, createInitialHangar, sellHangarWreck, sellCircuit, repairMech, reviveWreck, chargeMech, scrapMech, buyNewMech, createNewMech, type HangarState } from "./hangar";
 
 class MemStore {
   map = new Map<string, string>();
@@ -225,6 +226,49 @@ assert.equal(hub().credits, crBefore + 5);
   tap("dock:confirm:sell:ok");
   assert.equal(hub().inventory.armor ?? 0, 10);
   assert.equal(hub().credits, c0 + (a0 - 10) * 5);
+}
+
+// --- #379 A8: a hangar sound only after the action really traded (real reducers) ----------------
+{
+  const heard: string[] = [];
+  setActionSfxListener((id) => heard.push(id));
+  // Every sounding hangar action, refused by its real reducer. sellHangarWreck hands back a freshly
+  // reloaded hub on a refusal (#379 re-audit A8): it must stay silent too.
+  const refusals: Array<[string, (st: HangarState) => HangarState]> = [
+    ["sell-wreck", (st) => sellHangarWreck(st, "no-such-mech", store)],
+    ["sell-circuit", (st) => sellCircuit(st, "no-such-circuit")],
+    ["repair", (st) => repairMech(st, "no-such-mech")],
+    ["revive", (st) => reviveWreck(st, "no-such-mech")],
+    ["charge", (st) => chargeMech(st, "no-such-mech", store)],
+    ["scrap", (st) => scrapMech(st, "no-such-mech")],
+  ];
+  for (const [kind, fn] of refusals) {
+    const before = hubTransactionKey(hub());
+    sec().act(kind, { id: "no-such" }, fn);
+    assert.deepEqual(heard, [], `${kind}: a refusal makes no sound`);
+    assert.equal(hubTransactionKey(hub()), before, `${kind}: and traded nothing`);
+  }
+  const broke = { ...sec().state, hub: { ...sec().state.hub, credits: 0 } };
+  for (const [kind, fn] of [["btn-buy-mech", buyNewMech], ["btn-create-mech", createNewMech]] as const) {
+    sec().state = broke;
+    sec().act(kind, {}, fn);
+    assert.deepEqual(heard, [], `${kind}: no credits → no sound`);
+  }
+  sec().reloadHub();
+  // The fingerprint ignores key order and object identity.
+  const h0 = hub();
+  assert.equal(hubTransactionKey(JSON.parse(JSON.stringify(h0))), hubTransactionKey(h0));
+  // A real success sounds once.
+  sec().state = { ...sec().state, hub: { ...sec().state.hub, credits: 1_000_000 } };
+  sec().act("btn-buy-mech", {}, buyNewMech);
+  assert.deepEqual(heard, ["mech-new"], "a mech bought → its sound once");
+  heard.length = 0;
+  goto("T", "V", "VS");
+  tap("dock:sell:armor");
+  assert.deepEqual(heard, [], "asking to sell is silent");
+  tap("dock:confirm:sell:ok");
+  assert.deepEqual(heard, ["coin-gain"], "the sale sounds after its save");
+  setActionSfxListener(null);
 }
 
 // --- equip (整備 → 機体整備 → 装備回路) through the canvas pickers ----------------------------------------

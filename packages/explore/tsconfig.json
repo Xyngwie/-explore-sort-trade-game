@@ -53,6 +53,7 @@
     "src/learning.selftest.ts",
     "src/learningFollowups.selftest.ts",
     "src/platoonCommand.selftest.ts",
+    "src/sceneAudio.selftest.ts",
     "src/wreckSupplies.selftest.ts",
     "src/canvas-explore.selftest.ts",
     "src/textureArt.selftest.ts"

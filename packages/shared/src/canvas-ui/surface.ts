@@ -35,6 +35,9 @@ export type CanvasSurfaceOptions = {
    */
   inert?: () => boolean;
   draw: DrawFn;
+  /** Passed to the CanvasUI (UI sounds). */
+  onActivate?: (id: string) => void;
+  onDenied?: (id: string) => void;
 };
 
 export class CanvasSurface {
@@ -52,7 +55,7 @@ export class CanvasSurface {
   constructor(readonly canvas: HTMLCanvasElement, opts: CanvasSurfaceOptions) {
     this.draw = opts.draw;
     this.inert = opts.inert ?? (() => false);
-    this.ui = new CanvasUI({ blocked: opts.blocked, invalidate: () => this.invalidate() });
+    this.ui = new CanvasUI({ blocked: opts.blocked, invalidate: () => this.invalidate(), onActivate: opts.onActivate, onDenied: opts.onDenied });
     const doc = canvas.ownerDocument;
     this.probe = doc.createElement("div");
     this.probe.setAttribute("aria-hidden", "true");

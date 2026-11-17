@@ -785,12 +785,15 @@ export class ExploreScene {
   }
 
   /** Sortie screen inside `area` (the app hides the tabs during the sortie, PR6). */
-  drawSortie(ui: CanvasUI, area: Rect, dpr: number): void {
+  /** `hudTrailing`: the page's own control at the right end of the first HUD line (docs/AUDIO_V0.md: 「♪」). */
+  drawSortie(ui: CanvasUI, area: Rect, dpr: number, hudTrailing?: (r: Rect) => void): void {
     const ctx = ui.context;
     const lines = this.hudLines();
     const L = layoutExploreSortie(area, lines.length);
     this.mapRect = L.map;
-    lines.forEach((l, i) => ui.text(l.text, L.hud.x, L.hud.y + 8 + i * LINE + LINE / 2, { size: 12, color: l.color, weight: l.weight, maxW: L.hud.w }));
+    const trailW = hudTrailing ? 44 : 0;
+    lines.forEach((l, i) => ui.text(l.text, L.hud.x, L.hud.y + 8 + i * LINE + LINE / 2, { size: 12, color: l.color, weight: l.weight, maxW: L.hud.w - (i < 2 ? trailW : 0) }));
+    hudTrailing?.({ x: L.hud.x + L.hud.w - 40, y: L.hud.y + 2, w: 40, h: 2 * LINE });
     this.drawMap(ui, L.map, dpr);
     ui.rawRegion("explore:map", L.map, this.mapHandler);
     ui.scrollArea("explore:controls", L.controls, "auto", (off) => {

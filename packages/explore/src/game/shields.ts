@@ -1,4 +1,5 @@
 import { shieldOwnerUnits } from "./shieldOwners";
+import { raiseSfx } from "./sfxQueue";
 import { beginShieldExchange, dropAllOwnedShields, spareShields } from "./shieldOperations";
 import { PERIPHERY_HALF_RAD } from "./vision";
 import type { FieldObjectIdentities, FieldObjectReference, ShieldIdentity } from "@estg/shared";
@@ -45,6 +46,7 @@ export function absorbShieldHit(world: World, unit: Unit, incomingAngle: number,
       Math.abs(Math.atan2(Math.sin(incomingAngle - unit.heading), Math.cos(incomingAngle - unit.heading))) > halfArc + 1e-9) return false;
   entry.shield.hp = Math.max(0, entry.shield.hp - damage);
   if (entry.shield.hp === 0) {
+    raiseSfx(world, "shield-break");
     const state = world.shieldState!;
     delete state.equipped[unit.id]; delete state.ground[entry.key];
     delete state.identities.shields[entry.key];
@@ -71,6 +73,7 @@ export function resolvePiercingProjectileHit(
   const shieldDamage = damage * (1 - pierceRate);
   entry.shield.hp = Math.max(0, entry.shield.hp - shieldDamage);
   if (entry.shield.hp === 0) {
+    raiseSfx(world, "shield-break");
     const state = world.shieldState!;
     delete state.equipped[unit.id];
     delete state.ground[entry.key];

@@ -119,6 +119,8 @@ type Press = {
   startScroll: number;
   mode: "press" | "scroll" | "idle";
   inside: boolean;
+  /** A press that started on a disabled region (for onDenied; never activates). */
+  deniedId?: string | null;
 };
 
 export type CanvasUIOptions = {
@@ -126,6 +128,10 @@ export type CanvasUIOptions = {
   blocked?: () => boolean;
   /** Called whenever input changed something visible. */
   invalidate?: () => void;
+  /** A tap activated a region (after `blocked` passed), before its handler runs. Used for UI sounds. */
+  onActivate?: (id: string) => void;
+  /** A tap released on a disabled region. Used for UI sounds. */
+  onDenied?: (id: string) => void;
 };
 
 /** Text helpers ----------------------------------------------------------- */
@@ -436,6 +442,7 @@ export class CanvasUI {
       startScroll: scroll ? this.getScroll(scroll.id) : 0,
       mode: hit && !hit.disabled ? "press" : "idle",
       inside: true,
+      deniedId: hit && hit.disabled ? hit.id : null,
     };
     this.opts.invalidate?.();
   }
@@ -447,6 +454,7 @@ export class CanvasUI {
     if (!dragging && s.mode !== "scroll" && s.scrollId && Math.abs(dy) > CANVAS_SCROLL_SLOP_PX && Math.abs(dy) >= Math.abs(dx)) {
       s.mode = "scroll"; // a scroll never activates the button it started on
       s.regionId = null;
+      s.deniedId = null;
     }
     if (dragging && s.mode === "press") {
       const r = this.regions.find((x) => x.id === s.regionId);
@@ -469,6 +477,12 @@ export class CanvasUI {
     if (!s || s.pointerId !== pointerId) return false;
     this.press = null;
     this.opts.invalidate?.();
+    // #379 F2: released on the same disabled region it started on (no scroll, same layer, not blocked).
+    if (s.mode === "idle" && s.deniedId && s.layer === this.topLayerFrame && !this.opts.blocked?.()) {
+      const d = this.hitTest(p);
+      if (d && d.id === s.deniedId && d.disabled) this.opts.onDenied?.(d.id);
+      return false;
+    }
     if (s.mode !== "press" || !s.regionId) return false;
     if (s.layer !== this.topLayerFrame) return false; // a modal opened/closed meanwhile
     const drag = this.regions.find((x) => x.id === s.regionId && x.onDrag);
@@ -483,6 +497,7 @@ export class CanvasUI {
     if (!r || r.id !== s.regionId || r.disabled) return false;
     if (this.opts.blocked?.()) return false;
     this.activations++;
+    if (r.onActivate) this.opts.onActivate?.(r.id);
     r.onActivate?.();
     this.opts.invalidate?.();
     return true;

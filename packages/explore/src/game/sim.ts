@@ -1,3 +1,4 @@
+import { fireSfxOf, raiseSfx } from "./sfxQueue";
 import { dropFriendlyWreckSupplies } from "./wreckSupplies";
 import { barricadeWorking, interruptBarricade, tickBarricades, damageBarricade } from "./barricades";
 import { settleReturnedShields } from "./shieldReturn";
@@ -121,6 +122,7 @@ function revealVision(world: World): void {
       if (c.discovered || c.taken) continue;
       if (canSee(world, u, c.pos)) {
         c.discovered = true;
+        raiseSfx(world, "container-found");
         pushLog(world, `発見：コンテナ ${c.id} を確認。`);
       }
     }
@@ -152,6 +154,7 @@ function spawnBullet(world: World, from: Unit, to: Unit, fromEnemy: boolean): vo
     ...(fromEnemy ? { aimUnitId: to.id } : {}),
   };
   world.bullets.push(b);
+  raiseSfx(world, fireSfxOf(from));
 }
 
 function retireBullet(world: World, b: Bullet): void {
@@ -226,6 +229,7 @@ export function updateBullets(world: World, dt: number): void {
         const dx=end.x-start.x,dy=end.y-start.y,len=Math.hypot(dx,dy)||1;
         start={x:b.pos.x+dx/len*.001,y:b.pos.y+dy/len*.001};continue;
       }
+      raiseSfx(world, t.kind === "enemy" ? "hit-enemy" : "hit-self");
       if (b.fromEnemy && isLearningUnit(world, t)) {
         noteLearningForUnit(world, t, { kind: "struck", subject: "normal" });
         if (b.aimUnitId === t.id) b.aimUnitHit = true;
@@ -261,6 +265,7 @@ export function updateBullets(world: World, dt: number): void {
       if(t.hp<=0){
         if(t.kind!=="enemy")dropFriendlyWreckSupplies(world,t);
         t.alive=false;
+        raiseSfx(world, t.kind === "enemy" ? "enemy-down" : "ally-wrecked");
         reportBattle(world,friendly ? `${shooter?.name??b.ownerId} の誤射で ${t.name} 大破` : `${b.fromEnemy?"敵":shooter?.name??"分隊"} が ${t.name} を撃破`,t.pos);
         if(t.kind==="enemy"){
           if (!b.fromEnemy && shooter && isLearningUnit(world, shooter)) {
@@ -308,12 +313,14 @@ export function updateSalvage(world: World, unit: Unit, want: boolean, dt: numbe
     unit.salvageT = 0;
     return;
   }
+  if (!unit.salvageId && unit.kind === "leader") raiseSfx(world, "salvage-start");
   unit.salvageId = crate.id;
   unit.salvageT += dt;
   const salvageNeed = salvageSeconds(world) ?? world.balance.salvageSeconds;
   if (unit.salvageT >= salvageNeed) {
     crate.taken = true;
     const eliminated = takeEliminationTags(crate);
+    raiseSfx(world, "salvage-done");
     if (isLearningUnit(world, unit)) {
       noteLearningForUnit(world, unit, { kind: "quizSuccess", subject: "container" });
       if (eliminated > 0) noteLearningForUnit(world, unit, { kind: "eliminatedContainer", count: eliminated });
@@ -418,6 +425,7 @@ export function requestExtract(world: World): boolean {
   const center = { ...world.leader.pos };
   const radius = world.balance.boardingRadius;
   world.boarding = { center, radius, requestedAt: world.elapsed, cargoArrived: false };
+  raiseSfx(world, "extract-request");
   scheduleRecall(world);
   world.extract = { pos: { ...center }, radius };
   pushLog(world, `帰還要請。搭乗円展開（半径 ${radius}）。個別指示のない僚機は円内へ集合。貨物 ${world.balance.boardingCargoDelaySec}s／離昇 ${world.balance.boardingLiftOffDelaySec}s。`);
@@ -463,7 +471,7 @@ function resolveBoardingLiftOff(world: World): void {
       if (c.taken) continue;
       if (dist(c.pos, boarding.center) <= boarding.radius) { c.taken = true; c.discovered = true; c.glowT = 0; circleCrates += 1; world.salvaged += 1; }
     }
-    world.extracted = true; world.failReason = null;
+    world.extracted = true; world.failReason = null; raiseSfx(world, "liftoff");
     if (!world.leader.alive) {
       pushLog(world, circleCrates > 0
         ? `帰還成功（隊長の残骸を回収）。搭乗円内コンテナ ${circleCrates} を全回収（合計サルベージ ${world.salvaged}）。`
@@ -503,7 +511,9 @@ export function tickWorld(world: World, dt: number, input: PlayerInput): void {
   if (input.move.x || input.move.y || input.clickMove || input.fire || input.interact) interruptStripping(world, world.leader.id);
   tickCombatFeedback(world, dt);
   beginMovementPowerTick(world);
+  const timeBefore = world.timeLeft;
   world.elapsed += dt; world.timeLeft = Math.max(0, world.timeLeft - dt);
+  if (timeBefore > 30 && world.timeLeft <= 30 && world.timeLeft > 0) raiseSfx(world, "time-warning");
   updateSquadIntel(world); // PR2: what the squad sees before anyone decides
   if (world.timeLeft <= 0 && !world.operationTimedOut) {
     world.operationTimedOut = true;

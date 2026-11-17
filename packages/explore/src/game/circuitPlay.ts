@@ -1,3 +1,4 @@
+import { fireSfxOf, raiseSfx } from "./sfxQueue";
 import {setPlayLogOperation} from '@estg/shared';
 import { dropFriendlyWreckSupplies } from "./wreckSupplies";
 import { canBuildBarricade, startBarricade, barricadeWorking, interruptBarricade } from "./barricades";
@@ -634,6 +635,7 @@ function tryAirSupport(world: World, enemy: Unit): void {
   setPlayLogOperation('explore.air_support',{targetId:enemy.id,cost:AIR_SUPPORT_COST});
   if (!saveHubSaveToLocalStorage(next)) return;
   p.cooldownSec = AIR_SUPPORT_COOLDOWN_SEC;
+  raiseSfx(world, "air-support"); // #379 A8: only once the strike is paid for and happens
   enemy.hp = 0;
   enemy.alive = false;
   p.airWrecks.push({ id: enemy.id, pos: { ...enemy.pos }, recovered: false });
@@ -1295,6 +1297,7 @@ function spawnShot(
     ...(pierce != null && pierce > 0 ? { pierce } : {}),
   };
   world.bullets.push(b);
+  raiseSfx(world, fireSfxOf(from));
 }
 
 export function bendHoming(world: World, b: Bullet, dt: number): void {

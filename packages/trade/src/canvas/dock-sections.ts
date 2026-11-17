@@ -4,6 +4,7 @@
  * cards); drawing only reads `HangarState`.
  */
 import {
+  playActionSfx,
   CANVAS_THEME,
   CTA_COPY,
   P_SHIELD_CIRCUIT_DESCRIPTION_JA,
@@ -254,7 +255,11 @@ export class DockSections {
   act(kind: string, data: Record<string, string>, fn: (s: HangarState) => HangarState): void {
     if (playLogBlocked()) return;
     setPlayLogOperation(`trade.${kind}`, { id: kind, data });
+    const before = hubTransactionKey(this.state.hub);
     this.state = fn(this.state);
+    // #379 A8: only an action that really traded sounds. A refusal may still hand back a freshly
+    // reloaded hub (e.g. sellHangarWreck), so compare what was traded, not the object.
+    if (hubTransactionKey(this.state.hub) !== before) playActionSfx(`trade.${kind}`);
     this.ensureCaptainCircuit();
     this.onHubChanged();
   }
@@ -263,6 +268,7 @@ export class DockSections {
     if (playLogBlocked()) return false;
     setPlayLogOperation(kind, ctx);
     if (!saveHubSaveToLocalStorage(hub, this.env.storage ?? undefined)) { this.state = { ...this.state, notice: "保存できませんでした。変更していません。" }; return false; }
+    playActionSfx(kind); // #379 A8: after the save succeeded
     this.reloadHub();
     this.ensureCaptainCircuit();
     this.onHubChanged();
@@ -881,4 +887,20 @@ export function introSortQty(hub: HubSnapshot, stock: number): number {
 
 function toggleAt(ui: CanvasUI, id: string, r: Rect, label: string, on: boolean, disabled: boolean, onActivate: () => void): void {
   toggleButton(ui, id, r, label, on, { disabled, onActivate });
+}
+
+/**
+ * #379 A8: what a hangar action trades — credits, resources, unopened containers, each mech's state,
+ * durability and battery, the circuits and where they are equipped, left-behind mechs. Two hubs with
+ * the same key traded nothing (key order and object identity do not matter).
+ */
+export function hubTransactionKey(hub: HubSnapshot): string {
+  const h = normalizeHubSnapshot(hub);
+  const inv = Object.keys(h.inventory ?? {}).sort().map((k) => [k, Math.floor(Number((h.inventory as Record<string, number | undefined>)[k] ?? 0))]);
+  const fleet = h.fleet
+    .map((m) => [m.instanceId, m.status, m.durability, m.durabilityMax, m.battery?.activity ?? null, m.battery?.capacity ?? null, m.currentAmmo ?? null])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const circuits = h.circuits.map((c) => [c.circuitId, c.equippedTo ?? null]).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const lost = (h.lostMechs ?? []).map((m) => m.instanceId).sort();
+  return JSON.stringify([Math.floor(h.credits), Math.floor(h.unopenedContainers ?? 0), inv, fleet, circuits, lost]);
 }
